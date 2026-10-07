@@ -1,0 +1,554 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 110;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		FA0F23F83077114D00762213 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FA0F23E03077114C00762213 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FA0F23E73077114C00762213;
+			remoteInfo = isaidyes;
+		};
+		FA0F24023077114D00762213 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FA0F23E03077114C00762213 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FA0F23E73077114C00762213;
+			remoteInfo = isaidyes;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		FA0F23E83077114C00762213 /* isaidyes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = isaidyes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FA0F23F73077114D00762213 /* isaidyesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = isaidyesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FA0F24013077114D00762213 /* isaidyesUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = isaidyesUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		FA0F23EA3077114C00762213 /* isaidyes */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = isaidyes;
+			sourceTree = "<group>";
+		};
+		FA0F23FA3077114D00762213 /* isaidyesTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = isaidyesTests;
+			sourceTree = "<group>";
+		};
+		FA0F24043077114D00762213 /* isaidyesUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = isaidyesUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		FA0F23E53077114C00762213 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		FA0F23F43077114D00762213 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		FA0F23FE3077114D00762213 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		FA0F23DF3077114C00762213 = {
+			isa = PBXGroup;
+			children = (
+				FA0F23EA3077114C00762213 /* isaidyes */,
+				FA0F23FA3077114D00762213 /* isaidyesTests */,
+				FA0F24043077114D00762213 /* isaidyesUITests */,
+				FA0F23E93077114C00762213 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FA0F23E93077114C00762213 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				FA0F23E83077114C00762213 /* isaidyes.app */,
+				FA0F23F73077114D00762213 /* isaidyesTests.xctest */,
+				FA0F24013077114D00762213 /* isaidyesUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		FA0F23E73077114C00762213 /* isaidyes */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA0F24093077114D00762213 /* Build configuration list for PBXNativeTarget "isaidyes" */;
+			buildPhases = (
+				FA0F23E43077114C00762213 /* Sources */,
+				FA0F23E53077114C00762213 /* Frameworks */,
+				FA0F23E63077114C00762213 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				FA0F23EA3077114C00762213 /* isaidyes */,
+			);
+			name = isaidyes;
+			productName = isaidyes;
+			productReference = FA0F23E83077114C00762213 /* isaidyes.app */;
+			productType = "com.apple.product-type.application";
+		};
+		FA0F23F63077114D00762213 /* isaidyesTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA0F240C3077114D00762213 /* Build configuration list for PBXNativeTarget "isaidyesTests" */;
+			buildPhases = (
+				FA0F23F33077114D00762213 /* Sources */,
+				FA0F23F43077114D00762213 /* Frameworks */,
+				FA0F23F53077114D00762213 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FA0F23F93077114D00762213 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				FA0F23FA3077114D00762213 /* isaidyesTests */,
+			);
+			name = isaidyesTests;
+			productName = isaidyesTests;
+			productReference = FA0F23F73077114D00762213 /* isaidyesTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		FA0F24003077114D00762213 /* isaidyesUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA0F240F3077114D00762213 /* Build configuration list for PBXNativeTarget "isaidyesUITests" */;
+			buildPhases = (
+				FA0F23FD3077114D00762213 /* Sources */,
+				FA0F23FE3077114D00762213 /* Frameworks */,
+				FA0F23FF3077114D00762213 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FA0F24033077114D00762213 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				FA0F24043077114D00762213 /* isaidyesUITests */,
+			);
+			name = isaidyesUITests;
+			productName = isaidyesUITests;
+			productReference = FA0F24013077114D00762213 /* isaidyesUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		FA0F23E03077114C00762213 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					FA0F23E73077114C00762213 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					FA0F23F63077114D00762213 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = FA0F23E73077114C00762213;
+					};
+					FA0F24003077114D00762213 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = FA0F23E73077114C00762213;
+					};
+				};
+			};
+			buildConfigurationList = FA0F23E33077114C00762213 /* Build configuration list for PBXProject "isaidyes" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = FA0F23DF3077114C00762213;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = FA0F23E93077114C00762213 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				FA0F23E73077114C00762213 /* isaidyes */,
+				FA0F23F63077114D00762213 /* isaidyesTests */,
+				FA0F24003077114D00762213 /* isaidyesUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		FA0F23E63077114C00762213 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		FA0F23F53077114D00762213 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		FA0F23FF3077114D00762213 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		FA0F23E43077114C00762213 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		FA0F23F33077114D00762213 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		FA0F23FD3077114D00762213 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		FA0F23F93077114D00762213 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FA0F23E73077114C00762213 /* isaidyes */;
+			targetProxy = FA0F23F83077114D00762213 /* PBXContainerItemProxy */;
+		};
+		FA0F24033077114D00762213 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FA0F23E73077114C00762213 /* isaidyes */;
+			targetProxy = FA0F24023077114D00762213 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		FA0F24073077114D00762213 /* Debug configuration for PBXProject "isaidyes" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = LW97NHT3JA;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		FA0F24083077114D00762213 /* Release configuration for PBXProject "isaidyes" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = LW97NHT3JA;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		FA0F240A3077114D00762213 /* Debug configuration for PBXNativeTarget "isaidyes" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LW97NHT3JA;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.guide-systems.isaidyes";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FA0F240B3077114D00762213 /* Release configuration for PBXNativeTarget "isaidyes" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LW97NHT3JA;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.guide-systems.isaidyes";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		FA0F240D3077114D00762213 /* Debug configuration for PBXNativeTarget "isaidyesTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LW97NHT3JA;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.guide-systems.isaidyesTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/isaidyes.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/isaidyes";
+			};
+			name = Debug;
+		};
+		FA0F240E3077114D00762213 /* Release configuration for PBXNativeTarget "isaidyesTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LW97NHT3JA;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.guide-systems.isaidyesTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/isaidyes.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/isaidyes";
+			};
+			name = Release;
+		};
+		FA0F24103077114D00762213 /* Debug configuration for PBXNativeTarget "isaidyesUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LW97NHT3JA;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.guide-systems.isaidyesUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = isaidyes;
+			};
+			name = Debug;
+		};
+		FA0F24113077114D00762213 /* Release configuration for PBXNativeTarget "isaidyesUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LW97NHT3JA;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.guide-systems.isaidyesUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = isaidyes;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		FA0F23E33077114C00762213 /* Build configuration list for PBXProject "isaidyes" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA0F24073077114D00762213 /* Debug configuration for PBXProject "isaidyes" */,
+				FA0F24083077114D00762213 /* Release configuration for PBXProject "isaidyes" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		FA0F24093077114D00762213 /* Build configuration list for PBXNativeTarget "isaidyes" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA0F240A3077114D00762213 /* Debug configuration for PBXNativeTarget "isaidyes" */,
+				FA0F240B3077114D00762213 /* Release configuration for PBXNativeTarget "isaidyes" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		FA0F240C3077114D00762213 /* Build configuration list for PBXNativeTarget "isaidyesTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA0F240D3077114D00762213 /* Debug configuration for PBXNativeTarget "isaidyesTests" */,
+				FA0F240E3077114D00762213 /* Release configuration for PBXNativeTarget "isaidyesTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		FA0F240F3077114D00762213 /* Build configuration list for PBXNativeTarget "isaidyesUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA0F24103077114D00762213 /* Debug configuration for PBXNativeTarget "isaidyesUITests" */,
+				FA0F24113077114D00762213 /* Release configuration for PBXNativeTarget "isaidyesUITests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = FA0F23E03077114C00762213 /* Project object */;
+	validationLevel = 1;
+}
