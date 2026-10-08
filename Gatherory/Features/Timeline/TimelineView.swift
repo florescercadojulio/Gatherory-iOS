@@ -1,0 +1,1225 @@
+import SwiftUI
+import UIKit
+
+struct TimelineView: View {
+    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.layoutDirection) private var layoutDirection
+    @State private var isAddingTimelineItem = false
+    @State private var selectedTimelineItemID: UUID?
+    @Namespace private var timelineTransition
+
+    private var upcoming: [TimelineItem] {
+        workspace.timeline
+            .filter { $0.status == .upcoming }
+            .sorted(by: chronologicallyBefore)
+    }
+
+    private var completed: [TimelineItem] {
+        workspace.timeline
+            .filter { $0.status == .complete }
+            .sorted { lhs, rhs in
+                chronologicallyBefore(rhs, lhs)
+            }
+    }
+
+    private func chronologicallyBefore(_ lhs: TimelineItem, _ rhs: TimelineItem) -> Bool {
+        if lhs.scheduledAt == rhs.scheduledAt {
+            return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+        }
+
+        return lhs.scheduledAt < rhs.scheduledAt
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
+                eventCollection(
+                    title: "Upcoming",
+                    items: upcoming,
+                    emptyTitle: "No upcoming events",
+                    emptyDescription: "Add an event to start building the wedding timeline."
+                )
+
+                if !completed.isEmpty {
+                    eventCollection(
+                        title: "Completed",
+                        items: completed,
+                        emptyTitle: "No completed events",
+                        emptyDescription: "Completed events appear here."
+                    )
+                }
+            }
+            .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+            .padding(.top, AppTheme.Layout.screenTop)
+            .padding(.bottom, AppTheme.Layout.screenBottom)
+        }
+        .scrollIndicators(.hidden)
+        .appSoftScrollEdges()
+        .background(AppTheme.ColorToken.background)
+        .navigationTitle("Timeline")
+        .navigationBarTitleDisplayMode(.inline)
+        .appClearNavigationBar()
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button("Add event", systemImage: "plus") {
+                    isAddingTimelineItem = true
+                }
+                    .labelStyle(.iconOnly)
+
+                AccountToolbarButton()
+            }
+        }
+        .sheet(isPresented: $isAddingTimelineItem) {
+            NavigationStack {
+                TimelineItemEditorView()
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .navigationDestination(item: $selectedTimelineItemID) { itemID in
+            TimelineEventDetailView(
+                itemID: itemID,
+                transitionNamespace: timelineTransition
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func eventCollection(
+        title: String,
+        items: [TimelineItem],
+        emptyTitle: String,
+        emptyDescription: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.title2.bold())
+
+                Spacer(minLength: AppTheme.Spacing.compact)
+
+                Text(items.count, format: .number)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(items.count == 1 ? "1 event" : "\(items.count) events")
+            }
+
+            if items.isEmpty {
+                ContentUnavailableView(
+                    emptyTitle,
+                    systemImage: "calendar",
+                    description: Text(emptyDescription)
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppTheme.Spacing.section)
+            } else {
+                MasonryLayout(
+                    columnCount: dynamicTypeSize.isAccessibilitySize ? 1 : 2,
+                    spacing: 12,
+                    layoutDirection: layoutDirection
+                ) {
+                    ForEach(items) { item in
+                        eventButton(item)
+                    }
+                }
+            }
+        }
+    }
+
+    private func eventButton(_ item: TimelineItem) -> some View {
+        Button {
+            selectedTimelineItemID = item.id
+        } label: {
+            TimelineCollectionCard(
+                item: item,
+                transitionNamespace: timelineTransition
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens event details")
+        .accessibilityAction(named: item.status == .complete ? "Undo Complete" : "Mark Complete") {
+            withAnimation {
+                workspace.toggleTimelineItem(item)
+            }
+        }
+        .contextMenu {
+            Button(
+                item.status == .complete ? "Undo Complete" : "Mark Complete",
+                systemImage: item.status == .complete ? "arrow.uturn.backward" : "checkmark.circle"
+            ) {
+                withAnimation {
+                    workspace.toggleTimelineItem(item)
+                }
+            }
+        }
+    }
+}
+
+private struct TimelineItemEditorView: View {
+    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(\.dismiss) private var dismiss
+
+    private let originalItem: TimelineItem?
+
+    @State private var title: String
+    @State private var category: TimelineCategory
+    @State private var scheduledAt: Date
+    @State private var endsAt: Date?
+    @State private var isAllDay: Bool
+    @State private var timeZoneIdentifier: String
+    @State private var isEditingDateAndTime = false
+    @State private var eventLocation: EventLocation?
+    @State private var isEditingLocation = false
+    @State private var selectedParticipantIDs: Set<UUID>
+    @State private var imageData: Data?
+    @FocusState private var focusedField: Field?
+
+    private enum Field {
+        case title
+    }
+
+    init(item: TimelineItem? = nil) {
+        originalItem = item
+        _title = State(initialValue: item?.title ?? "")
+        _category = State(initialValue: item?.category ?? .venue)
+        _scheduledAt = State(
+            initialValue: item?.scheduledAt
+                ?? Calendar.current.date(byAdding: .day, value: 7, to: .now)
+                ?? .now
+        )
+        _endsAt = State(initialValue: item?.endsAt)
+        _isAllDay = State(initialValue: item?.isAllDay ?? false)
+        _timeZoneIdentifier = State(
+            initialValue: item?.timeZoneIdentifier ?? TimeZone.autoupdatingCurrent.identifier
+        )
+        _eventLocation = State(initialValue: item?.eventLocation)
+        _selectedParticipantIDs = State(initialValue: Set(item?.participantIDs ?? []))
+        _imageData = State(initialValue: item?.imageData)
+    }
+
+    private var isEditing: Bool {
+        originalItem != nil
+    }
+
+    private var trimmedTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var startSummary: String {
+        scheduledAt.formatted(
+            date: .abbreviated,
+            time: isAllDay ? .omitted : .shortened
+        )
+    }
+
+    private var endSummary: String? {
+        endsAt?.formatted(
+            date: .abbreviated,
+            time: isAllDay ? .omitted : .shortened
+        )
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("Event name", text: $title)
+                    .textInputAutocapitalization(.sentences)
+                    .submitLabel(.done)
+                    .focused($focusedField, equals: .title)
+                    .onSubmit {
+                        focusedField = nil
+                    }
+            } header: {
+                Text("Event Name")
+            }
+
+            Section("Photo") {
+                PhotoAttachmentPicker(
+                    imageData: $imageData,
+                    emptySymbol: category.symbol,
+                    suggestedConcept: "Wedding \(category.title.lowercased()) event artwork for \(trimmedTitle.isEmpty ? "our celebration" : trimmedTitle)"
+                )
+            }
+
+            Section {
+                Picker("Event type", selection: $category) {
+                    ForEach(TimelineCategory.allCases) { option in
+                        Label(option.title, systemImage: option.symbol)
+                            .tag(option)
+                    }
+                }
+            } header: {
+                Label("Event Type", systemImage: "square.grid.2x2.fill")
+            } footer: {
+                Text("Choose the kind of wedding event.")
+            }
+
+            Section {
+                Button {
+                    focusedField = nil
+                    isEditingDateAndTime = true
+                } label: {
+                    HStack(spacing: AppTheme.Spacing.standard) {
+                        Image(systemName: "calendar.badge.clock")
+                            .foregroundStyle(AppTheme.ColorToken.accent)
+                            .frame(width: 28)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(isAllDay ? "All-day" : "Starts")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text(startSummary)
+                                .foregroundStyle(.primary)
+
+                            if let endSummary {
+                                Text("Ends \(endSummary)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } header: {
+                Text("Schedule")
+            }
+
+            Section {
+                Button {
+                    isEditingLocation = true
+                } label: {
+                    HStack(spacing: AppTheme.Spacing.standard) {
+                        Image(systemName: "mappin.and.ellipse")
+                            .foregroundStyle(AppTheme.ColorToken.accent)
+                            .frame(width: 28)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let eventLocation {
+                                Text(eventLocation.title)
+                                    .foregroundStyle(.primary)
+                                if !eventLocation.detail.isEmpty {
+                                    Text(eventLocation.detail)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                            } else {
+                                Text("Add Location")
+                                    .foregroundStyle(AppTheme.ColorToken.accent)
+                            }
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } header: {
+                Text("Location")
+            } footer: {
+                Text("Optional. Search Apple Maps, then add a unit or familiar place name if useful.")
+            }
+
+            Section {
+                ForEach(workspace.planningMembers) { member in
+                    Button {
+                        toggle(member)
+                    } label: {
+                        HStack(spacing: AppTheme.Spacing.standard) {
+                            Text(member.initials)
+                                .font(.caption.bold())
+                                .foregroundStyle(.white)
+                                .frame(width: 34, height: 34)
+                                .background(AppTheme.ColorToken.accent, in: Circle())
+                                .accessibilityHidden(true)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(member.name)
+                                    .foregroundStyle(.primary)
+                                Text(member.participantRole.title)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: 0)
+
+                            if selectedParticipantIDs.contains(member.id) {
+                                Image(systemName: "checkmark")
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(AppTheme.ColorToken.accent)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityValue(selectedParticipantIDs.contains(member.id) ? "Selected" : "Not selected")
+                }
+            } header: {
+                Label("Planning Team", systemImage: "person.2.fill")
+            } footer: {
+                Text("Hosts and collaborators can be assigned. Guests stay on the invitation list.")
+            }
+        }
+        .navigationTitle(isEditing ? "Edit Event" : "New Event")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    dismiss()
+                }
+            }
+
+            ToolbarItem(placement: .confirmationAction) {
+                Button(isEditing ? "Save" : "Add") {
+                    let updatedItem = TimelineItem(
+                        id: originalItem?.id ?? UUID(),
+                        title: trimmedTitle,
+                        category: category,
+                        scheduledAt: scheduledAt,
+                        eventLocation: eventLocation,
+                        endsAt: endsAt,
+                        isAllDay: isAllDay,
+                        timeZoneIdentifier: timeZoneIdentifier,
+                        participantIDs: Array(selectedParticipantIDs),
+                        status: originalItem?.status ?? .upcoming,
+                        linkedIdeaID: originalItem?.linkedIdeaID,
+                        imageData: imageData
+                    )
+
+                    if isEditing {
+                        workspace.updateTimelineItem(updatedItem)
+                    } else {
+                        workspace.addTimelineItem(updatedItem)
+                    }
+                    dismiss()
+                }
+                .disabled(trimmedTitle.isEmpty || selectedParticipantIDs.isEmpty)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .sheet(isPresented: $isEditingDateAndTime) {
+            EventDateTimeEditorView(
+                startsAt: scheduledAt,
+                endsAt: endsAt,
+                isAllDay: isAllDay,
+                timeZoneIdentifier: timeZoneIdentifier
+            ) { updatedStartsAt, updatedEndsAt, updatedIsAllDay, updatedTimeZoneIdentifier in
+                scheduledAt = updatedStartsAt
+                endsAt = updatedEndsAt
+                isAllDay = updatedIsAllDay
+                timeZoneIdentifier = updatedTimeZoneIdentifier
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isEditingLocation) {
+            EventLocationEditorView(location: eventLocation) { updatedLocation in
+                eventLocation = updatedLocation
+            }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .onAppear {
+            guard !isEditing else { return }
+            selectedParticipantIDs = Set(
+                workspace.members
+                    .filter { $0.participantRole == .host }
+                    .map(\.id)
+            )
+            scheduledAt = max(scheduledAt, Date.now)
+            focusedField = .title
+        }
+    }
+
+    private func toggle(_ member: WeddingMember) {
+        if selectedParticipantIDs.contains(member.id) {
+            selectedParticipantIDs.remove(member.id)
+        } else {
+            selectedParticipantIDs.insert(member.id)
+        }
+    }
+}
+
+private struct EventDateTimeEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    @State private var startsAt: Date
+    @State private var endsAt: Date?
+    @State private var isAllDay: Bool
+    @State private var timeZoneIdentifier: String
+
+    let save: (Date, Date?, Bool, String) -> Void
+
+    init(
+        startsAt: Date,
+        endsAt: Date?,
+        isAllDay: Bool,
+        timeZoneIdentifier: String,
+        save: @escaping (Date, Date?, Bool, String) -> Void
+    ) {
+        _startsAt = State(initialValue: startsAt)
+        _endsAt = State(initialValue: endsAt)
+        _isAllDay = State(initialValue: isAllDay)
+        _timeZoneIdentifier = State(initialValue: timeZoneIdentifier)
+        self.save = save
+    }
+
+    private var selectedTimeZone: TimeZone {
+        TimeZone(identifier: timeZoneIdentifier) ?? .autoupdatingCurrent
+    }
+
+    private var earliestStart: Date {
+        Calendar.current.startOfDay(for: .now)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle("All-day", isOn: $isAllDay)
+
+                    datePickerRow(
+                        title: "Starts",
+                        selection: $startsAt,
+                        range: earliestStart...
+                    )
+
+                    if endsAt != nil {
+                        datePickerRow(
+                            title: "Ends",
+                            selection: endDateBinding,
+                            range: startsAt...
+                        )
+
+                        Button("Remove End Time", systemImage: "minus.circle", role: .destructive) {
+                            endsAt = nil
+                        }
+                    } else {
+                        Button("Add End Time", systemImage: "plus.circle") {
+                            endsAt = defaultEndDate
+                        }
+                    }
+                }
+
+                Section {
+                    Picker("Time Zone", selection: $timeZoneIdentifier) {
+                        ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { identifier in
+                            Text(timeZoneLabel(for: identifier))
+                                .tag(identifier)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                }
+            }
+            .environment(\.timeZone, selectedTimeZone)
+            .navigationTitle("Date and Time")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", systemImage: "xmark") {
+                        dismiss()
+                    }
+                    .labelStyle(.iconOnly)
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", systemImage: "checkmark") {
+                        save(startsAt, endsAt, isAllDay, timeZoneIdentifier)
+                        dismiss()
+                    }
+                    .labelStyle(.iconOnly)
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+        }
+        .onChange(of: startsAt) { _, newStart in
+            guard let endsAt, endsAt < newStart else { return }
+            self.endsAt = defaultEndDate
+        }
+    }
+
+    @ViewBuilder
+    private func datePickerRow(
+        title: String,
+        selection: Binding<Date>,
+        range: PartialRangeFrom<Date>
+    ) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                Text(title)
+                    .font(.headline)
+
+                DatePicker(
+                    "Date",
+                    selection: selection,
+                    in: range,
+                    displayedComponents: .date
+                )
+
+                if !isAllDay {
+                    DatePicker(
+                        "Time",
+                        selection: selection,
+                        in: range,
+                        displayedComponents: .hourAndMinute
+                    )
+                }
+            }
+            .padding(.vertical, 4)
+        } else {
+            HStack(spacing: AppTheme.Spacing.compact) {
+                Text(title)
+
+                Spacer(minLength: AppTheme.Spacing.compact)
+
+                DatePicker(
+                    "\(title) date",
+                    selection: selection,
+                    in: range,
+                    displayedComponents: .date
+                )
+                .labelsHidden()
+
+                if !isAllDay {
+                    DatePicker(
+                        "\(title) time",
+                        selection: selection,
+                        in: range,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .labelsHidden()
+                }
+            }
+        }
+    }
+
+    private var defaultEndDate: Date {
+        Calendar.current.date(byAdding: .hour, value: 1, to: startsAt) ?? startsAt
+    }
+
+    private var endDateBinding: Binding<Date> {
+        Binding(
+            get: { endsAt ?? defaultEndDate },
+            set: { endsAt = $0 }
+        )
+    }
+
+    private func timeZoneLabel(for identifier: String) -> String {
+        guard let timeZone = TimeZone(identifier: identifier) else { return identifier }
+        let name = timeZone.localizedName(for: .generic, locale: .current) ?? identifier
+        return "\(name) (\(gmtOffset(for: timeZone)))"
+    }
+
+    private func gmtOffset(for timeZone: TimeZone) -> String {
+        let seconds = timeZone.secondsFromGMT(for: startsAt)
+        let sign = seconds < 0 ? "−" : "+"
+        let absoluteSeconds = abs(seconds)
+        let hours = absoluteSeconds / 3_600
+        let minutes = (absoluteSeconds % 3_600) / 60
+        return minutes == 0
+            ? "GMT\(sign)\(hours)"
+            : "GMT\(sign)\(hours):\(String(format: "%02d", minutes))"
+    }
+}
+
+private struct TimelineCollectionCard: View {
+    let item: TimelineItem
+    let transitionNamespace: Namespace.ID
+
+    private var scheduleSummary: String {
+        let start = item.scheduledAt.formatted(
+            date: .abbreviated,
+            time: item.isAllDay ? .omitted : .shortened
+        )
+        return item.isAllDay ? "\(start) · All-day" : start
+    }
+
+    private var artworkAspectRatio: CGFloat {
+        if let imageData = item.imageData,
+           let image = UIImage(data: imageData),
+           image.size.height > 0 {
+            return min(max(image.size.width / image.size.height, 0.72), 1.35)
+        }
+
+        if item.category == .venue,
+           let image = UIImage(named: "WeddingVenueHero"),
+           image.size.height > 0 {
+            return min(max(image.size.width / image.size.height, 0.72), 1.35)
+        }
+
+        return item.category.collectionAspectRatio
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            TimelineArtwork(item: item, progressiveBlurRadius: 22)
+
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0.34),
+                    .init(color: .black.opacity(0.12), location: 0.55),
+                    .init(color: .black.opacity(0.70), location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .font(.headline)
+                    .lineLimit(3)
+                    .strikethrough(item.status == .complete)
+
+                Text(scheduleSummary)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(2)
+
+                if let location = item.location {
+                    Label(location, systemImage: "mappin")
+                        .font(.caption)
+                        .lineLimit(2)
+                }
+            }
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.36), radius: 5, y: 2)
+            .padding(AppTheme.Spacing.standard)
+
+            if item.status == .complete {
+                VStack {
+                    HStack {
+                        Spacer(minLength: 0)
+                        Image(systemName: "checkmark")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white)
+                            .frame(width: 30, height: 30)
+                            .background(.green, in: Circle())
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(AppTheme.Spacing.compact)
+                .accessibilityHidden(true)
+            }
+        }
+        .aspectRatio(artworkAspectRatio, contentMode: .fit)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                .stroke(.white.opacity(0.16), lineWidth: 0.5)
+        }
+        .matchedTransitionSource(id: item.id, in: transitionNamespace)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(item.status == .complete ? "Completed" : "Upcoming")
+    }
+}
+
+private struct TimelineArtwork: View {
+    let item: TimelineItem
+    var progressiveBlurRadius: CGFloat = 22
+
+    var body: some View {
+        MediaArtwork(
+            imageData: item.imageData,
+            assetName: item.imageData == nil && item.category == .venue ? "WeddingVenueHero" : nil,
+            symbol: item.category.symbol,
+            colors: item.category.artworkColors,
+            accent: item.category.artworkAccent,
+            ambientBlurRadius: progressiveBlurRadius == 0 ? 4 : 12,
+            progressiveBlurRadius: progressiveBlurRadius == 0 ? 0 : 32,
+            blurStart: 0.24
+        )
+    }
+}
+
+private struct TimelineEventDetailView: View {
+    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(\.dismiss) private var dismiss
+    @State private var isConfirmingDeletion = false
+    @State private var isEditingEvent = false
+
+    let itemID: UUID
+    let transitionNamespace: Namespace.ID
+
+    private var item: TimelineItem? {
+        workspace.timeline.first { $0.id == itemID }
+    }
+
+    var body: some View {
+        Group {
+            if let item {
+                TimelineEventDetailScreen(item: item)
+            } else {
+                ContentUnavailableView("Event unavailable", systemImage: "calendar.badge.exclamationmark")
+            }
+        }
+        .navigationTitle("Event details")
+        .navigationBarTitleDisplayMode(.inline)
+        .appClearNavigationBar()
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            if let item {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu("Event actions", systemImage: "ellipsis") {
+                        Button("Edit Event", systemImage: "pencil") {
+                            isEditingEvent = true
+                        }
+
+                        Button(
+                            item.status == .complete ? "Undo Complete" : "Mark Complete",
+                            systemImage: item.status == .complete ? "arrow.uturn.backward" : "checkmark.circle"
+                        ) {
+                            withAnimation {
+                                workspace.toggleTimelineItem(item)
+                            }
+                        }
+
+                        Divider()
+
+                        Button("Delete Event", systemImage: "trash", role: .destructive) {
+                            isConfirmingDeletion = true
+                        }
+                    }
+                }
+            }
+        }
+        .confirmationDialog(
+            "Delete this event?",
+            isPresented: $isConfirmingDeletion,
+            titleVisibility: .visible
+        ) {
+            if let item {
+                Button("Delete Event", role: .destructive) {
+                    workspace.deleteTimelineItem(item)
+                    dismiss()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the event from the shared timeline for everyone.")
+        }
+        .sheet(isPresented: $isEditingEvent) {
+            if let item {
+                NavigationStack {
+                    TimelineItemEditorView(item: item)
+                }
+            }
+        }
+        .navigationTransition(.zoom(sourceID: itemID, in: transitionNamespace))
+    }
+}
+
+private struct TimelineEventDetailScreen: View {
+    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @State private var weather = EventWeatherModel()
+
+    let item: TimelineItem
+
+    private var participantNames: String {
+        let names = workspace.members
+            .filter { item.participantIDs.contains($0.id) }
+            .map(\.name)
+        return names.isEmpty ? "Unassigned" : names.formatted()
+    }
+
+    private var weatherRequestID: String {
+        [
+            item.id.uuidString,
+            item.scheduledAt.timeIntervalSinceReferenceDate.formatted(),
+            item.eventLocation?.latitude?.formatted() ?? "no-latitude",
+            item.eventLocation?.longitude?.formatted() ?? "no-longitude"
+        ]
+        .joined(separator: "|")
+    }
+
+    private var scheduleSummary: String {
+        let start = item.scheduledAt.formatted(
+            date: .long,
+            time: item.isAllDay ? .omitted : .shortened
+        )
+
+        guard let endsAt = item.endsAt else {
+            return item.isAllDay ? "\(start) · All-day" : start
+        }
+
+        let end = endsAt.formatted(
+            date: .long,
+            time: item.isAllDay ? .omitted : .shortened
+        )
+        return "\(start) – \(end)"
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                TimelineArtwork(
+                    item: item,
+                    progressiveBlurRadius: reduceTransparency ? 0 : 22
+                )
+                .ignoresSafeArea()
+
+                readingScrim
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+                        Color.clear
+                            .frame(height: max(proxy.size.height * 0.38, 240))
+                            .accessibilityHidden(true)
+
+                        identity
+                        metadata
+                    }
+                    .frame(
+                        width: max(proxy.size.width - (AppTheme.Layout.screenHorizontal * 2), 0),
+                        alignment: .leading
+                    )
+                    .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+                    .padding(.bottom, AppTheme.Layout.screenBottom)
+                    .frame(minHeight: proxy.size.height, alignment: .bottom)
+                }
+                .scrollIndicators(.hidden)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .background(.black)
+        .task(id: weatherRequestID) {
+            await weather.load(for: item)
+        }
+    }
+
+    private var readingScrim: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .black.opacity(reduceTransparency ? 0.52 : 0.32), location: 0),
+                .init(color: .black.opacity(reduceTransparency ? 0.18 : 0.08), location: 0.16),
+                .init(color: .clear, location: 0.28),
+                .init(color: .black.opacity(reduceTransparency ? 0.36 : 0.20), location: 0.40),
+                .init(color: .black.opacity(reduceTransparency ? 0.68 : 0.46), location: 0.58),
+                .init(color: .black.opacity(reduceTransparency ? 0.82 : 0.62), location: 0.78),
+                .init(color: .black.opacity(reduceTransparency ? 0.92 : 0.78), location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    private var identity: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: AppTheme.Spacing.compact) {
+                Label(item.category.title, systemImage: item.category.symbol)
+                    .font(.caption.weight(.semibold))
+
+                Spacer(minLength: AppTheme.Spacing.compact)
+
+                Label(
+                    item.status == .complete ? "Completed" : "Upcoming",
+                    systemImage: item.status == .complete ? "checkmark.circle.fill" : "calendar"
+                )
+                .font(.caption.weight(.semibold))
+            }
+
+            Text(item.title)
+                .font(.largeTitle.bold())
+                .tracking(-0.7)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(.white)
+        .shadow(color: .black.opacity(0.44), radius: 8, y: 2)
+    }
+
+    private var metadata: some View {
+        VStack(spacing: 0) {
+            TimelineMetadataRow(
+                title: "Date & Time",
+                value: scheduleSummary,
+                symbol: "calendar"
+            )
+
+            Divider()
+                .padding(.leading, 44)
+
+            if let location = item.location {
+                TimelineMetadataRow(
+                    title: "Location",
+                    value: location,
+                    symbol: "mappin.and.ellipse"
+                )
+
+                Divider()
+                    .padding(.leading, 44)
+            }
+
+            TimelineWeatherRow(
+                phase: weather.phase,
+                attribution: weather.attribution
+            ) {
+                Task {
+                    await weather.load(for: item)
+                }
+            }
+
+            Divider()
+                .padding(.leading, 44)
+
+            TimelineMetadataRow(
+                title: "Planning Team",
+                value: participantNames,
+                symbol: "person.2.fill"
+            )
+        }
+        .padding(.vertical, AppTheme.Spacing.compact)
+        .background(
+            reduceTransparency ? AnyShapeStyle(.black.opacity(0.90)) : AnyShapeStyle(.thickMaterial),
+            in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                .stroke(.white.opacity(0.14), lineWidth: 0.5)
+        }
+        .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+private struct TimelineWeatherRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let phase: EventWeatherPhase
+    let attribution: EventWeatherAttribution?
+    let retry: () -> Void
+
+    var body: some View {
+        Group {
+            switch phase {
+            case .idle, .loading:
+                loadingRow
+            case .forecast(let forecast):
+                forecastRow(forecast)
+            case .missingLocation:
+                TimelineMetadataRow(
+                    title: "Forecast",
+                    value: "Add a mapped location",
+                    symbol: "cloud.sun"
+                )
+            case .outsideForecastRange:
+                TimelineMetadataRow(
+                    title: "Forecast",
+                    value: "Available closer to the event",
+                    symbol: "cloud.sun"
+                )
+            case .pastEvent:
+                TimelineMetadataRow(
+                    title: "Forecast",
+                    value: "Event has passed",
+                    symbol: "cloud.sun"
+                )
+            case .unavailable:
+                unavailableRow
+            }
+        }
+    }
+
+    private var loadingRow: some View {
+        HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
+            Image(systemName: "cloud.sun")
+                .font(.title3)
+                .foregroundStyle(.white.opacity(0.72))
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Forecast")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.72))
+
+                HStack(spacing: AppTheme.Spacing.compact) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading weather…")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.standard)
+        .padding(.vertical, 14)
+        .frame(minHeight: 64)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func forecastRow(_ forecast: EventWeatherForecast) -> some View {
+        HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
+            Image(systemName: forecast.symbolName)
+                .symbolRenderingMode(.multicolor)
+                .font(.title3)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Forecast")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.72))
+
+                Text(forecast.conditionDescription)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: AppTheme.Spacing.standard) {
+                        temperatureSummary(forecast)
+                        precipitationSummary(forecast)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        temperatureSummary(forecast)
+                        precipitationSummary(forecast)
+                    }
+                }
+
+                if let attribution {
+                    weatherAttribution(attribution)
+                }
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.standard)
+        .padding(.vertical, 14)
+        .frame(minHeight: 76)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func temperatureSummary(_ forecast: EventWeatherForecast) -> some View {
+        Text("H: \(forecast.highTemperatureText)  L: \(forecast.lowTemperatureText)")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+            .fixedSize(horizontal: true, vertical: false)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("High \(forecast.highTemperatureText), low \(forecast.lowTemperatureText)")
+    }
+
+    private func precipitationSummary(_ forecast: EventWeatherForecast) -> some View {
+        Label(forecast.precipitationChanceText, systemImage: "drop.fill")
+            .font(.subheadline)
+            .foregroundStyle(.white.opacity(0.72))
+            .accessibilityLabel("\(forecast.precipitationChanceText) chance of precipitation")
+    }
+
+    private func weatherAttribution(_ attribution: EventWeatherAttribution) -> some View {
+        Link(destination: attribution.legalPageURL) {
+            AsyncImage(
+                url: colorScheme == .light
+                    ? attribution.combinedMarkLightURL
+                    : attribution.combinedMarkDarkURL
+            ) { phase in
+                if let image = phase.image {
+                    image
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Text(attribution.serviceName)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 92, height: 22, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Weather data attribution")
+        .accessibilityHint("Opens Apple Weather data sources")
+    }
+
+    private var unavailableRow: some View {
+        HStack(alignment: .center, spacing: AppTheme.Spacing.standard) {
+            Image(systemName: "cloud.sun")
+                .font(.title3)
+                .foregroundStyle(.white.opacity(0.72))
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Forecast")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.72))
+
+                Text("Weather unavailable")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+            }
+
+            Spacer(minLength: 0)
+
+            Button("Try Again", systemImage: "arrow.clockwise", action: retry)
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .frame(minWidth: AppTheme.Layout.minimumTouchTarget, minHeight: AppTheme.Layout.minimumTouchTarget)
+        }
+        .padding(.horizontal, AppTheme.Spacing.standard)
+        .padding(.vertical, 10)
+        .frame(minHeight: 64)
+        .accessibilityElement(children: .contain)
+    }
+}
+
+private struct TimelineMetadataRow: View {
+    let title: String
+    let value: String
+    let symbol: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
+            Image(systemName: symbol)
+                .font(.title3)
+                .foregroundStyle(.white.opacity(0.72))
+                .frame(width: 28)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.72))
+
+                Text(value)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.standard)
+        .padding(.vertical, 14)
+        .frame(minHeight: 64)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private extension TimelineCategory {
+    var collectionAspectRatio: CGFloat {
+        switch self {
+        case .venue: 0.84
+        case .foodTasting: 1.18
+        case .attireFitting: 0.76
+        case .weddingShower: 0.92
+        case .bachelorBachelorette: 0.78
+        case .rehearsal: 1.12
+        case .ceremony: 0.74
+        case .reception: 1.0
+        case .other: 1.20
+        }
+    }
+}
+
+#Preview {
+    NavigationStack {
+        TimelineView()
+            .environment(WeddingWorkspace.sample)
+    }
+}

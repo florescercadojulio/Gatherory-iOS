@@ -1,4 +1,4 @@
-# iSaidYes App Architecture
+# Gatherory App Architecture
 
 ## Overview
 
@@ -8,7 +8,7 @@ This structure is intended to support authentication, local persistence, network
 
 ## Product Vision
 
-**I Said Yes** is a shared planning space where couples and the people they trust collect, discuss, organize, and decide on wedding ideas together.
+**Gatherory** is a shared planning space where couples and the people they trust collect, discuss, organize, and decide on wedding ideas together.
 
 The initial experience can be bride-forward because brides are likely to represent a large part of the audience, but it should never imply that wedding planning belongs to one gender. The language, imagery, onboarding, and permissions should welcome brides, grooms, partners, family members, wedding-party members, and professional planners. Use the relationship-based roles `Host`, `Collaborator`, and `Guest` instead of gender-coded assumptions.
 
@@ -41,9 +41,9 @@ The visual personality should feel celebratory, warm, polished, and calm. It sho
 ## Recommended Folder Structure
 
 ```text
-isaidyes/
+Gatherory/
 ├── App/
-│   ├── ISaidYesApp.swift
+│   ├── GatheroryApp.swift
 │   ├── AppEnvironment.swift
 │   ├── AppRouter.swift
 │   └── RootView.swift
@@ -133,15 +133,15 @@ isaidyes/
     ├── Info.plist
     ├── Development.xcconfig
     ├── Production.xcconfig
-    └── isaidyes.entitlements
+    └── Gatherory.entitlements
 
-isaidyesTests/
+GatheroryTests/
 ├── Features/
 ├── Data/
 ├── TestDoubles/
 └── Fixtures/
 
-isaidyesUITests/
+GatheroryUITests/
 ├── Authentication/
 └── CriticalFlows/
 ```
@@ -154,7 +154,7 @@ Create these directories as they become necessary rather than adding every empty
 
 The `App` directory contains the composition root and the application's highest-level navigation.
 
-- `ISaidYesApp` creates long-lived dependencies and injects them into SwiftUI.
+- `GatheroryApp` creates long-lived dependencies and injects them into SwiftUI.
 - `AppEnvironment` owns configured service implementations and the SwiftData container.
 - `AppRouter` represents application-level navigation when that navigation becomes sufficiently complex to warrant a dedicated type.
 - `RootView` decides whether to show session restoration, authentication, onboarding, or the signed-in application.
@@ -197,13 +197,25 @@ Keep a person's wedding role separate from both attendance and planning permissi
 - A `Collaborator` helps with ideas, decisions, and timeline events.
 - A `Guest` belongs to the eventual invitation list and isn't assignable to planning work by default.
 
-Timeline events should store structured fields instead of combining them into display strings: `title` is the event name, `category` is the event type, `scheduledAt` is the date and time, `location` is the place, stable participant IDs identify the planning team, and optional image data identifies the event visually. Persist participant IDs rather than names so profile edits don't break assignments and the backend can enforce access independently of the UI. In the interface, prefer these direct domain labels over conversational prompts like “what,” “why,” or “who.” Event completion is reversible from the collection context menu and event detail; destructive management such as deletion belongs in the event detail view.
+Timeline events should store structured fields instead of combining them into display strings: `title` is the event name, `category` is the event type, `scheduledAt` is the date and time, `eventLocation` is a structured place, stable participant IDs identify the planning team, and optional image data identifies the event visually. `EventLocation` keeps the Apple Maps identifier, normalized full and short addresses, coordinates, an optional unit or floor, and an optional user-facing location name. Persist this value rather than `MKMapItem` so the domain and backend stay independent of MapKit while retaining enough information to display the place, open it in Maps, or refresh provider details later. Persist participant IDs rather than names so profile edits don't break assignments and the backend can enforce access independently of the UI. In the interface, prefer these direct domain labels over conversational prompts like “what,” “why,” or “who.” Event completion is reversible from the collection context menu and event detail; destructive management such as deletion belongs in the event detail view.
+
+The location editor uses `MKLocalSearchCompleter` for live address and point-of-interest suggestions, then resolves the selected completion with `MKLocalSearch`. Searching Apple Maps doesn't require reading the device's current location, so this flow must not request location permission. If a future “Use My Location” action is added, treat it as a separate, explicit capability and request permission only in response to that action.
+
+Event details use the stored coordinates to request the matching daily forecast from WeatherKit. Keep this request detail-scoped instead of fetching forecasts for every row in the timeline: opening an event is a clear signal of interest, controls request volume, and keeps weather secondary to the event itself. Show the condition, high and low temperatures, and precipitation chance only when WeatherKit returns the event's calendar day. If the date is beyond the returned forecast window, say that the forecast will be available closer to the event instead of presenting historical averages as a prediction.
+
+`EventWeatherProviding` is the provider boundary. Its WeatherKit implementation maps framework values into app-owned `EventWeatherForecast` and `EventWeatherAttribution` values, which keeps views testable and leaves room for a server-backed implementation for scheduled checks and notifications. Weather data may be cached only temporarily to improve WeatherKit performance; don't persist it as shared event data. Whenever forecast data appears, display the Apple Weather mark linked to WeatherKit's legal attribution page. The app target also needs the WeatherKit entitlement, and the explicit App ID must have WeatherKit enabled in the Apple Developer portal before live requests can succeed.
+
+References:
+
+- [WeatherKit](https://developer.apple.com/documentation/weatherkit)
+- [Weather attribution](https://developer.apple.com/documentation/weatherkit/weatherattribution)
+- [Enable WeatherKit for an App ID](https://developer.apple.com/help/account/services/weatherkit)
 
 ### Image Sources
 
 Ideas, registry gifts, and timeline events share one image-source flow. It offers the system Photos picker, an on-device camera capture, and Image Playground when `ImagePlaygroundViewController.isAvailable` is true. The Image Playground integration must use Apple's presented `imagePlaygroundSheet` experience; it isn't a headless generation service. Seed the sheet with domain-specific concepts and, when replacing an image, provide the existing artwork as the optional source image.
 
-Image Playground returns a temporary file URL. Read the file immediately into app-owned image data before dismissing the sheet, then let the feature's normal save operation persist or upload it. Keep camera permission copy narrowly scoped to wedding ideas, gifts, and events. Unsupported sources remain visible but unavailable with an accessibility explanation so the layout stays predictable across the simulator and devices without Image Playground.
+Image Playground returns a temporary file URL. Read the file immediately into app-owned image data before dismissing the sheet, then let the feature's normal save operation persist or upload it. Keep camera permission copy narrowly scoped to ideas, gifts, and events. Unsupported sources remain visible but unavailable with an accessibility explanation so the layout stays predictable across the simulator and devices without Image Playground.
 
 ### Resources
 
@@ -409,7 +421,7 @@ Text(idea.updatedAt, style: .relative)
 Use the system font for most UI. A tasteful custom typeface may be used sparingly for large celebratory headings or branding, but it must scale relative to a Dynamic Type text style:
 
 ```swift
-Text("I Said Yes")
+Text("Gatherory")
     .font(.custom("BrandDisplay", size: 34, relativeTo: .largeTitle))
 ```
 
@@ -491,11 +503,11 @@ This type should contain reusable design decisions, not every literal used by th
 
 ## Application Composition
 
-`ISaidYesApp` should construct dependencies, while `RootView` handles top-level application state:
+`GatheroryApp` should construct dependencies, while `RootView` handles top-level application state:
 
 ```swift
 @main
-struct ISaidYesApp: App {
+struct GatheroryApp: App {
     private let environment = AppEnvironment.live()
 
     var body: some Scene {
