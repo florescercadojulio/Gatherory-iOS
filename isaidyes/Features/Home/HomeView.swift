@@ -16,58 +16,74 @@ struct HomeView: View {
                 upcomingSection
                 supportCircle
             }
-            .padding(.horizontal, AppTheme.Spacing.standard)
-            .padding(.bottom, AppTheme.Spacing.section)
+            .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+            .padding(.top, AppTheme.Layout.screenTop)
+            .padding(.bottom, AppTheme.Layout.screenBottom)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
         .background(AppTheme.ColorToken.background)
         .navigationTitle("I Said Yes")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Add idea", systemImage: "plus") { }
                     .labelStyle(.iconOnly)
                     .accessibilityHint("Opens the new wedding idea form")
+
+                AccountToolbarButton()
             }
         }
     }
 
     private var weddingHeader: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+            Text("Together, on purpose")
+                .editorialEyebrow()
+                .foregroundStyle(.black.opacity(0.55))
+
             Text(workspace.title)
-                .font(.largeTitle.bold())
+                .font(AppTheme.Typography.display)
+                .tracking(-1)
                 .minimumScaleFactor(0.8)
 
             Text(workspace.weddingDate, format: .dateTime.month(.wide).day().year())
                 .font(.headline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.black.opacity(0.62))
 
             Label("\(daysRemaining) days to go", systemImage: "heart.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(AppTheme.ColorToken.accent)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(.black, in: Capsule())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, AppTheme.Spacing.compact)
+        .appCard(
+            background: AppTheme.ColorToken.lilac,
+            foreground: AppTheme.ColorToken.onPastel,
+            padding: AppTheme.Spacing.spacious,
+            border: false
+        )
     }
 
     private var planningModeCard: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
             HStack(alignment: .top) {
                 Image(systemName: workspace.planningMode.symbol)
-                    .font(.title2)
-                    .foregroundStyle(AppTheme.ColorToken.accent)
-                    .frame(width: 32, height: 32)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(.black, in: Circle())
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Planning mode")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
+                        .editorialEyebrow()
+                        .foregroundStyle(.black.opacity(0.52))
                     Text(workspace.planningMode.title)
-                        .font(.title3.bold())
+                        .font(AppTheme.Typography.cardTitle)
                     Text(workspace.planningMode.detail)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.black.opacity(0.62))
                 }
 
                 Spacer(minLength: AppTheme.Spacing.compact)
@@ -86,10 +102,18 @@ struct HomeView: View {
             } label: {
                 Label("Change mode", systemImage: "slider.horizontal.3")
                     .frame(maxWidth: .infinity)
+                    .foregroundStyle(.white)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .tint(.black)
         }
-        .appCard()
+        .appCard(
+            background: AppTheme.ColorToken.cream,
+            foreground: AppTheme.ColorToken.onPastel,
+            padding: AppTheme.Spacing.spacious,
+            border: false
+        )
     }
 
     private var overviewGrid: some View {
@@ -98,21 +122,25 @@ struct HomeView: View {
                 value: "\(workspace.decisionQueue.count)",
                 label: "To decide",
                 symbol: "rectangle.on.rectangle.angled",
-                tint: .purple
+                background: AppTheme.ColorToken.lime
             )
             MetricCard(
                 value: "\(workspace.ideas.filter { $0.status == .shortlisted }.count)",
                 label: "Shortlisted",
                 symbol: "heart.fill",
-                tint: .pink
+                background: AppTheme.ColorToken.pink
             )
         }
     }
 
     private var upcomingSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+            Text("On the horizon")
+                .editorialEyebrow()
+                .foregroundStyle(.secondary)
+
             Text("Coming up")
-                .font(.title2.bold())
+                .font(AppTheme.Typography.sectionTitle)
 
             ForEach(workspace.upcomingTimeline.prefix(3)) { item in
                 HStack(spacing: AppTheme.Spacing.standard) {
@@ -123,8 +151,10 @@ struct HomeView: View {
                         Text(item.dueDate, format: .dateTime.day())
                             .font(.title2.bold())
                     }
-                    .foregroundStyle(AppTheme.ColorToken.accent)
+                    .foregroundStyle(.black)
                     .frame(width: 48)
+                    .padding(.vertical, AppTheme.Spacing.compact)
+                    .background(AppTheme.ColorToken.lime, in: RoundedRectangle(cornerRadius: AppTheme.Radius.control))
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(item.title)
@@ -136,7 +166,7 @@ struct HomeView: View {
 
                     Spacer()
                 }
-                .appCard()
+                .appCard(background: AppTheme.ColorToken.surface)
             }
         }
     }
@@ -144,10 +174,18 @@ struct HomeView: View {
     private var supportCircle: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
             HStack {
-                Text("Your support circle")
-                    .font(.title2.bold())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Your people")
+                        .editorialEyebrow()
+                        .foregroundStyle(.black.opacity(0.52))
+                    Text("Support circle")
+                        .font(AppTheme.Typography.sectionTitle)
+                }
                 Spacer()
                 Button("Manage") { }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    .tint(.black)
             }
 
             HStack(spacing: -8) {
@@ -155,12 +193,18 @@ struct HomeView: View {
                     Text(member.initials)
                         .font(.subheadline.bold())
                         .frame(width: 44, height: 44)
-                        .background(AppTheme.ColorToken.elevatedSurface, in: Circle())
-                        .overlay(Circle().stroke(AppTheme.ColorToken.background, lineWidth: 3))
+                        .background(.black.opacity(0.08), in: Circle())
+                        .overlay(Circle().stroke(AppTheme.ColorToken.pink, lineWidth: 3))
                         .accessibilityLabel("\(member.name), \(member.role)")
                 }
             }
         }
+        .appCard(
+            background: AppTheme.ColorToken.pink,
+            foreground: AppTheme.ColorToken.onPastel,
+            padding: AppTheme.Spacing.spacious,
+            border: false
+        )
     }
 }
 
@@ -168,13 +212,13 @@ private struct MetricCard: View {
     let value: String
     let label: String
     let symbol: String
-    let tint: Color
+    let background: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
             Image(systemName: symbol)
                 .font(.title2)
-                .foregroundStyle(tint)
+                .foregroundStyle(.black)
             Text(value)
                 .font(.title.bold())
             Text(label)
@@ -182,7 +226,7 @@ private struct MetricCard: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .appCard()
+        .appCard(background: background, foreground: .black, border: false)
         .accessibilityElement(children: .combine)
     }
 }

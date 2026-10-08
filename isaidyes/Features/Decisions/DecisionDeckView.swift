@@ -1,4 +1,5 @@
 import SwiftUI
+import Glur
 
 struct DecisionDeckView: View {
     @Environment(WeddingWorkspace.self) private var workspace
@@ -10,17 +11,14 @@ struct DecisionDeckView: View {
     }
 
     var body: some View {
-        VStack(spacing: AppTheme.Spacing.spacious) {
+        VStack(spacing: AppTheme.Spacing.compact) {
             if let idea = currentIdea {
-                deckProgress
-
                 DecisionCard(idea: idea, dragOffset: dragOffset)
+                    .frame(maxHeight: .infinity)
                     .offset(dragOffset)
                     .rotationEffect(.degrees(Double(dragOffset.width / 24)))
                     .gesture(dragGesture(for: idea))
                     .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82), value: dragOffset)
-
-                decisionButtons(for: idea)
             } else {
                 ContentUnavailableView {
                     Label("You're all caught up", systemImage: "checkmark.circle.fill")
@@ -37,46 +35,12 @@ struct DecisionDeckView: View {
                 .frame(maxHeight: .infinity)
             }
         }
-        .padding(AppTheme.Spacing.standard)
+        .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+        .padding(.top, AppTheme.Layout.screenTop)
+        .padding(.bottom, AppTheme.Layout.screenTop)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.ColorToken.background)
-        .navigationTitle("Decision deck")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Undo", systemImage: "arrow.uturn.backward") {
-                    workspace.undoLastDecision()
-                }
-                .labelStyle(.iconOnly)
-                .disabled(!workspace.canUndoDecision)
-            }
-        }
-    }
-
-    private var deckProgress: some View {
-        HStack {
-            Text("\(workspace.decisionQueue.count) ideas waiting")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-    }
-
-    private func decisionButtons(for idea: WeddingIdea) -> some View {
-        HStack(spacing: AppTheme.Spacing.spacious) {
-            DecisionButton(title: "Pass", symbol: "xmark", tint: .secondary) {
-                decide(.pass, idea: idea)
-            }
-
-            DecisionButton(title: "Maybe", symbol: "bookmark.fill", tint: .orange) {
-                decide(.maybe, idea: idea)
-            }
-
-            DecisionButton(title: "Love it", symbol: "heart.fill", tint: .pink) {
-                decide(.love, idea: idea)
-            }
-        }
-        .frame(maxWidth: .infinity)
+        .toolbarVisibility(.hidden, for: .navigationBar)
     }
 
     private func dragGesture(for idea: WeddingIdea) -> some Gesture {
@@ -112,27 +76,38 @@ private struct DecisionCard: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                LinearGradient(
-                    colors: [idea.category.tint.opacity(0.58), idea.category.tint],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                idea.category.tint
 
                 Image(systemName: idea.category.symbol)
-                    .font(.system(size: 88, weight: .light))
-                    .foregroundStyle(.white.opacity(0.9))
+                    .font(.system(size: 112, weight: .light))
+                    .foregroundStyle(.black.opacity(0.76))
                     .accessibilityHidden(true)
-
+            }
+            .glur(
+                radius: 12,
+                offset: 0.58,
+                interpolation: 0.34,
+                direction: .up,
+                noise: 0.04
+            )
+            .overlay(alignment: .top) {
+                SwipeGuide()
+                    .padding(AppTheme.Spacing.standard)
+            }
+            .overlay {
                 swipeFeedback
             }
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 240)
+            .frame(minHeight: 330, maxHeight: .infinity)
 
             VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
                 HStack {
                     Label(idea.category.title, systemImage: idea.category.symbol)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(idea.category.tint)
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(AppTheme.ColorToken.lime, in: Capsule())
                     Spacer()
                     if let cost = idea.estimatedCost {
                         Text(cost, format: .currency(code: Locale.current.currency?.identifier ?? "USD").precision(.fractionLength(0)))
@@ -146,19 +121,24 @@ private struct DecisionCard: View {
 
                 Text(idea.note)
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.black.opacity(0.62))
                     .fixedSize(horizontal: false, vertical: true)
 
                 Label("Suggested by \(idea.submittedBy)", systemImage: "person.crop.circle")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.black.opacity(0.58))
             }
             .padding(AppTheme.Spacing.spacious)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.ColorToken.surface)
+            .foregroundStyle(.black)
+            .background(AppTheme.ColorToken.cream)
         }
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero))
-        .shadow(color: .black.opacity(0.12), radius: 18, y: 8)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous)
+                .stroke(.black.opacity(0.08), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.1), radius: 16, y: 8)
         .accessibilityElement(children: .combine)
         .accessibilityHint("Swipe left to pass, right to love it, or up to save for later. Decision buttons are also available below.")
     }
@@ -189,27 +169,31 @@ private struct SwipeLabel: View {
     }
 }
 
-private struct DecisionButton: View {
+private struct SwipeGuide: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            SwipeGuideLabel(title: "Pass", symbol: "arrow.left")
+            Spacer(minLength: 0)
+            SwipeGuideLabel(title: "Maybe", symbol: "arrow.up")
+            Spacer(minLength: 0)
+            SwipeGuideLabel(title: "Love", symbol: "arrow.right")
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Swipe left to pass, up for maybe, or right to love")
+    }
+}
+
+private struct SwipeGuideLabel: View {
     let title: String
     let symbol: String
-    let tint: Color
-    let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: symbol)
-                    .font(.title3.bold())
-                    .frame(width: 52, height: 52)
-                    .background(tint.opacity(0.14), in: Circle())
-                Text(title)
-                    .font(.caption.weight(.semibold))
-            }
-            .foregroundStyle(tint)
-        }
-        .buttonStyle(.plain)
-        .contentShape(Rectangle())
-        .accessibilityLabel(title)
+        Label(title, systemImage: symbol)
+            .font(.caption.weight(.bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(.black.opacity(0.58), in: Capsule())
     }
 }
 

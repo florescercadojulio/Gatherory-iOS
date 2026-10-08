@@ -10,11 +10,13 @@ import SwiftUI
 @main
 struct isaidyesApp: App {
     @State private var workspace = WeddingWorkspace.sample
+    @AppStorage("appAppearance") private var appearance = AppAppearance.system.rawValue
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(workspace)
+                .preferredColorScheme(AppAppearance(rawValue: appearance)?.colorScheme)
         }
     }
 }

@@ -19,36 +19,54 @@ struct TimelineView: View {
         List {
             weddingDateSection
 
-            Section("Upcoming") {
+            Section {
                 ForEach(upcoming) { item in
                     TimelineRow(item: item) {
                         withAnimation {
                             workspace.toggleTimelineItem(item)
                         }
                     }
+                    .listRowInsets(AppTheme.Layout.listRowInsets)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
+            } header: {
+                Text("Coming up")
+                    .editorialEyebrow()
             }
 
             if !completed.isEmpty {
-                Section("Completed") {
+                Section {
                     ForEach(completed) { item in
                         TimelineRow(item: item) {
                             withAnimation {
                                 workspace.toggleTimelineItem(item)
                             }
                         }
+                        .listRowInsets(AppTheme.Layout.listRowInsets)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                     }
+                } header: {
+                    Text("Completed")
+                        .editorialEyebrow()
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
+        .contentMargins(.top, AppTheme.Layout.screenTop, for: .scrollContent)
+        .contentMargins(.bottom, AppTheme.Layout.screenBottom, for: .scrollContent)
+        .scrollContentBackground(.hidden)
         .scrollEdgeEffectStyle(.soft, for: .top)
+        .background(AppTheme.ColorToken.background)
         .navigationTitle("Timeline")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Add task", systemImage: "plus") { }
                     .labelStyle(.iconOnly)
+
+                AccountToolbarButton()
             }
         }
     }
@@ -58,20 +76,28 @@ struct TimelineView: View {
             HStack(spacing: AppTheme.Spacing.standard) {
                 Image(systemName: "calendar.badge.heart")
                     .font(.title)
-                    .foregroundStyle(AppTheme.ColorToken.accent)
+                    .foregroundStyle(.white)
                     .frame(width: 48, height: 48)
-                    .background(AppTheme.ColorToken.accent.opacity(0.12), in: Circle())
+                    .background(.black, in: Circle())
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Wedding day")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
+                        .editorialEyebrow()
+                        .foregroundStyle(.black.opacity(0.52))
                     Text(workspace.weddingDate, format: .dateTime.month(.wide).day().year())
                         .font(.headline)
                 }
             }
-            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .appCard(
+                background: AppTheme.ColorToken.lime,
+                foreground: .black,
+                padding: AppTheme.Spacing.spacious,
+                border: false
+            )
+            .listRowInsets(AppTheme.Layout.featuredRowInsets)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         }
     }
 }
@@ -84,11 +110,12 @@ private struct TimelineRow: View {
         HStack(spacing: AppTheme.Spacing.standard) {
             Button(action: toggle) {
                 Image(systemName: item.status == .complete ? "checkmark.circle.fill" : "circle")
-                    .font(.title2)
-                    .foregroundStyle(item.status == .complete ? .green : AppTheme.ColorToken.accent)
-                    .frame(width: 44, height: 44)
+                    .font(.headline)
+                    .frame(width: 32, height: 32)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.circle)
+            .tint(item.status == .complete ? .green : AppTheme.ColorToken.ink)
             .accessibilityLabel(item.status == .complete ? "Mark incomplete" : "Mark complete")
 
             VStack(alignment: .leading, spacing: 4) {
@@ -101,7 +128,8 @@ private struct TimelineRow: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard(background: AppTheme.ColorToken.surface)
     }
 }
 

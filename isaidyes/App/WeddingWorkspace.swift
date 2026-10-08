@@ -9,6 +9,8 @@ final class WeddingWorkspace {
     var members: [WeddingMember]
     var ideas: [WeddingIdea]
     var timeline: [TimelineItem]
+    var registry: [RegistryItem]
+    var isRegistryShared: Bool
 
     private var decisionHistory: [DecisionRecord] = []
 
@@ -18,7 +20,9 @@ final class WeddingWorkspace {
         planningMode: PlanningMode,
         members: [WeddingMember],
         ideas: [WeddingIdea],
-        timeline: [TimelineItem]
+        timeline: [TimelineItem],
+        registry: [RegistryItem],
+        isRegistryShared: Bool = false
     ) {
         self.title = title
         self.weddingDate = weddingDate
@@ -26,6 +30,8 @@ final class WeddingWorkspace {
         self.members = members
         self.ideas = ideas
         self.timeline = timeline
+        self.registry = registry
+        self.isRegistryShared = isRegistryShared
     }
 
     var decisionQueue: [WeddingIdea] {
@@ -68,6 +74,23 @@ final class WeddingWorkspace {
     func toggleTimelineItem(_ item: TimelineItem) {
         guard let index = timeline.firstIndex(where: { $0.id == item.id }) else { return }
         timeline[index].status = timeline[index].status == .complete ? .upcoming : .complete
+    }
+
+    func updateIdea(_ idea: WeddingIdea, status: IdeaStatus) {
+        guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
+        ideas[index].status = status
+    }
+
+    func addRegistryItem(_ item: RegistryItem) {
+        registry.append(item)
+    }
+
+    func commitToRegistryItem(_ item: RegistryItem) {
+        guard isRegistryShared,
+              let index = registry.firstIndex(where: { $0.id == item.id }),
+              registry[index].remainingCount > 0 else { return }
+
+        registry[index].committedCount += 1
     }
 }
 
@@ -152,7 +175,37 @@ extension WeddingWorkspace {
                     owner: "Alex",
                     status: .complete
                 )
-            ]
+            ],
+            registry: [
+                RegistryItem(
+                    title: "Weekend getaway fund",
+                    note: "Help us plan a quiet first trip after the wedding.",
+                    category: .cashFund,
+                    price: 1_500
+                ),
+                RegistryItem(
+                    title: "Dutch oven",
+                    note: "A forever piece for Sunday dinners and sourdough experiments.",
+                    category: .kitchen,
+                    price: 280,
+                    committedCount: 1
+                ),
+                RegistryItem(
+                    title: "Linen sheet set",
+                    note: "Soft, breathable sheets in warm ivory.",
+                    category: .home,
+                    price: 190,
+                    quantity: 2,
+                    committedCount: 1
+                ),
+                RegistryItem(
+                    title: "Cooking class for two",
+                    note: "An evening learning handmade pasta together.",
+                    category: .experience,
+                    price: 160
+                )
+            ],
+            isRegistryShared: true
         )
     }
 }

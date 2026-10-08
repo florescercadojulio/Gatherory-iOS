@@ -87,6 +87,7 @@ enum IdeaStatus: String, CaseIterable, Identifiable, Codable {
     case shortlisted
     case chosen
     case passed
+    case archived
 
     var id: Self { self }
 
@@ -97,6 +98,7 @@ enum IdeaStatus: String, CaseIterable, Identifiable, Codable {
         case .shortlisted: "Shortlisted"
         case .chosen: "Chosen"
         case .passed: "Passed"
+        case .archived: "Archived"
         }
     }
 
@@ -107,6 +109,7 @@ enum IdeaStatus: String, CaseIterable, Identifiable, Codable {
         case .shortlisted: "heart.fill"
         case .chosen: "checkmark.seal.fill"
         case .passed: "xmark"
+        case .archived: "archivebox.fill"
         }
     }
 }
@@ -189,5 +192,71 @@ struct TimelineItem: Identifiable, Hashable {
         self.owner = owner
         self.status = status
         self.linkedIdeaID = linkedIdeaID
+    }
+}
+
+enum RegistryCategory: String, CaseIterable, Identifiable, Codable {
+    case home
+    case kitchen
+    case travel
+    case experience
+    case cashFund
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .home: "Home"
+        case .kitchen: "Kitchen"
+        case .travel: "Travel"
+        case .experience: "Experience"
+        case .cashFund: "Cash fund"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .home: "house.fill"
+        case .kitchen: "fork.knife"
+        case .travel: "airplane"
+        case .experience: "ticket.fill"
+        case .cashFund: "giftcard.fill"
+        }
+    }
+}
+
+struct RegistryItem: Identifiable, Hashable {
+    let id: UUID
+    var title: String
+    var note: String
+    var category: RegistryCategory
+    var price: Decimal
+    var quantity: Int
+    var committedCount: Int
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        note: String,
+        category: RegistryCategory,
+        price: Decimal,
+        quantity: Int = 1,
+        committedCount: Int = 0
+    ) {
+        self.id = id
+        self.title = title
+        self.note = note
+        self.category = category
+        self.price = price
+        self.quantity = quantity
+        self.committedCount = committedCount
+    }
+
+    var remainingCount: Int {
+        max(quantity - committedCount, 0)
+    }
+
+    var isFulfilled: Bool {
+        remainingCount == 0
     }
 }

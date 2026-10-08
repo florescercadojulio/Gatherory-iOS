@@ -68,4 +68,38 @@ struct isaidyesTests {
         #expect(completedItem.status == .complete)
     }
 
+    @Test("Ideas can be archived from the list")
+    func archiveIdea() throws {
+        let workspace = WeddingWorkspace.sample
+        let idea = try #require(workspace.ideas.first)
+
+        workspace.updateIdea(idea, status: .archived)
+
+        let archivedIdea = try #require(workspace.ideas.first { $0.id == idea.id })
+        #expect(archivedIdea.status == .archived)
+    }
+
+    @Test("Guests can reserve an available registry item")
+    func reserveRegistryItem() throws {
+        let workspace = WeddingWorkspace.sample
+        let item = try #require(workspace.registry.first { !$0.isFulfilled })
+
+        workspace.commitToRegistryItem(item)
+
+        let reservedItem = try #require(workspace.registry.first { $0.id == item.id })
+        #expect(reservedItem.committedCount == item.committedCount + 1)
+    }
+
+    @Test("A private registry does not accept reservations")
+    func privateRegistryCannotBeReserved() throws {
+        let workspace = WeddingWorkspace.sample
+        workspace.isRegistryShared = false
+        let item = try #require(workspace.registry.first { !$0.isFulfilled })
+
+        workspace.commitToRegistryItem(item)
+
+        let unchangedItem = try #require(workspace.registry.first { $0.id == item.id })
+        #expect(unchangedItem.committedCount == item.committedCount)
+    }
+
 }
