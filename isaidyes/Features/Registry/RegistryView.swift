@@ -472,7 +472,8 @@ private struct RegistryItemEditorView: View {
             Section("Photo") {
                 PhotoAttachmentPicker(
                     imageData: $imageData,
-                    emptySymbol: category.symbol
+                    emptySymbol: category.symbol,
+                    suggestedConcept: "Wedding registry artwork for \(trimmedTitle.isEmpty ? category.title.lowercased() : trimmedTitle)"
                 )
             }
 

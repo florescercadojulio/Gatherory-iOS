@@ -197,7 +197,13 @@ Keep a person's wedding role separate from both attendance and planning permissi
 - A `Collaborator` helps with ideas, decisions, and timeline events.
 - A `Guest` belongs to the eventual invitation list and isn't assignable to planning work by default.
 
-Timeline events should store structured answers instead of combining them into display strings: `title` answers what, `category` answers why, `scheduledAt` answers when, `location` answers where, stable participant IDs answer who, and optional image data identifies the event visually. Persist participant IDs rather than names so profile edits don't break assignments and the backend can enforce access independently of the UI. Event completion is a reversible status change exposed as a native list swipe action; destructive management such as deletion belongs in the event detail view.
+Timeline events should store structured fields instead of combining them into display strings: `title` is the event name, `category` is the event type, `scheduledAt` is the date and time, `location` is the place, stable participant IDs identify the planning team, and optional image data identifies the event visually. Persist participant IDs rather than names so profile edits don't break assignments and the backend can enforce access independently of the UI. In the interface, prefer these direct domain labels over conversational prompts like “what,” “why,” or “who.” Event completion is reversible from the collection context menu and event detail; destructive management such as deletion belongs in the event detail view.
+
+### Image Sources
+
+Ideas, registry gifts, and timeline events share one image-source flow. It offers the system Photos picker, an on-device camera capture, and Image Playground when `ImagePlaygroundViewController.isAvailable` is true. The Image Playground integration must use Apple's presented `imagePlaygroundSheet` experience; it isn't a headless generation service. Seed the sheet with domain-specific concepts and, when replacing an image, provide the existing artwork as the optional source image.
+
+Image Playground returns a temporary file URL. Read the file immediately into app-owned image data before dismissing the sheet, then let the feature's normal save operation persist or upload it. Keep camera permission copy narrowly scoped to wedding ideas, gifts, and events. Unsupported sources remain visible but unavailable with an accessibility explanation so the layout stays predictable across the simulator and devices without Image Playground.
 
 ### Resources
 

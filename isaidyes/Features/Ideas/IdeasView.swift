@@ -565,7 +565,8 @@ private struct AddIdeaView: View {
                 Section("Photo") {
                     PhotoAttachmentPicker(
                         imageData: $imageData,
-                        emptySymbol: category.symbol
+                        emptySymbol: category.symbol,
+                        suggestedConcept: "Wedding \(category.title.lowercased()) inspiration for \(trimmedTitle.isEmpty ? "our celebration" : trimmedTitle)"
                     )
                 }
             }
