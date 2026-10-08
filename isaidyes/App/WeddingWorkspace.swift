@@ -1,0 +1,158 @@
+import Foundation
+import Observation
+
+@Observable
+final class WeddingWorkspace {
+    var title: String
+    var weddingDate: Date
+    var planningMode: PlanningMode
+    var members: [WeddingMember]
+    var ideas: [WeddingIdea]
+    var timeline: [TimelineItem]
+
+    private var decisionHistory: [DecisionRecord] = []
+
+    init(
+        title: String,
+        weddingDate: Date,
+        planningMode: PlanningMode,
+        members: [WeddingMember],
+        ideas: [WeddingIdea],
+        timeline: [TimelineItem]
+    ) {
+        self.title = title
+        self.weddingDate = weddingDate
+        self.planningMode = planningMode
+        self.members = members
+        self.ideas = ideas
+        self.timeline = timeline
+    }
+
+    var decisionQueue: [WeddingIdea] {
+        ideas.filter { $0.status == .new }
+    }
+
+    var upcomingTimeline: [TimelineItem] {
+        timeline
+            .filter { $0.status == .upcoming }
+            .sorted { $0.dueDate < $1.dueDate }
+    }
+
+    var canUndoDecision: Bool {
+        !decisionHistory.isEmpty
+    }
+
+    func decide(_ choice: DecisionChoice, on idea: WeddingIdea) {
+        guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
+
+        decisionHistory.append(
+            DecisionRecord(ideaID: idea.id, previousStatus: ideas[index].status)
+        )
+
+        ideas[index].status = switch choice {
+        case .pass: .passed
+        case .maybe: .maybe
+        case .love: .shortlisted
+        }
+    }
+
+    func undoLastDecision() {
+        guard let decision = decisionHistory.popLast(),
+              let index = ideas.firstIndex(where: { $0.id == decision.ideaID }) else {
+            return
+        }
+
+        ideas[index].status = decision.previousStatus
+    }
+
+    func toggleTimelineItem(_ item: TimelineItem) {
+        guard let index = timeline.firstIndex(where: { $0.id == item.id }) else { return }
+        timeline[index].status = timeline[index].status == .complete ? .upcoming : .complete
+    }
+}
+
+private struct DecisionRecord {
+    let ideaID: UUID
+    let previousStatus: IdeaStatus
+}
+
+extension WeddingWorkspace {
+    static var sample: WeddingWorkspace {
+        let calendar = Calendar.current
+        let now = Date.now
+
+        return WeddingWorkspace(
+            title: "Alex & Jordan",
+            weddingDate: calendar.date(byAdding: .day, value: 248, to: now) ?? now,
+            planningMode: .openToIdeas,
+            members: [
+                WeddingMember(name: "Alex", role: "Planning Lead", initials: "A"),
+                WeddingMember(name: "Jordan", role: "Partner", initials: "J"),
+                WeddingMember(name: "Sarah", role: "Collaborator", initials: "S"),
+                WeddingMember(name: "Mia", role: "Collaborator", initials: "M")
+            ],
+            ideas: [
+                WeddingIdea(
+                    title: "Garden ceremony lighting",
+                    note: "Warm string lights through the trees for the ceremony and dinner.",
+                    category: .decor,
+                    submittedBy: "Sarah",
+                    estimatedCost: 400
+                ),
+                WeddingIdea(
+                    title: "Wildflower table arrangements",
+                    note: "Loose seasonal flowers in small mismatched glass vases.",
+                    category: .flowers,
+                    submittedBy: "Mia",
+                    estimatedCost: 650
+                ),
+                WeddingIdea(
+                    title: "Documentary-style photographer",
+                    note: "Candid photographs with a few relaxed portraits after the ceremony.",
+                    category: .photography,
+                    submittedBy: "Jordan",
+                    estimatedCost: 2800
+                ),
+                WeddingIdea(
+                    title: "Letterpress invitation suite",
+                    note: "Warm ivory paper with a simple botanical detail.",
+                    category: .invitations,
+                    submittedBy: "Alex",
+                    estimatedCost: 520,
+                    status: .shortlisted
+                ),
+                WeddingIdea(
+                    title: "Acoustic cocktail-hour duo",
+                    note: "Guitar and vocals before the reception band begins.",
+                    category: .music,
+                    submittedBy: "Jordan",
+                    estimatedCost: 900,
+                    status: .maybe
+                )
+            ],
+            timeline: [
+                TimelineItem(
+                    title: "Tour shortlisted venues",
+                    dueDate: calendar.date(byAdding: .day, value: 12, to: now) ?? now,
+                    owner: "Alex & Jordan"
+                ),
+                TimelineItem(
+                    title: "Choose a photographer",
+                    dueDate: calendar.date(byAdding: .day, value: 26, to: now) ?? now,
+                    owner: "Jordan"
+                ),
+                TimelineItem(
+                    title: "Finalize the guest list",
+                    dueDate: calendar.date(byAdding: .day, value: 41, to: now) ?? now,
+                    owner: "Alex"
+                ),
+                TimelineItem(
+                    title: "Create inspiration boards",
+                    dueDate: calendar.date(byAdding: .day, value: -2, to: now) ?? now,
+                    owner: "Alex",
+                    status: .complete
+                )
+            ]
+        )
+    }
+}
