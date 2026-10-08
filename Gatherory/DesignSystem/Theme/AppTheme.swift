@@ -36,6 +36,7 @@ enum AppTheme {
         static let inverseCanvas = Color.black
         static let inverseInk = Color.white
         static let hairline = Color(uiColor: .separator)
+        static let cardBorder = Color(uiColor: .opaqueSeparator).opacity(0.34)
 
         static let lime = Color(red: 220 / 255, green: 238 / 255, blue: 177 / 255)
         static let lilac = Color(red: 197 / 255, green: 176 / 255, blue: 244 / 255)
@@ -117,7 +118,7 @@ extension View {
             .overlay {
                 if border {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                        .stroke(AppTheme.ColorToken.hairline, lineWidth: 0.5)
+                        .stroke(AppTheme.ColorToken.cardBorder, lineWidth: 0.5)
                 }
             }
     }

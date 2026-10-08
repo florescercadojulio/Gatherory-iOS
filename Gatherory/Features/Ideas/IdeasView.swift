@@ -11,13 +11,19 @@ struct IdeasView: View {
     @Namespace private var ideaTransition
 
     private var filteredIdeas: [WeddingIdea] {
+        ideas(for: filter)
+    }
+
+    private func ideas(for filter: IdeaFilter) -> [WeddingIdea] {
         switch filter {
         case .all:
             workspace.ideas.filter { $0.status != .passed && $0.status != .archived }
         case .inbox:
             workspace.ideas.filter { $0.status == .new }
         case .saved:
-            workspace.ideas.filter { $0.status == .maybe || $0.status == .shortlisted || $0.status == .chosen }
+            workspace.ideas.filter { $0.status == .maybe || $0.status == .shortlisted }
+        case .approved:
+            workspace.ideas.filter { $0.status == .chosen }
         case .archived:
             workspace.ideas.filter { $0.status == .archived }
         }
@@ -25,17 +31,7 @@ struct IdeasView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
-                Picker("Idea filter", selection: $filter) {
-                    ForEach(IdeaFilter.allCases) { filter in
-                        Text(filter.title).tag(filter)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .accessibilityHint("Filters ideas by status")
-
-                ideaCollection
-            }
+            ideaCollection
             .padding(.horizontal, AppTheme.Layout.screenHorizontal)
             .padding(.top, AppTheme.Layout.screenTop)
             .padding(.bottom, AppTheme.Layout.screenBottom)
@@ -47,6 +43,27 @@ struct IdeasView: View {
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Menu {
+                    ForEach(IdeaFilter.allCases) { option in
+                        Button {
+                            withAnimation(.snappy) {
+                                filter = option
+                            }
+                        } label: {
+                            Label(
+                                option.title,
+                                systemImage: option == filter ? "checkmark" : option.symbol
+                            )
+                        }
+                    }
+                } label: {
+                    Label(filter.title, systemImage: "line.3.horizontal.decrease")
+                }
+                .accessibilityLabel("Filter ideas")
+                .accessibilityValue(filter.title)
+            }
+
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Add idea", systemImage: "plus") {
                     isAddingIdea = true
@@ -71,38 +88,22 @@ struct IdeasView: View {
 
     @ViewBuilder
     private var ideaCollection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(filter.collectionTitle)
-                    .font(.title2.bold())
-
-                Spacer(minLength: AppTheme.Spacing.compact)
-
-                Text(filteredIdeas.count, format: .number)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel(
-                        filteredIdeas.count == 1 ? "1 idea" : "\(filteredIdeas.count) ideas"
-                    )
-            }
-
-            if filteredIdeas.isEmpty {
-                ContentUnavailableView(
-                    "No ideas here",
-                    systemImage: "sparkles",
-                    description: Text("Ideas from your support circle will appear here.")
-                )
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppTheme.Spacing.section)
-            } else {
-                MasonryLayout(
-                    columnCount: dynamicTypeSize.isAccessibilitySize ? 1 : 2,
-                    spacing: 12,
-                    layoutDirection: layoutDirection
-                ) {
-                    ForEach(filteredIdeas) { idea in
-                        ideaButton(idea)
-                    }
+        if filteredIdeas.isEmpty {
+            ContentUnavailableView(
+                filter.emptyTitle,
+                systemImage: filter.symbol,
+                description: Text(filter.emptyDescription)
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppTheme.Spacing.section)
+        } else {
+            MasonryLayout(
+                columnCount: dynamicTypeSize.isAccessibilitySize ? 1 : 2,
+                spacing: 12,
+                layoutDirection: layoutDirection
+            ) {
+                ForEach(filteredIdeas) { idea in
+                    ideaButton(idea)
                 }
             }
         }
@@ -171,6 +172,7 @@ private enum IdeaFilter: String, CaseIterable, Identifiable {
     case all
     case inbox
     case saved
+    case approved
     case archived
 
     var id: Self { self }
@@ -180,16 +182,38 @@ private enum IdeaFilter: String, CaseIterable, Identifiable {
         case .all: "All"
         case .inbox: "Inbox"
         case .saved: "Saved"
+        case .approved: "Approved"
         case .archived: "Archive"
         }
     }
 
-    var collectionTitle: String {
+    var symbol: String {
         switch self {
-        case .all: "All Ideas"
-        case .inbox: "Inbox"
-        case .saved: "Saved"
-        case .archived: "Archive"
+        case .all: "square.grid.2x2"
+        case .inbox: "tray"
+        case .saved: "bookmark"
+        case .approved: "checkmark.seal"
+        case .archived: "archivebox"
+        }
+    }
+
+    var emptyTitle: String {
+        switch self {
+        case .all: "No ideas yet"
+        case .inbox: "Inbox is clear"
+        case .saved: "No saved ideas"
+        case .approved: "No approved ideas"
+        case .archived: "No archived ideas"
+        }
+    }
+
+    var emptyDescription: String {
+        switch self {
+        case .all: "Add an idea to start shaping the event."
+        case .inbox: "New ideas from your planning team appear here."
+        case .saved: "Ideas saved for later appear here."
+        case .approved: "Ideas appear here after they are approved."
+        case .archived: "Archived ideas appear here."
         }
     }
 }
@@ -340,7 +364,7 @@ struct IdeaDetailView: View {
                         }
 
                         if idea.status != .chosen {
-                            Button("Choose", systemImage: "checkmark.circle.fill") {
+                            Button("Approve", systemImage: "checkmark.circle.fill") {
                                 withAnimation {
                                     workspace.updateIdea(idea, status: .chosen)
                                 }

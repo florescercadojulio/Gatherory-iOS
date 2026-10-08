@@ -3,6 +3,7 @@ import Observation
 
 @Observable
 final class WeddingWorkspace {
+    let mainEventID: UUID
     var title: String
     var weddingDate: Date
     var venueName: String
@@ -11,6 +12,9 @@ final class WeddingWorkspace {
     var members: [WeddingMember]
     var ideas: [WeddingIdea]
     var timeline: [TimelineItem]
+    var notes: [EventNote]
+    var mainEventStatus: EventStatus
+    var mainEventResponse: EventResponse?
     var registry: [RegistryItem]
     var isRegistryShared: Bool
     var isCollaboratorLinkEnabled: Bool
@@ -21,6 +25,7 @@ final class WeddingWorkspace {
     private var decisionHistory: [DecisionRecord] = []
 
     init(
+        mainEventID: UUID = UUID(),
         title: String,
         weddingDate: Date,
         venueName: String,
@@ -29,6 +34,9 @@ final class WeddingWorkspace {
         members: [WeddingMember],
         ideas: [WeddingIdea],
         timeline: [TimelineItem],
+        notes: [EventNote] = [],
+        mainEventStatus: EventStatus = .approved,
+        mainEventResponse: EventResponse? = nil,
         registry: [RegistryItem],
         isRegistryShared: Bool = false,
         isCollaboratorLinkEnabled: Bool = true,
@@ -36,6 +44,7 @@ final class WeddingWorkspace {
         defaultCollaboratorPermission: PlanningPermission = .contribute,
         collaboratorInviteURL: URL = URL(string: "https://isaidyes.app/join/planning-circle")!
     ) {
+        self.mainEventID = mainEventID
         self.title = title
         self.weddingDate = weddingDate
         self.venueName = venueName
@@ -43,7 +52,14 @@ final class WeddingWorkspace {
         self.planningMode = planningMode
         self.members = members
         self.ideas = ideas
-        self.timeline = timeline
+        self.timeline = timeline.map { event in
+            var childEvent = event
+            childEvent.parentEventID = mainEventID
+            return childEvent
+        }
+        self.notes = notes
+        self.mainEventStatus = mainEventStatus
+        self.mainEventResponse = mainEventResponse
         self.registry = registry
         self.isRegistryShared = isRegistryShared
         self.isCollaboratorLinkEnabled = isCollaboratorLinkEnabled
@@ -58,8 +74,18 @@ final class WeddingWorkspace {
 
     var upcomingTimeline: [TimelineItem] {
         timeline
-            .filter { $0.status == .upcoming }
+            .filter { $0.status != .archived && $0.completionStatus == .upcoming }
             .sorted { $0.scheduledAt < $1.scheduledAt }
+    }
+
+    var childEvents: [TimelineItem] {
+        timeline
+            .filter { $0.parentEventID == mainEventID && $0.status != .archived }
+            .sorted { $0.scheduledAt < $1.scheduledAt }
+    }
+
+    var approvedChildEvents: [TimelineItem] {
+        childEvents.filter { $0.status == .approved }
     }
 
     var planningMembers: [WeddingMember] {
@@ -95,16 +121,40 @@ final class WeddingWorkspace {
 
     func toggleTimelineItem(_ item: TimelineItem) {
         guard let index = timeline.firstIndex(where: { $0.id == item.id }) else { return }
-        timeline[index].status = timeline[index].status == .complete ? .upcoming : .complete
+        timeline[index].completionStatus = timeline[index].completionStatus == .complete ? .upcoming : .complete
     }
 
     func addTimelineItem(_ item: TimelineItem) {
-        timeline.append(item)
+        var childEvent = item
+        childEvent.parentEventID = mainEventID
+        timeline.append(childEvent)
     }
 
     func updateTimelineItem(_ item: TimelineItem) {
         guard let index = timeline.firstIndex(where: { $0.id == item.id }) else { return }
-        timeline[index] = item
+        var childEvent = item
+        childEvent.parentEventID = mainEventID
+        timeline[index] = childEvent
+    }
+
+    func setResponse(_ response: EventResponse?, for item: TimelineItem) {
+        guard let index = timeline.firstIndex(where: { $0.id == item.id }) else { return }
+        timeline[index].response = response
+    }
+
+    func setEventStatus(_ status: EventStatus, for item: TimelineItem) {
+        guard let index = timeline.firstIndex(where: { $0.id == item.id }) else { return }
+        timeline[index].status = status
+    }
+
+    func setMainEventResponse(_ response: EventResponse?) {
+        mainEventResponse = response
+    }
+
+    func sendNote(_ body: String) {
+        let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedBody.isEmpty else { return }
+        notes.insert(EventNote(body: String(trimmedBody.prefix(750))), at: 0)
     }
 
     func deleteTimelineItem(_ item: TimelineItem) {
@@ -172,6 +222,15 @@ extension WeddingWorkspace {
     static var sample: WeddingWorkspace {
         let calendar = Calendar.current
         let now = Date.now
+        let weddingDate = calendar.date(byAdding: .day, value: 248, to: now) ?? now
+        let venueLocation = EventLocation(
+            address: "Ann Arbor, Michigan",
+            shortAddress: "Ann Arbor, MI",
+            placeName: "Willow & Stone Estate",
+            locationName: "Willow & Stone Estate",
+            latitude: 42.2808,
+            longitude: -83.7430
+        )
         let alex = WeddingMember(
             name: "Alex",
             participantRole: .host,
@@ -196,7 +255,7 @@ extension WeddingWorkspace {
 
         return WeddingWorkspace(
             title: "Alex & Jordan",
-            weddingDate: calendar.date(byAdding: .day, value: 248, to: now) ?? now,
+            weddingDate: weddingDate,
             venueName: "Willow & Stone Estate",
             location: "Ann Arbor, Michigan",
             planningMode: .openToIdeas,
@@ -254,22 +313,17 @@ extension WeddingWorkspace {
                     title: "Meet with the venue coordinator",
                     category: .venue,
                     scheduledAt: calendar.date(byAdding: .day, value: 7, to: now) ?? now,
-                    eventLocation: EventLocation(
-                        address: "Ann Arbor, Michigan",
-                        shortAddress: "Ann Arbor, MI",
-                        placeName: "Willow & Stone Estate",
-                        locationName: "Willow & Stone Estate",
-                        latitude: 42.2808,
-                        longitude: -83.7430
-                    ),
-                    participantIDs: [alex.id, jordan.id]
+                    eventLocation: venueLocation,
+                    participantIDs: [alex.id, jordan.id],
+                    status: .approved
                 ),
                 TimelineItem(
                     title: "Plan the photographer shot list",
                     category: .ceremony,
                     scheduledAt: calendar.date(byAdding: .day, value: 26, to: now) ?? now,
                     location: "Video call",
-                    participantIDs: [jordan.id, sarah.id]
+                    participantIDs: [jordan.id, sarah.id],
+                    status: .notSure
                 ),
                 TimelineItem(
                     title: "Finalize the guest list",
@@ -284,7 +338,37 @@ extension WeddingWorkspace {
                     scheduledAt: calendar.date(byAdding: .day, value: -2, to: now) ?? now,
                     location: "Home",
                     participantIDs: [alex.id, mia.id],
-                    status: .complete
+                    status: .approved,
+                    completionStatus: .complete
+                ),
+                TimelineItem(
+                    title: "Ceremony",
+                    category: .ceremony,
+                    purpose: .eventExperience,
+                    scheduledAt: calendar.date(bySettingHour: 16, minute: 0, second: 0, of: weddingDate) ?? weddingDate,
+                    eventLocation: venueLocation,
+                    endsAt: calendar.date(bySettingHour: 16, minute: 30, second: 0, of: weddingDate),
+                    participantIDs: [alex.id, jordan.id],
+                    status: .approved
+                ),
+                TimelineItem(
+                    title: "Cocktail Hour",
+                    category: .reception,
+                    purpose: .eventExperience,
+                    scheduledAt: calendar.date(bySettingHour: 17, minute: 0, second: 0, of: weddingDate) ?? weddingDate,
+                    eventLocation: venueLocation,
+                    endsAt: calendar.date(bySettingHour: 18, minute: 0, second: 0, of: weddingDate),
+                    participantIDs: [alex.id, jordan.id],
+                    status: .approved
+                ),
+                TimelineItem(
+                    title: "Dinner & Dancing",
+                    category: .reception,
+                    purpose: .eventExperience,
+                    scheduledAt: calendar.date(bySettingHour: 18, minute: 0, second: 0, of: weddingDate) ?? weddingDate,
+                    eventLocation: venueLocation,
+                    participantIDs: [alex.id, jordan.id],
+                    status: .approved
                 )
             ],
             registry: [

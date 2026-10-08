@@ -5,10 +5,9 @@ struct HomeView: View {
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var selectedIdeaID: UUID?
     @State private var isInvitingCollaborators = false
+    @State private var isComposingNote = false
     @State private var isShowingInvitationPreview = false
-    @Namespace private var ideaTransition
     @Namespace private var invitationTransition
 
     private var daysRemaining: Int {
@@ -19,24 +18,14 @@ struct HomeView: View {
         workspace.members.filter { $0.attendance == .going }
     }
 
-    private var chosenIdeas: [WeddingIdea] {
-        workspace.ideas.filter { $0.status == .chosen }
+    private var eventHeroHeight: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? 720 : 640
     }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
-                Button {
-                    isShowingInvitationPreview = true
-                } label: {
-                    eventHero
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opens the guest invitation preview")
-
-                eventActions
-                confirmedPlans
-                nextMoment
+                eventHero
             }
             .padding(.horizontal, AppTheme.Layout.screenHorizontal)
             .padding(.top, AppTheme.Layout.screenTop)
@@ -48,15 +37,19 @@ struct HomeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button("Send a note", systemImage: "megaphone") {
+                    isComposingNote = true
+                }
+                .labelStyle(.iconOnly)
+
+                Button("Invite collaborators", systemImage: "person.badge.plus") {
+                    isInvitingCollaborators = true
+                }
+                .labelStyle(.iconOnly)
+
                 AccountToolbarButton()
             }
-        }
-        .navigationDestination(item: $selectedIdeaID) { ideaID in
-            IdeaDetailView(
-                ideaID: ideaID,
-                transitionNamespace: ideaTransition
-            )
         }
         .navigationDestination(isPresented: $isShowingInvitationPreview) {
             InvitationPreviewView(transitionNamespace: invitationTransition)
@@ -65,13 +58,24 @@ struct HomeView: View {
             CollaborationInviteView()
                 .environment(workspace)
         }
+        .sheet(isPresented: $isComposingNote) {
+            NoteComposerView()
+                .environment(workspace)
+        }
     }
 
     private var eventHero: some View {
-        ZStack(alignment: .bottom) {
-            venueArtwork
+        GeometryReader { proxy in
+            ZStack(alignment: .bottom) {
+                Button {
+                    isShowingInvitationPreview = true
+                } label: {
+                    ZStack(alignment: .bottom) {
+                        venueArtwork
+                            .frame(width: proxy.size.width, height: eventHeroHeight)
+                            .clipped()
 
-            LinearGradient(
+                    LinearGradient(
                 stops: [
                     .init(color: .clear, location: 0.34),
                     .init(color: .black.opacity(reduceTransparency ? 0.24 : 0.08), location: 0.52),
@@ -82,7 +86,7 @@ struct HomeView: View {
                 endPoint: .bottom
             )
 
-            VStack(spacing: AppTheme.Spacing.standard) {
+                    VStack(spacing: AppTheme.Spacing.standard) {
                 Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 120 : 220)
 
                 attendeeSummary
@@ -109,23 +113,43 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, AppTheme.Spacing.compact)
                 .shadow(color: .black.opacity(0.28), radius: 10, y: 4)
+
             }
-            .foregroundStyle(.white)
-            .padding(AppTheme.Spacing.spacious)
+                    .foregroundStyle(.white)
+                    .padding(AppTheme.Spacing.spacious)
+
+                    VStack {
+                        HStack {
+                            EventStatusBadge(status: workspace.mainEventStatus)
+
+                            Spacer(minLength: 0)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(AppTheme.Spacing.spacious)
+                }
+                    .frame(width: proxy.size.width, height: eventHeroHeight)
+                    .clipped()
+                    .matchedTransitionSource(id: InvitationTransitionID.mainEvent, in: invitationTransition)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens the guest invitation preview")
+                .accessibilityLabel(
+                    "\(workspace.title), \(workspace.weddingDate.formatted(date: .long, time: .omitted)), " +
+                    "at \(workspace.venueName), \(workspace.location). \(goingMembers.count) going. " +
+                    "\(daysRemaining) days to go."
+                )
+            }
+            .frame(width: proxy.size.width, height: eventHeroHeight)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous)
+                    .stroke(.white.opacity(0.20), lineWidth: 0.5)
+            }
+            .accessibilityElement(children: .contain)
         }
-        .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 650 : 570)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous)
-                .stroke(.white.opacity(0.20), lineWidth: 0.5)
-        }
-        .matchedTransitionSource(id: InvitationTransitionID.mainEvent, in: invitationTransition)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(workspace.title), \(workspace.weddingDate.formatted(date: .long, time: .omitted)), " +
-            "at \(workspace.venueName), \(workspace.location). \(goingMembers.count) going. " +
-            "\(daysRemaining) days to go."
-        )
+        .frame(height: eventHeroHeight)
     }
 
     @ViewBuilder
@@ -175,65 +199,66 @@ struct HomeView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var eventActions: some View {
-        HStack(spacing: AppTheme.Spacing.standard) {
-            Button("Send a note", systemImage: "megaphone.fill") { }
-                .frame(maxWidth: .infinity)
+}
 
-            Button("Invite", systemImage: "person.badge.plus") {
-                isInvitingCollaborators = true
-            }
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
-        .controlSize(.large)
+private struct NoteComposerView: View {
+    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(\.dismiss) private var dismiss
+    @State private var note = ""
+    @FocusState private var isFocused: Bool
+
+    private let characterLimit = 750
+
+    private var trimmedNote: String {
+        note.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var confirmedPlans: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            Text("The wedding so far")
-                .font(AppTheme.Typography.sectionTitle)
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextEditor(text: $note)
+                        .frame(minHeight: 180, alignment: .topLeading)
+                        .focused($isFocused)
+                        .accessibilityLabel("Note")
+                        .onChange(of: note) { _, newValue in
+                            if newValue.count > characterLimit {
+                                note = String(newValue.prefix(characterLimit))
+                            }
+                        }
+                } header: {
+                    Text("Message")
+                } footer: {
+                    HStack {
+                        Text("Share an update with everyone helping plan this event.")
 
-            ForEach(chosenIdeas) { idea in
-                ConfirmedPlanRow(
-                    idea: idea,
-                    venueImageName: idea.category == .venue ? "WeddingVenueHero" : nil,
-                    transitionNamespace: ideaTransition,
-                    open: {
-                        selectedIdeaID = idea.id
+                        Spacer(minLength: AppTheme.Spacing.compact)
+
+                        Text("\(note.count)/\(characterLimit)")
+                            .monospacedDigit()
+                            .accessibilityLabel("\(characterLimit - note.count) characters remaining")
                     }
-                )
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var nextMoment: some View {
-        if let item = workspace.upcomingTimeline.first {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                Text("Next up")
-                    .font(AppTheme.Typography.sectionTitle)
-
-                HStack(spacing: AppTheme.Spacing.standard) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.title2)
-                        .foregroundStyle(AppTheme.ColorToken.accent)
-                        .frame(width: 48, height: 48)
-                        .background(AppTheme.ColorToken.accent.opacity(0.12), in: Circle())
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.title)
-                            .font(.headline)
-                        Text(item.scheduledAt, format: .dateTime.weekday(.wide).month(.abbreviated).day())
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 0)
                 }
-                .appCard(background: AppTheme.ColorToken.surface)
-                .accessibilityElement(children: .combine)
+            }
+            .navigationTitle("Send a Note")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Send") {
+                        workspace.sendNote(trimmedNote)
+                        dismiss()
+                    }
+                    .disabled(trimmedNote.isEmpty)
+                }
+            }
+            .task {
+                isFocused = true
             }
         }
     }
@@ -243,45 +268,16 @@ private enum InvitationTransitionID: Hashable {
     case mainEvent
 }
 
-private enum InvitationResponse: String, CaseIterable, Identifiable {
-    case going
-    case notSure
-    case notGoing
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .going: "Going"
-        case .notSure: "Not Sure"
-        case .notGoing: "Can't Go"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .going: "checkmark.circle.fill"
-        case .notSure: "questionmark.circle.fill"
-        case .notGoing: "xmark.circle.fill"
-        }
-    }
-}
-
-private struct InvitationMoment: Identifiable {
-    let id = UUID()
-    let title: String
-    let time: Date
-    let detail: String
-    let symbol: String
-}
-
 private struct InvitationPreviewView: View {
     @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var response: InvitationResponse?
+    @State private var scrollOffset: CGFloat = 0
+    @State private var selectedScheduleItem: TimelineItem?
 
     let transitionNamespace: Namespace.ID
+    @Namespace private var scheduleTransition
 
     private var hosts: [WeddingMember] {
         workspace.members.filter { $0.participantRole == .host }
@@ -302,141 +298,119 @@ private struct InvitationPreviewView: View {
             ?? workspace.weddingDate
     }
 
-    private var schedule: [InvitationMoment] {
-        [
-            InvitationMoment(
-                title: "Ceremony",
-                time: eventTime(hour: 16),
-                detail: "The garden at \(workspace.venueName)",
-                symbol: "heart.fill"
-            ),
-            InvitationMoment(
-                title: "Cocktail Hour",
-                time: eventTime(hour: 17),
-                detail: "Drinks and small bites on the terrace",
-                symbol: "wineglass.fill"
-            ),
-            InvitationMoment(
-                title: "Dinner & Dancing",
-                time: eventTime(hour: 18),
-                detail: "Dinner under the trees, followed by dancing",
-                symbol: "music.note"
-            )
-        ]
+    private var schedule: [TimelineItem] {
+        workspace.approvedChildEvents.filter {
+            $0.purpose == .eventExperience
+                && Calendar.current.isDate($0.scheduledAt, inSameDayAs: workspace.weddingDate)
+        }
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
-                invitationHero
-                rsvpCard
-                eventDetails
-                scheduleCard
-                musicCard
-                dressCodeCard
-                notesCard
+        GeometryReader { proxy in
+            let heroHeight = max(
+                proxy.size.height + proxy.safeAreaInsets.top,
+                dynamicTypeSize.isAccessibilitySize ? 760 : 680
+            )
+
+            ZStack {
+                InvitationFixedBackdrop(
+                    blurProgress: blurProgress,
+                    reduceMotion: reduceMotion,
+                    reduceTransparency: reduceTransparency
+                )
+
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        invitationHero(height: heroHeight)
+
+                        invitationInformation
+                    }
+                }
+                .scrollIndicators(.hidden)
+                .appSoftScrollEdges()
+                .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                    max(geometry.contentOffset.y + geometry.contentInsets.top, 0)
+                } action: { _, newOffset in
+                    scrollOffset = newOffset
+                }
             }
-            .padding(.horizontal, AppTheme.Layout.screenHorizontal)
-            .padding(.top, AppTheme.Layout.screenTop)
-            .padding(.bottom, AppTheme.Layout.screenBottom)
+            .ignoresSafeArea(edges: .top)
         }
-        .scrollIndicators(.hidden)
-        .appSoftScrollEdges()
-        .background(AppTheme.ColorToken.background)
+        .background(.black)
         .navigationTitle("Invitation")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .preferredColorScheme(.dark)
         .navigationTransition(
             .zoom(sourceID: InvitationTransitionID.mainEvent, in: transitionNamespace)
         )
+        .navigationDestination(item: $selectedScheduleItem) { item in
+            TimelineEventReadOnlyView(
+                item: item,
+                transitionNamespace: scheduleTransition
+            )
+        }
     }
 
-    private var invitationHero: some View {
-        ZStack(alignment: .bottom) {
-            heroArtwork
+    private var blurProgress: CGFloat {
+        min(max(scrollOffset / 220, 0), 1)
+    }
 
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0.30),
-                    .init(color: .black.opacity(reduceTransparency ? 0.28 : 0.10), location: 0.50),
-                    .init(color: .black.opacity(reduceTransparency ? 0.78 : 0.50), location: 0.74),
-                    .init(color: .black.opacity(reduceTransparency ? 0.92 : 0.74), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .accessibilityHidden(true)
+    private func invitationHero(height: CGFloat) -> some View {
+        VStack(spacing: AppTheme.Spacing.standard) {
+            Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 150 : 260)
 
-            VStack(spacing: AppTheme.Spacing.standard) {
-                Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 150 : 260)
+            Text("Together with their families")
+                .font(.subheadline.weight(.medium))
 
-                Text("Together with their families")
-                    .font(.subheadline.weight(.medium))
-
-                Text(workspace.title)
-                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("invite you to celebrate with them")
-                    .font(.body)
-                    .multilineTextAlignment(.center)
-
-                VStack(spacing: 6) {
-                    Text(
-                        workspace.weddingDate,
-                        format: .dateTime.weekday(.wide).month(.wide).day().year()
-                    )
-                    .font(.headline)
-
-                    Text(workspace.venueName)
-                        .font(.subheadline.weight(.semibold))
-
-                    Text(workspace.location)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.84))
-                }
+            Text(workspace.title)
+                .font(.system(.largeTitle, design: .rounded, weight: .bold))
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("invite you to celebrate with them")
+                .font(.body)
+                .multilineTextAlignment(.center)
+
+            VStack(spacing: 6) {
+                Text(
+                    workspace.weddingDate,
+                    format: .dateTime.weekday(.wide).month(.wide).day().year()
+                )
+                .font(.headline)
+
+                Text(workspace.venueName)
+                    .font(.subheadline.weight(.semibold))
+
+                Text(workspace.location)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.84))
             }
-            .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.34), radius: 10, y: 4)
-            .padding(AppTheme.Spacing.spacious)
+            .multilineTextAlignment(.center)
         }
-        .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 690 : 610)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous)
-                .stroke(.white.opacity(0.20), lineWidth: 0.5)
-        }
+        .foregroundStyle(.white)
+        .shadow(color: .black.opacity(0.34), radius: 10, y: 4)
+        .padding(AppTheme.Spacing.spacious)
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
         .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder
-    private var heroArtwork: some View {
-        let artwork = Image("WeddingVenueHero")
-            .resizable()
-            .scaledToFill()
-
-        if reduceTransparency {
-            artwork
-        } else {
-            artwork.glur(
-                radius: 26,
-                mask: .linear(
-                    stops: [
-                        .init(intensity: 0, location: 0),
-                        .init(intensity: 0, location: 0.46),
-                        .init(intensity: 0.18, location: 0.60),
-                        .init(intensity: 0.74, location: 0.79),
-                        .init(intensity: 1, location: 1)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                noise: 0.025
-            )
+    private var invitationInformation: some View {
+        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
+            rsvpCard
+            eventDetails
+            scheduleCard
+            musicCard
+            dressCodeCard
+            notesCard
         }
+        .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+        .padding(.top, AppTheme.Spacing.section)
+        .padding(.bottom, AppTheme.Layout.screenBottom + AppTheme.Spacing.section)
+        .foregroundStyle(.white)
+        .environment(\.colorScheme, .dark)
     }
 
     private var rsvpCard: some View {
@@ -445,19 +419,11 @@ private struct InvitationPreviewView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: AppTheme.Spacing.compact) {
-                    responseButtons
-                }
+            responseButtons
 
-                VStack(spacing: AppTheme.Spacing.compact) {
-                    responseButtons
-                }
-            }
-
-            if let response {
+            if let response = workspace.mainEventResponse {
                 Label(
-                    response == .going ? "We can't wait to celebrate with you." : "Response saved for this preview.",
+                    response == .going ? "We can't wait to celebrate with you." : "Response saved for this event.",
                     systemImage: response.symbol
                 )
                 .font(.subheadline.weight(.medium))
@@ -469,32 +435,10 @@ private struct InvitationPreviewView: View {
 
     @ViewBuilder
     private var responseButtons: some View {
-        ForEach(InvitationResponse.allCases) { option in
-            Button {
-                withAnimation(.snappy) {
-                    response = option
-                }
-            } label: {
-                VStack(spacing: 6) {
-                    Image(systemName: option.symbol)
-                        .font(.title3)
-
-                    Text(option.title)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                }
-                .foregroundStyle(response == option ? Color.white : Color.primary)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 62)
+        EventResponseControl(selection: workspace.mainEventResponse) { response in
+            withAnimation(.snappy) {
+                workspace.setMainEventResponse(response)
             }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.roundedRectangle(radius: AppTheme.Radius.control))
-            .tint(
-                response == option
-                    ? AppTheme.ColorToken.accent
-                    : Color(uiColor: .tertiarySystemFill)
-            )
-            .accessibilityValue(response == option ? "Selected" : "Not selected")
         }
     }
 
@@ -521,15 +465,34 @@ private struct InvitationPreviewView: View {
     }
 
     private var scheduleCard: some View {
-        InvitationSection(title: "Schedule", symbol: "clock.fill") {
-            ForEach(schedule) { moment in
-                InvitationDetailRow(
-                    symbol: moment.symbol,
-                    title: moment.time.formatted(date: .omitted, time: .shortened),
-                    value: "\(moment.title)\n\(moment.detail)"
-                )
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+            Label("Schedule", systemImage: "clock.fill")
+                .font(.title3.bold())
+
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .center, spacing: 12) {
+                    ForEach(schedule) { item in
+                        TimelineEventCard(
+                            item: item,
+                            transitionNamespace: scheduleTransition,
+                            showsPlanningStatus: false,
+                            cardAspectRatio: 0.78
+                        ) {
+                            selectedScheduleItem = item
+                        }
+                        .containerRelativeFrame(.horizontal) { length, _ in
+                            dynamicTypeSize.isAccessibilitySize
+                                ? length
+                                : min(max(length * 0.78, 250), 340)
+                        }
+                    }
+                }
+                .scrollTargetLayout()
             }
+            .scrollIndicators(.hidden)
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
         }
+        .foregroundStyle(.white)
     }
 
     @ViewBuilder
@@ -581,17 +544,11 @@ private struct InvitationPreviewView: View {
         }
     }
 
-    private func eventTime(hour: Int) -> Date {
-        Calendar.current.date(
-            bySettingHour: hour,
-            minute: 0,
-            second: 0,
-            of: workspace.weddingDate
-        ) ?? workspace.weddingDate
-    }
 }
 
 private struct InvitationSection<Content: View>: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     let title: String
     let symbol: String
     @ViewBuilder let content: Content
@@ -605,14 +562,71 @@ private struct InvitationSection<Content: View>: View {
         }
         .padding(AppTheme.Spacing.standard)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            AppTheme.ColorToken.surface,
-            in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-        )
+        .background {
+            let shape = RoundedRectangle(
+                cornerRadius: AppTheme.Radius.card,
+                style: .continuous
+            )
+
+            if reduceTransparency {
+                shape.fill(.black.opacity(0.92))
+            } else {
+                shape
+                    .fill(.regularMaterial)
+                    .overlay(shape.fill(.black.opacity(0.46)))
+            }
+        }
         .overlay {
             RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                .stroke(AppTheme.ColorToken.hairline, lineWidth: 0.5)
+                .stroke(.white.opacity(reduceTransparency ? 0.12 : 0.22), lineWidth: 0.5)
         }
+        .foregroundStyle(.white)
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+private struct InvitationFixedBackdrop: View {
+    let blurProgress: CGFloat
+    let reduceMotion: Bool
+    let reduceTransparency: Bool
+
+    var body: some View {
+        GeometryReader { proxy in
+            let activeBlurProgress = reduceMotion ? 0 : blurProgress
+            let blurRadius = reduceTransparency ? 0 : 38 * activeBlurProgress
+            let dimmingOpacity = reduceTransparency
+                ? 0.82
+                : 0.10 + (0.34 * blurProgress)
+
+            ZStack {
+                Color.black
+
+                Image("WeddingVenueHero")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .scaleEffect(1 + (0.06 * activeBlurProgress))
+                    .blur(radius: blurRadius, opaque: true)
+                    .clipped()
+
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0.02), location: 0),
+                        .init(color: .black.opacity(dimmingOpacity * 0.42), location: 0.52),
+                        .init(color: .black.opacity(dimmingOpacity), location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                Color.black.opacity(reduceMotion ? 0.12 * blurProgress : 0)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .clipped()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .ignoresSafeArea()
     }
 }
 
@@ -644,72 +658,6 @@ private struct InvitationDetailRow: View {
     }
 }
 
-private struct ConfirmedPlanRow: View {
-    let idea: WeddingIdea
-    let venueImageName: String?
-    let transitionNamespace: Namespace.ID
-    let open: () -> Void
-
-    var body: some View {
-        Button(action: open) {
-            HStack(spacing: AppTheme.Spacing.standard) {
-                artwork
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Label(idea.category.title, systemImage: idea.category.symbol)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-
-                    Text(idea.title)
-                        .font(.headline)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text(idea.note)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Opens idea details")
-        .padding(AppTheme.Spacing.standard)
-        .background(
-            AppTheme.ColorToken.surface,
-            in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-        )
-    }
-
-    @ViewBuilder
-    private var artwork: some View {
-        if let venueImageName {
-            Image(venueImageName)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 72, height: 88)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
-                .matchedTransitionSource(id: idea.id, in: transitionNamespace)
-                .accessibilityHidden(true)
-        } else {
-            MediaArtwork(
-                imageData: idea.imageData,
-                symbol: idea.category.symbol,
-                colors: idea.category.artworkColors,
-                accent: idea.category.artworkAccent,
-                ambientBlurRadius: 4,
-                progressiveBlurRadius: 0,
-                blurStart: 1
-            )
-            .frame(width: 72, height: 88)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
-            .matchedTransitionSource(id: idea.id, in: transitionNamespace)
-            .accessibilityHidden(true)
-        }
-    }
-}
 
 #Preview {
     NavigationStack {

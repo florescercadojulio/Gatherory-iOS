@@ -96,7 +96,7 @@ enum IdeaStatus: String, CaseIterable, Identifiable, Codable {
         case .new: "New"
         case .maybe: "Maybe"
         case .shortlisted: "Shortlisted"
-        case .chosen: "Chosen"
+        case .chosen: "Approved"
         case .passed: "Passed"
         case .archived: "Archived"
         }
@@ -305,9 +305,75 @@ struct WeddingMember: Identifiable, Hashable {
     }
 }
 
-enum TimelineStatus: String, Codable {
+enum EventCompletionStatus: String, Codable {
     case upcoming
     case complete
+}
+
+enum EventStatus: String, CaseIterable, Identifiable, Codable {
+    case draft
+    case approved
+    case notSure
+    case rejected
+    case archived
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .draft: "Draft"
+        case .approved: "Approved"
+        case .notSure: "Not Sure"
+        case .rejected: "Rejected"
+        case .archived: "Archived"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .draft: "doc.badge.ellipsis"
+        case .approved: "checkmark.seal.fill"
+        case .notSure: "questionmark.circle.fill"
+        case .rejected: "xmark.circle.fill"
+        case .archived: "archivebox.fill"
+        }
+    }
+}
+
+enum EventResponse: String, CaseIterable, Identifiable, Codable {
+    case going
+    case notSure
+    case notGoing
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .going: "Going"
+        case .notSure: "Not Sure"
+        case .notGoing: "Can't Go"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .going: "checkmark.circle.fill"
+        case .notSure: "questionmark.circle.fill"
+        case .notGoing: "xmark.circle.fill"
+        }
+    }
+}
+
+struct EventNote: Identifiable, Hashable, Codable {
+    let id: UUID
+    let body: String
+    let sentAt: Date
+
+    init(id: UUID = UUID(), body: String, sentAt: Date = .now) {
+        self.id = id
+        self.body = body
+        self.sentAt = sentAt
+    }
 }
 
 enum TimelineCategory: String, CaseIterable, Identifiable, Codable {
@@ -348,6 +414,43 @@ enum TimelineCategory: String, CaseIterable, Identifiable, Codable {
         case .ceremony: "heart.fill"
         case .reception: "music.note"
         case .other: "ellipsis.circle.fill"
+        }
+    }
+}
+
+enum EventPurpose: String, CaseIterable, Identifiable, Codable {
+    case planning
+    case eventExperience
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .planning: "Planning & Scouting"
+        case .eventExperience: "Part of the Event"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .planning: "Planning"
+        case .eventExperience: "Event"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .planning:
+            "A visit, appointment, or task that helps bring the event to life."
+        case .eventExperience:
+            "An activity guests can attend as part of the event experience."
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .planning: "binoculars.fill"
+        case .eventExperience: "party.popper.fill"
         }
     }
 }
@@ -408,13 +511,17 @@ struct TimelineItem: Identifiable, Hashable {
     let id: UUID
     var title: String
     var category: TimelineCategory
+    var purpose: EventPurpose
     var scheduledAt: Date
     var endsAt: Date?
     var isAllDay: Bool
     var timeZoneIdentifier: String
     var eventLocation: EventLocation?
     var participantIDs: [UUID]
-    var status: TimelineStatus
+    var parentEventID: UUID?
+    var status: EventStatus
+    var completionStatus: EventCompletionStatus
+    var response: EventResponse?
     var linkedIdeaID: UUID?
     var imageData: Data?
 
@@ -422,19 +529,24 @@ struct TimelineItem: Identifiable, Hashable {
         id: UUID = UUID(),
         title: String,
         category: TimelineCategory,
+        purpose: EventPurpose = .planning,
         scheduledAt: Date,
         location: String,
         endsAt: Date? = nil,
         isAllDay: Bool = false,
         timeZoneIdentifier: String = TimeZone.autoupdatingCurrent.identifier,
         participantIDs: [UUID],
-        status: TimelineStatus = .upcoming,
+        parentEventID: UUID? = nil,
+        status: EventStatus = .draft,
+        completionStatus: EventCompletionStatus = .upcoming,
+        response: EventResponse? = nil,
         linkedIdeaID: UUID? = nil,
         imageData: Data? = nil
     ) {
         self.id = id
         self.title = title
         self.category = category
+        self.purpose = purpose
         self.scheduledAt = scheduledAt
         self.endsAt = endsAt
         self.isAllDay = isAllDay
@@ -443,7 +555,10 @@ struct TimelineItem: Identifiable, Hashable {
             ? nil
             : EventLocation(address: location)
         self.participantIDs = participantIDs
+        self.parentEventID = parentEventID
         self.status = status
+        self.completionStatus = completionStatus
+        self.response = response
         self.linkedIdeaID = linkedIdeaID
         self.imageData = imageData
     }
@@ -452,26 +567,34 @@ struct TimelineItem: Identifiable, Hashable {
         id: UUID = UUID(),
         title: String,
         category: TimelineCategory,
+        purpose: EventPurpose = .planning,
         scheduledAt: Date,
         eventLocation: EventLocation? = nil,
         endsAt: Date? = nil,
         isAllDay: Bool = false,
         timeZoneIdentifier: String = TimeZone.autoupdatingCurrent.identifier,
         participantIDs: [UUID],
-        status: TimelineStatus = .upcoming,
+        parentEventID: UUID? = nil,
+        status: EventStatus = .draft,
+        completionStatus: EventCompletionStatus = .upcoming,
+        response: EventResponse? = nil,
         linkedIdeaID: UUID? = nil,
         imageData: Data? = nil
     ) {
         self.id = id
         self.title = title
         self.category = category
+        self.purpose = purpose
         self.scheduledAt = scheduledAt
         self.endsAt = endsAt
         self.isAllDay = isAllDay
         self.timeZoneIdentifier = timeZoneIdentifier
         self.eventLocation = eventLocation
         self.participantIDs = participantIDs
+        self.parentEventID = parentEventID
         self.status = status
+        self.completionStatus = completionStatus
+        self.response = response
         self.linkedIdeaID = linkedIdeaID
         self.imageData = imageData
     }

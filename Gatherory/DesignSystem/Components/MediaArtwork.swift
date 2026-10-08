@@ -35,28 +35,35 @@ struct MediaArtwork: View {
 
     @ViewBuilder
     private func photo(_ image: Image) -> some View {
-        let artwork = image
-            .resizable()
-            .scaledToFill()
+        GeometryReader { proxy in
+            let artwork = image
+                .resizable()
+                .scaledToFill()
+                .frame(width: proxy.size.width, height: proxy.size.height)
 
-        if reduceTransparency || progressiveBlurRadius == 0 {
-            artwork
-        } else {
-            artwork.glur(
-                radius: progressiveBlurRadius,
-                mask: .linear(
-                    stops: [
-                        .init(intensity: 0, location: 0),
-                        .init(intensity: 0, location: blurStart),
-                        .init(intensity: 0.22, location: min(blurStart + 0.16, 1)),
-                        .init(intensity: 0.72, location: min(blurStart + 0.34, 1)),
-                        .init(intensity: 1, location: min(blurStart + 0.50, 1))
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                noise: 0.035
-            )
+            if reduceTransparency || progressiveBlurRadius == 0 {
+                artwork
+                    .clipped()
+            } else {
+                artwork
+                    .glur(
+                        radius: progressiveBlurRadius,
+                        mask: .linear(
+                            stops: [
+                                .init(intensity: 0, location: 0),
+                                .init(intensity: 0, location: blurStart),
+                                .init(intensity: 0.22, location: min(blurStart + 0.16, 1)),
+                                .init(intensity: 0.72, location: min(blurStart + 0.34, 1)),
+                                .init(intensity: 1, location: min(blurStart + 0.50, 1))
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        noise: 0.035
+                    )
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .clipped()
+            }
         }
     }
 

@@ -7,6 +7,7 @@ struct CollaborationInviteView: View {
         NavigationStack {
             CollaborationInviteScreen()
         }
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -589,17 +590,22 @@ private func initials(for name: String) -> String {
 private extension View {
     @ViewBuilder
     func collaborationCard(reduceTransparency: Bool) -> some View {
-        if reduceTransparency {
-            background(
-                Color(uiColor: .secondarySystemBackground),
-                in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-            )
-        } else {
-            background(
-                .regularMaterial,
-                in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-            )
-        }
+        let shape = RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+
+        foregroundStyle(.white)
+            .background {
+                if reduceTransparency {
+                    shape.fill(.black.opacity(0.92))
+                } else {
+                    shape
+                        .fill(.regularMaterial)
+                        .overlay(shape.fill(.black.opacity(0.42)))
+                }
+            }
+            .overlay {
+                shape.stroke(.white.opacity(0.18), lineWidth: 0.5)
+            }
+            .environment(\.colorScheme, .dark)
     }
 }
 

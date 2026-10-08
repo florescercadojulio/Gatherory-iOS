@@ -5,22 +5,44 @@ struct TimelineView: View {
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.layoutDirection) private var layoutDirection
+    @State private var filter: TimelineFilter = .all
     @State private var isAddingTimelineItem = false
     @State private var selectedTimelineItemID: UUID?
     @Namespace private var timelineTransition
 
     private var upcoming: [TimelineItem] {
         workspace.timeline
-            .filter { $0.status == .upcoming }
+            .filter { $0.status != .archived && $0.completionStatus == .upcoming }
             .sorted(by: chronologicallyBefore)
     }
 
     private var completed: [TimelineItem] {
         workspace.timeline
-            .filter { $0.status == .complete }
+            .filter { $0.status != .archived && $0.completionStatus == .complete }
             .sorted { lhs, rhs in
                 chronologicallyBefore(rhs, lhs)
             }
+    }
+
+    private var archived: [TimelineItem] {
+        workspace.timeline
+            .filter { $0.status == .archived }
+            .sorted(by: chronologicallyBefore)
+    }
+
+    private var filteredEvents: [TimelineItem] {
+        switch filter {
+        case .all:
+            workspace.timeline
+                .filter { $0.status != .archived }
+                .sorted(by: chronologicallyBefore)
+        case .upcoming:
+            upcoming
+        case .completed:
+            completed
+        case .archived:
+            archived
+        }
     }
 
     private func chronologicallyBefore(_ lhs: TimelineItem, _ rhs: TimelineItem) -> Bool {
@@ -33,23 +55,7 @@ struct TimelineView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
-                eventCollection(
-                    title: "Upcoming",
-                    items: upcoming,
-                    emptyTitle: "No upcoming events",
-                    emptyDescription: "Add an event to start building the wedding timeline."
-                )
-
-                if !completed.isEmpty {
-                    eventCollection(
-                        title: "Completed",
-                        items: completed,
-                        emptyTitle: "No completed events",
-                        emptyDescription: "Completed events appear here."
-                    )
-                }
-            }
+            eventCollection
             .padding(.horizontal, AppTheme.Layout.screenHorizontal)
             .padding(.top, AppTheme.Layout.screenTop)
             .padding(.bottom, AppTheme.Layout.screenBottom)
@@ -61,6 +67,27 @@ struct TimelineView: View {
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Menu {
+                    ForEach(TimelineFilter.allCases) { option in
+                        Button {
+                            withAnimation(.snappy) {
+                                filter = option
+                            }
+                        } label: {
+                            Label(
+                                option.title,
+                                systemImage: option == filter ? "checkmark" : option.symbol
+                            )
+                        }
+                    }
+                } label: {
+                    Label(filter.title, systemImage: "line.3.horizontal.decrease")
+                }
+                .accessibilityLabel("Filter timeline")
+                .accessibilityValue(filter.title)
+            }
+
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Add event", systemImage: "plus") {
                     isAddingTimelineItem = true
@@ -86,72 +113,109 @@ struct TimelineView: View {
     }
 
     @ViewBuilder
-    private func eventCollection(
-        title: String,
-        items: [TimelineItem],
-        emptyTitle: String,
-        emptyDescription: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .font(.title2.bold())
-
-                Spacer(minLength: AppTheme.Spacing.compact)
-
-                Text(items.count, format: .number)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel(items.count == 1 ? "1 event" : "\(items.count) events")
-            }
-
-            if items.isEmpty {
-                ContentUnavailableView(
-                    emptyTitle,
-                    systemImage: "calendar",
-                    description: Text(emptyDescription)
-                )
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppTheme.Spacing.section)
-            } else {
-                MasonryLayout(
-                    columnCount: dynamicTypeSize.isAccessibilitySize ? 1 : 2,
-                    spacing: 12,
-                    layoutDirection: layoutDirection
-                ) {
-                    ForEach(items) { item in
-                        eventButton(item)
-                    }
+    private var eventCollection: some View {
+        if filteredEvents.isEmpty {
+            ContentUnavailableView(
+                filter.emptyTitle,
+                systemImage: filter.symbol,
+                description: Text(filter.emptyDescription)
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppTheme.Spacing.section)
+        } else {
+            MasonryLayout(
+                columnCount: dynamicTypeSize.isAccessibilitySize ? 1 : 2,
+                spacing: 12,
+                layoutDirection: layoutDirection
+            ) {
+                ForEach(filteredEvents) { item in
+                    eventButton(item)
                 }
             }
         }
     }
 
     private func eventButton(_ item: TimelineItem) -> some View {
-        Button {
+        TimelineEventCard(
+            item: item,
+            transitionNamespace: timelineTransition,
+            showsPlanningStatus: true
+        ) {
             selectedTimelineItemID = item.id
-        } label: {
-            TimelineCollectionCard(
-                item: item,
-                transitionNamespace: timelineTransition
-            )
         }
-        .buttonStyle(.plain)
-        .accessibilityHint("Opens event details")
-        .accessibilityAction(named: item.status == .complete ? "Undo Complete" : "Mark Complete") {
+        .accessibilityAction(named: item.completionStatus == .complete ? "Undo Complete" : "Mark Complete") {
             withAnimation {
                 workspace.toggleTimelineItem(item)
             }
         }
         .contextMenu {
-            Button(
-                item.status == .complete ? "Undo Complete" : "Mark Complete",
-                systemImage: item.status == .complete ? "arrow.uturn.backward" : "checkmark.circle"
-            ) {
-                withAnimation {
-                    workspace.toggleTimelineItem(item)
+            if item.status == .archived {
+                Button("Restore as Draft", systemImage: "arrow.uturn.backward") {
+                    withAnimation {
+                        workspace.setEventStatus(.draft, for: item)
+                    }
+                }
+            } else {
+                Button(
+                    item.completionStatus == .complete ? "Undo Complete" : "Mark Complete",
+                    systemImage: item.completionStatus == .complete ? "arrow.uturn.backward" : "checkmark.circle"
+                ) {
+                    withAnimation {
+                        workspace.toggleTimelineItem(item)
+                    }
+                }
+
+                Button("Archive Event", systemImage: "archivebox") {
+                    withAnimation {
+                        workspace.setEventStatus(.archived, for: item)
+                    }
                 }
             }
+        }
+    }
+}
+
+private enum TimelineFilter: String, CaseIterable, Identifiable {
+    case all
+    case upcoming
+    case completed
+    case archived
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .all: "All"
+        case .upcoming: "Upcoming"
+        case .completed: "Completed"
+        case .archived: "Archive"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .all: "calendar"
+        case .upcoming: "calendar.badge.clock"
+        case .completed: "checkmark.circle"
+        case .archived: "archivebox"
+        }
+    }
+
+    var emptyTitle: String {
+        switch self {
+        case .all: "No events yet"
+        case .upcoming: "No upcoming events"
+        case .completed: "No completed events"
+        case .archived: "No archived events"
+        }
+    }
+
+    var emptyDescription: String {
+        switch self {
+        case .all: "Add an event to start building the timeline."
+        case .upcoming: "New and scheduled events appear here."
+        case .completed: "Events appear here after they are marked complete."
+        case .archived: "Archived events appear here."
         }
     }
 }
@@ -164,6 +228,8 @@ private struct TimelineItemEditorView: View {
 
     @State private var title: String
     @State private var category: TimelineCategory
+    @State private var purpose: EventPurpose
+    @State private var status: EventStatus
     @State private var scheduledAt: Date
     @State private var endsAt: Date?
     @State private var isAllDay: Bool
@@ -183,6 +249,8 @@ private struct TimelineItemEditorView: View {
         originalItem = item
         _title = State(initialValue: item?.title ?? "")
         _category = State(initialValue: item?.category ?? .venue)
+        _purpose = State(initialValue: item?.purpose ?? .planning)
+        _status = State(initialValue: item?.status ?? .draft)
         _scheduledAt = State(
             initialValue: item?.scheduledAt
                 ?? Calendar.current.date(byAdding: .day, value: 7, to: .now)
@@ -252,7 +320,33 @@ private struct TimelineItemEditorView: View {
             } header: {
                 Label("Event Type", systemImage: "square.grid.2x2.fill")
             } footer: {
-                Text("Choose the kind of wedding event.")
+                Text("Choose the kind of event.")
+            }
+
+            Section {
+                Picker("Purpose", selection: $purpose) {
+                    ForEach(EventPurpose.allCases) { option in
+                        Label(option.title, systemImage: option.symbol)
+                            .tag(option)
+                    }
+                }
+            } header: {
+                Label("Event Purpose", systemImage: purpose.symbol)
+            } footer: {
+                Text(purpose.description)
+            }
+
+            Section {
+                Picker("Planning status", selection: $status) {
+                    ForEach(EventStatus.allCases.filter { $0 != .archived }) { option in
+                        Label(option.title, systemImage: option.symbol)
+                            .tag(option)
+                    }
+                }
+            } header: {
+                Label("Planning Status", systemImage: "checklist")
+            } footer: {
+                Text("Only approved events appear on the guest invitation.")
             }
 
             Section {
@@ -381,13 +475,17 @@ private struct TimelineItemEditorView: View {
                         id: originalItem?.id ?? UUID(),
                         title: trimmedTitle,
                         category: category,
+                        purpose: purpose,
                         scheduledAt: scheduledAt,
                         eventLocation: eventLocation,
                         endsAt: endsAt,
                         isAllDay: isAllDay,
                         timeZoneIdentifier: timeZoneIdentifier,
                         participantIDs: Array(selectedParticipantIDs),
-                        status: originalItem?.status ?? .upcoming,
+                        parentEventID: originalItem?.parentEventID,
+                        status: status,
+                        completionStatus: originalItem?.completionStatus ?? .upcoming,
+                        response: originalItem?.response,
                         linkedIdeaID: originalItem?.linkedIdeaID,
                         imageData: imageData
                     )
@@ -629,9 +727,11 @@ private struct EventDateTimeEditorView: View {
     }
 }
 
-private struct TimelineCollectionCard: View {
+struct TimelineCollectionCard: View {
     let item: TimelineItem
     let transitionNamespace: Namespace.ID
+    var showsPlanningStatus = true
+    var cardAspectRatio: CGFloat? = nil
 
     private var scheduleSummary: String {
         let start = item.scheduledAt.formatted(
@@ -673,10 +773,13 @@ private struct TimelineCollectionCard: View {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
+                Label(item.purpose.shortTitle, systemImage: item.purpose.symbol)
+                    .font(.caption2.weight(.semibold))
+
                 Text(item.title)
                     .font(.headline)
                     .lineLimit(3)
-                    .strikethrough(item.status == .complete)
+                    .strikethrough(item.completionStatus == .complete)
 
                 Text(scheduleSummary)
                     .font(.caption.weight(.medium))
@@ -692,7 +795,7 @@ private struct TimelineCollectionCard: View {
             .shadow(color: .black.opacity(0.36), radius: 5, y: 2)
             .padding(AppTheme.Spacing.standard)
 
-            if item.status == .complete {
+            if item.completionStatus == .complete {
                 VStack {
                     HStack {
                         Spacer(minLength: 0)
@@ -707,8 +810,21 @@ private struct TimelineCollectionCard: View {
                 .padding(AppTheme.Spacing.compact)
                 .accessibilityHidden(true)
             }
+
+            if showsPlanningStatus {
+                VStack {
+                    HStack {
+                        EventStatusBadge(status: item.status)
+
+                        Spacer(minLength: 0)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(.white)
+                .padding(AppTheme.Spacing.compact)
+            }
         }
-        .aspectRatio(artworkAspectRatio, contentMode: .fit)
+        .aspectRatio(cardAspectRatio ?? artworkAspectRatio, contentMode: .fit)
         .frame(maxWidth: .infinity, alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
         .overlay {
@@ -717,7 +833,86 @@ private struct TimelineCollectionCard: View {
         }
         .matchedTransitionSource(id: item.id, in: transitionNamespace)
         .accessibilityElement(children: .combine)
-        .accessibilityValue(item.status == .complete ? "Completed" : "Upcoming")
+        .accessibilityValue(
+            "\(item.purpose.title), \(item.completionStatus == .complete ? "Completed" : "Upcoming")"
+        )
+    }
+}
+
+struct TimelineEventCard: View {
+    let item: TimelineItem
+    let transitionNamespace: Namespace.ID
+    var showsPlanningStatus = true
+    var cardAspectRatio: CGFloat? = nil
+    let open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            TimelineCollectionCard(
+                item: item,
+                transitionNamespace: transitionNamespace,
+                showsPlanningStatus: showsPlanningStatus,
+                cardAspectRatio: cardAspectRatio
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens event details")
+    }
+}
+
+struct EventStatusBadge: View {
+    let status: EventStatus
+
+    var body: some View {
+        Label(status.title, systemImage: status.symbol)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10)
+            .frame(minHeight: 30)
+            .background(.ultraThinMaterial, in: Capsule())
+            .environment(\.colorScheme, .dark)
+            .accessibilityLabel("Event status: \(status.title)")
+    }
+}
+
+struct EventResponseControl: View {
+    let selection: EventResponse?
+    let select: (EventResponse) -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                controls
+            }
+            .frame(maxWidth: .infinity)
+
+            VStack(spacing: 6) {
+                controls
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var controls: some View {
+        ForEach(EventResponse.allCases) { option in
+            Button {
+                select(option)
+            } label: {
+                Label(option.title, systemImage: option.symbol)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+                    .labelStyle(.titleAndIcon)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .frame(maxWidth: .infinity)
+            .tint(selection == option ? AppTheme.ColorToken.accent : .secondary)
+            .foregroundStyle(selection == option ? AppTheme.ColorToken.accent : .primary)
+            .accessibilityValue(selection == option ? "Selected" : "Not selected")
+        }
     }
 }
 
@@ -755,7 +950,7 @@ private struct TimelineEventDetailView: View {
     var body: some View {
         Group {
             if let item {
-                TimelineEventDetailScreen(item: item)
+                TimelineEventDetailScreen(item: item, audience: .planning)
             } else {
                 ContentUnavailableView("Event unavailable", systemImage: "calendar.badge.exclamationmark")
             }
@@ -772,12 +967,27 @@ private struct TimelineEventDetailView: View {
                             isEditingEvent = true
                         }
 
-                        Button(
-                            item.status == .complete ? "Undo Complete" : "Mark Complete",
-                            systemImage: item.status == .complete ? "arrow.uturn.backward" : "checkmark.circle"
-                        ) {
-                            withAnimation {
-                                workspace.toggleTimelineItem(item)
+                        if item.status == .archived {
+                            Button("Restore as Draft", systemImage: "arrow.uturn.backward") {
+                                withAnimation {
+                                    workspace.setEventStatus(.draft, for: item)
+                                }
+                            }
+                        } else {
+                            Button(
+                                item.completionStatus == .complete ? "Undo Complete" : "Mark Complete",
+                                systemImage: item.completionStatus == .complete ? "arrow.uturn.backward" : "checkmark.circle"
+                            ) {
+                                withAnimation {
+                                    workspace.toggleTimelineItem(item)
+                                }
+                            }
+
+                            Button("Archive Event", systemImage: "archivebox") {
+                                withAnimation {
+                                    workspace.setEventStatus(.archived, for: item)
+                                }
+                                dismiss()
                             }
                         }
 
@@ -816,18 +1026,52 @@ private struct TimelineEventDetailView: View {
     }
 }
 
-private struct TimelineEventDetailScreen: View {
+enum TimelineEventAudience {
+    case planning
+    case invitation
+}
+
+struct TimelineEventReadOnlyView: View {
+    @Environment(WeddingWorkspace.self) private var workspace
+
+    let item: TimelineItem
+    let transitionNamespace: Namespace.ID
+
+    private var currentItem: TimelineItem {
+        workspace.timeline.first { $0.id == item.id } ?? item
+    }
+
+    var body: some View {
+        TimelineEventDetailScreen(item: currentItem, audience: .invitation)
+            .navigationTitle("Event details")
+            .navigationBarTitleDisplayMode(.inline)
+            .appClearNavigationBar()
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .navigationTransition(.zoom(sourceID: item.id, in: transitionNamespace))
+    }
+}
+
+struct TimelineEventDetailScreen: View {
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var weather = EventWeatherModel()
 
     let item: TimelineItem
+    let audience: TimelineEventAudience
 
     private var participantNames: String {
-        let names = workspace.members
-            .filter { item.participantIDs.contains($0.id) }
+        let names = workspace.members.filter { member in
+            switch audience {
+            case .planning:
+                item.participantIDs.contains(member.id)
+            case .invitation:
+                member.participantRole == .host
+            }
+        }
             .map(\.name)
-        return names.isEmpty ? "Unassigned" : names.formatted()
+        return names.isEmpty
+            ? (audience == .planning ? "Unassigned" : "Your hosts")
+            : names.formatted()
     }
 
     private var weatherRequestID: String {
@@ -848,6 +1092,17 @@ private struct TimelineEventDetailScreen: View {
 
         guard let endsAt = item.endsAt else {
             return item.isAllDay ? "\(start) · All-day" : start
+        }
+
+        if Calendar.current.isDate(item.scheduledAt, inSameDayAs: endsAt) {
+            let date = item.scheduledAt.formatted(date: .long, time: .omitted)
+            if item.isAllDay {
+                return "\(date) · All-day"
+            }
+
+            let startTime = item.scheduledAt.formatted(date: .omitted, time: .shortened)
+            let endTime = endsAt.formatted(date: .omitted, time: .shortened)
+            return "\(date) · \(startTime)–\(endTime)"
         }
 
         let end = endsAt.formatted(
@@ -875,6 +1130,11 @@ private struct TimelineEventDetailScreen: View {
                             .accessibilityHidden(true)
 
                         identity
+
+                        if audience == .invitation {
+                            attendanceCard
+                        }
+
                         metadata
                     }
                     .frame(
@@ -922,8 +1182,8 @@ private struct TimelineEventDetailScreen: View {
                 Spacer(minLength: AppTheme.Spacing.compact)
 
                 Label(
-                    item.status == .complete ? "Completed" : "Upcoming",
-                    systemImage: item.status == .complete ? "checkmark.circle.fill" : "calendar"
+                    item.completionStatus == .complete ? "Completed" : "Upcoming",
+                    systemImage: item.completionStatus == .complete ? "checkmark.circle.fill" : "calendar"
                 )
                 .font(.caption.weight(.semibold))
             }
@@ -937,12 +1197,47 @@ private struct TimelineEventDetailScreen: View {
         .shadow(color: .black.opacity(0.44), radius: 8, y: 2)
     }
 
+    private var attendanceCard: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+            Label("Will you join us?", systemImage: "envelope.open.fill")
+                .font(.headline)
+
+            EventResponseControl(selection: item.response) { response in
+                withAnimation(.snappy) {
+                    workspace.setResponse(response, for: item)
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(AppTheme.Spacing.standard)
+        .background(
+            reduceTransparency
+                ? AnyShapeStyle(.black.opacity(0.92))
+                : AnyShapeStyle(.thickMaterial),
+            in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                .stroke(.white.opacity(0.16), lineWidth: 0.5)
+        }
+        .environment(\.colorScheme, .dark)
+    }
+
     private var metadata: some View {
         VStack(spacing: 0) {
             TimelineMetadataRow(
                 title: "Date & Time",
                 value: scheduleSummary,
                 symbol: "calendar"
+            )
+
+            Divider()
+                .padding(.leading, 44)
+
+            TimelineMetadataRow(
+                title: "Event Purpose",
+                value: item.purpose.title,
+                symbol: item.purpose.symbol
             )
 
             Divider()
@@ -972,7 +1267,7 @@ private struct TimelineEventDetailScreen: View {
                 .padding(.leading, 44)
 
             TimelineMetadataRow(
-                title: "Planning Team",
+                title: audience == .planning ? "Planning Team" : "Hosted By",
                 value: participantNames,
                 symbol: "person.2.fill"
             )
