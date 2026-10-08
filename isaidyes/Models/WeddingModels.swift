@@ -129,6 +129,7 @@ struct WeddingIdea: Identifiable, Hashable {
     var estimatedCost: Int?
     var status: IdeaStatus
     var submittedAt: Date
+    var imageData: Data?
 
     init(
         id: UUID = UUID(),
@@ -138,7 +139,8 @@ struct WeddingIdea: Identifiable, Hashable {
         submittedBy: String,
         estimatedCost: Int? = nil,
         status: IdeaStatus = .new,
-        submittedAt: Date = .now
+        submittedAt: Date = .now,
+        imageData: Data? = nil
     ) {
         self.id = id
         self.title = title
@@ -148,6 +150,23 @@ struct WeddingIdea: Identifiable, Hashable {
         self.estimatedCost = estimatedCost
         self.status = status
         self.submittedAt = submittedAt
+        self.imageData = imageData
+    }
+}
+
+enum AttendanceStatus: String, CaseIterable, Codable {
+    case invited
+    case going
+    case maybe
+    case declined
+
+    var title: String {
+        switch self {
+        case .invited: "Invited"
+        case .going: "Going"
+        case .maybe: "Maybe"
+        case .declined: "Can't go"
+        }
     }
 }
 
@@ -156,12 +175,20 @@ struct WeddingMember: Identifiable, Hashable {
     var name: String
     var role: String
     var initials: String
+    var attendance: AttendanceStatus
 
-    init(id: UUID = UUID(), name: String, role: String, initials: String) {
+    init(
+        id: UUID = UUID(),
+        name: String,
+        role: String,
+        initials: String,
+        attendance: AttendanceStatus = .going
+    ) {
         self.id = id
         self.name = name
         self.role = role
         self.initials = initials
+        self.attendance = attendance
     }
 }
 
@@ -233,6 +260,7 @@ struct RegistryItem: Identifiable, Hashable {
     var price: Decimal
     var quantity: Int
     var committedCount: Int
+    var imageData: Data?
 
     init(
         id: UUID = UUID(),
@@ -241,7 +269,8 @@ struct RegistryItem: Identifiable, Hashable {
         category: RegistryCategory,
         price: Decimal,
         quantity: Int = 1,
-        committedCount: Int = 0
+        committedCount: Int = 0,
+        imageData: Data? = nil
     ) {
         self.id = id
         self.title = title
@@ -250,6 +279,7 @@ struct RegistryItem: Identifiable, Hashable {
         self.price = price
         self.quantity = quantity
         self.committedCount = committedCount
+        self.imageData = imageData
     }
 
     var remainingCount: Int {

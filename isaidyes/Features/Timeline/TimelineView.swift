@@ -61,6 +61,7 @@ struct TimelineView: View {
         .background(AppTheme.ColorToken.background)
         .navigationTitle("Timeline")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Add task", systemImage: "plus") { }

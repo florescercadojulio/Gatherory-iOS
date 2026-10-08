@@ -5,6 +5,8 @@ import Observation
 final class WeddingWorkspace {
     var title: String
     var weddingDate: Date
+    var venueName: String
+    var location: String
     var planningMode: PlanningMode
     var members: [WeddingMember]
     var ideas: [WeddingIdea]
@@ -17,6 +19,8 @@ final class WeddingWorkspace {
     init(
         title: String,
         weddingDate: Date,
+        venueName: String,
+        location: String,
         planningMode: PlanningMode,
         members: [WeddingMember],
         ideas: [WeddingIdea],
@@ -26,6 +30,8 @@ final class WeddingWorkspace {
     ) {
         self.title = title
         self.weddingDate = weddingDate
+        self.venueName = venueName
+        self.location = location
         self.planningMode = planningMode
         self.members = members
         self.ideas = ideas
@@ -81,8 +87,17 @@ final class WeddingWorkspace {
         ideas[index].status = status
     }
 
+    func addIdea(_ idea: WeddingIdea) {
+        ideas.insert(idea, at: 0)
+    }
+
     func addRegistryItem(_ item: RegistryItem) {
         registry.append(item)
+    }
+
+    func updateRegistryItem(_ item: RegistryItem) {
+        guard let index = registry.firstIndex(where: { $0.id == item.id }) else { return }
+        registry[index] = item
     }
 
     func commitToRegistryItem(_ item: RegistryItem) {
@@ -107,6 +122,8 @@ extension WeddingWorkspace {
         return WeddingWorkspace(
             title: "Alex & Jordan",
             weddingDate: calendar.date(byAdding: .day, value: 248, to: now) ?? now,
+            venueName: "Willow & Stone Estate",
+            location: "Ann Arbor, Michigan",
             planningMode: .openToIdeas,
             members: [
                 WeddingMember(name: "Alex", role: "Planning Lead", initials: "A"),
@@ -115,6 +132,14 @@ extension WeddingWorkspace {
                 WeddingMember(name: "Mia", role: "Collaborator", initials: "M")
             ],
             ideas: [
+                WeddingIdea(
+                    title: "Willow & Stone Estate",
+                    note: "Garden ceremony, dinner under the trees, and space for everyone we love.",
+                    category: .venue,
+                    submittedBy: "Alex & Jordan",
+                    estimatedCost: 12_000,
+                    status: .chosen
+                ),
                 WeddingIdea(
                     title: "Garden ceremony lighting",
                     note: "Warm string lights through the trees for the ceremony and dinner.",
@@ -134,7 +159,8 @@ extension WeddingWorkspace {
                     note: "Candid photographs with a few relaxed portraits after the ceremony.",
                     category: .photography,
                     submittedBy: "Jordan",
-                    estimatedCost: 2800
+                    estimatedCost: 2800,
+                    status: .chosen
                 ),
                 WeddingIdea(
                     title: "Letterpress invitation suite",
@@ -142,7 +168,7 @@ extension WeddingWorkspace {
                     category: .invitations,
                     submittedBy: "Alex",
                     estimatedCost: 520,
-                    status: .shortlisted
+                    status: .chosen
                 ),
                 WeddingIdea(
                     title: "Acoustic cocktail-hour duo",
@@ -155,12 +181,12 @@ extension WeddingWorkspace {
             ],
             timeline: [
                 TimelineItem(
-                    title: "Tour shortlisted venues",
+                    title: "Meet with the venue coordinator",
                     dueDate: calendar.date(byAdding: .day, value: 12, to: now) ?? now,
                     owner: "Alex & Jordan"
                 ),
                 TimelineItem(
-                    title: "Choose a photographer",
+                    title: "Plan the photographer shot list",
                     dueDate: calendar.date(byAdding: .day, value: 26, to: now) ?? now,
                     owner: "Jordan"
                 ),

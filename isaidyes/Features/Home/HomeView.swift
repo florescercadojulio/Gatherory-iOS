@@ -1,20 +1,30 @@
+import Glur
 import SwiftUI
 
 struct HomeView: View {
     @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var daysRemaining: Int {
         max(Calendar.current.dateComponents([.day], from: .now, to: workspace.weddingDate).day ?? 0, 0)
     }
 
+    private var goingMembers: [WeddingMember] {
+        workspace.members.filter { $0.attendance == .going }
+    }
+
+    private var chosenIdeas: [WeddingIdea] {
+        workspace.ideas.filter { $0.status == .chosen }
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
-                weddingHeader
-                planningModeCard
-                overviewGrid
-                upcomingSection
-                supportCircle
+            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
+                eventHero
+                eventActions
+                confirmedPlans
+                nextMoment
             }
             .padding(.horizontal, AppTheme.Layout.screenHorizontal)
             .padding(.top, AppTheme.Layout.screenTop)
@@ -22,212 +32,246 @@ struct HomeView: View {
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
         .background(AppTheme.ColorToken.background)
-        .navigationTitle("I Said Yes")
+        .navigationTitle("Our wedding")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Add idea", systemImage: "plus") { }
-                    .labelStyle(.iconOnly)
-                    .accessibilityHint("Opens the new wedding idea form")
-
+            ToolbarItem(placement: .topBarTrailing) {
                 AccountToolbarButton()
             }
         }
     }
 
-    private var weddingHeader: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            Text("Together, on purpose")
-                .editorialEyebrow()
-                .foregroundStyle(.black.opacity(0.55))
+    private var eventHero: some View {
+        ZStack(alignment: .bottom) {
+            venueArtwork
 
-            Text(workspace.title)
-                .font(AppTheme.Typography.display)
-                .tracking(-1)
-                .minimumScaleFactor(0.8)
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0.34),
+                    .init(color: .black.opacity(reduceTransparency ? 0.24 : 0.08), location: 0.52),
+                    .init(color: .black.opacity(reduceTransparency ? 0.76 : 0.46), location: 0.76),
+                    .init(color: .black.opacity(reduceTransparency ? 0.90 : 0.70), location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
 
-            Text(workspace.weddingDate, format: .dateTime.month(.wide).day().year())
-                .font(.headline)
-                .foregroundStyle(.black.opacity(0.62))
+            VStack(spacing: AppTheme.Spacing.standard) {
+                Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 120 : 220)
 
-            Label("\(daysRemaining) days to go", systemImage: "heart.fill")
+                attendeeSummary
+
+                VStack(spacing: 8) {
+                    Text(workspace.title)
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(workspace.weddingDate, format: .dateTime.weekday(.wide).month(.wide).day().year())
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+
+                    Label("\(workspace.venueName) · \(workspace.location)", systemImage: "mappin.and.ellipse")
+                        .font(.subheadline.weight(.medium))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white.opacity(0.88))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("\(daysRemaining) days away")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+                .shadow(color: .black.opacity(0.28), radius: 10, y: 4)
+            }
+            .foregroundStyle(.white)
+            .padding(AppTheme.Spacing.spacious)
+        }
+        .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 650 : 570)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous)
+                .stroke(.white.opacity(0.20), lineWidth: 0.5)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(workspace.title), \(workspace.weddingDate.formatted(date: .long, time: .omitted)), " +
+            "at \(workspace.venueName), \(workspace.location). \(goingMembers.count) going. " +
+            "\(daysRemaining) days to go."
+        )
+    }
+
+    @ViewBuilder
+    private var venueArtwork: some View {
+        let artwork = Image("WeddingVenueHero")
+            .resizable()
+            .scaledToFill()
+
+        if reduceTransparency {
+            artwork
+        } else {
+            artwork.glur(
+                radius: 24,
+                mask: .linear(
+                    stops: [
+                        .init(intensity: 0, location: 0),
+                        .init(intensity: 0, location: 0.48),
+                        .init(intensity: 0.18, location: 0.60),
+                        .init(intensity: 0.74, location: 0.78),
+                        .init(intensity: 1, location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                noise: 0.025
+            )
+        }
+    }
+
+    private var attendeeSummary: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: -10) {
+                ForEach(goingMembers.prefix(5)) { member in
+                    Text(member.initials)
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .background(.regularMaterial, in: Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.72), lineWidth: 2))
+                        .accessibilityHidden(true)
+                }
+            }
+
+            Text(goingMembers.count == 1 ? "1 person going" : "\(goingMembers.count) people going")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(.black, in: Capsule())
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .appCard(
-            background: AppTheme.ColorToken.lilac,
-            foreground: AppTheme.ColorToken.onPastel,
-            padding: AppTheme.Spacing.spacious,
-            border: false
-        )
+        .accessibilityElement(children: .combine)
     }
 
-    private var planningModeCard: some View {
+    private var eventActions: some View {
+        HStack(spacing: AppTheme.Spacing.standard) {
+            Button("Send a note", systemImage: "megaphone.fill") { }
+                .frame(maxWidth: .infinity)
+
+            Button("Invite guests", systemImage: "person.badge.plus") { }
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .controlSize(.large)
+    }
+
+    private var confirmedPlans: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            HStack(alignment: .top) {
-                Image(systemName: workspace.planningMode.symbol)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(.black, in: Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Decided together")
+                    .editorialEyebrow()
+                    .foregroundStyle(.secondary)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Planning mode")
-                        .editorialEyebrow()
-                        .foregroundStyle(.black.opacity(0.52))
-                    Text(workspace.planningMode.title)
-                        .font(AppTheme.Typography.cardTitle)
-                    Text(workspace.planningMode.detail)
-                        .font(.subheadline)
-                        .foregroundStyle(.black.opacity(0.62))
-                }
-
-                Spacer(minLength: AppTheme.Spacing.compact)
+                Text("The wedding so far")
+                    .font(AppTheme.Typography.sectionTitle)
             }
 
-            Menu {
-                ForEach(PlanningMode.allCases) { mode in
-                    Button {
-                        withAnimation {
-                            workspace.planningMode = mode
-                        }
-                    } label: {
-                        Label(mode.title, systemImage: mode.symbol)
-                    }
-                }
-            } label: {
-                Label("Change mode", systemImage: "slider.horizontal.3")
-                    .frame(maxWidth: .infinity)
-                    .foregroundStyle(.white)
+            ForEach(chosenIdeas) { idea in
+                ConfirmedPlanRow(
+                    idea: idea,
+                    venueImageName: idea.category == .venue ? "WeddingVenueHero" : nil
+                )
             }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .tint(.black)
-        }
-        .appCard(
-            background: AppTheme.ColorToken.cream,
-            foreground: AppTheme.ColorToken.onPastel,
-            padding: AppTheme.Spacing.spacious,
-            border: false
-        )
-    }
-
-    private var overviewGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AppTheme.Spacing.standard) {
-            MetricCard(
-                value: "\(workspace.decisionQueue.count)",
-                label: "To decide",
-                symbol: "rectangle.on.rectangle.angled",
-                background: AppTheme.ColorToken.lime
-            )
-            MetricCard(
-                value: "\(workspace.ideas.filter { $0.status == .shortlisted }.count)",
-                label: "Shortlisted",
-                symbol: "heart.fill",
-                background: AppTheme.ColorToken.pink
-            )
         }
     }
 
-    private var upcomingSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            Text("On the horizon")
-                .editorialEyebrow()
-                .foregroundStyle(.secondary)
+    @ViewBuilder
+    private var nextMoment: some View {
+        if let item = workspace.upcomingTimeline.first {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+                Text("Next up")
+                    .font(AppTheme.Typography.sectionTitle)
 
-            Text("Coming up")
-                .font(AppTheme.Typography.sectionTitle)
-
-            ForEach(workspace.upcomingTimeline.prefix(3)) { item in
                 HStack(spacing: AppTheme.Spacing.standard) {
-                    VStack(spacing: 2) {
-                        Text(item.dueDate, format: .dateTime.month(.abbreviated))
-                            .font(.caption.weight(.semibold))
-                            .textCase(.uppercase)
-                        Text(item.dueDate, format: .dateTime.day())
-                            .font(.title2.bold())
-                    }
-                    .foregroundStyle(.black)
-                    .frame(width: 48)
-                    .padding(.vertical, AppTheme.Spacing.compact)
-                    .background(AppTheme.ColorToken.lime, in: RoundedRectangle(cornerRadius: AppTheme.Radius.control))
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.title2)
+                        .foregroundStyle(AppTheme.ColorToken.accent)
+                        .frame(width: 48, height: 48)
+                        .background(AppTheme.ColorToken.accent.opacity(0.12), in: Circle())
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(item.title)
                             .font(.headline)
-                        Text(item.owner)
+                        Text(item.dueDate, format: .dateTime.weekday(.wide).month(.abbreviated).day())
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
 
-                    Spacer()
+                    Spacer(minLength: 0)
                 }
                 .appCard(background: AppTheme.ColorToken.surface)
+                .accessibilityElement(children: .combine)
             }
         }
-    }
-
-    private var supportCircle: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Your people")
-                        .editorialEyebrow()
-                        .foregroundStyle(.black.opacity(0.52))
-                    Text("Support circle")
-                        .font(AppTheme.Typography.sectionTitle)
-                }
-                Spacer()
-                Button("Manage") { }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.capsule)
-                    .tint(.black)
-            }
-
-            HStack(spacing: -8) {
-                ForEach(workspace.members.prefix(5)) { member in
-                    Text(member.initials)
-                        .font(.subheadline.bold())
-                        .frame(width: 44, height: 44)
-                        .background(.black.opacity(0.08), in: Circle())
-                        .overlay(Circle().stroke(AppTheme.ColorToken.pink, lineWidth: 3))
-                        .accessibilityLabel("\(member.name), \(member.role)")
-                }
-            }
-        }
-        .appCard(
-            background: AppTheme.ColorToken.pink,
-            foreground: AppTheme.ColorToken.onPastel,
-            padding: AppTheme.Spacing.spacious,
-            border: false
-        )
     }
 }
 
-private struct MetricCard: View {
-    let value: String
-    let label: String
-    let symbol: String
-    let background: Color
+private struct ConfirmedPlanRow: View {
+    let idea: WeddingIdea
+    let venueImageName: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-            Image(systemName: symbol)
-                .font(.title2)
-                .foregroundStyle(.black)
-            Text(value)
-                .font(.title.bold())
-            Text(label)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        HStack(spacing: AppTheme.Spacing.standard) {
+            artwork
+
+            VStack(alignment: .leading, spacing: 5) {
+                Label(idea.category.title, systemImage: idea.category.symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Text(idea.title)
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(idea.note)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .accessibilityLabel("Chosen")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .appCard(background: background, foreground: .black, border: false)
+        .padding(AppTheme.Spacing.standard)
+        .background(
+            AppTheme.ColorToken.surface,
+            in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+        )
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var artwork: some View {
+        if let venueImageName {
+            Image(venueImageName)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 72, height: 88)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+                .accessibilityHidden(true)
+        } else {
+            MediaArtwork(
+                imageData: idea.imageData,
+                symbol: idea.category.symbol,
+                colors: idea.category.artworkColors,
+                accent: idea.category.artworkAccent,
+                ambientBlurRadius: 4,
+                progressiveBlurRadius: 0,
+                blurStart: 1
+            )
+            .frame(width: 72, height: 88)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+            .accessibilityHidden(true)
+        }
     }
 }
 

@@ -1,5 +1,4 @@
 import SwiftUI
-import Glur
 
 struct DecisionDeckView: View {
     @Environment(WeddingWorkspace.self) private var workspace
@@ -125,26 +124,11 @@ private struct DecisionCard: View {
 
     @ViewBuilder
     private var artwork: some View {
-        if reduceTransparency {
-            DecisionArtwork(category: idea.category)
-        } else {
-            DecisionArtwork(category: idea.category)
-                .glur(
-                    radius: 22,
-                    mask: .linear(
-                        stops: [
-                            .init(intensity: 0, location: 0),
-                            .init(intensity: 0, location: 0.38),
-                            .init(intensity: 0.22, location: 0.54),
-                            .init(intensity: 0.72, location: 0.72),
-                            .init(intensity: 1, location: 0.88)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    noise: 0.035
-                )
-        }
+        ProgressiveArtwork(
+            symbol: idea.category.symbol,
+            colors: idea.category.artworkColors,
+            accent: idea.category.artworkAccent
+        )
     }
 
     private var ideaDetails: some View {
@@ -202,43 +186,6 @@ private struct DecisionCard: View {
     }
 }
 
-private struct DecisionArtwork: View {
-    let category: IdeaCategory
-
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                LinearGradient(
-                    colors: category.artworkColors,
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-
-                Circle()
-                    .fill(.white.opacity(0.26))
-                    .frame(width: proxy.size.width * 0.92)
-                    .blur(radius: 36)
-                    .offset(x: -proxy.size.width * 0.34, y: -proxy.size.height * 0.34)
-
-                Circle()
-                    .fill(category.artworkAccent.opacity(0.72))
-                    .frame(width: proxy.size.width * 1.08)
-                    .blur(radius: 42)
-                    .offset(x: proxy.size.width * 0.42, y: proxy.size.height * 0.18)
-
-                Image(systemName: category.symbol)
-                    .font(.system(size: min(proxy.size.width * 0.34, 136), weight: .ultraLight))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.white.opacity(0.82))
-                    .shadow(color: .black.opacity(0.14), radius: 24, y: 12)
-                    .offset(y: -proxy.size.height * 0.16)
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-        }
-        .accessibilityHidden(true)
-    }
-}
-
 private struct SwipeLabel: View {
     let title: String
     let symbol: String
@@ -282,27 +229,6 @@ private struct SwipeGuideLabel: View {
                 Capsule()
                     .stroke(.white.opacity(0.16), lineWidth: 0.5)
             }
-    }
-}
-
-private extension IdeaCategory {
-    var artworkColors: [Color] {
-        switch self {
-        case .venue: [Color(red: 0.34, green: 0.23, blue: 0.62), Color(red: 0.78, green: 0.59, blue: 0.86), Color(red: 0.96, green: 0.72, blue: 0.62)]
-        case .attire: [Color(red: 0.32, green: 0.19, blue: 0.31), Color(red: 0.78, green: 0.45, blue: 0.58), Color(red: 0.96, green: 0.78, blue: 0.72)]
-        case .flowers: [Color(red: 0.16, green: 0.36, blue: 0.30), Color(red: 0.78, green: 0.40, blue: 0.42), Color(red: 0.98, green: 0.72, blue: 0.55)]
-        case .food: [Color(red: 0.42, green: 0.20, blue: 0.12), Color(red: 0.82, green: 0.48, blue: 0.24), Color(red: 0.98, green: 0.79, blue: 0.49)]
-        case .photography: [Color(red: 0.10, green: 0.22, blue: 0.29), Color(red: 0.19, green: 0.55, blue: 0.57), Color(red: 0.76, green: 0.78, blue: 0.62)]
-        case .music: [Color(red: 0.14, green: 0.15, blue: 0.32), Color(red: 0.45, green: 0.28, blue: 0.68), Color(red: 0.93, green: 0.43, blue: 0.55)]
-        case .decor: [Color(red: 0.24, green: 0.16, blue: 0.43), Color(red: 0.56, green: 0.38, blue: 0.78), Color(red: 0.96, green: 0.65, blue: 0.56)]
-        case .invitations: [Color(red: 0.22, green: 0.35, blue: 0.43), Color(red: 0.48, green: 0.67, blue: 0.64), Color(red: 0.94, green: 0.76, blue: 0.60)]
-        case .honeymoon: [Color(red: 0.08, green: 0.40, blue: 0.57), Color(red: 0.32, green: 0.70, blue: 0.75), Color(red: 0.98, green: 0.68, blue: 0.38)]
-        case .other: [Color(red: 0.25, green: 0.20, blue: 0.49), Color(red: 0.70, green: 0.40, blue: 0.72), Color(red: 0.97, green: 0.61, blue: 0.54)]
-        }
-    }
-
-    var artworkAccent: Color {
-        artworkColors.last ?? tint
     }
 }
 

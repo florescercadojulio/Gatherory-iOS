@@ -44,7 +44,7 @@ enum AppTheme {
         static let mint = Color(red: 200 / 255, green: 230 / 255, blue: 205 / 255)
         static let coral = Color(red: 243 / 255, green: 201 / 255, blue: 182 / 255)
         static let navy = Color(red: 31 / 255, green: 29 / 255, blue: 61 / 255)
-        static let accent = Color(red: 255 / 255, green: 61 / 255, blue: 139 / 255)
+        static let accent = Color(uiColor: .systemBlue)
         static let celebration = accent
     }
 
