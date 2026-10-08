@@ -10,7 +10,7 @@ This structure is intended to support authentication, local persistence, network
 
 **I Said Yes** is a shared planning space where couples and the people they trust collect, discuss, organize, and decide on wedding ideas together.
 
-The initial experience can be bride-forward because brides are likely to represent a large part of the audience, but it should never imply that wedding planning belongs to one gender. The language, imagery, onboarding, and permissions should welcome brides, grooms, partners, family members, wedding-party members, and professional planners. Prefer roles such as `Partner`, `Collaborator`, and `Planner` over gender-coded assumptions.
+The initial experience can be bride-forward because brides are likely to represent a large part of the audience, but it should never imply that wedding planning belongs to one gender. The language, imagery, onboarding, and permissions should welcome brides, grooms, partners, family members, wedding-party members, and professional planners. Use the relationship-based roles `Host`, `Collaborator`, and `Guest` instead of gender-coded assumptions.
 
 The core product promise is:
 
@@ -76,6 +76,7 @@ isaidyes/
 │   ├── Boards/
 │   ├── Collaboration/
 │   ├── Decisions/
+│   ├── Timeline/
 │   ├── Profile/
 │   └── Settings/
 │
@@ -108,6 +109,13 @@ isaidyes/
 │       ├── ThemeColors.swift
 │       ├── ThemeSpacing.swift
 │       └── ThemeShape.swift
+│
+├── Music/
+│   ├── MusicCatalog.swift
+│   ├── MusicSearchView.swift
+│   └── Providers/
+│       ├── AppleMusicCatalogProvider.swift
+│       └── SpotifyCatalogProvider.swift       // Future
 │
 ├── Shared/
 │   ├── Extensions/
@@ -181,6 +189,16 @@ The theme is a semantic vocabulary, not a parallel rendering framework. It shoul
 
 `Shared` contains small reusable types with no natural feature owner. Treat this as a narrow exception rather than a default destination. If a shared folder becomes large, its contents probably need a clearer domain or feature boundary.
 
+### People and Timeline Domain
+
+Keep a person's wedding role separate from both attendance and planning permission:
+
+- A `Host` is part of the couple and normally has management access.
+- A `Collaborator` helps with ideas, decisions, and timeline events.
+- A `Guest` belongs to the eventual invitation list and isn't assignable to planning work by default.
+
+Timeline events should store structured answers instead of combining them into display strings: `title` answers what, `category` answers why, `scheduledAt` answers when, `location` answers where, stable participant IDs answer who, and optional image data identifies the event visually. Persist participant IDs rather than names so profile edits don't break assignments and the backend can enforce access independently of the UI. Event completion is a reversible status change exposed as a native list swipe action; destructive management such as deletion belongs in the event detail view.
+
 ### Resources
 
 `Resources` contains compiled application resources such as images, colors, strings, preview data, and non-secret configuration files. Swift source remains outside this directory.
@@ -202,6 +220,32 @@ API   SwiftData  Keychain
 Dependencies should point toward application behavior rather than from low-level infrastructure back into UI features. Protocols at important boundaries allow tests and previews to substitute deterministic implementations.
 
 For the initial app, these layers can remain in one Xcode target. Separate Swift packages are useful later when a boundary is independently reusable, separately owned, or materially improves build performance; they are not required merely to reproduce the folder structure.
+
+## Music Catalog Providers
+
+Song ideas use an app-owned `MusicTrack` value rather than storing `MusicKit.Song` or a future Spotify SDK model. The shared value includes the provider ID, provider catalog ID, title, artist, album, artwork URL, external URL, duration, and ISRC when available. This makes it suitable for persistence and backend synchronization without coupling wedding ideas to one vendor SDK.
+
+```text
+Ideas UI
+   ↓
+MusicCatalog
+   ↓
+MusicCatalogProviding
+  ↙                 ↘
+Apple Music          Spotify / future providers
+MusicKit             provider SDK or REST API
+```
+
+Each provider maps its native response into `MusicTrack`. A saved `WeddingIdea` can optionally carry that track reference, so it continues through the existing collaboration, decision, and detail flows. Provider-specific authorization and search stay behind `MusicCatalogProviding`; views request a provider by `MusicProviderID` and never import a provider SDK directly.
+
+Apple Music is the initial live provider. Spotify is represented only as a provider ID until its authorization and catalog implementation are added. Treat ISRC as useful cross-catalog matching metadata, not as a guaranteed unique primary key; the stable identity remains the provider ID plus the provider's catalog ID.
+
+Request music authorization in context, when someone chooses to find a song. The app must include `NSAppleMusicUsageDescription`, and its explicit App ID must have the MusicKit App Service enabled in the Apple Developer portal.
+
+References:
+
+- [MusicKit](https://developer.apple.com/documentation/musickit)
+- [Enable MusicKit for an App ID](https://developer.apple.com/help/account/services/musickit)
 
 ## Authentication and Session Management
 

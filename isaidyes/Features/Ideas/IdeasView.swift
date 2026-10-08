@@ -211,6 +211,7 @@ private struct IdeaArtworkThumbnail: View {
     var body: some View {
         MediaArtwork(
             imageData: idea.imageData,
+            remoteURL: idea.musicTrack?.artworkURL,
             symbol: idea.category.symbol,
             colors: idea.category.artworkColors,
             accent: idea.category.artworkAccent,
@@ -339,6 +340,7 @@ private struct IdeaDetailScreen: View {
     private var backgroundArtwork: some View {
         MediaArtwork(
             imageData: idea.imageData,
+            remoteURL: idea.musicTrack?.artworkURL,
             symbol: idea.category.symbol,
             colors: idea.category.artworkColors,
             accent: idea.category.artworkAccent,
@@ -382,16 +384,40 @@ private struct IdeaDetailScreen: View {
                 .tracking(-0.7)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(idea.note)
-                .font(.body)
-                .foregroundStyle(.white.opacity(0.84))
-                .fixedSize(horizontal: false, vertical: true)
+            if !idea.note.isEmpty {
+                Text(idea.note)
+                    .font(.body)
+                    .foregroundStyle(.white.opacity(0.84))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .foregroundStyle(.white)
     }
 
     private var metadata: some View {
         VStack(spacing: 0) {
+            if let track = idea.musicTrack {
+                IdeaMetadataRow(
+                    title: "Artist",
+                    value: track.artistName,
+                    symbol: "person.wave.2.fill"
+                )
+
+                if let albumTitle = track.albumTitle {
+                    Divider()
+                        .padding(.leading, 44)
+
+                    IdeaMetadataRow(
+                        title: "Album",
+                        value: albumTitle,
+                        symbol: "square.stack.fill"
+                    )
+                }
+
+                Divider()
+                    .padding(.leading, 44)
+            }
+
             IdeaMetadataRow(
                 title: "Shared by",
                 value: idea.submittedBy,
@@ -407,6 +433,26 @@ private struct IdeaDetailScreen: View {
                     value: estimatedCost.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")),
                     symbol: "tag.fill"
                 )
+            }
+
+            if let track = idea.musicTrack, let externalURL = track.externalURL {
+                Divider()
+                    .padding(.leading, 44)
+
+                Link(destination: externalURL) {
+                    LabeledContent {
+                        Label("Open", systemImage: "arrow.up.forward")
+                            .font(.body.weight(.semibold))
+                    } label: {
+                        Label(track.providerID.displayName, systemImage: "music.note")
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.body)
+                    .padding(.horizontal, AppTheme.Spacing.standard)
+                    .frame(minHeight: 56)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens this song in \(track.providerID.displayName)")
             }
         }
         .padding(.vertical, 4)
@@ -449,6 +495,7 @@ private struct AddIdeaView: View {
     @State private var category = IdeaCategory.other
     @State private var estimatedCost = ""
     @State private var imageData: Data?
+    @State private var selectedTrack: MusicTrack?
 
     private var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -469,13 +516,6 @@ private struct AddIdeaView: View {
 
     var body: some View {
         Form {
-            Section("Photo") {
-                PhotoAttachmentPicker(
-                    imageData: $imageData,
-                    emptySymbol: category.symbol
-                )
-            }
-
             Section("Idea") {
                 TextField("Title", text: $title)
 
@@ -487,6 +527,46 @@ private struct AddIdeaView: View {
                         Label(category.title, systemImage: category.symbol)
                             .tag(category)
                     }
+                }
+            }
+
+            if category == .music {
+                Section {
+                    NavigationLink {
+                        MusicSearchView { track in
+                            let shouldUseSongTitle = trimmedTitle.isEmpty || title == selectedTrack?.title
+                            selectedTrack = track
+                            if shouldUseSongTitle {
+                                title = track.title
+                            }
+                        }
+                    } label: {
+                        if let selectedTrack {
+                            MusicTrackRow(track: selectedTrack)
+                        } else {
+                            Label("Choose from Apple Music", systemImage: "music.note.list")
+                                .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                        }
+                    }
+
+                    if selectedTrack != nil {
+                        Button("Remove Song", systemImage: "minus.circle", role: .destructive) {
+                            selectedTrack = nil
+                        }
+                    }
+                } header: {
+                    Text("Song")
+                } footer: {
+                    Text("Optional. The song reference stays connected to its music service while the idea remains shareable with everyone.")
+                }
+            }
+
+            if selectedTrack == nil {
+                Section("Photo") {
+                    PhotoAttachmentPicker(
+                        imageData: $imageData,
+                        emptySymbol: category.symbol
+                    )
                 }
             }
 
@@ -513,7 +593,8 @@ private struct AddIdeaView: View {
                             category: category,
                             submittedBy: workspace.members.first?.name ?? "You",
                             estimatedCost: parsedEstimate,
-                            imageData: imageData
+                            imageData: imageData,
+                            musicTrack: category == .music ? selectedTrack : nil
                         )
                     )
                     dismiss()
@@ -528,5 +609,6 @@ private struct AddIdeaView: View {
     NavigationStack {
         IdeasView()
             .environment(WeddingWorkspace.sample)
+            .environment(MusicCatalog())
     }
 }

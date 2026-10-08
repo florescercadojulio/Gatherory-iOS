@@ -130,6 +130,7 @@ struct WeddingIdea: Identifiable, Hashable {
     var status: IdeaStatus
     var submittedAt: Date
     var imageData: Data?
+    var musicTrack: MusicTrack?
 
     init(
         id: UUID = UUID(),
@@ -140,7 +141,8 @@ struct WeddingIdea: Identifiable, Hashable {
         estimatedCost: Int? = nil,
         status: IdeaStatus = .new,
         submittedAt: Date = .now,
-        imageData: Data? = nil
+        imageData: Data? = nil,
+        musicTrack: MusicTrack? = nil
     ) {
         self.id = id
         self.title = title
@@ -151,6 +153,7 @@ struct WeddingIdea: Identifiable, Hashable {
         self.status = status
         self.submittedAt = submittedAt
         self.imageData = imageData
+        self.musicTrack = musicTrack
     }
 }
 
@@ -170,25 +173,135 @@ enum AttendanceStatus: String, CaseIterable, Codable {
     }
 }
 
+enum PlanningPermission: String, CaseIterable, Identifiable, Codable {
+    case manage
+    case contribute
+    case viewOnly
+
+    var id: Self { self }
+
+    static let inviteOptions: [PlanningPermission] = [.contribute, .viewOnly]
+
+    var title: String {
+        switch self {
+        case .manage: "Can manage"
+        case .contribute: "Can contribute"
+        case .viewOnly: "View only"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .manage: "Can change settings and manage the planning circle."
+        case .contribute: "Can add ideas, vote, and update shared plans."
+        case .viewOnly: "Can follow the plans without making changes."
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .manage: "person.badge.key.fill"
+        case .contribute: "person.badge.plus"
+        case .viewOnly: "eye.fill"
+        }
+    }
+}
+
+enum CollaborationInvitationStatus: String, Codable {
+    case active
+    case invited
+
+    var title: String {
+        switch self {
+        case .active: "Active"
+        case .invited: "Invited"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .active: "checkmark.circle.fill"
+        case .invited: "paperplane.fill"
+        }
+    }
+}
+
+enum WeddingParticipantRole: String, CaseIterable, Identifiable, Codable {
+    case host
+    case collaborator
+    case guest
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .host: "Host"
+        case .collaborator: "Collaborator"
+        case .guest: "Guest"
+        }
+    }
+
+    var pluralTitle: String {
+        switch self {
+        case .host: "Hosts"
+        case .collaborator: "Collaborators"
+        case .guest: "Guests"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .host: "Part of the couple getting married, with full planning access."
+        case .collaborator: "Helps with ideas, decisions, and the timeline."
+        case .guest: "Will receive the wedding invitation when it is ready."
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .host: "heart.fill"
+        case .collaborator: "person.2.fill"
+        case .guest: "envelope.fill"
+        }
+    }
+
+    var defaultPlanningPermission: PlanningPermission {
+        switch self {
+        case .host: .manage
+        case .collaborator: .contribute
+        case .guest: .viewOnly
+        }
+    }
+}
+
 struct WeddingMember: Identifiable, Hashable {
     let id: UUID
     var name: String
-    var role: String
+    var participantRole: WeddingParticipantRole
     var initials: String
     var attendance: AttendanceStatus
+    var email: String?
+    var planningPermission: PlanningPermission
+    var invitationStatus: CollaborationInvitationStatus
 
     init(
         id: UUID = UUID(),
         name: String,
-        role: String,
+        participantRole: WeddingParticipantRole,
         initials: String,
-        attendance: AttendanceStatus = .going
+        attendance: AttendanceStatus = .going,
+        email: String? = nil,
+        planningPermission: PlanningPermission = .contribute,
+        invitationStatus: CollaborationInvitationStatus = .active
     ) {
         self.id = id
         self.name = name
-        self.role = role
+        self.participantRole = participantRole
         self.initials = initials
         self.attendance = attendance
+        self.email = email
+        self.planningPermission = planningPermission
+        self.invitationStatus = invitationStatus
     }
 }
 
@@ -197,28 +310,79 @@ enum TimelineStatus: String, Codable {
     case complete
 }
 
+enum TimelineCategory: String, CaseIterable, Identifiable, Codable {
+    case venue
+    case foodTasting
+    case attireFitting
+    case weddingShower
+    case bachelorBachelorette
+    case rehearsal
+    case ceremony
+    case reception
+    case other
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .venue: "Venue"
+        case .foodTasting: "Food Tasting"
+        case .attireFitting: "Attire Fitting"
+        case .weddingShower: "Wedding Shower"
+        case .bachelorBachelorette: "Bachelor or Bachelorette"
+        case .rehearsal: "Rehearsal"
+        case .ceremony: "Ceremony"
+        case .reception: "Reception"
+        case .other: "Other"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .venue: "building.columns.fill"
+        case .foodTasting: "fork.knife"
+        case .attireFitting: "tshirt.fill"
+        case .weddingShower: "gift.fill"
+        case .bachelorBachelorette: "party.popper.fill"
+        case .rehearsal: "figure.2"
+        case .ceremony: "heart.fill"
+        case .reception: "music.note"
+        case .other: "ellipsis.circle.fill"
+        }
+    }
+}
+
 struct TimelineItem: Identifiable, Hashable {
     let id: UUID
     var title: String
-    var dueDate: Date
-    var owner: String
+    var category: TimelineCategory
+    var scheduledAt: Date
+    var location: String
+    var participantIDs: [UUID]
     var status: TimelineStatus
     var linkedIdeaID: UUID?
+    var imageData: Data?
 
     init(
         id: UUID = UUID(),
         title: String,
-        dueDate: Date,
-        owner: String,
+        category: TimelineCategory,
+        scheduledAt: Date,
+        location: String,
+        participantIDs: [UUID],
         status: TimelineStatus = .upcoming,
-        linkedIdeaID: UUID? = nil
+        linkedIdeaID: UUID? = nil,
+        imageData: Data? = nil
     ) {
         self.id = id
         self.title = title
-        self.dueDate = dueDate
-        self.owner = owner
+        self.category = category
+        self.scheduledAt = scheduledAt
+        self.location = location
+        self.participantIDs = participantIDs
         self.status = status
         self.linkedIdeaID = linkedIdeaID
+        self.imageData = imageData
     }
 }
 

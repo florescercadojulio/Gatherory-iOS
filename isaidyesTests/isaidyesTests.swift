@@ -68,6 +68,16 @@ struct isaidyesTests {
         #expect(completedItem.status == .complete)
     }
 
+    @Test("Timeline events can be deleted from their details")
+    func deleteTimelineItem() throws {
+        let workspace = WeddingWorkspace.sample
+        let item = try #require(workspace.timeline.first)
+
+        workspace.deleteTimelineItem(item)
+
+        #expect(workspace.timeline.contains { $0.id == item.id } == false)
+    }
+
     @Test("Ideas can be archived from the list")
     func archiveIdea() throws {
         let workspace = WeddingWorkspace.sample
@@ -100,6 +110,46 @@ struct isaidyesTests {
 
         let unchangedItem = try #require(workspace.registry.first { $0.id == item.id })
         #expect(unchangedItem.committedCount == item.committedCount)
+    }
+
+    @Test("A guest invitation preserves role and contact details")
+    func inviteCollaborator() throws {
+        let workspace = WeddingWorkspace.sample
+
+        workspace.inviteParticipant(
+            name: "Taylor Reed",
+            email: "taylor@example.com",
+            initials: "TR",
+            role: .guest
+        )
+
+        let collaborator = try #require(workspace.members.first { $0.name == "Taylor Reed" })
+        #expect(collaborator.email == "taylor@example.com")
+        #expect(collaborator.participantRole == .guest)
+        #expect(collaborator.planningPermission == .viewOnly)
+        #expect(collaborator.invitationStatus == .invited)
+    }
+
+    @Test("The same collaborator is not invited twice")
+    func collaboratorInvitationsAreUnique() {
+        let workspace = WeddingWorkspace.sample
+        let originalCount = workspace.members.count
+
+        workspace.inviteParticipant(
+            name: "Sarah",
+            initials: "S",
+            role: .collaborator
+        )
+
+        #expect(workspace.members.count == originalCount)
+    }
+
+    @Test("Guests are excluded from timeline assignments")
+    func timelineAssignmentsOnlyIncludePlanners() {
+        let workspace = WeddingWorkspace.sample
+
+        #expect(workspace.planningMembers.allSatisfy { $0.participantRole != .guest })
+        #expect(workspace.members.contains { $0.participantRole == .guest })
     }
 
 }

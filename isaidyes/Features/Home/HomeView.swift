@@ -6,6 +6,7 @@ struct HomeView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedIdeaID: UUID?
+    @State private var isInvitingCollaborators = false
     @Namespace private var ideaTransition
 
     private var daysRemaining: Int {
@@ -47,6 +48,10 @@ struct HomeView: View {
                 ideaID: ideaID,
                 transitionNamespace: ideaTransition
             )
+        }
+        .fullScreenCover(isPresented: $isInvitingCollaborators) {
+            CollaborationInviteView()
+                .environment(workspace)
         }
     }
 
@@ -162,7 +167,9 @@ struct HomeView: View {
             Button("Send a note", systemImage: "megaphone.fill") { }
                 .frame(maxWidth: .infinity)
 
-            Button("Invite guests", systemImage: "person.badge.plus") { }
+            Button("Invite", systemImage: "person.badge.plus") {
+                isInvitingCollaborators = true
+            }
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
@@ -205,7 +212,7 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(item.title)
                             .font(.headline)
-                        Text(item.dueDate, format: .dateTime.weekday(.wide).month(.abbreviated).day())
+                        Text(item.scheduledAt, format: .dateTime.weekday(.wide).month(.abbreviated).day())
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }

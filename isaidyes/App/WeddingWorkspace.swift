@@ -13,6 +13,10 @@ final class WeddingWorkspace {
     var timeline: [TimelineItem]
     var registry: [RegistryItem]
     var isRegistryShared: Bool
+    var isCollaboratorLinkEnabled: Bool
+    var requiresCollaboratorApproval: Bool
+    var defaultCollaboratorPermission: PlanningPermission
+    var collaboratorInviteURL: URL
 
     private var decisionHistory: [DecisionRecord] = []
 
@@ -26,7 +30,11 @@ final class WeddingWorkspace {
         ideas: [WeddingIdea],
         timeline: [TimelineItem],
         registry: [RegistryItem],
-        isRegistryShared: Bool = false
+        isRegistryShared: Bool = false,
+        isCollaboratorLinkEnabled: Bool = true,
+        requiresCollaboratorApproval: Bool = true,
+        defaultCollaboratorPermission: PlanningPermission = .contribute,
+        collaboratorInviteURL: URL = URL(string: "https://isaidyes.app/join/planning-circle")!
     ) {
         self.title = title
         self.weddingDate = weddingDate
@@ -38,6 +46,10 @@ final class WeddingWorkspace {
         self.timeline = timeline
         self.registry = registry
         self.isRegistryShared = isRegistryShared
+        self.isCollaboratorLinkEnabled = isCollaboratorLinkEnabled
+        self.requiresCollaboratorApproval = requiresCollaboratorApproval
+        self.defaultCollaboratorPermission = defaultCollaboratorPermission
+        self.collaboratorInviteURL = collaboratorInviteURL
     }
 
     var decisionQueue: [WeddingIdea] {
@@ -47,7 +59,11 @@ final class WeddingWorkspace {
     var upcomingTimeline: [TimelineItem] {
         timeline
             .filter { $0.status == .upcoming }
-            .sorted { $0.dueDate < $1.dueDate }
+            .sorted { $0.scheduledAt < $1.scheduledAt }
+    }
+
+    var planningMembers: [WeddingMember] {
+        members.filter { $0.participantRole != .guest }
     }
 
     var canUndoDecision: Bool {
@@ -86,6 +102,10 @@ final class WeddingWorkspace {
         timeline.append(item)
     }
 
+    func deleteTimelineItem(_ item: TimelineItem) {
+        timeline.removeAll { $0.id == item.id }
+    }
+
     func updateIdea(_ idea: WeddingIdea, status: IdeaStatus) {
         guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
         ideas[index].status = status
@@ -111,6 +131,31 @@ final class WeddingWorkspace {
 
         registry[index].committedCount += 1
     }
+
+    func inviteParticipant(
+        name: String,
+        email: String? = nil,
+        initials: String,
+        role: WeddingParticipantRole
+    ) {
+        guard !members.contains(where: { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }) else {
+            return
+        }
+
+        members.append(
+            WeddingMember(
+                name: name,
+                participantRole: role,
+                initials: initials,
+                attendance: .invited,
+                email: email,
+                planningPermission: role == .collaborator
+                    ? defaultCollaboratorPermission
+                    : role.defaultPlanningPermission,
+                invitationStatus: .invited
+            )
+        )
+    }
 }
 
 private struct DecisionRecord {
@@ -122,6 +167,27 @@ extension WeddingWorkspace {
     static var sample: WeddingWorkspace {
         let calendar = Calendar.current
         let now = Date.now
+        let alex = WeddingMember(
+            name: "Alex",
+            participantRole: .host,
+            initials: "A",
+            planningPermission: .manage
+        )
+        let jordan = WeddingMember(
+            name: "Jordan",
+            participantRole: .host,
+            initials: "J",
+            planningPermission: .manage
+        )
+        let sarah = WeddingMember(name: "Sarah", participantRole: .collaborator, initials: "S")
+        let mia = WeddingMember(name: "Mia", participantRole: .collaborator, initials: "M")
+        let chris = WeddingMember(
+            name: "Chris",
+            participantRole: .guest,
+            initials: "C",
+            attendance: .invited,
+            planningPermission: .viewOnly
+        )
 
         return WeddingWorkspace(
             title: "Alex & Jordan",
@@ -129,12 +195,7 @@ extension WeddingWorkspace {
             venueName: "Willow & Stone Estate",
             location: "Ann Arbor, Michigan",
             planningMode: .openToIdeas,
-            members: [
-                WeddingMember(name: "Alex", role: "Planning Lead", initials: "A"),
-                WeddingMember(name: "Jordan", role: "Partner", initials: "J"),
-                WeddingMember(name: "Sarah", role: "Collaborator", initials: "S"),
-                WeddingMember(name: "Mia", role: "Collaborator", initials: "M")
-            ],
+            members: [alex, jordan, sarah, mia, chris],
             ideas: [
                 WeddingIdea(
                     title: "Willow & Stone Estate",
@@ -186,23 +247,31 @@ extension WeddingWorkspace {
             timeline: [
                 TimelineItem(
                     title: "Meet with the venue coordinator",
-                    dueDate: calendar.date(byAdding: .day, value: 12, to: now) ?? now,
-                    owner: "Alex & Jordan"
+                    category: .venue,
+                    scheduledAt: calendar.date(byAdding: .day, value: 12, to: now) ?? now,
+                    location: "Willow & Stone Estate",
+                    participantIDs: [alex.id, jordan.id]
                 ),
                 TimelineItem(
                     title: "Plan the photographer shot list",
-                    dueDate: calendar.date(byAdding: .day, value: 26, to: now) ?? now,
-                    owner: "Jordan"
+                    category: .ceremony,
+                    scheduledAt: calendar.date(byAdding: .day, value: 26, to: now) ?? now,
+                    location: "Video call",
+                    participantIDs: [jordan.id, sarah.id]
                 ),
                 TimelineItem(
                     title: "Finalize the guest list",
-                    dueDate: calendar.date(byAdding: .day, value: 41, to: now) ?? now,
-                    owner: "Alex"
+                    category: .other,
+                    scheduledAt: calendar.date(byAdding: .day, value: 41, to: now) ?? now,
+                    location: "Home",
+                    participantIDs: [alex.id, mia.id]
                 ),
                 TimelineItem(
                     title: "Create inspiration boards",
-                    dueDate: calendar.date(byAdding: .day, value: -2, to: now) ?? now,
-                    owner: "Alex",
+                    category: .other,
+                    scheduledAt: calendar.date(byAdding: .day, value: -2, to: now) ?? now,
+                    location: "Home",
+                    participantIDs: [alex.id, mia.id],
                     status: .complete
                 )
             ],

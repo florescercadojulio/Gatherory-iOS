@@ -21,7 +21,7 @@ struct AccountView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(workspace.members.first?.name ?? "Your account")
                             .font(.headline)
-                        Text(workspace.members.first?.role ?? "Planning lead")
+                        Text(workspace.members.first?.participantRole.title ?? "Host")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -48,7 +48,7 @@ struct AccountView: View {
                 NavigationLink {
                     SupportCircleView()
                 } label: {
-                    Label("Support circle", systemImage: "person.3.fill")
+                    Label("People", systemImage: "person.3.fill")
                 }
             }
 
@@ -74,34 +74,61 @@ struct AccountView: View {
 
 private struct SupportCircleView: View {
     @Environment(WeddingWorkspace.self) private var workspace
+    @State private var isInvitingCollaborators = false
 
     var body: some View {
-        List(workspace.members) { member in
-            HStack(spacing: AppTheme.Spacing.standard) {
-                Text(member.initials)
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
-                    .background(AppTheme.ColorToken.accent, in: Circle())
+        List {
+            ForEach(WeddingParticipantRole.allCases) { role in
+                let people = workspace.members.filter { $0.participantRole == role }
 
-                VStack(alignment: .leading) {
-                    Text(member.name)
-                    Text(member.role)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                if !people.isEmpty {
+                    Section(role.pluralTitle) {
+                        ForEach(people) { member in
+                            HStack(spacing: AppTheme.Spacing.standard) {
+                                Text(member.initials)
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.white)
+                                    .frame(width: 40, height: 40)
+                                    .background(AppTheme.ColorToken.accent, in: Circle())
+
+                                VStack(alignment: .leading) {
+                                    Text(member.name)
+                                    Text(member.participantRole == .guest
+                                         ? member.attendance.title
+                                         : member.planningPermission.title)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer(minLength: 0)
+
+                                if member.invitationStatus == .invited {
+                                    Label(member.invitationStatus.title, systemImage: member.invitationStatus.symbol)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .accessibilityLabel(member.invitationStatus.title)
+                                }
+                            }
+                        }
+                    }
                 }
-
-                Spacer(minLength: 0)
-
-                Text(member.attendance.title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
-        .navigationTitle("Support circle")
+        .navigationTitle("People")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Invite", systemImage: "person.badge.plus") {
+                    isInvitingCollaborators = true
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $isInvitingCollaborators) {
+            CollaborationInviteView()
+                .environment(workspace)
+        }
     }
 }
 

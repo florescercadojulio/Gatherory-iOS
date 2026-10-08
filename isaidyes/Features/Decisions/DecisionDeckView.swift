@@ -152,7 +152,9 @@ private struct DecisionCard: View {
 
     @ViewBuilder
     private var artwork: some View {
-        ProgressiveArtwork(
+        MediaArtwork(
+            imageData: idea.imageData,
+            remoteURL: idea.musicTrack?.artworkURL,
             symbol: idea.category.symbol,
             colors: idea.category.artworkColors,
             accent: idea.category.artworkAccent
@@ -264,5 +266,6 @@ private struct SwipeGuideLabel: View {
     NavigationStack {
         DecisionDeckView()
             .environment(WeddingWorkspace.sample)
+            .environment(MusicCatalog())
     }
 }

@@ -5,6 +5,8 @@ struct MediaArtwork: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     let imageData: Data?
+    var assetName: String? = nil
+    var remoteURL: URL? = nil
     let symbol: String
     let colors: [Color]
     let accent: Color
@@ -14,22 +16,26 @@ struct MediaArtwork: View {
 
     var body: some View {
         if let imageData, let image = UIImage(data: imageData) {
-            photo(image)
+            photo(Image(uiImage: image))
+        } else if let assetName {
+            photo(Image(assetName))
+        } else if let remoteURL {
+            AsyncImage(url: remoteURL) { phase in
+                switch phase {
+                case .success(let image):
+                    photo(image)
+                default:
+                    fallbackArtwork
+                }
+            }
         } else {
-            ProgressiveArtwork(
-                symbol: symbol,
-                colors: colors,
-                accent: accent,
-                ambientBlurRadius: ambientBlurRadius,
-                progressiveBlurRadius: progressiveBlurRadius,
-                blurStart: blurStart
-            )
+            fallbackArtwork
         }
     }
 
     @ViewBuilder
-    private func photo(_ image: UIImage) -> some View {
-        let artwork = Image(uiImage: image)
+    private func photo(_ image: Image) -> some View {
+        let artwork = image
             .resizable()
             .scaledToFill()
 
@@ -52,5 +58,16 @@ struct MediaArtwork: View {
                 noise: 0.035
             )
         }
+    }
+
+    private var fallbackArtwork: some View {
+        ProgressiveArtwork(
+            symbol: symbol,
+            colors: colors,
+            accent: accent,
+            ambientBlurRadius: ambientBlurRadius,
+            progressiveBlurRadius: progressiveBlurRadius,
+            blurStart: blurStart
+        )
     }
 }
