@@ -5,6 +5,8 @@ struct HomeView: View {
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var selectedIdeaID: UUID?
+    @Namespace private var ideaTransition
 
     private var daysRemaining: Int {
         max(Calendar.current.dateComponents([.day], from: .now, to: workspace.weddingDate).day ?? 0, 0)
@@ -39,6 +41,12 @@ struct HomeView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 AccountToolbarButton()
             }
+        }
+        .navigationDestination(item: $selectedIdeaID) { ideaID in
+            IdeaDetailView(
+                ideaID: ideaID,
+                transitionNamespace: ideaTransition
+            )
         }
     }
 
@@ -82,6 +90,7 @@ struct HomeView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.72))
                 }
+                .padding(.horizontal, AppTheme.Spacing.compact)
                 .shadow(color: .black.opacity(0.28), radius: 10, y: 4)
             }
             .foregroundStyle(.white)
@@ -163,19 +172,17 @@ struct HomeView: View {
 
     private var confirmedPlans: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Decided together")
-                    .editorialEyebrow()
-                    .foregroundStyle(.secondary)
-
-                Text("The wedding so far")
-                    .font(AppTheme.Typography.sectionTitle)
-            }
+            Text("The wedding so far")
+                .font(AppTheme.Typography.sectionTitle)
 
             ForEach(chosenIdeas) { idea in
                 ConfirmedPlanRow(
                     idea: idea,
-                    venueImageName: idea.category == .venue ? "WeddingVenueHero" : nil
+                    venueImageName: idea.category == .venue ? "WeddingVenueHero" : nil,
+                    transitionNamespace: ideaTransition,
+                    open: {
+                        selectedIdeaID = idea.id
+                    }
                 )
             }
         }
@@ -215,38 +222,40 @@ struct HomeView: View {
 private struct ConfirmedPlanRow: View {
     let idea: WeddingIdea
     let venueImageName: String?
+    let transitionNamespace: Namespace.ID
+    let open: () -> Void
 
     var body: some View {
-        HStack(spacing: AppTheme.Spacing.standard) {
-            artwork
+        Button(action: open) {
+            HStack(spacing: AppTheme.Spacing.standard) {
+                artwork
 
-            VStack(alignment: .leading, spacing: 5) {
-                Label(idea.category.title, systemImage: idea.category.symbol)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 5) {
+                    Label(idea.category.title, systemImage: idea.category.symbol)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
 
-                Text(idea.title)
-                    .font(.headline)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text(idea.title)
+                        .font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                Text(idea.note)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    Text(idea.note)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
             }
-
-            Spacer(minLength: 0)
-
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(AppTheme.ColorToken.accent)
-                .accessibilityLabel("Chosen")
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens idea details")
         .padding(AppTheme.Spacing.standard)
         .background(
             AppTheme.ColorToken.surface,
             in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
         )
-        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -257,6 +266,7 @@ private struct ConfirmedPlanRow: View {
                 .scaledToFill()
                 .frame(width: 72, height: 88)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+                .matchedTransitionSource(id: idea.id, in: transitionNamespace)
                 .accessibilityHidden(true)
         } else {
             MediaArtwork(
@@ -270,6 +280,7 @@ private struct ConfirmedPlanRow: View {
             )
             .frame(width: 72, height: 88)
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+            .matchedTransitionSource(id: idea.id, in: transitionNamespace)
             .accessibilityHidden(true)
         }
     }

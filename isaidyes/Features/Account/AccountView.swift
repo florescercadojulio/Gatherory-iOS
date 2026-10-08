@@ -12,11 +12,11 @@ struct AccountView: View {
         Form {
             Section {
                 HStack(spacing: AppTheme.Spacing.standard) {
-                    Text(workspace.members.first?.initials ?? "A")
-                        .font(.title2.bold())
-                        .foregroundStyle(.black)
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 54))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(AppTheme.ColorToken.accent)
                         .frame(width: 64, height: 64)
-                        .background(AppTheme.ColorToken.lilac, in: Circle())
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(workspace.members.first?.name ?? "Your account")
@@ -56,8 +56,12 @@ struct AccountView: View {
                 Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { }
             }
         }
+        .scrollContentBackground(.hidden)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .background(AppTheme.ColorToken.background)
         .navigationTitle("Account")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") {
@@ -76,9 +80,9 @@ private struct SupportCircleView: View {
             HStack(spacing: AppTheme.Spacing.standard) {
                 Text(member.initials)
                     .font(.subheadline.bold())
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.white)
                     .frame(width: 40, height: 40)
-                    .background(AppTheme.ColorToken.pink, in: Circle())
+                    .background(AppTheme.ColorToken.accent, in: Circle())
 
                 VStack(alignment: .leading) {
                     Text(member.name)
@@ -86,8 +90,17 @@ private struct SupportCircleView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
+
+                Spacer(minLength: 0)
+
+                Text(member.attendance.title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.ColorToken.background)
         .navigationTitle("Support circle")
     }
 }

@@ -29,7 +29,15 @@ struct IdeasView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .listRowInsets(AppTheme.Layout.featuredRowInsets)
+                .accessibilityHint("Filters ideas by status")
+                .listRowInsets(
+                    EdgeInsets(
+                        top: 0,
+                        leading: AppTheme.Layout.screenHorizontal,
+                        bottom: 0,
+                        trailing: AppTheme.Layout.screenHorizontal
+                    )
+                )
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             }
@@ -52,10 +60,8 @@ struct IdeasView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .accessibilityHint("Opens idea details")
                         .listRowInsets(AppTheme.Layout.listRowInsets)
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
+                        .accessibilityHint("Opens idea details")
                         .swipeActions(edge: .leading, allowsFullSwipe: true) {
                             Button("Shortlist", systemImage: "heart.fill") {
                                 withAnimation {
@@ -92,7 +98,8 @@ struct IdeasView: View {
                 }
             }
         }
-        .listStyle(.plain)
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(.compact)
         .contentMargins(.top, AppTheme.Layout.screenTop, for: .scrollContent)
         .contentMargins(.bottom, AppTheme.Layout.screenBottom, for: .scrollContent)
         .scrollContentBackground(.hidden)
@@ -143,7 +150,9 @@ private enum IdeaFilter: String, CaseIterable, Identifiable {
     }
 }
 
-private struct IdeaRow: View {
+struct IdeaRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let idea: WeddingIdea
     var transitionNamespace: Namespace.ID?
 
@@ -151,31 +160,38 @@ private struct IdeaRow: View {
         HStack(spacing: AppTheme.Spacing.standard) {
             artwork
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(idea.title)
-                    .font(.headline)
+                    .font(.body.weight(.semibold))
                     .lineLimit(2)
 
                 Text("\(idea.category.title) · \(idea.submittedBy)")
                     .font(.subheadline)
-                    .foregroundStyle(.black.opacity(0.58))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
 
-                Label(idea.status.title, systemImage: idea.status.symbol)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(.black.opacity(0.08), in: Capsule())
+                if dynamicTypeSize.isAccessibilitySize {
+                    statusLabel
+                }
+            }
+
+            Spacer(minLength: AppTheme.Spacing.compact)
+
+            if !dynamicTypeSize.isAccessibilitySize {
+                statusLabel
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .appCard(
-            background: idea.category.tint,
-            foreground: .black,
-            padding: AppTheme.Spacing.standard,
-            border: false
-        )
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
         .accessibilityElement(children: .combine)
+    }
+
+    private var statusLabel: some View {
+        Label(idea.status.title, systemImage: idea.status.symbol)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(idea.status.tint)
+            .lineLimit(1)
+            .fixedSize()
     }
 
     @ViewBuilder
@@ -202,7 +218,7 @@ private struct IdeaArtworkThumbnail: View {
             progressiveBlurRadius: 0,
             blurStart: 1
         )
-        .frame(width: 64, height: 64)
+        .frame(width: 58, height: 58)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
@@ -212,7 +228,7 @@ private struct IdeaArtworkThumbnail: View {
     }
 }
 
-private struct IdeaDetailView: View {
+struct IdeaDetailView: View {
     @Environment(WeddingWorkspace.self) private var workspace
     let ideaID: UUID
     let transitionNamespace: Namespace.ID
@@ -233,13 +249,67 @@ private struct IdeaDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            if let idea {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu("Idea actions", systemImage: "ellipsis") {
+                        if idea.status != .new {
+                            Button("Move to Inbox", systemImage: "tray") {
+                                withAnimation {
+                                    workspace.updateIdea(idea, status: .new)
+                                }
+                            }
+                        }
+
+                        if idea.status != .shortlisted {
+                            Button("Shortlist", systemImage: "heart.fill") {
+                                withAnimation {
+                                    workspace.updateIdea(idea, status: .shortlisted)
+                                }
+                            }
+                        }
+
+                        if idea.status != .maybe {
+                            Button("Save for Now", systemImage: "bookmark.fill") {
+                                withAnimation {
+                                    workspace.updateIdea(idea, status: .maybe)
+                                }
+                            }
+                        }
+
+                        if idea.status != .chosen {
+                            Button("Choose", systemImage: "checkmark.circle.fill") {
+                                withAnimation {
+                                    workspace.updateIdea(idea, status: .chosen)
+                                }
+                            }
+                        }
+
+                        Divider()
+
+                        if idea.status == .archived {
+                            Button("Restore", systemImage: "arrow.uturn.backward") {
+                                withAnimation {
+                                    workspace.updateIdea(idea, status: .new)
+                                }
+                            }
+                        } else {
+                            Button("Archive", systemImage: "archivebox.fill") {
+                                withAnimation {
+                                    workspace.updateIdea(idea, status: .archived)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         .navigationTransition(.zoom(sourceID: ideaID, in: transitionNamespace))
     }
 }
 
 private struct IdeaDetailScreen: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let idea: WeddingIdea
 
@@ -320,65 +390,52 @@ private struct IdeaDetailScreen: View {
         .foregroundStyle(.white)
     }
 
-    @ViewBuilder
     private var metadata: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(spacing: AppTheme.Spacing.compact) {
-                metadataViews
-            }
-        } else {
-            HStack(spacing: AppTheme.Spacing.compact) {
-                metadataViews
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var metadataViews: some View {
-        IdeaMetric(title: "Shared by", value: idea.submittedBy, symbol: "person.fill", reduceTransparency: reduceTransparency)
-
-        if let estimatedCost = idea.estimatedCost {
-            IdeaMetric(
-                title: "Estimate",
-                value: estimatedCost.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")),
-                symbol: "tag.fill",
-                reduceTransparency: reduceTransparency
+        VStack(spacing: 0) {
+            IdeaMetadataRow(
+                title: "Shared by",
+                value: idea.submittedBy,
+                symbol: "person.fill"
             )
+
+            if let estimatedCost = idea.estimatedCost {
+                Divider()
+                    .padding(.leading, 44)
+
+                IdeaMetadataRow(
+                    title: "Estimated cost",
+                    value: estimatedCost.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")),
+                    symbol: "tag.fill"
+                )
+            }
         }
+        .padding(.vertical, 4)
+        .background(
+            reduceTransparency ? AnyShapeStyle(.black.opacity(0.82)) : AnyShapeStyle(.regularMaterial),
+            in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+        )
+        .environment(\.colorScheme, .dark)
     }
 }
 
-private struct IdeaMetric: View {
+private struct IdeaMetadataRow: View {
     let title: String
     let value: String
     let symbol: String
-    let reduceTransparency: Bool
 
     var body: some View {
-        HStack(spacing: AppTheme.Spacing.compact) {
-            Image(systemName: symbol)
-                .font(.headline)
-                .frame(width: 28, height: 28)
-                .background(.white.opacity(0.14), in: Circle())
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.72))
-                Text(value)
-                    .font(.headline)
-            }
-
-            Spacer(minLength: 0)
+        LabeledContent {
+            Text(value)
+                .font(.body.weight(.semibold))
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+        } label: {
+            Label(title, systemImage: symbol)
+                .foregroundStyle(.secondary)
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, minHeight: 58)
-        .background(.black.opacity(reduceTransparency ? 0.72 : 0.24), in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 0.5)
-        }
+        .font(.body)
+        .padding(.horizontal, AppTheme.Spacing.standard)
+        .frame(minHeight: 56)
         .accessibilityElement(children: .combine)
     }
 }

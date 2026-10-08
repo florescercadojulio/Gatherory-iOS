@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TimelineView: View {
     @Environment(WeddingWorkspace.self) private var workspace
+    @State private var isAddingTimelineItem = false
 
     private var upcoming: [TimelineItem] {
         workspace.timeline
@@ -26,13 +27,9 @@ struct TimelineView: View {
                             workspace.toggleTimelineItem(item)
                         }
                     }
-                    .listRowInsets(AppTheme.Layout.listRowInsets)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
                 }
             } header: {
                 Text("Coming up")
-                    .editorialEyebrow()
             }
 
             if !completed.isEmpty {
@@ -43,17 +40,13 @@ struct TimelineView: View {
                                 workspace.toggleTimelineItem(item)
                             }
                         }
-                        .listRowInsets(AppTheme.Layout.listRowInsets)
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
                     }
                 } header: {
                     Text("Completed")
-                        .editorialEyebrow()
                 }
             }
         }
-        .listStyle(.plain)
+        .listStyle(.insetGrouped)
         .contentMargins(.top, AppTheme.Layout.screenTop, for: .scrollContent)
         .contentMargins(.bottom, AppTheme.Layout.screenBottom, for: .scrollContent)
         .scrollContentBackground(.hidden)
@@ -64,41 +57,130 @@ struct TimelineView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Add task", systemImage: "plus") { }
+                Button("Add task", systemImage: "plus") {
+                    isAddingTimelineItem = true
+                }
                     .labelStyle(.iconOnly)
 
                 AccountToolbarButton()
             }
         }
+        .sheet(isPresented: $isAddingTimelineItem) {
+            NavigationStack {
+                AddTimelineItemView()
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     private var weddingDateSection: some View {
-        Section {
-            HStack(spacing: AppTheme.Spacing.standard) {
-                Image(systemName: "calendar.badge.heart")
-                    .font(.title)
-                    .foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
-                    .background(.black, in: Circle())
-
+        Section("Event") {
+            Label {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Wedding day")
-                        .editorialEyebrow()
-                        .foregroundStyle(.black.opacity(0.52))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                     Text(workspace.weddingDate, format: .dateTime.month(.wide).day().year())
                         .font(.headline)
                 }
+            } icon: {
+                Image(systemName: "calendar")
+                    .font(.title2)
+                    .foregroundStyle(AppTheme.ColorToken.accent)
+                    .frame(width: 36)
             }
+            .padding(.vertical, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .appCard(
-                background: AppTheme.ColorToken.lime,
-                foreground: .black,
-                padding: AppTheme.Spacing.spacious,
-                border: false
-            )
-            .listRowInsets(AppTheme.Layout.featuredRowInsets)
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
+        }
+    }
+}
+
+private struct AddTimelineItemView: View {
+    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var title = ""
+    @State private var dueDate = Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now
+    @State private var owner = ""
+    @FocusState private var focusedField: Field?
+
+    private enum Field {
+        case title
+    }
+
+    private var trimmedTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var defaultOwner: String {
+        let couple = workspace.members.prefix(2).map(\.name).joined(separator: " & ")
+        return couple.isEmpty ? "You" : couple
+    }
+
+    private var ownerOptions: [String] {
+        [defaultOwner] + workspace.members.map(\.name).filter { $0 != defaultOwner }
+    }
+
+    private var earliestDueDate: Date {
+        Calendar.current.startOfDay(for: .now)
+    }
+
+    var body: some View {
+        Form {
+            Section("Task") {
+                TextField("Task name", text: $title)
+                    .textInputAutocapitalization(.sentences)
+                    .submitLabel(.done)
+                    .focused($focusedField, equals: .title)
+            }
+
+            Section("Schedule") {
+                DatePicker(
+                    "Due date",
+                    selection: $dueDate,
+                    in: earliestDueDate...,
+                    displayedComponents: .date
+                )
+
+                Picker("Assigned to", selection: $owner) {
+                    ForEach(ownerOptions, id: \.self) { option in
+                        Text(option).tag(option)
+                    }
+                }
+            }
+        }
+        .navigationTitle("New Task")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    dismiss()
+                }
+            }
+
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Add") {
+                    workspace.addTimelineItem(
+                        TimelineItem(
+                            title: trimmedTitle,
+                            dueDate: dueDate,
+                            owner: owner
+                        )
+                    )
+                    dismiss()
+                }
+                .disabled(trimmedTitle.isEmpty)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .onAppear {
+            if owner.isEmpty {
+                owner = defaultOwner
+            }
+
+            dueDate = max(dueDate, earliestDueDate)
+            focusedField = .title
         }
     }
 }
@@ -111,12 +193,11 @@ private struct TimelineRow: View {
         HStack(spacing: AppTheme.Spacing.standard) {
             Button(action: toggle) {
                 Image(systemName: item.status == .complete ? "checkmark.circle.fill" : "circle")
-                    .font(.headline)
-                    .frame(width: 32, height: 32)
+                    .font(.title3)
+                    .frame(width: 44, height: 44)
             }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.circle)
-            .tint(item.status == .complete ? .green : AppTheme.ColorToken.ink)
+            .buttonStyle(.plain)
+            .foregroundStyle(item.status == .complete ? .green : AppTheme.ColorToken.accent)
             .accessibilityLabel(item.status == .complete ? "Mark incomplete" : "Mark complete")
 
             VStack(alignment: .leading, spacing: 4) {
@@ -129,8 +210,9 @@ private struct TimelineRow: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .appCard(background: AppTheme.ColorToken.surface)
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
     }
 }
 

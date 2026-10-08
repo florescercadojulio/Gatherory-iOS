@@ -82,6 +82,10 @@ final class WeddingWorkspace {
         timeline[index].status = timeline[index].status == .complete ? .upcoming : .complete
     }
 
+    func addTimelineItem(_ item: TimelineItem) {
+        timeline.append(item)
+    }
+
     func updateIdea(_ idea: WeddingIdea, status: IdeaStatus) {
         guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
         ideas[index].status = status

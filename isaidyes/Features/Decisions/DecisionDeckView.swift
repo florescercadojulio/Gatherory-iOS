@@ -4,6 +4,8 @@ struct DecisionDeckView: View {
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dragOffset: CGSize = .zero
+    @State private var selectedIdeaID: UUID?
+    @Namespace private var decisionTransition
 
     private var currentIdea: WeddingIdea? {
         workspace.decisionQueue.first
@@ -12,11 +14,22 @@ struct DecisionDeckView: View {
     var body: some View {
         VStack(spacing: AppTheme.Spacing.compact) {
             if let idea = currentIdea {
-                DecisionCard(idea: idea, dragOffset: dragOffset)
+                DecisionCard(
+                    idea: idea,
+                    dragOffset: dragOffset,
+                    transitionNamespace: decisionTransition
+                )
                     .frame(maxHeight: .infinity)
                     .offset(dragOffset)
                     .rotationEffect(.degrees(Double(dragOffset.width / 24)))
                     .gesture(dragGesture(for: idea))
+                    .onTapGesture {
+                        openDetails(for: idea)
+                    }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction(named: Text("Open details")) {
+                        openDetails(for: idea)
+                    }
                     .accessibilityAction(named: Text("Pass")) {
                         decide(.pass, idea: idea)
                     }
@@ -49,6 +62,13 @@ struct DecisionDeckView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.ColorToken.background)
         .toolbarVisibility(.hidden, for: .navigationBar)
+        .navigationDestination(item: $selectedIdeaID) { ideaID in
+            IdeaDetailView(
+                ideaID: ideaID,
+                transitionNamespace: decisionTransition
+            )
+            .toolbarVisibility(.visible, for: .navigationBar)
+        }
     }
 
     private func dragGesture(for idea: WeddingIdea) -> some Gesture {
@@ -75,6 +95,12 @@ struct DecisionDeckView: View {
             dragOffset = .zero
         }
     }
+
+    private func openDetails(for idea: WeddingIdea) {
+        guard abs(dragOffset.width) < 10, abs(dragOffset.height) < 10 else { return }
+        dragOffset = .zero
+        selectedIdeaID = idea.id
+    }
 }
 
 private struct DecisionCard: View {
@@ -82,6 +108,7 @@ private struct DecisionCard: View {
 
     let idea: WeddingIdea
     let dragOffset: CGSize
+    let transitionNamespace: Namespace.ID
 
     var body: some View {
         ZStack {
@@ -118,8 +145,9 @@ private struct DecisionCard: View {
                 .stroke(.white.opacity(0.16), lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.18), radius: 20, y: 10)
+        .matchedTransitionSource(id: idea.id, in: transitionNamespace)
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Swipe left to pass, right to love it, or up to save for later.")
+        .accessibilityHint("Opens idea details. Swipe left to pass, right to love it, or up to save for later.")
     }
 
     @ViewBuilder

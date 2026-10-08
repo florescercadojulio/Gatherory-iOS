@@ -30,33 +30,19 @@ struct RegistryView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                    Image(systemName: "gift.fill")
-                        .font(.title)
-                        .foregroundStyle(.white)
-                        .frame(width: 50, height: 50)
-                        .background(.black, in: Circle())
-
-                    Text("Gifts for what comes next")
-                        .font(AppTheme.Typography.sectionTitle)
+                    Label("Gifts for what comes next", systemImage: "gift.fill")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
 
                     Text("Collect meaningful things and experiences now, then let guests reserve one when you’re ready.")
                         .font(.subheadline)
-                        .foregroundStyle(.black.opacity(0.62))
+                        .foregroundStyle(.secondary)
 
                     Toggle("Open to guests", isOn: $workspace.isRegistryShared)
-                        .font(.headline)
-                        .tint(.black)
+                        .tint(AppTheme.ColorToken.accent)
                 }
+                .padding(.vertical, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .appCard(
-                    background: AppTheme.ColorToken.lilac,
-                    foreground: .black,
-                    padding: AppTheme.Spacing.spacious,
-                    border: false
-                )
-                .listRowInsets(AppTheme.Layout.featuredRowInsets)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
             }
 
             Section {
@@ -68,7 +54,14 @@ struct RegistryView: View {
                 }
                 .pickerStyle(.segmented)
                 .accessibilityHint("Filters gifts by reservation status")
-                .listRowInsets(AppTheme.Layout.featuredRowInsets)
+                .listRowInsets(
+                    EdgeInsets(
+                        top: 0,
+                        leading: AppTheme.Layout.screenHorizontal,
+                        bottom: 0,
+                        trailing: AppTheme.Layout.screenHorizontal
+                    )
+                )
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             }
@@ -97,25 +90,12 @@ struct RegistryView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityHint("Opens gift details")
-                        .listRowInsets(AppTheme.Layout.listRowInsets)
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
                     }
                 }
-            } header: {
-                HStack {
-                    Label(selectedCollection.title, systemImage: selectedCollection.symbol)
-
-                    Spacer()
-
-                    Text(visibleItems.count == 1 ? "1 gift" : "\(visibleItems.count) gifts")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-                .editorialEyebrow()
             }
         }
-        .listStyle(.plain)
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(.compact)
         .contentMargins(.top, AppTheme.Layout.screenTop, for: .scrollContent)
         .contentMargins(.bottom, AppTheme.Layout.screenBottom, for: .scrollContent)
         .scrollContentBackground(.hidden)
@@ -196,22 +176,21 @@ private struct RegistryItemRow: View {
                     .font(.headline)
                 Text(item.price, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))
                     .font(.subheadline)
-                    .foregroundStyle(.black.opacity(0.62))
+                    .foregroundStyle(.secondary)
 
-                Text(item.isFulfilled ? "Reserved" : "\(item.remainingCount) of \(item.quantity) available")
+                Label(
+                    item.isFulfilled ? "Reserved" : "\(item.remainingCount) of \(item.quantity) available",
+                    systemImage: item.isFulfilled ? "checkmark.circle.fill" : "gift.fill"
+                )
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(item.isFulfilled ? .secondary : AppTheme.ColorToken.accent)
             }
 
             Spacer(minLength: 0)
         }
+        .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .appCard(
-            background: item.category.tint,
-            foreground: .black,
-            padding: AppTheme.Spacing.standard,
-            border: false
-        )
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
         .accessibilityElement(children: .combine)
     }
 
@@ -239,7 +218,7 @@ private struct RegistryArtworkThumbnail: View {
             progressiveBlurRadius: 0,
             blurStart: 1
         )
-        .frame(width: 52, height: 52)
+        .frame(width: 58, height: 58)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
@@ -307,7 +286,6 @@ private struct RegistryItemDetailView: View {
 
 private struct RegistryItemDetailScreen: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let item: RegistryItem
     let isRegistryShared: Bool
@@ -323,7 +301,7 @@ private struct RegistryItemDetailScreen: View {
                         Spacer(minLength: max(proxy.size.height * 0.42, 260))
 
                         giftIdentity
-                        metrics
+                        metadata
 
                         if !isRegistryShared {
                             Label("The couple hasn’t opened this registry to guests yet.", systemImage: "lock.fill")
@@ -402,68 +380,50 @@ private struct RegistryItemDetailScreen: View {
         .foregroundStyle(.white)
     }
 
-    @ViewBuilder
-    private var metrics: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(spacing: AppTheme.Spacing.compact) {
-                metricViews
-            }
-        } else {
-            HStack(spacing: AppTheme.Spacing.compact) {
-                metricViews
-            }
+    private var metadata: some View {
+        VStack(spacing: 0) {
+            RegistryMetadataRow(
+                title: "Price",
+                value: item.price.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")),
+                symbol: "tag.fill"
+            )
+
+            Divider()
+                .padding(.leading, 44)
+
+            RegistryMetadataRow(
+                title: "Available",
+                value: "\(item.remainingCount) of \(item.quantity)",
+                symbol: "shippingbox.fill"
+            )
         }
-    }
-
-    @ViewBuilder
-    private var metricViews: some View {
-        RegistryMetric(
-            title: "Price",
-            value: item.price.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")),
-            symbol: "tag.fill",
-            reduceTransparency: reduceTransparency
+        .padding(.vertical, 4)
+        .background(
+            reduceTransparency ? AnyShapeStyle(.black.opacity(0.82)) : AnyShapeStyle(.regularMaterial),
+            in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
         )
-        RegistryMetric(
-            title: "Available",
-            value: "\(item.remainingCount) of \(item.quantity)",
-            symbol: "shippingbox.fill",
-            reduceTransparency: reduceTransparency
-        )
+        .environment(\.colorScheme, .dark)
     }
-
 }
 
-private struct RegistryMetric: View {
+private struct RegistryMetadataRow: View {
     let title: String
     let value: String
     let symbol: String
-    let reduceTransparency: Bool
 
     var body: some View {
-        HStack(spacing: AppTheme.Spacing.compact) {
-            Image(systemName: symbol)
-                .font(.headline)
-                .frame(width: 28, height: 28)
-                .background(.white.opacity(0.14), in: Circle())
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.72))
-                Text(value)
-                    .font(.headline)
-            }
-
-            Spacer(minLength: 0)
+        LabeledContent {
+            Text(value)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.trailing)
+        } label: {
+            Label(title, systemImage: symbol)
+                .font(.body)
+                .foregroundStyle(.secondary)
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, minHeight: 58)
-        .background(.black.opacity(reduceTransparency ? 0.72 : 0.24), in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 0.5)
-        }
+        .padding(.horizontal, AppTheme.Spacing.standard)
+        .frame(minHeight: 56)
         .accessibilityElement(children: .combine)
     }
 }

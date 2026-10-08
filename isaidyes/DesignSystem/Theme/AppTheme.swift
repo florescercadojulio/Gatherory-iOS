@@ -139,7 +139,7 @@ extension IdeaCategory {
 extension IdeaStatus {
     var tint: Color {
         switch self {
-        case .new: AppTheme.ColorToken.navy
+        case .new: AppTheme.ColorToken.accent
         case .maybe: .orange
         case .shortlisted: AppTheme.ColorToken.accent
         case .chosen: .green
