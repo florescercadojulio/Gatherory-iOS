@@ -134,6 +134,8 @@ extension View {
 extension IdeaCategory {
     var tint: Color {
         switch self {
+        case .event: AppTheme.ColorToken.mint
+        case .registry: AppTheme.ColorToken.lilac
         case .venue: AppTheme.ColorToken.lilac
         case .attire: AppTheme.ColorToken.pink
         case .flowers: AppTheme.ColorToken.coral

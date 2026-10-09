@@ -426,6 +426,35 @@ extension WeddingWorkspace {
                     submittedBy: "Jordan",
                     estimatedCost: 900,
                     status: .maybe
+                ),
+                WeddingIdea(
+                    title: "Welcome Dinner",
+                    note: "A relaxed dinner for the planning circle and out-of-town family before the wedding weekend begins.",
+                    category: .event,
+                    submittedBy: "Alex",
+                    status: .maybe,
+                    configuration: .event(
+                        EventIdeaConfiguration(
+                            category: .reception,
+                            purpose: .eventExperience,
+                            proposedDate: calendar.date(byAdding: .day, value: 246, to: now),
+                            location: venueLocation
+                        )
+                    )
+                ),
+                WeddingIdea(
+                    title: "Weekend Getaway Fund",
+                    note: "A flexible fund for a quiet first trip after the celebration.",
+                    category: .registry,
+                    submittedBy: "Jordan",
+                    status: .new,
+                    configuration: .registry(
+                        RegistryIdeaConfiguration(
+                            category: .cashFund,
+                            price: 1_500,
+                            quantity: 1
+                        )
+                    )
                 )
             ],
             timeline: [

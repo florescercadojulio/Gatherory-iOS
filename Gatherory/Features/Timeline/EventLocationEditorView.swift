@@ -89,15 +89,18 @@ struct EventLocationEditorView: View {
                 }
                 .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
             } else {
-                LocationButton(.currentLocation) {
+                Button {
                     currentLocationModel.requestLocation()
+                } label: {
+                    Label("Use Current Location", systemImage: "location.fill")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
                 }
-                .symbolVariant(.fill)
-                .labelStyle(.titleAndIcon)
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
                 .tint(AppTheme.ColorToken.accent)
-                .foregroundStyle(.white)
-                .clipShape(.capsule)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .listRowBackground(Color.clear)
             }
         } header: {
             Text("Nearby")

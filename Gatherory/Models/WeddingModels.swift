@@ -37,6 +37,8 @@ enum PlanningMode: String, CaseIterable, Identifiable, Codable {
 }
 
 enum IdeaCategory: String, CaseIterable, Identifiable, Codable {
+    case event
+    case registry
     case venue
     case attire
     case flowers
@@ -52,6 +54,8 @@ enum IdeaCategory: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
+        case .event: "Event"
+        case .registry: "Registry"
         case .venue: "Venue"
         case .attire: "Attire"
         case .flowers: "Flowers"
@@ -67,6 +71,8 @@ enum IdeaCategory: String, CaseIterable, Identifiable, Codable {
 
     var symbol: String {
         switch self {
+        case .event: "calendar.badge.plus"
+        case .registry: "gift.fill"
         case .venue: "building.2.fill"
         case .attire: "hanger"
         case .flowers: "camera.macro"
@@ -410,6 +416,19 @@ struct MusicIdeaConfiguration: Codable, Hashable {
     var tracks: [MusicTrack]
 }
 
+struct EventIdeaConfiguration: Codable, Hashable {
+    var category: TimelineCategory
+    var purpose: EventPurpose
+    var proposedDate: Date?
+    var location: EventLocation?
+}
+
+struct RegistryIdeaConfiguration: Codable, Hashable {
+    var category: RegistryCategory
+    var price: Decimal?
+    var quantity: Int
+}
+
 enum IdeaConfiguration: Codable, Hashable {
     case standard
     case attire(AttireIdeaConfiguration)
@@ -421,6 +440,8 @@ enum IdeaConfiguration: Codable, Hashable {
     case invitations(InvitationIdeaConfiguration)
     case honeymoon(HoneymoonIdeaConfiguration)
     case music(MusicIdeaConfiguration)
+    case event(EventIdeaConfiguration)
+    case registry(RegistryIdeaConfiguration)
 }
 
 struct WeddingIdea: Identifiable, Hashable {
@@ -479,6 +500,23 @@ struct WeddingIdea: Identifiable, Hashable {
                 .honeymoon(HoneymoonIdeaConfiguration(style: .relaxing, destination: "", nights: nil))
             case .music:
                 .music(MusicIdeaConfiguration(tracks: musicTrack.map { [$0] } ?? []))
+            case .event:
+                .event(
+                    EventIdeaConfiguration(
+                        category: .other,
+                        purpose: .planning,
+                        proposedDate: nil,
+                        location: nil
+                    )
+                )
+            case .registry:
+                .registry(
+                    RegistryIdeaConfiguration(
+                        category: .home,
+                        price: nil,
+                        quantity: 1
+                    )
+                )
             default:
                 .standard
             }
@@ -531,6 +569,16 @@ struct WeddingIdea: Identifiable, Hashable {
 
     var honeymoonConfiguration: HoneymoonIdeaConfiguration? {
         guard case .honeymoon(let configuration) = configuration else { return nil }
+        return configuration
+    }
+
+    var eventConfiguration: EventIdeaConfiguration? {
+        guard case .event(let configuration) = configuration else { return nil }
+        return configuration
+    }
+
+    var registryConfiguration: RegistryIdeaConfiguration? {
+        guard case .registry(let configuration) = configuration else { return nil }
         return configuration
     }
 }
@@ -973,7 +1021,7 @@ struct TimelineItem: Identifiable, Hashable {
         timeZoneIdentifier: String = TimeZone.autoupdatingCurrent.identifier,
         participantIDs: [UUID],
         parentEventID: UUID? = nil,
-        status: EventStatus = .draft,
+        status: EventStatus = .approved,
         completionStatus: EventCompletionStatus = .upcoming,
         response: EventResponse? = nil,
         linkedIdeaID: UUID? = nil,
@@ -1011,7 +1059,7 @@ struct TimelineItem: Identifiable, Hashable {
         timeZoneIdentifier: String = TimeZone.autoupdatingCurrent.identifier,
         participantIDs: [UUID],
         parentEventID: UUID? = nil,
-        status: EventStatus = .draft,
+        status: EventStatus = .approved,
         completionStatus: EventCompletionStatus = .upcoming,
         response: EventResponse? = nil,
         linkedIdeaID: UUID? = nil,

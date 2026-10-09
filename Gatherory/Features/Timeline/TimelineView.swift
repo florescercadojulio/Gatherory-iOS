@@ -223,6 +223,7 @@ private enum TimelineFilter: String, CaseIterable, Identifiable {
 private struct TimelineItemEditorView: View {
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private let originalItem: TimelineItem?
 
@@ -248,9 +249,9 @@ private struct TimelineItemEditorView: View {
     init(item: TimelineItem? = nil) {
         originalItem = item
         _title = State(initialValue: item?.title ?? "")
-        _category = State(initialValue: item?.category ?? .venue)
+        _category = State(initialValue: item?.category ?? .other)
         _purpose = State(initialValue: item?.purpose ?? .planning)
-        _status = State(initialValue: item?.status ?? .draft)
+        _status = State(initialValue: item?.status ?? .approved)
         _scheduledAt = State(
             initialValue: item?.scheduledAt
                 ?? Calendar.current.date(byAdding: .day, value: 7, to: .now)
@@ -274,6 +275,33 @@ private struct TimelineItemEditorView: View {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var resolvedTitle: String {
+        trimmedTitle.isEmpty ? suggestedTitle : trimmedTitle
+    }
+
+    private var suggestedTitle: String {
+        switch category {
+        case .venue:
+            purpose == .planning ? "Venue Visit" : "Venue"
+        case .foodTasting:
+            "Food Tasting"
+        case .attireFitting:
+            "Attire Fitting"
+        case .weddingShower:
+            "Wedding Shower"
+        case .bachelorBachelorette:
+            "Bachelor or Bachelorette Party"
+        case .rehearsal:
+            "Wedding Rehearsal"
+        case .ceremony:
+            "Ceremony"
+        case .reception:
+            "Reception"
+        case .other:
+            purpose == .planning ? "Planning Event" : "Event"
+        }
+    }
+
     private var startSummary: String {
         scheduledAt.formatted(
             date: .abbreviated,
@@ -291,7 +319,27 @@ private struct TimelineItemEditorView: View {
     var body: some View {
         Form {
             Section {
-                TextField("Event name", text: $title)
+                categoryGrid
+                    .listRowInsets(categoryGridInsets)
+                    .listRowBackground(Color.clear)
+            } header: {
+                Text("Event Type")
+            } footer: {
+                Text("Choose what is happening. You can still give it a custom name below.")
+            }
+
+            Section {
+                purposePicker
+                    .listRowInsets(categoryGridInsets)
+                    .listRowBackground(Color.clear)
+            } header: {
+                Text("Purpose")
+            } footer: {
+                Text(purpose.description)
+            }
+
+            Section {
+                TextField("Custom name (optional)", text: $title)
                     .textInputAutocapitalization(.sentences)
                     .submitLabel(.done)
                     .focused($focusedField, equals: .title)
@@ -300,56 +348,23 @@ private struct TimelineItemEditorView: View {
                     }
             } header: {
                 Text("Event Name")
-            }
-
-            Section("Photo") {
-                PhotoAttachmentPicker(
-                    imageData: $imageData,
-                    emptySymbol: category.symbol,
-                    fallbackAssetName: category == .venue ? "WeddingVenueHero" : nil,
-                    fallbackColors: category.artworkColors,
-                    fallbackAccent: category.artworkAccent,
-                    suggestedConcept: "Wedding \(category.title.lowercased()) event artwork for \(trimmedTitle.isEmpty ? "our celebration" : trimmedTitle)"
-                )
-            }
-
-            Section {
-                Picker("Event type", selection: $category) {
-                    ForEach(TimelineCategory.allCases) { option in
-                        Label(option.title, systemImage: option.symbol)
-                            .tag(option)
-                    }
-                }
-            } header: {
-                Label("Event Type", systemImage: "square.grid.2x2.fill")
             } footer: {
-                Text("Choose the kind of event.")
+                Text("Leave this blank to use “\(suggestedTitle)”.")
             }
 
-            Section {
-                Picker("Purpose", selection: $purpose) {
-                    ForEach(EventPurpose.allCases) { option in
-                        Label(option.title, systemImage: option.symbol)
-                            .tag(option)
+            if isEditing {
+                Section {
+                    Picker("Planning status", selection: $status) {
+                        ForEach(EventStatus.allCases.filter { $0 != .archived }) { option in
+                            Label(option.title, systemImage: option.symbol)
+                                .tag(option)
+                        }
                     }
+                } header: {
+                    Label("Planning Status", systemImage: "checklist")
+                } footer: {
+                    Text("Only approved events appear on the guest invitation.")
                 }
-            } header: {
-                Label("Event Purpose", systemImage: purpose.symbol)
-            } footer: {
-                Text(purpose.description)
-            }
-
-            Section {
-                Picker("Planning status", selection: $status) {
-                    ForEach(EventStatus.allCases.filter { $0 != .archived }) { option in
-                        Label(option.title, systemImage: option.symbol)
-                            .tag(option)
-                    }
-                }
-            } header: {
-                Label("Planning Status", systemImage: "checklist")
-            } footer: {
-                Text("Only approved events appear on the guest invitation.")
             }
 
             Section {
@@ -423,6 +438,17 @@ private struct TimelineItemEditorView: View {
                 Text("Optional. Search Apple Maps, then add a unit or familiar place name if useful.")
             }
 
+            Section("Photo") {
+                PhotoAttachmentPicker(
+                    imageData: $imageData,
+                    emptySymbol: category.symbol,
+                    fallbackAssetName: category == .venue ? "WeddingVenueHero" : nil,
+                    fallbackColors: category.artworkColors,
+                    fallbackAccent: category.artworkAccent,
+                    suggestedConcept: "Wedding \(category.title.lowercased()) event artwork for \(resolvedTitle)"
+                )
+            }
+
             Section {
                 ForEach(workspace.planningMembers) { member in
                     Button {
@@ -473,10 +499,10 @@ private struct TimelineItemEditorView: View {
             }
 
             ToolbarItem(placement: .confirmationAction) {
-                Button(isEditing ? "Save" : "Add") {
+                Button(isEditing ? "Save" : "Schedule") {
                     let updatedItem = TimelineItem(
                         id: originalItem?.id ?? UUID(),
-                        title: trimmedTitle,
+                        title: resolvedTitle,
                         category: category,
                         purpose: purpose,
                         scheduledAt: scheduledAt,
@@ -500,7 +526,7 @@ private struct TimelineItemEditorView: View {
                     }
                     dismiss()
                 }
-                .disabled(trimmedTitle.isEmpty || selectedParticipantIDs.isEmpty)
+                .disabled(selectedParticipantIDs.isEmpty)
                 .keyboardShortcut(.defaultAction)
             }
         }
@@ -534,7 +560,152 @@ private struct TimelineItemEditorView: View {
                     .map(\.id)
             )
             scheduledAt = max(scheduledAt, Date.now)
-            focusedField = .title
+        }
+    }
+
+    private static let categoryOrder: [TimelineCategory] = [
+        .other,
+        .venue,
+        .foodTasting,
+        .attireFitting,
+        .weddingShower,
+        .bachelorBachelorette,
+        .rehearsal,
+        .ceremony,
+        .reception
+    ]
+
+    private var categoryGridInsets: EdgeInsets {
+        EdgeInsets(
+            top: AppTheme.Spacing.compact,
+            leading: 0,
+            bottom: AppTheme.Spacing.compact,
+            trailing: 0
+        )
+    }
+
+    private var categoryGrid: some View {
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.compact),
+                count: dynamicTypeSize.isAccessibilitySize ? 2 : 3
+            ),
+            spacing: AppTheme.Spacing.compact
+        ) {
+            ForEach(Self.categoryOrder) { option in
+                categoryTile(option)
+            }
+        }
+        .padding(2)
+        .accessibilityLabel("Event types")
+    }
+
+    private func categoryTile(_ option: TimelineCategory) -> some View {
+        let isSelected = category == option
+
+        return Button {
+            withAnimation(.snappy) {
+                category = option
+            }
+        } label: {
+            VStack(spacing: 6) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: option.symbol)
+                        .symbolRenderingMode(.hierarchical)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(isSelected ? Color.white : option.artworkAccent)
+                        .frame(width: 38, height: 38)
+                        .background(
+                            isSelected ? option.artworkAccent : Color.clear,
+                            in: Circle()
+                        )
+                        .background(.regularMaterial, in: Circle())
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white, AppTheme.ColorToken.accent)
+                            .offset(x: 4, y: -4)
+                    }
+                }
+
+                Text(option.title)
+                    .font(.caption2.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 112 : 76)
+            .padding(4)
+            .background(
+                isSelected ? option.artworkAccent.opacity(0.14) : AppTheme.ColorToken.elevatedSurface,
+                in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? option.artworkAccent : AppTheme.ColorToken.cardBorder,
+                        lineWidth: isSelected ? 2 : 0.5
+                    )
+            }
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.title)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityHint("Selects the \(option.title.lowercased()) event type")
+    }
+
+    @ViewBuilder
+    private var purposePicker: some View {
+        let content = ForEach(EventPurpose.allCases) { option in
+            let isSelected = purpose == option
+
+            Button {
+                withAnimation(.snappy) {
+                    purpose = option
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(option.title, systemImage: option.symbol)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(2)
+
+                    Text(option.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+                .frame(maxWidth: .infinity, minHeight: 94, alignment: .leading)
+                .padding(AppTheme.Spacing.compact)
+                .background(
+                    isSelected ? AppTheme.ColorToken.accent.opacity(0.14) : AppTheme.ColorToken.elevatedSurface,
+                    in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                        .strokeBorder(
+                            isSelected ? AppTheme.ColorToken.accent : AppTheme.ColorToken.cardBorder,
+                            lineWidth: isSelected ? 2 : 0.5
+                        )
+                }
+                .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        }
+
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: AppTheme.Spacing.compact) {
+                content
+            }
+            .padding(2)
+        } else {
+            HStack(spacing: AppTheme.Spacing.compact) {
+                content
+            }
+            .padding(2)
         }
     }
 

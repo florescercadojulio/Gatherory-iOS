@@ -12,7 +12,6 @@ private enum AppTab: Hashable {
     case ideas
     case decide
     case timeline
-    case registry
 }
 
 struct ContentView: View {
@@ -41,12 +40,6 @@ struct ContentView: View {
             Tab("Timeline", systemImage: "calendar", value: .timeline) {
                 NavigationStack {
                     TimelineView()
-                }
-            }
-
-            Tab("Registry", systemImage: "gift.fill", value: .registry) {
-                NavigationStack {
-                    RegistryView()
                 }
             }
         }

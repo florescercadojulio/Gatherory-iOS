@@ -308,6 +308,8 @@ private struct IdeaCollectionCard: View {
 private extension IdeaCategory {
     var collectionAspectRatio: CGFloat {
         switch self {
+        case .event: 0.84
+        case .registry: 0.92
         case .venue: 0.82
         case .attire: 0.74
         case .flowers: 1.12
@@ -483,15 +485,19 @@ private struct IdeaDetailScreen: View {
 
     private var metadata: some View {
         VStack(spacing: 0) {
-            IdeaMetadataRow(
-                title: "Shared by",
-                value: idea.submittedBy,
-                symbol: "person.fill"
-            )
+            if idea.category != .event {
+                IdeaMetadataRow(
+                    title: "Shared by",
+                    value: idea.submittedBy,
+                    symbol: "person.fill"
+                )
+            }
 
             if let estimatedCost = idea.estimatedCost {
-                Divider()
-                    .padding(.leading, 44)
+                if idea.category != .event {
+                    Divider()
+                        .padding(.leading, 44)
+                }
 
                 IdeaMetadataRow(
                     title: estimatedCostLabel,
@@ -510,6 +516,8 @@ private struct IdeaDetailScreen: View {
 
     private var estimatedCostLabel: String {
         switch idea.category {
+        case .event: "Estimated event cost"
+        case .registry: "Estimated gift price"
         case .attire: "Estimated attire cost"
         case .food: "Estimated food budget"
         case .music: "Estimated music cost"
@@ -532,6 +540,38 @@ private struct IdeaCategoryDetailContent: View {
     @ViewBuilder
     var body: some View {
         switch idea.category {
+        case .event:
+            if let configuration = idea.eventConfiguration {
+                EventIdeaDetailCard(idea: idea, configuration: configuration)
+            } else {
+                genericContent
+            }
+
+        case .registry:
+            if let configuration = idea.registryConfiguration {
+                configurationContent(
+                    primaryTitle: "Registry Category",
+                    primaryValue: configuration.category.title,
+                    primarySymbol: configuration.category.symbol,
+                    facts: [
+                        configuration.price.map {
+                            IdeaDetailFact(
+                                title: "Price",
+                                value: $0.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")),
+                                symbol: "tag.fill"
+                            )
+                        },
+                        IdeaDetailFact(
+                            title: "Quantity",
+                            value: configuration.quantity.formatted(),
+                            symbol: "shippingbox.fill"
+                        )
+                    ].compactMap { $0 }
+                )
+            } else {
+                genericContent
+            }
+
         case .venue:
             if let configuration = idea.venueConfiguration {
                 configurationContent(
@@ -826,6 +866,159 @@ private struct IdeaCategoryDetailContent: View {
     }
 }
 
+private struct EventIdeaDetailCard: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @State private var weather = EventWeatherModel()
+
+    let idea: WeddingIdea
+    let configuration: EventIdeaConfiguration
+
+    private var requestID: String {
+        let date = configuration.proposedDate?.timeIntervalSinceReferenceDate ?? 0
+        let latitude = configuration.location?.latitude ?? 0
+        let longitude = configuration.location?.longitude ?? 0
+        return "\(date)-\(latitude)-\(longitude)"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            EventIdeaMetadataRow(
+                title: "Purpose",
+                value: configuration.purpose.title,
+                symbol: configuration.purpose.symbol
+            )
+
+            if let proposedDate = configuration.proposedDate {
+                divider
+                EventIdeaMetadataRow(
+                    title: "Proposed Date",
+                    value: proposedDate.formatted(date: .long, time: .shortened),
+                    symbol: "calendar"
+                )
+            }
+
+            if let location = configuration.location {
+                divider
+                if let directionsURL = directionsURL(for: location) {
+                    Link(destination: directionsURL) {
+                        EventIdeaMetadataRow(
+                            title: "Location",
+                            value: location.formatted,
+                            symbol: "mappin.and.ellipse"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens directions in Maps")
+                } else {
+                    EventIdeaMetadataRow(
+                        title: "Location",
+                        value: location.formatted,
+                        symbol: "mappin.and.ellipse"
+                    )
+                }
+            }
+
+            if configuration.proposedDate != nil, configuration.location != nil {
+                divider
+                TimelineWeatherRow(
+                    phase: weather.phase,
+                    attribution: weather.attribution
+                ) {
+                    loadWeather()
+                }
+            }
+
+            divider
+            EventIdeaMetadataRow(
+                title: "Proposed By",
+                value: idea.submittedBy,
+                symbol: "person.2.fill"
+            )
+
+            if !idea.note.isEmpty {
+                divider
+                EventIdeaMetadataRow(
+                    title: "Notes",
+                    value: idea.note,
+                    symbol: "text.quote"
+                )
+            }
+        }
+        .padding(.vertical, 4)
+        .background(
+            reduceTransparency ? AnyShapeStyle(.black.opacity(0.82)) : AnyShapeStyle(.regularMaterial),
+            in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+        )
+        .environment(\.colorScheme, .dark)
+        .task(id: requestID) {
+            loadWeather()
+        }
+    }
+
+    private var divider: some View {
+        Divider()
+            .padding(.leading, 44)
+    }
+
+    private func loadWeather() {
+        guard let proposedDate = configuration.proposedDate else { return }
+        Task {
+            await weather.load(on: proposedDate, location: configuration.location)
+        }
+    }
+
+    private func directionsURL(for location: EventLocation) -> URL? {
+        if let latitude = location.latitude, let longitude = location.longitude {
+            let name = location.title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "Event"
+            return URL(string: "https://maps.apple.com/?ll=\(latitude),\(longitude)&q=\(name)")
+        }
+
+        let address = location.formatted.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        return address.isEmpty ? nil : URL(string: "https://maps.apple.com/?q=\(address)")
+    }
+}
+
+private struct EventIdeaMetadataRow: View {
+    let title: String
+    let value: String
+    let symbol: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
+            Image(systemName: symbol)
+                .font(.title3)
+                .foregroundStyle(.white.opacity(0.72))
+                .frame(width: 28)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.72))
+
+                Text(value)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+
+            if title == "Location" {
+                Image(systemName: "arrow.up.forward")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.standard)
+        .padding(.vertical, 14)
+        .frame(minHeight: 64)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private struct IdeaDetailFact: Identifiable {
     let title: String
     let value: String
@@ -903,6 +1096,15 @@ private struct AddIdeaView: View {
     @State private var tripDestination = ""
     @State private var tripNights = ""
     @State private var musicTracks: [MusicTrack] = []
+    @State private var eventCategory: TimelineCategory = .other
+    @State private var eventPurpose: EventPurpose = .planning
+    @State private var includesProposedDate = false
+    @State private var eventProposedDate = Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now
+    @State private var eventLocation: EventLocation?
+    @State private var isEditingEventLocation = false
+    @State private var registryCategory: RegistryCategory = .home
+    @State private var registryPrice = ""
+    @State private var registryQuantity = 1
 
     let setDetent: (PresentationDetent) -> Void
 
@@ -916,6 +1118,10 @@ private struct AddIdeaView: View {
 
     private var suggestedTitle: String {
         switch category {
+        case .event:
+            return eventCategory == .other ? "Event Idea" : eventCategory.title
+        case .registry:
+            return registryCategory == .cashFund ? "Cash Fund" : "Registry Gift"
         case .attire:
             return attireStyle == .any ? "Attire" : "\(attireStyle.title) Attire"
         case .venue:
@@ -979,12 +1185,31 @@ private struct AddIdeaView: View {
     }
 
     private var hasValidCategoryNumbers: Bool {
-        [foodServings, venueCapacity, photographyHours, invitationQuantity, tripNights]
+        let standardNumbersAreValid = [foodServings, venueCapacity, photographyHours, invitationQuantity, tripNights]
             .allSatisfy(isValidOptionalInt)
+        let registryPriceIsValid = registryPrice.isEmpty || Decimal(string: registryPrice) != nil
+        return standardNumbersAreValid && registryPriceIsValid
     }
 
     private var ideaConfiguration: IdeaConfiguration {
         switch category {
+        case .event:
+            return .event(
+                EventIdeaConfiguration(
+                    category: eventCategory,
+                    purpose: eventPurpose,
+                    proposedDate: includesProposedDate ? eventProposedDate : nil,
+                    location: eventLocation
+                )
+            )
+        case .registry:
+            return .registry(
+                RegistryIdeaConfiguration(
+                    category: registryCategory,
+                    price: registryPrice.isEmpty ? nil : Decimal(string: registryPrice),
+                    quantity: registryQuantity
+                )
+            )
         case .attire:
             return .attire(
                 AttireIdeaConfiguration(
@@ -1130,9 +1355,11 @@ private struct AddIdeaView: View {
                     )
                 }
 
-                Section("Optional") {
-                    TextField("Estimated cost", text: $estimatedCost)
-                        .keyboardType(.numberPad)
+                if category != .registry {
+                    Section("Optional") {
+                        TextField("Estimated cost", text: $estimatedCost)
+                            .keyboardType(.numberPad)
+                    }
                 }
             }
             .task(id: category) {
@@ -1141,13 +1368,20 @@ private struct AddIdeaView: View {
                     proxy.scrollTo(Self.ideaFieldsAnchor, anchor: .top)
                 }
             }
+            .sheet(isPresented: $isEditingEventLocation) {
+                EventLocationEditorView(location: eventLocation) { updatedLocation in
+                    eventLocation = updatedLocation
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
         }
     }
 
     private static let ideaFieldsAnchor = "idea-fields"
     private static let categoryPages: [[IdeaCategory]] = [
-        [.other, .venue, .attire, .food, .flowers, .photography, .music, .decor, .invitations],
-        [.honeymoon]
+        [.other, .event, .registry, .venue, .attire, .food, .flowers, .photography, .music],
+        [.decor, .invitations, .honeymoon]
     ]
 
     private var categoryGridInsets: EdgeInsets {
@@ -1256,7 +1490,8 @@ private struct AddIdeaView: View {
 
                             Text(title(option))
                                 .font(.caption.weight(.semibold))
-                                .lineLimit(1)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
                         }
                         .foregroundStyle(isSelected ? .white : .primary)
                         .frame(width: 98, height: 76)
@@ -1287,6 +1522,76 @@ private struct AddIdeaView: View {
     @ViewBuilder
     private func categoryConfiguration(for category: IdeaCategory) -> some View {
         switch category {
+        case .event:
+            Section {
+                optionStrip(
+                    TimelineCategory.allCases,
+                    selection: $eventCategory,
+                    title: \.title,
+                    symbol: \.symbol
+                )
+
+                Picker("Purpose", selection: $eventPurpose) {
+                    ForEach(EventPurpose.allCases) { purpose in
+                        Label(purpose.shortTitle, systemImage: purpose.symbol)
+                            .tag(purpose)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(eventPurpose.description)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Toggle("Suggest a date", isOn: $includesProposedDate)
+
+                if includesProposedDate {
+                    DatePicker(
+                        "Proposed date",
+                        selection: $eventProposedDate,
+                        in: Date.now...
+                    )
+                }
+
+                Button {
+                    isEditingEventLocation = true
+                } label: {
+                    LabeledContent {
+                        Text(eventLocation?.title ?? "Add Location")
+                            .foregroundStyle(eventLocation == nil ? AppTheme.ColorToken.accent : .primary)
+                            .multilineTextAlignment(.trailing)
+                    } label: {
+                        Label("Location", systemImage: "mappin.and.ellipse")
+                    }
+                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } header: {
+                Text("Event Idea")
+            } footer: {
+                Text("This stays in Ideas for discussion. After it’s approved, it can become a scheduled timeline event.")
+            }
+
+        case .registry:
+            Section {
+                optionStrip(
+                    RegistryCategory.allCases,
+                    selection: $registryCategory,
+                    title: \.title,
+                    symbol: \.symbol
+                )
+
+                TextField("Price (optional)", text: $registryPrice)
+                    .keyboardType(.decimalPad)
+
+                Stepper("Quantity: \(registryQuantity)", value: $registryQuantity, in: 1...20)
+            } header: {
+                Text("Registry Idea")
+            } footer: {
+                Text("Add a gift, fund, or experience for the planning team to review before it’s shared with guests.")
+            }
+
         case .venue:
             Section {
                 optionStrip(
