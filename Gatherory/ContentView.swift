@@ -14,10 +14,54 @@ private enum AppTab: Hashable {
     case timeline
 }
 
+struct AppRootView: View {
+    @Environment(WorkspaceLibrary.self) private var workspaceLibrary
+
+    private var isPresentingWorkspace: Binding<Bool> {
+        Binding(
+            get: { workspaceLibrary.selectedWorkspace != nil },
+            set: { isPresented in
+                if !isPresented {
+                    workspaceLibrary.closeWorkspace()
+                }
+            }
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            WorkspaceBrowserView()
+        }
+        .tint(AppTheme.ColorToken.accent)
+        .fullScreenCover(isPresented: isPresentingWorkspace) {
+            if let workspace = workspaceLibrary.selectedWorkspace {
+                WorkspaceSessionView(workspace: workspace)
+            }
+        }
+    }
+}
+
+private struct WorkspaceSessionView: View {
+    @Environment(\.dismiss) private var dismiss
+    let workspace: WeddingWorkspace
+
+    var body: some View {
+        ContentView {
+            dismiss()
+        }
+        .environment(workspace)
+    }
+}
+
 struct ContentView: View {
     @Environment(WeddingWorkspace.self) private var workspace
+    var onExitWorkspace: (() -> Void)?
     @State private var selectedTab = AppTab.home
     @State private var homeReselectionTrigger = 0
+
+    init(onExitWorkspace: (() -> Void)? = nil) {
+        self.onExitWorkspace = onExitWorkspace
+    }
 
     private var tabSelection: Binding<AppTab> {
         Binding(
@@ -35,25 +79,28 @@ struct ContentView: View {
         TabView(selection: tabSelection) {
             Tab("Home", systemImage: "house.fill", value: .home) {
                 NavigationStack {
-                    HomeView(homeReselectionTrigger: homeReselectionTrigger)
+                    HomeView(
+                        homeReselectionTrigger: homeReselectionTrigger,
+                        onExitWorkspace: onExitWorkspace
+                    )
                 }
             }
 
             Tab("Ideas", systemImage: "sparkles.rectangle.stack.fill", value: .ideas) {
                 NavigationStack {
-                    IdeasView()
+                    IdeasView(onExitWorkspace: onExitWorkspace)
                 }
             }
 
             Tab("Decide", systemImage: "rectangle.on.rectangle.angled", value: .decide) {
                 NavigationStack {
-                    DecisionDeckView()
+                    DecisionDeckView(onExitWorkspace: onExitWorkspace)
                 }
             }
 
             Tab("Timeline", systemImage: "calendar", value: .timeline) {
                 NavigationStack {
-                    TimelineView()
+                    TimelineView(onExitWorkspace: onExitWorkspace)
                 }
             }
         }

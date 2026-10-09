@@ -11,6 +11,54 @@ import Testing
 
 struct GatheroryTests {
 
+    @Test("The app uses the Gatherory launch screen")
+    func appDeclaresLaunchScreen() {
+        let launchScreen = Bundle.main.object(
+            forInfoDictionaryKey: "UILaunchStoryboardName"
+        ) as? String
+
+        #expect(launchScreen == "LaunchScreen")
+    }
+
+    @Test("The sample library opens on the workspace collection")
+    func sampleLibraryStartsAtWorkspaceCollection() {
+        let library = WorkspaceLibrary.sample
+
+        #expect(library.workspaces.count == 2)
+        #expect(library.selectedWorkspace == nil)
+    }
+
+    @Test("Opening and closing a workspace updates the active context")
+    func workspaceSelectionRoundTrip() throws {
+        let library = WorkspaceLibrary.sample
+        let workspace = try #require(library.workspaces.first)
+
+        library.open(workspace)
+        #expect(library.selectedWorkspace === workspace)
+
+        library.closeWorkspace()
+        #expect(library.selectedWorkspace == nil)
+
+        library.closeWorkspace()
+        #expect(library.selectedWorkspace == nil)
+    }
+
+    @Test("Creating a workspace adds it and opens it")
+    func creatingWorkspaceSelectsIt() {
+        let library = WorkspaceLibrary()
+        let workspace = WeddingWorkspace.newWorkspace(
+            title: "Neighborhood dinner",
+            startsAt: .now,
+            eventLocation: nil,
+            imageData: nil
+        )
+
+        library.add(workspace)
+
+        #expect(library.workspaces.count == 1)
+        #expect(library.selectedWorkspace === workspace)
+    }
+
     @Test("Loving an idea adds it to the shortlist")
     func loveIdea() throws {
         let workspace = WeddingWorkspace.sample

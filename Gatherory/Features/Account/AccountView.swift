@@ -41,7 +41,7 @@ struct AccountView: View {
                 }
             }
 
-            Section("Wedding workspace") {
+            Section("Current Workspace") {
                 LabeledContent("Workspace", value: workspace.title)
                 Toggle("Registry visible to guests", systemImage: "gift.fill", isOn: $workspace.isRegistryShared)
 

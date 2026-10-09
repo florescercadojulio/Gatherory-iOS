@@ -9,15 +9,14 @@ import SwiftUI
 
 @main
 struct GatheroryApp: App {
-    @State private var workspace = WeddingWorkspace.sample
+    @State private var workspaceLibrary = WorkspaceLibrary.sample
     @State private var musicCatalog = MusicCatalog()
     @AppStorage("appAppearance") private var appearance = AppAppearance.system.rawValue
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .appSoftScrollEdges()
-                .environment(workspace)
+            AppRootView()
+                .environment(workspaceLibrary)
                 .environment(musicCatalog)
                 .preferredColorScheme(AppAppearance(rawValue: appearance)?.colorScheme)
         }

@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct DecisionDeckView: View {
+    var onExitWorkspace: (() -> Void)?
+
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dragOffset: CGSize = .zero
@@ -13,8 +15,31 @@ struct DecisionDeckView: View {
 
     var body: some View {
         VStack(spacing: AppTheme.Spacing.compact) {
-            EventContextLabel(section: "Decide", eventTitle: workspace.selectedEventTitle)
+            if let onExitWorkspace {
+                HStack {
+                    WorkspaceLibraryToolbarButton(action: onExitWorkspace)
+                        .frame(
+                            width: AppTheme.Layout.minimumTouchTarget,
+                            height: AppTheme.Layout.minimumTouchTarget
+                        )
+
+                    Spacer(minLength: AppTheme.Spacing.compact)
+
+                    EventContextLabel(section: "Decide", eventTitle: workspace.selectedEventTitle)
+
+                    Spacer(minLength: AppTheme.Spacing.compact)
+
+                    AccountToolbarButton(monochrome: true)
+                        .frame(
+                            width: AppTheme.Layout.minimumTouchTarget,
+                            height: AppTheme.Layout.minimumTouchTarget
+                        )
+                }
                 .padding(.bottom, 2)
+            } else {
+                EventContextLabel(section: "Decide", eventTitle: workspace.selectedEventTitle)
+                    .padding(.bottom, 2)
+            }
 
             if let idea = currentIdea {
                 DecisionCard(

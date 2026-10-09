@@ -6,6 +6,7 @@ import UIKit
 
 struct HomeView: View {
     var homeReselectionTrigger = 0
+    var onExitWorkspace: (() -> Void)?
 
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -111,7 +112,11 @@ struct HomeView: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItemGroup(placement: .topBarLeading) {
+                if let onExitWorkspace {
+                    WorkspaceLibraryToolbarButton(action: onExitWorkspace)
+                }
+
                 eventCollaboratorButton
             }
 

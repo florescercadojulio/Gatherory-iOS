@@ -444,7 +444,7 @@ enum IdeaConfiguration: Codable, Hashable {
     case registry(RegistryIdeaConfiguration)
 }
 
-struct WeddingIdea: Identifiable, Hashable {
+struct WeddingIdea: Identifiable, Hashable, Codable {
     let id: UUID
     /// The root event or direct child event this idea helps plan.
     /// Older mock data is attached to the root event by `WeddingWorkspace`.
@@ -705,7 +705,7 @@ enum WeddingParticipantRole: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-struct WeddingMember: Identifiable, Hashable {
+struct WeddingMember: Identifiable, Hashable, Codable {
     let id: UUID
     var name: String
     var participantRole: WeddingParticipantRole
@@ -848,7 +848,7 @@ struct EventNote: Identifiable, Hashable, Codable {
     }
 }
 
-struct EventMoment: Identifiable, Hashable {
+struct EventMoment: Identifiable, Hashable, Codable {
     let id: UUID
     var imageData: Data
     var addedBy: String
@@ -998,7 +998,7 @@ struct EventLocation: Hashable, Codable, Sendable {
     }
 }
 
-struct TimelineItem: Identifiable, Hashable {
+struct TimelineItem: Identifiable, Hashable, Codable {
     let id: UUID
     var title: String
     var category: TimelineCategory
@@ -1109,7 +1109,7 @@ struct TimelineItem: Identifiable, Hashable {
 
 /// A stable reference to either the root event or one of its direct children.
 /// Gatherory intentionally supports two levels: one main event and its subevents.
-enum EventReference: Identifiable, Hashable {
+enum EventReference: Identifiable, Hashable, Codable {
     case main
     case subevent(UUID)
     case idea(UUID)
@@ -1130,8 +1130,8 @@ enum EventReference: Identifiable, Hashable {
     }
 }
 
-struct EventTreeNode: Identifiable, Hashable {
-    enum Kind: Hashable {
+struct EventTreeNode: Identifiable, Hashable, Codable {
+    enum Kind: Hashable, Codable {
         case main
         case subevent
     }
@@ -1176,7 +1176,7 @@ enum RegistryCategory: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-struct RegistryItem: Identifiable, Hashable {
+struct RegistryItem: Identifiable, Hashable, Codable {
     let id: UUID
     var title: String
     var note: String

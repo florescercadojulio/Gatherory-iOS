@@ -65,7 +65,7 @@ final class WeddingWorkspace {
         isCollaboratorLinkEnabled: Bool = true,
         requiresCollaboratorApproval: Bool = true,
         defaultCollaboratorPermission: PlanningPermission = .contribute,
-        collaboratorInviteURL: URL = URL(string: "https://isaidyes.app/join/planning-circle")!
+        collaboratorInviteURL: URL = URL(string: "https://gatherory.app/join/planning-circle")!
     ) {
         self.mainEventID = mainEventID
         self.title = title

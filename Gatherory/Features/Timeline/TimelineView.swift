@@ -2,6 +2,8 @@ import SwiftUI
 import UIKit
 
 struct TimelineView: View {
+    var onExitWorkspace: (() -> Void)?
+
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.layoutDirection) private var layoutDirection
@@ -74,7 +76,11 @@ struct TimelineView: View {
         .appClearNavigationBar()
         .toolbar {
             if workspace.isMainEventContext {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItemGroup(placement: .topBarLeading) {
+                    if let onExitWorkspace {
+                        WorkspaceLibraryToolbarButton(action: onExitWorkspace)
+                    }
+
                     Menu {
                         ForEach(TimelineFilter.allCases) { option in
                             Button {
@@ -100,6 +106,10 @@ struct TimelineView: View {
                         isAddingTimelineItem = true
                     }
                     .labelStyle(.iconOnly)
+                }
+            } else if let onExitWorkspace {
+                ToolbarItem(placement: .topBarLeading) {
+                    WorkspaceLibraryToolbarButton(action: onExitWorkspace)
                 }
             }
 

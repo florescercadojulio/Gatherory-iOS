@@ -2,6 +2,8 @@ import SwiftUI
 import UIKit
 
 struct IdeasView: View {
+    var onExitWorkspace: (() -> Void)?
+
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.layoutDirection) private var layoutDirection
@@ -48,7 +50,11 @@ struct IdeasView: View {
                 EventContextLabel(section: "Ideas", eventTitle: workspace.selectedEventTitle)
             }
 
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItemGroup(placement: .topBarLeading) {
+                if let onExitWorkspace {
+                    WorkspaceLibraryToolbarButton(action: onExitWorkspace)
+                }
+
                 Menu {
                     ForEach(IdeaFilter.allCases) { option in
                         Button {
@@ -1154,7 +1160,7 @@ private struct IdeaEditorView: View {
         _category = State(initialValue: existingIdea.category)
         _isChoosingCategory = State(initialValue: false)
         _categoryPage = State(initialValue: [.decor, .invitations, .honeymoon].contains(existingIdea.category) ? 1 : 0)
-        _estimatedCost = State(initialValue: existingIdea.estimatedCost?.formatted() ?? "")
+        _estimatedCost = State(initialValue: existingIdea.estimatedCost.map { String($0) } ?? "")
         _imageData = State(initialValue: existingIdea.imageData)
 
         switch existingIdea.configuration {
@@ -1165,30 +1171,30 @@ private struct IdeaEditorView: View {
             _attireRestrictions = State(initialValue: configuration.restrictions)
         case .venue(let configuration):
             _venueSetting = State(initialValue: configuration.setting)
-            _venueCapacity = State(initialValue: configuration.capacity?.formatted() ?? "")
+            _venueCapacity = State(initialValue: configuration.capacity.map { String($0) } ?? "")
             _venueArea = State(initialValue: configuration.area)
         case .food(let configuration):
             _foodType = State(initialValue: configuration.type)
-            _foodServings = State(initialValue: configuration.servings?.formatted() ?? "")
+            _foodServings = State(initialValue: configuration.servings.map { String($0) } ?? "")
             _dietaryNotes = State(initialValue: configuration.dietaryNotes)
         case .flowers(let configuration):
             _flowerFocus = State(initialValue: configuration.focus)
             _flowerPalette = State(initialValue: configuration.palette)
         case .photography(let configuration):
             _photographyStyle = State(initialValue: configuration.style)
-            _photographyHours = State(initialValue: configuration.coverageHours?.formatted() ?? "")
+            _photographyHours = State(initialValue: configuration.coverageHours.map { String($0) } ?? "")
             _photographyPriorities = State(initialValue: configuration.priorities)
         case .decor(let configuration):
             _decorFocus = State(initialValue: configuration.focus)
             _decorPalette = State(initialValue: configuration.paletteOrMaterials)
         case .invitations(let configuration):
             _invitationFormat = State(initialValue: configuration.format)
-            _invitationQuantity = State(initialValue: configuration.quantity?.formatted() ?? "")
+            _invitationQuantity = State(initialValue: configuration.quantity.map { String($0) } ?? "")
             _invitationNotes = State(initialValue: configuration.productionNotes)
         case .honeymoon(let configuration):
             _tripStyle = State(initialValue: configuration.style)
             _tripDestination = State(initialValue: configuration.destination)
-            _tripNights = State(initialValue: configuration.nights?.formatted() ?? "")
+            _tripNights = State(initialValue: configuration.nights.map { String($0) } ?? "")
         case .music(let configuration):
             _musicTracks = State(initialValue: configuration.tracks)
         case .event(let configuration):
@@ -1285,6 +1291,31 @@ private struct IdeaEditorView: View {
             .allSatisfy(isValidOptionalInt)
         let registryPriceIsValid = registryPrice.isEmpty || Decimal(string: registryPrice) != nil
         return standardNumbersAreValid && registryPriceIsValid
+    }
+
+    private var isValid: Bool {
+        hasValidEstimate && hasValidCategoryNumbers
+    }
+
+    private var editedIdea: WeddingIdea {
+        WeddingIdea(
+            id: existingIdea?.id ?? UUID(),
+            eventID: existingIdea?.eventID,
+            title: resolvedTitle,
+            note: trimmedNote,
+            category: category,
+            submittedBy: existingIdea?.submittedBy ?? workspace.members.first?.name ?? "You",
+            estimatedCost: parsedEstimate,
+            status: existingIdea?.status ?? .new,
+            submittedAt: existingIdea?.submittedAt ?? .now,
+            imageData: imageData,
+            configuration: ideaConfiguration
+        )
+    }
+
+    private var hasChanges: Bool {
+        guard let existingIdea else { return true }
+        return editedIdea != existingIdea
     }
 
     private var ideaConfiguration: IdeaConfiguration {
@@ -1404,7 +1435,7 @@ private struct IdeaEditorView: View {
                     Button(existingIdea == nil ? "Add" : "Save") {
                         saveIdea()
                     }
-                    .disabled(!hasValidEstimate || !hasValidCategoryNumbers)
+                    .disabled(!isValid || !hasChanges)
                 }
             }
         }
@@ -1941,24 +1972,10 @@ private struct IdeaEditorView: View {
     }
 
     private func saveIdea() {
-        let updatedIdea = WeddingIdea(
-                id: existingIdea?.id ?? UUID(),
-                eventID: existingIdea?.eventID,
-                title: resolvedTitle,
-                note: trimmedNote,
-                category: category,
-                submittedBy: existingIdea?.submittedBy ?? workspace.members.first?.name ?? "You",
-                estimatedCost: parsedEstimate,
-                status: existingIdea?.status ?? .new,
-                submittedAt: existingIdea?.submittedAt ?? .now,
-                imageData: imageData,
-                configuration: ideaConfiguration
-            )
-
         if existingIdea == nil {
-            workspace.addIdea(updatedIdea)
+            workspace.addIdea(editedIdea)
         } else {
-            workspace.updateIdea(updatedIdea)
+            workspace.updateIdea(editedIdea)
         }
         dismiss()
     }
