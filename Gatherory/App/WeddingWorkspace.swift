@@ -1,6 +1,11 @@
 import Foundation
 import Observation
 
+enum BudgetAccount: Hashable {
+    case freePool
+    case event(EventReference)
+}
+
 @Observable
 final class WeddingWorkspace {
     let mainEventID: UUID
@@ -20,6 +25,11 @@ final class WeddingWorkspace {
     var mainEventParticipantIDs: [UUID]
     var ideas: [WeddingIdea]
     var timeline: [TimelineItem]
+    var eventExpenses: [EventExpense]
+    /// The top-level spending limit. Event allocations always add up to this cap.
+    var workspaceBudgetCap: Decimal?
+    /// The main event owns the portion that hasn't been allocated to child events.
+    var mainEventBudgetCap: Decimal?
     var notes: [EventNote]
     var mainEventStatus: MainEventStatus
     var mainEventResponse: EventResponse?
@@ -55,6 +65,9 @@ final class WeddingWorkspace {
         mainEventParticipantIDs: [UUID]? = nil,
         ideas: [WeddingIdea],
         timeline: [TimelineItem],
+        eventExpenses: [EventExpense] = [],
+        workspaceBudgetCap: Decimal? = nil,
+        mainEventBudgetCap: Decimal? = nil,
         notes: [EventNote] = [],
         mainEventStatus: MainEventStatus = .draft,
         mainEventResponse: EventResponse? = nil,
@@ -94,10 +107,21 @@ final class WeddingWorkspace {
             }
             return scopedIdea
         }
-        self.timeline = timeline.map { event in
+        let scopedTimeline = timeline.map { event in
             var childEvent = event
             childEvent.parentEventID = mainEventID
             return childEvent
+        }
+        self.timeline = scopedTimeline
+        self.eventExpenses = eventExpenses
+        self.workspaceBudgetCap = workspaceBudgetCap
+        let delegatedBudget = scopedTimeline.compactMap(\.budgetCap).reduce(Decimal.zero, +)
+        if let mainEventBudgetCap {
+            self.mainEventBudgetCap = mainEventBudgetCap
+        } else if let workspaceBudgetCap {
+            self.mainEventBudgetCap = max(.zero, workspaceBudgetCap - delegatedBudget)
+        } else {
+            self.mainEventBudgetCap = nil
         }
         self.notes = notes.map { note in
             guard note.eventID == nil else { return note }
@@ -182,6 +206,196 @@ final class WeddingWorkspace {
         notes.filter { ($0.eventID ?? mainEventID) == selectedEventID }
     }
 
+    var workspaceCostTotal: Decimal {
+        eventExpenses.reduce(Decimal.zero) { $0 + $1.amount }
+    }
+
+    var workspaceBudgetRemaining: Decimal? {
+        workspaceBudgetCap.map { $0 - workspaceCostTotal }
+    }
+
+    var allocatedBudgetTotal: Decimal {
+        (mainEventBudgetCap ?? .zero)
+            + timeline.compactMap(\.budgetCap).reduce(Decimal.zero, +)
+    }
+
+    var freeBudgetPool: Decimal {
+        guard let workspaceBudgetCap else { return .zero }
+        return max(.zero, workspaceBudgetCap - allocatedBudgetTotal)
+    }
+
+    func budgetCap(for reference: EventReference) -> Decimal? {
+        switch reference {
+        case .main:
+            mainEventBudgetCap
+        case .subevent(let id):
+            timeline.first(where: { $0.id == id })?.budgetCap
+        case .idea:
+            nil
+        }
+    }
+
+    func budgetRemaining(for reference: EventReference) -> Decimal? {
+        budgetCap(for: reference).map { $0 - costTotal(for: reference) }
+    }
+
+    /// Changes the workspace cap while preserving every existing allocation.
+    /// Increasing the cap adds to the free pool; a new cap starts on the main event.
+    @discardableResult
+    func updateWorkspaceBudgetCap(_ newCap: Decimal?) -> Bool {
+        guard let newCap else {
+            workspaceBudgetCap = nil
+            mainEventBudgetCap = nil
+            for index in timeline.indices {
+                timeline[index].budgetCap = nil
+            }
+            return true
+        }
+
+        guard newCap >= .zero else { return false }
+        let hadBudget = workspaceBudgetCap != nil
+        guard !hadBudget || newCap >= allocatedBudgetTotal else { return false }
+        workspaceBudgetCap = newCap
+        if !hadBudget {
+            mainEventBudgetCap = newCap
+        }
+        return true
+    }
+
+    /// Opts a child event into allocation. Removing it returns its allocation
+    /// to the free pool so the workspace never loses budget capacity.
+    @discardableResult
+    func setEventRequiresBudget(_ requiresBudget: Bool, eventID: UUID) -> Bool {
+        guard workspaceBudgetCap != nil,
+              let index = timeline.firstIndex(where: { $0.id == eventID }) else {
+            return false
+        }
+
+        if requiresBudget {
+            timeline[index].budgetCap = timeline[index].budgetCap ?? .zero
+        } else if timeline[index].budgetCap != nil {
+            timeline[index].budgetCap = nil
+        }
+        return true
+    }
+
+    func budgetBalance(for account: BudgetAccount) -> Decimal? {
+        switch account {
+        case .freePool:
+            workspaceBudgetCap == nil ? nil : freeBudgetPool
+        case .event(let reference):
+            budgetCap(for: reference)
+        }
+    }
+
+    /// Moves budget between the free pool and event allocations, or directly
+    /// from one event to another. The workspace cap never changes.
+    @discardableResult
+    func transferBudget(
+        _ amount: Decimal,
+        from source: BudgetAccount,
+        to destination: BudgetAccount
+    ) -> Bool {
+        guard workspaceBudgetCap != nil,
+              source != destination,
+              amount > .zero,
+              let sourceBalance = budgetBalance(for: source),
+              sourceBalance >= amount,
+              budgetBalance(for: destination) != nil else {
+            return false
+        }
+
+        switch (source, destination) {
+        case (.freePool, .event(let destinationEvent)):
+            guard let destinationCap = budgetCap(for: destinationEvent) else { return false }
+            return setBudgetCap(destinationCap + amount, for: destinationEvent)
+
+        case (.event(let sourceEvent), .freePool):
+            guard let sourceCap = budgetCap(for: sourceEvent) else { return false }
+            return setBudgetCap(sourceCap - amount, for: sourceEvent)
+
+        case (.event(let sourceEvent), .event(let destinationEvent)):
+            guard let sourceCap = budgetCap(for: sourceEvent),
+                  let destinationCap = budgetCap(for: destinationEvent),
+                  setBudgetCap(sourceCap - amount, for: sourceEvent) else {
+                return false
+            }
+            return setBudgetCap(destinationCap + amount, for: destinationEvent)
+
+        case (.freePool, .freePool):
+            return false
+        }
+    }
+
+    /// Moves existing budget power between events. No transfer can increase
+    /// the workspace's overall cap or make a source allocation negative.
+    @discardableResult
+    func transferBudget(
+        _ amount: Decimal,
+        from source: EventReference,
+        to destination: EventReference
+    ) -> Bool {
+        transferBudget(amount, from: .event(source), to: .event(destination))
+    }
+
+    private func setBudgetCap(_ amount: Decimal, for reference: EventReference) -> Bool {
+        switch reference {
+        case .main:
+            mainEventBudgetCap = amount
+            return true
+        case .subevent(let id):
+            guard let index = timeline.firstIndex(where: { $0.id == id }),
+                  timeline[index].budgetCap != nil else {
+                return false
+            }
+            timeline[index].budgetCap = amount
+            return true
+        case .idea:
+            return false
+        }
+    }
+
+    func expenses(for reference: EventReference) -> [EventExpense] {
+        let eventID: UUID = switch reference {
+        case .main, .idea:
+            mainEventID
+        case .subevent(let id):
+            id
+        }
+
+        return expenses(forEventID: eventID)
+    }
+
+    func expenses(forEventID eventID: UUID) -> [EventExpense] {
+        eventExpenses
+            .filter { $0.eventID == eventID }
+            .sorted { lhs, rhs in
+                if lhs.createdAt == rhs.createdAt {
+                    return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+                }
+                return lhs.createdAt < rhs.createdAt
+            }
+    }
+
+    func costTotal(for reference: EventReference) -> Decimal {
+        expenses(for: reference).reduce(Decimal.zero) { $0 + $1.amount }
+    }
+
+    func costTotal(status: EventExpenseStatus) -> Decimal {
+        eventExpenses
+            .filter { $0.status == status }
+            .reduce(Decimal.zero) { $0 + $1.amount }
+    }
+
+    func replaceExpenses(_ expenses: [EventExpense], forEventID eventID: UUID) {
+        eventExpenses.removeAll { $0.eventID == eventID }
+        eventExpenses.append(contentsOf: expenses.map { expense in
+            var scopedExpense = expense
+            scopedExpense.eventID = eventID
+            return scopedExpense
+        })
+    }
+
     func participants(for reference: EventReference) -> [WeddingMember] {
         switch reference {
         case .main, .idea:
@@ -215,6 +429,84 @@ final class WeddingWorkspace {
                   !timeline[index].participantIDs.contains(participantID) else { return }
             timeline[index].participantIDs.append(participantID)
         }
+    }
+
+    @discardableResult
+    func updateParticipant(
+        _ participantID: UUID,
+        role: WeddingParticipantRole,
+        planningPermission: PlanningPermission
+    ) -> Bool {
+        guard let index = members.firstIndex(where: { $0.id == participantID }) else {
+            return false
+        }
+
+        guard canAssignParticipantRole(role, to: participantID) else { return false }
+
+        members[index].participantRole = role
+        members[index].planningPermission = role == .collaborator
+            ? planningPermission
+            : role.defaultPlanningPermission
+        return true
+    }
+
+    func canAssignParticipantRole(
+        _ role: WeddingParticipantRole,
+        to participantID: UUID
+    ) -> Bool {
+        guard let member = members.first(where: { $0.id == participantID }) else {
+            return false
+        }
+
+        if member.participantRole == .host,
+           role != .host,
+           members.filter({ $0.participantRole == .host }).count == 1 {
+            return false
+        }
+
+        return true
+    }
+
+    func canRemoveParticipant(
+        _ participantID: UUID,
+        from reference: EventReference? = nil
+    ) -> Bool {
+        let target = reference ?? selectedEventReference
+        guard let member = members.first(where: { $0.id == participantID }),
+              participants(for: target).contains(where: { $0.id == participantID }) else {
+            return false
+        }
+
+        switch target {
+        case .subevent:
+            return true
+        case .main, .idea:
+            guard member.participantRole == .host else { return true }
+            return participants(for: target)
+                .filter { $0.participantRole == .host }
+                .count > 1
+        }
+    }
+
+    @discardableResult
+    func removeParticipant(
+        _ participantID: UUID,
+        from reference: EventReference? = nil
+    ) -> Bool {
+        let target = reference ?? selectedEventReference
+        guard canRemoveParticipant(participantID, from: target) else { return false }
+
+        switch target {
+        case .main, .idea:
+            mainEventParticipantIDs.removeAll { $0 == participantID }
+        case .subevent(let eventID):
+            guard let index = timeline.firstIndex(where: { $0.id == eventID }) else {
+                return false
+            }
+            timeline[index].participantIDs.removeAll { $0 == participantID }
+        }
+
+        return true
     }
 
     func selectEventContext(_ reference: EventReference) {
@@ -359,6 +651,11 @@ final class WeddingWorkspace {
         guard canAddChildEvent(to: item.parentEventID ?? mainEventID) else { return }
         var childEvent = item
         childEvent.parentEventID = mainEventID
+        if workspaceBudgetCap == nil {
+            childEvent.budgetCap = nil
+        } else if childEvent.budgetCap != nil {
+            childEvent.budgetCap = .zero
+        }
         if childEvent.participantIDs.isEmpty {
             childEvent.participantIDs = mainEventParticipantIDs
         }
@@ -370,6 +667,24 @@ final class WeddingWorkspace {
         guard canAddChildEvent(to: item.parentEventID ?? mainEventID) else { return }
         var childEvent = item
         childEvent.parentEventID = mainEventID
+        let previousAllocation = timeline[index].budgetCap
+        guard workspaceBudgetCap != nil else {
+            childEvent.budgetCap = nil
+            timeline[index] = childEvent
+            return
+        }
+        switch (previousAllocation, childEvent.budgetCap) {
+        case (.some, .none):
+            break
+        case (.none, .some):
+            childEvent.budgetCap = .zero
+        case (.some(let allocation), .some):
+            // Allocation changes go through `transferBudget` so this editor
+            // can't accidentally create or discard budget.
+            childEvent.budgetCap = allocation
+        case (.none, .none):
+            break
+        }
         timeline[index] = childEvent
     }
 
@@ -434,7 +749,9 @@ final class WeddingWorkspace {
         isMainEventDeleted = true
         mainEventResponse = nil
         mainEventMoments.removeAll()
+        eventExpenses.removeAll()
         timeline.removeAll { $0.parentEventID == mainEventID }
+        mainEventBudgetCap = workspaceBudgetCap
         selectedEventReference = .main
     }
 
@@ -449,6 +766,7 @@ final class WeddingWorkspace {
 
     func deleteTimelineItem(_ item: TimelineItem) {
         timeline.removeAll { $0.id == item.id }
+        eventExpenses.removeAll { $0.eventID == item.id }
         if selectedEventReference == .subevent(item.id) {
             selectedEventReference = .main
         }
@@ -558,7 +876,7 @@ extension WeddingWorkspace {
             planningPermission: .viewOnly
         )
 
-        return WeddingWorkspace(
+        let workspace = WeddingWorkspace(
             title: "Alex & Jordan",
             weddingDate: weddingDate,
             venueName: "Willow & Stone Estate",
@@ -705,6 +1023,7 @@ extension WeddingWorkspace {
                     status: .approved
                 )
             ],
+            workspaceBudgetCap: 30_000,
             registry: [
                 RegistryItem(
                     title: "Weekend getaway fund",
@@ -736,5 +1055,58 @@ extension WeddingWorkspace {
             ],
             isRegistryShared: true
         )
+
+        if workspace.timeline.count >= 7 {
+            _ = workspace.setEventRequiresBudget(true, eventID: workspace.timeline[4].id)
+            _ = workspace.transferBudget(
+                4_000,
+                from: .main,
+                to: .subevent(workspace.timeline[4].id)
+            )
+            _ = workspace.setEventRequiresBudget(true, eventID: workspace.timeline[6].id)
+            _ = workspace.transferBudget(
+                10_000,
+                from: .main,
+                to: .subevent(workspace.timeline[6].id)
+            )
+            _ = workspace.transferBudget(
+                2_000,
+                from: .event(.main),
+                to: .freePool
+            )
+
+            workspace.eventExpenses = [
+                EventExpense(
+                    eventID: workspace.mainEventID,
+                    title: "Venue deposit",
+                    amount: 6_000,
+                    category: .venue,
+                    status: .paid
+                ),
+                EventExpense(
+                    eventID: workspace.mainEventID,
+                    title: "Photography package",
+                    amount: 2_800,
+                    category: .photography,
+                    status: .committed
+                ),
+                EventExpense(
+                    eventID: workspace.timeline[4].id,
+                    title: "Ceremony musicians",
+                    amount: 1_200,
+                    category: .entertainment,
+                    status: .estimated
+                ),
+                EventExpense(
+                    eventID: workspace.timeline[6].id,
+                    title: "Dinner service",
+                    amount: 8_400,
+                    category: .foodAndDrink,
+                    status: .committed
+                )
+            ]
+        }
+
+        return workspace
     }
 }

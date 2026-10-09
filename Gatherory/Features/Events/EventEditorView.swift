@@ -26,15 +26,24 @@ struct EventEditorView: View {
     @State private var imageData: Data?
     @State private var eventDescription: String
     @State private var dressCode: String
+    @State private var eventExpenses: [EventExpense]
+    @State private var usesBudget: Bool
+    @State private var mainBudgetAmount: String
     @State private var selectedParticipantIDs: Set<UUID>
     @State private var isEditingDateAndTime = false
     @State private var isEditingLocation = false
     @State private var isConfirmingDeletion = false
     @State private var didLoadMain = false
+    @State private var didLoadExpenses = false
+    @State private var expenseEditorTarget: EventExpenseEditorTarget?
+    @State private var isAllocatingBudget = false
+
+    private let draftEventID: UUID
 
     init(mode: EventEditorMode) {
         self.mode = mode
         let item: TimelineItem? = if case .subevent(let item) = mode { item } else { nil }
+        draftEventID = item?.id ?? UUID()
         _title = State(initialValue: item?.title ?? "")
         _category = State(initialValue: item?.category ?? .other)
         _purpose = State(initialValue: item?.purpose ?? .planning)
@@ -48,6 +57,9 @@ struct EventEditorView: View {
         _imageData = State(initialValue: item?.imageData)
         _eventDescription = State(initialValue: item?.eventDescription ?? "")
         _dressCode = State(initialValue: item?.dressCode ?? "")
+        _eventExpenses = State(initialValue: [])
+        _usesBudget = State(initialValue: item?.budgetCap != nil)
+        _mainBudgetAmount = State(initialValue: "")
         _selectedParticipantIDs = State(initialValue: Set(item?.participantIDs ?? []))
     }
 
@@ -80,6 +92,37 @@ struct EventEditorView: View {
         case .reception: "Reception"
         case .other: purpose == .planning ? "Planning Event" : "Event"
         }
+    }
+
+    private var expenseEventID: UUID {
+        isMainEvent ? workspace.mainEventID : draftEventID
+    }
+
+    private var eventCostTotal: Decimal {
+        eventExpenses.reduce(Decimal.zero) { $0 + $1.amount }
+    }
+
+    private var currentChildBudget: Decimal {
+        guard let originalItem else { return .zero }
+        return workspace.budgetCap(for: .subevent(originalItem.id)) ?? .zero
+    }
+
+    private var parsedMainBudget: Decimal? {
+        guard !mainBudgetAmount.isEmpty else { return nil }
+        let decimalSeparator = Locale.current.decimalSeparator ?? "."
+        let normalized = mainBudgetAmount
+            .replacingOccurrences(of: decimalSeparator, with: ".")
+            .replacingOccurrences(of: ",", with: "")
+        return Decimal(string: normalized)
+    }
+
+    private var currentAllocatedBudget: Decimal {
+        workspace.allocatedBudgetTotal
+    }
+
+    private var mainBudgetIsValid: Bool {
+        mainBudgetAmount.isEmpty
+            || (parsedMainBudget.map { $0 > .zero && $0 >= currentAllocatedBudget } ?? false)
     }
 
     var body: some View {
@@ -157,6 +200,79 @@ struct EventEditorView: View {
                     )
                 }
                 .buttonStyle(.plain)
+            }
+
+            if isMainEvent {
+                Section {
+                    TextField("Budget cap", text: $mainBudgetAmount)
+                        .keyboardType(.decimalPad)
+                } header: {
+                    Text("Workspace Budget (Optional)")
+                } footer: {
+                    if !mainBudgetIsValid && currentAllocatedBudget > .zero {
+                        Text("At least \(currentAllocatedBudget.formatted(.currency(code: currencyCode))) is already allocated to events.")
+                    } else {
+                        Text("This cap powers budget signals across the workspace.")
+                    }
+                }
+            } else if workspace.workspaceBudgetCap != nil {
+                Section {
+                    Toggle("Uses a budget", isOn: $usesBudget)
+
+                    if usesBudget {
+                        LabeledContent(
+                            "Allocated",
+                            value: currentChildBudget.formatted(
+                                .currency(code: currencyCode)
+                            )
+                        )
+
+                        if originalItem?.budgetCap != nil {
+                            Button("Allocate Budget", systemImage: "arrow.left.arrow.right") {
+                                isAllocatingBudget = true
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Budget")
+                } footer: {
+                    Text(
+                        usesBudget
+                            ? "Allocate existing workspace budget without changing the workspace cap."
+                            : "Leave this off for events that don't need spending."
+                    )
+                }
+            }
+
+            Section {
+                if eventExpenses.isEmpty {
+                    Text("No costs added")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(eventExpenses) { expense in
+                        Button {
+                            expenseEditorTarget = EventExpenseEditorTarget(expense: expense)
+                        } label: {
+                            expenseRow(expense)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .onDelete(perform: deleteExpenses)
+                }
+
+                Button("Add Cost", systemImage: "plus.circle") {
+                    expenseEditorTarget = EventExpenseEditorTarget(expense: nil)
+                }
+            } header: {
+                HStack {
+                    Text("Costs")
+                    Spacer()
+                    if !eventExpenses.isEmpty {
+                        Text(eventCostTotal, format: .currency(code: currencyCode))
+                    }
+                }
+            } footer: {
+                Text("Track estimates, commitments, and payments for this event.")
             }
 
             Section {
@@ -241,7 +357,11 @@ struct EventEditorView: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button(isCreating ? "Schedule" : "Save") { save() }
-                    .disabled(isMainEvent ? trimmedTitle.isEmpty : selectedParticipantIDs.isEmpty)
+                    .disabled(
+                        isMainEvent
+                            ? trimmedTitle.isEmpty || !mainBudgetIsValid
+                            : selectedParticipantIDs.isEmpty
+                    )
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -265,6 +385,26 @@ struct EventEditorView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(item: $expenseEditorTarget) { target in
+            NavigationStack {
+                EventExpenseEditorView(
+                    expense: target.expense,
+                    eventID: expenseEventID,
+                    onSave: upsertExpense
+                )
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isAllocatingBudget) {
+            if let originalItem {
+                NavigationStack {
+                    BudgetAllocationView(target: .subevent(originalItem.id))
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+        }
         .confirmationDialog("Delete this event?", isPresented: $isConfirmingDeletion, titleVisibility: .visible) {
             Button("Delete Event", role: .destructive) {
                 workspace.deleteMainEvent()
@@ -280,7 +420,39 @@ struct EventEditorView: View {
             } else if isCreating && selectedParticipantIDs.isEmpty {
                 selectedParticipantIDs = Set(workspace.mainEventParticipantIDs)
             }
+            loadExpensesIfNeeded()
         }
+    }
+
+    private var currencyCode: String {
+        Locale.current.currency?.identifier ?? "USD"
+    }
+
+    private func expenseRow(_ expense: EventExpense) -> some View {
+        HStack(spacing: AppTheme.Spacing.standard) {
+            Image(systemName: expense.category.symbol)
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(expense.title)
+                    .foregroundStyle(.primary)
+                Text("\(expense.category.title) · \(expense.status.title)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: AppTheme.Spacing.compact)
+
+            Text(expense.amount, format: .currency(code: currencyCode))
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary)
+                .monospacedDigit()
+        }
+        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Edits this cost")
     }
 
     private var scheduleSummary: String {
@@ -447,11 +619,21 @@ struct EventEditorView: View {
         imageData = workspace.mainEventImageData
         dressCode = workspace.dressCode
         eventDescription = workspace.eventMessage
+        mainBudgetAmount = workspace.workspaceBudgetCap.map {
+            NSDecimalNumber(decimal: $0).stringValue
+        } ?? ""
         didLoadMain = true
+    }
+
+    private func loadExpensesIfNeeded() {
+        guard !didLoadExpenses else { return }
+        eventExpenses = workspace.expenses(forEventID: expenseEventID)
+        didLoadExpenses = true
     }
 
     private func save() {
         if isMainEvent {
+            _ = workspace.updateWorkspaceBudgetCap(parsedMainBudget)
             workspace.updateMainEvent(
                 title: trimmedTitle,
                 status: mainStatus,
@@ -466,7 +648,7 @@ struct EventEditorView: View {
             )
         } else {
             let item = TimelineItem(
-                id: originalItem?.id ?? UUID(),
+                id: draftEventID,
                 title: resolvedTitle,
                 category: category,
                 purpose: purpose,
@@ -483,11 +665,25 @@ struct EventEditorView: View {
                 linkedIdeaID: originalItem?.linkedIdeaID,
                 imageData: imageData,
                 eventDescription: eventDescription.trimmingCharacters(in: .whitespacesAndNewlines),
-                dressCode: dressCode.trimmingCharacters(in: .whitespacesAndNewlines)
+                dressCode: dressCode.trimmingCharacters(in: .whitespacesAndNewlines),
+                budgetCap: usesBudget ? (originalItem?.budgetCap ?? .zero) : nil
             )
             if originalItem == nil { workspace.addTimelineItem(item) } else { workspace.updateTimelineItem(item) }
         }
+        workspace.replaceExpenses(eventExpenses, forEventID: expenseEventID)
         dismiss()
+    }
+
+    private func upsertExpense(_ expense: EventExpense) {
+        if let index = eventExpenses.firstIndex(where: { $0.id == expense.id }) {
+            eventExpenses[index] = expense
+        } else {
+            eventExpenses.append(expense)
+        }
+    }
+
+    private func deleteExpenses(at offsets: IndexSet) {
+        eventExpenses.remove(atOffsets: offsets)
     }
 
     private func toggle(_ member: WeddingMember) {
@@ -496,5 +692,123 @@ struct EventEditorView: View {
         } else {
             selectedParticipantIDs.insert(member.id)
         }
+    }
+}
+
+private struct EventExpenseEditorTarget: Identifiable {
+    let id: UUID
+    let expense: EventExpense?
+
+    init(expense: EventExpense?) {
+        self.expense = expense
+        id = expense?.id ?? UUID()
+    }
+}
+
+private struct EventExpenseEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var amount: String
+    @State private var category: EventExpenseCategory
+    @State private var status: EventExpenseStatus
+
+    let expense: EventExpense?
+    let eventID: UUID
+    let onSave: (EventExpense) -> Void
+
+    init(
+        expense: EventExpense?,
+        eventID: UUID,
+        onSave: @escaping (EventExpense) -> Void
+    ) {
+        self.expense = expense
+        self.eventID = eventID
+        self.onSave = onSave
+        _title = State(initialValue: expense?.title ?? "")
+        _amount = State(
+            initialValue: expense.map { NSDecimalNumber(decimal: $0.amount).stringValue } ?? ""
+        )
+        _category = State(initialValue: expense?.category ?? .other)
+        _status = State(initialValue: expense?.status ?? .estimated)
+    }
+
+    private var trimmedTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var parsedAmount: Decimal? {
+        let decimalSeparator = Locale.current.decimalSeparator ?? "."
+        let normalized = amount
+            .replacingOccurrences(of: decimalSeparator, with: ".")
+            .replacingOccurrences(of: ",", with: "")
+        return Decimal(string: normalized)
+    }
+
+    private var canSave: Bool {
+        guard let parsedAmount else { return false }
+        return !trimmedTitle.isEmpty && parsedAmount > .zero
+    }
+
+    var body: some View {
+        Form {
+            Section("Cost") {
+                TextField("Name", text: $title)
+                    .textInputAutocapitalization(.sentences)
+
+                TextField("Amount", text: $amount)
+                    .keyboardType(.decimalPad)
+            }
+
+            Section("Category") {
+                Picker("Category", selection: $category) {
+                    ForEach(EventExpenseCategory.allCases) { option in
+                        Label(option.title, systemImage: option.symbol)
+                            .tag(option)
+                    }
+                }
+            }
+
+            Section("Status") {
+                Picker("Status", selection: $status) {
+                    ForEach(EventExpenseStatus.allCases) { option in
+                        Label(option.title, systemImage: option.symbol)
+                            .tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.ColorToken.background)
+        .navigationTitle(expense == nil ? "Add Cost" : "Edit Cost")
+        .navigationBarTitleDisplayMode(.inline)
+        .appClearNavigationBar()
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { save() }
+                    .disabled(!canSave)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+
+    private func save() {
+        guard let parsedAmount else { return }
+        onSave(
+            EventExpense(
+                id: expense?.id ?? UUID(),
+                eventID: eventID,
+                title: trimmedTitle,
+                amount: parsedAmount,
+                category: category,
+                status: status,
+                createdAt: expense?.createdAt ?? .now
+            )
+        )
+        dismiss()
     }
 }

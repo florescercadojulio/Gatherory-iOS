@@ -46,7 +46,8 @@ extension WeddingWorkspace {
         title: String,
         startsAt: Date,
         eventLocation: EventLocation?,
-        imageData: Data?
+        imageData: Data?,
+        budgetCap: Decimal? = nil
     ) -> WeddingWorkspace {
         let host = WeddingMember(
             name: "You",
@@ -68,6 +69,7 @@ extension WeddingWorkspace {
             members: [host],
             ideas: [],
             timeline: [],
+            workspaceBudgetCap: budgetCap,
             registry: []
         )
     }
@@ -115,6 +117,7 @@ extension WeddingWorkspace {
                 )
             ],
             timeline: [],
+            workspaceBudgetCap: 12_000,
             registry: []
         )
     }

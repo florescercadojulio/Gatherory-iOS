@@ -179,10 +179,24 @@ private struct NewWorkspaceView: View {
     @State private var startsAt = Calendar.current.date(byAdding: .month, value: 6, to: .now) ?? .now
     @State private var eventLocation: EventLocation?
     @State private var imageData: Data?
+    @State private var budgetAmount = ""
     @State private var isEditingLocation = false
 
     private var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var parsedBudget: Decimal? {
+        guard !budgetAmount.isEmpty else { return nil }
+        let decimalSeparator = Locale.current.decimalSeparator ?? "."
+        let normalized = budgetAmount
+            .replacingOccurrences(of: decimalSeparator, with: ".")
+            .replacingOccurrences(of: ",", with: "")
+        return Decimal(string: normalized)
+    }
+
+    private var budgetIsValid: Bool {
+        budgetAmount.isEmpty || (parsedBudget.map { $0 > .zero } ?? false)
     }
 
     var body: some View {
@@ -205,6 +219,15 @@ private struct NewWorkspaceView: View {
                     fallbackAssetName: "WeddingVenueHero",
                     suggestedConcept: "Artwork for \(trimmedTitle.isEmpty ? "our event" : trimmedTitle)"
                 )
+            }
+
+            Section {
+                TextField("Budget cap", text: $budgetAmount)
+                    .keyboardType(.decimalPad)
+            } header: {
+                Text("Budget (Optional)")
+            } footer: {
+                Text("The main event starts with the full budget. You can allocate part of it to sub-events later.")
             }
 
             Section("Location") {
@@ -258,12 +281,13 @@ private struct NewWorkspaceView: View {
                             title: trimmedTitle,
                             startsAt: startsAt,
                             eventLocation: eventLocation,
-                            imageData: imageData
+                            imageData: imageData,
+                            budgetCap: parsedBudget
                         )
                     )
                     dismiss()
                 }
-                .disabled(trimmedTitle.isEmpty)
+                .disabled(trimmedTitle.isEmpty || !budgetIsValid)
                 .keyboardShortcut(.defaultAction)
             }
         }

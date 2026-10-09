@@ -15,32 +15,6 @@ struct DecisionDeckView: View {
 
     var body: some View {
         VStack(spacing: AppTheme.Spacing.compact) {
-            if let onExitWorkspace {
-                HStack {
-                    WorkspaceLibraryToolbarButton(action: onExitWorkspace)
-                        .frame(
-                            width: AppTheme.Layout.minimumTouchTarget,
-                            height: AppTheme.Layout.minimumTouchTarget
-                        )
-
-                    Spacer(minLength: AppTheme.Spacing.compact)
-
-                    EventContextLabel(section: "Decide", eventTitle: workspace.selectedEventTitle)
-
-                    Spacer(minLength: AppTheme.Spacing.compact)
-
-                    AccountToolbarButton(monochrome: true)
-                        .frame(
-                            width: AppTheme.Layout.minimumTouchTarget,
-                            height: AppTheme.Layout.minimumTouchTarget
-                        )
-                }
-                .padding(.bottom, 2)
-            } else {
-                EventContextLabel(section: "Decide", eventTitle: workspace.selectedEventTitle)
-                    .padding(.bottom, 2)
-            }
-
             if let idea = currentIdea {
                 DecisionCard(
                     idea: idea,
@@ -89,13 +63,29 @@ struct DecisionDeckView: View {
         .padding(.bottom, AppTheme.Layout.screenTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.ColorToken.background)
-        .toolbarVisibility(.hidden, for: .navigationBar)
+        .navigationTitle("Decide")
+        .navigationBarTitleDisplayMode(.inline)
+        .appClearNavigationBar()
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                EventContextLabel(section: "Decide", eventTitle: workspace.selectedEventTitle)
+            }
+
+            if let onExitWorkspace {
+                ToolbarItem(placement: .topBarLeading) {
+                    WorkspaceLibraryToolbarButton(action: onExitWorkspace)
+                }
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                AccountToolbarButton()
+            }
+        }
         .navigationDestination(item: $selectedIdeaID) { ideaID in
             IdeaDetailView(
                 ideaID: ideaID,
                 transitionNamespace: decisionTransition
             )
-            .toolbarVisibility(.visible, for: .navigationBar)
         }
     }
 

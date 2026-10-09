@@ -20,6 +20,15 @@ struct GatheroryTests {
         #expect(launchScreen == "LaunchScreen")
     }
 
+    @Test("The branded launch animation stays brief and shortens for Reduce Motion")
+    func launchExperienceTimingIsBrief() {
+        #expect(LaunchExperienceTiming.standardMilliseconds <= 1_500)
+        #expect(
+            LaunchExperienceTiming.reducedMotionMilliseconds
+                < LaunchExperienceTiming.standardMilliseconds
+        )
+    }
+
     @Test("The sample library opens on the workspace collection")
     func sampleLibraryStartsAtWorkspaceCollection() {
         let library = WorkspaceLibrary.sample
@@ -50,13 +59,16 @@ struct GatheroryTests {
             title: "Neighborhood dinner",
             startsAt: .now,
             eventLocation: nil,
-            imageData: nil
+            imageData: nil,
+            budgetCap: 5_000
         )
 
         library.add(workspace)
 
         #expect(library.workspaces.count == 1)
         #expect(library.selectedWorkspace === workspace)
+        #expect(workspace.workspaceBudgetCap == 5_000)
+        #expect(workspace.mainEventBudgetCap == 5_000)
     }
 
     @Test("Loving an idea adds it to the shortlist")
@@ -117,6 +129,116 @@ struct GatheroryTests {
         #expect(completedItem.completionStatus == .complete)
     }
 
+    @Test("Event costs roll up across the workspace")
+    func eventCostsRollUp() {
+        let workspace = WeddingWorkspace.sample
+        let expectedTotal = workspace.eventExpenses.reduce(Decimal.zero) { $0 + $1.amount }
+
+        #expect(workspace.workspaceCostTotal == expectedTotal)
+        #expect(
+            EventExpenseStatus.allCases.reduce(Decimal.zero) {
+                $0 + workspace.costTotal(status: $1)
+            } == expectedTotal
+        )
+    }
+
+    @Test("Budget transfers preserve the workspace cap")
+    func budgetTransfersPreserveWorkspaceCap() throws {
+        let workspace = WeddingWorkspace.sample
+        let child = try #require(workspace.childEvents.first)
+        let totalBefore = workspace.allocatedBudgetTotal
+
+        #expect(workspace.setEventRequiresBudget(true, eventID: child.id))
+        #expect(workspace.transferBudget(500, from: .main, to: .subevent(child.id)))
+
+        #expect(workspace.budgetCap(for: .subevent(child.id)) == 500)
+        #expect(workspace.allocatedBudgetTotal == totalBefore)
+        #expect(
+            workspace.allocatedBudgetTotal + workspace.freeBudgetPool
+                == workspace.workspaceBudgetCap
+        )
+    }
+
+    @Test("An event cannot take more budget than its source owns")
+    func budgetTransferCannotOverdrawSource() throws {
+        let workspace = WeddingWorkspace.sample
+        let child = try #require(workspace.childEvents.first)
+        let mainBudget = try #require(workspace.mainEventBudgetCap)
+
+        #expect(workspace.setEventRequiresBudget(true, eventID: child.id))
+        #expect(
+            workspace.transferBudget(
+                mainBudget + 1,
+                from: .main,
+                to: .subevent(child.id)
+            ) == false
+        )
+        #expect(workspace.mainEventBudgetCap == mainBudget)
+        #expect(workspace.budgetCap(for: .subevent(child.id)) == .zero)
+    }
+
+    @Test("Removing an event budget returns its allocation to the free pool")
+    func removingEventBudgetReturnsAllocationToPool() throws {
+        let workspace = WeddingWorkspace.sample
+        let child = try #require(workspace.childEvents.first)
+        let mainBudget = try #require(workspace.mainEventBudgetCap)
+        let freePool = workspace.freeBudgetPool
+
+        #expect(workspace.setEventRequiresBudget(true, eventID: child.id))
+        #expect(workspace.transferBudget(750, from: .main, to: .subevent(child.id)))
+        #expect(workspace.setEventRequiresBudget(false, eventID: child.id))
+
+        #expect(workspace.mainEventBudgetCap == mainBudget - 750)
+        #expect(workspace.freeBudgetPool == freePool + 750)
+        #expect(workspace.budgetCap(for: .subevent(child.id)) == nil)
+    }
+
+    @Test("Budget can move through the free pool")
+    func budgetCanMoveThroughFreePool() throws {
+        let workspace = WeddingWorkspace.sample
+        let child = try #require(workspace.childEvents.first)
+        let initialPool = workspace.freeBudgetPool
+
+        #expect(workspace.setEventRequiresBudget(true, eventID: child.id))
+        #expect(
+            workspace.transferBudget(
+                500,
+                from: .event(.main),
+                to: .freePool
+            )
+        )
+        #expect(workspace.freeBudgetPool == initialPool + 500)
+
+        #expect(
+            workspace.transferBudget(
+                300,
+                from: .freePool,
+                to: .event(.subevent(child.id))
+            )
+        )
+        #expect(workspace.freeBudgetPool == initialPool + 200)
+        #expect(workspace.budgetCap(for: .subevent(child.id)) == 300)
+    }
+
+    @Test("Replacing costs only changes the selected event")
+    func replacingEventCostsIsScoped() throws {
+        let workspace = WeddingWorkspace.sample
+        let child = try #require(workspace.childEvents.first)
+        let mainCosts = workspace.expenses(for: .main)
+        let replacement = EventExpense(
+            eventID: child.id,
+            title: "Transportation",
+            amount: 350,
+            category: .travel,
+            status: .committed
+        )
+
+        workspace.replaceExpenses([replacement], forEventID: child.id)
+
+        #expect(workspace.expenses(for: .subevent(child.id)) == [replacement])
+        #expect(workspace.expenses(for: .main) == mainCosts)
+    }
+
     @Test("The event tree is limited to a root and direct subevents")
     func eventTreeHasOnlyTwoLevels() {
         let workspace = WeddingWorkspace.sample
@@ -168,6 +290,45 @@ struct GatheroryTests {
 
         let storedEvent = try #require(workspace.timeline.first { $0.id == newEvent.id })
         #expect(Set(storedEvent.participantIDs) == Set(workspace.mainEventParticipantIDs))
+    }
+
+    @Test("Changing a participant role applies its appropriate access")
+    func participantRoleUpdatesAccess() throws {
+        let workspace = WeddingWorkspace.sample
+        let collaborator = try #require(
+            workspace.members.first { $0.participantRole == .collaborator }
+        )
+
+        let didUpdate = workspace.updateParticipant(
+            collaborator.id,
+            role: .guest,
+            planningPermission: .contribute
+        )
+
+        let updated = try #require(workspace.members.first { $0.id == collaborator.id })
+        #expect(didUpdate)
+        #expect(updated.participantRole == .guest)
+        #expect(updated.planningPermission == .viewOnly)
+    }
+
+    @Test("Removing a participant only changes the selected event")
+    func participantRemovalIsEventScoped() throws {
+        let workspace = WeddingWorkspace.sample
+        let event = try #require(workspace.childEvents.first { !$0.participantIDs.isEmpty })
+        let participantID = try #require(
+            event.participantIDs.first { workspace.mainEventParticipantIDs.contains($0) }
+        )
+
+        let didRemove = workspace.removeParticipant(
+            participantID,
+            from: .subevent(event.id)
+        )
+
+        let updatedEvent = try #require(workspace.timeline.first { $0.id == event.id })
+        #expect(didRemove)
+        #expect(!updatedEvent.participantIDs.contains(participantID))
+        #expect(workspace.mainEventParticipantIDs.contains(participantID))
+        #expect(workspace.members.contains { $0.id == participantID })
     }
 
     @Test("Ideas and decisions follow the selected event context")

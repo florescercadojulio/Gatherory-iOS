@@ -15,7 +15,7 @@ struct GatheroryApp: App {
 
     var body: some Scene {
         WindowGroup {
-            AppRootView()
+            GatheroryLaunchContainer()
                 .environment(workspaceLibrary)
                 .environment(musicCatalog)
                 .preferredColorScheme(AppAppearance(rawValue: appearance)?.colorScheme)

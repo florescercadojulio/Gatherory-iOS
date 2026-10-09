@@ -1443,7 +1443,7 @@ private struct IdeaEditorView: View {
 
     private var categoryChooser: some View {
         Form {
-            Section("Category") {
+            Section {
                 categoryGrid(selectedCategory: category)
                     .listRowInsets(categoryGridInsets)
                     .listRowBackground(Color.clear)
@@ -1454,7 +1454,7 @@ private struct IdeaEditorView: View {
     private func ideaEditor(for category: IdeaCategory) -> some View {
         ScrollViewReader { proxy in
             Form {
-                Section("Category") {
+                Section {
                     categoryGrid(selectedCategory: category)
                         .listRowInsets(categoryGridInsets)
                         .listRowBackground(Color.clear)

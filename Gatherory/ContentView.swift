@@ -12,6 +12,7 @@ private enum AppTab: Hashable {
     case ideas
     case decide
     case timeline
+    case insights
 }
 
 struct AppRootView: View {
@@ -101,6 +102,12 @@ struct ContentView: View {
             Tab("Timeline", systemImage: "calendar", value: .timeline) {
                 NavigationStack {
                     TimelineView(onExitWorkspace: onExitWorkspace)
+                }
+            }
+
+            Tab("Insights", systemImage: "chart.bar.xaxis", value: .insights) {
+                NavigationStack {
+                    InsightsView(onExitWorkspace: onExitWorkspace)
                 }
             }
         }

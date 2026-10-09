@@ -867,6 +867,105 @@ struct EventMoment: Identifiable, Hashable, Codable {
     }
 }
 
+enum EventExpenseStatus: String, CaseIterable, Identifiable, Codable {
+    case estimated
+    case committed
+    case paid
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .estimated: "Estimated"
+        case .committed: "Committed"
+        case .paid: "Paid"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .estimated: "sparkles"
+        case .committed: "doc.text.fill"
+        case .paid: "checkmark.circle.fill"
+        }
+    }
+}
+
+enum EventExpenseCategory: String, CaseIterable, Identifiable, Codable {
+    case venue
+    case foodAndDrink
+    case attire
+    case decor
+    case entertainment
+    case photography
+    case stationery
+    case travel
+    case gifts
+    case other
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .venue: "Venue"
+        case .foodAndDrink: "Food & Drink"
+        case .attire: "Attire"
+        case .decor: "Decor"
+        case .entertainment: "Entertainment"
+        case .photography: "Photography"
+        case .stationery: "Stationery"
+        case .travel: "Travel"
+        case .gifts: "Gifts"
+        case .other: "Other"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .venue: "building.2.fill"
+        case .foodAndDrink: "fork.knife"
+        case .attire: "hanger"
+        case .decor: "lamp.ceiling.fill"
+        case .entertainment: "music.note"
+        case .photography: "camera.fill"
+        case .stationery: "envelope.fill"
+        case .travel: "airplane"
+        case .gifts: "gift.fill"
+        case .other: "ellipsis.circle.fill"
+        }
+    }
+}
+
+/// A cost belongs to exactly one event. Keeping this as its own record makes it
+/// straightforward to sync and query once the local workspace gains a backend.
+struct EventExpense: Identifiable, Hashable, Codable {
+    let id: UUID
+    var eventID: UUID
+    var title: String
+    var amount: Decimal
+    var category: EventExpenseCategory
+    var status: EventExpenseStatus
+    var createdAt: Date
+
+    init(
+        id: UUID = UUID(),
+        eventID: UUID,
+        title: String,
+        amount: Decimal,
+        category: EventExpenseCategory = .other,
+        status: EventExpenseStatus = .estimated,
+        createdAt: Date = .now
+    ) {
+        self.id = id
+        self.eventID = eventID
+        self.title = title
+        self.amount = amount
+        self.category = category
+        self.status = status
+        self.createdAt = createdAt
+    }
+}
+
 enum TimelineCategory: String, CaseIterable, Identifiable, Codable {
     case venue
     case foodTasting
@@ -1019,6 +1118,9 @@ struct TimelineItem: Identifiable, Hashable, Codable {
     var imageData: Data?
     var eventDescription: String
     var dressCode: String
+    /// `nil` means this event doesn't participate in budget allocation.
+    /// A zero value means it participates but hasn't received funds yet.
+    var budgetCap: Decimal?
 
     init(
         id: UUID = UUID(),
@@ -1038,7 +1140,8 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         linkedIdeaID: UUID? = nil,
         imageData: Data? = nil,
         eventDescription: String = "",
-        dressCode: String = ""
+        dressCode: String = "",
+        budgetCap: Decimal? = nil
     ) {
         self.id = id
         self.title = title
@@ -1060,6 +1163,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         self.imageData = imageData
         self.eventDescription = eventDescription
         self.dressCode = dressCode
+        self.budgetCap = budgetCap
     }
 
     init(
@@ -1080,7 +1184,8 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         linkedIdeaID: UUID? = nil,
         imageData: Data? = nil,
         eventDescription: String = "",
-        dressCode: String = ""
+        dressCode: String = "",
+        budgetCap: Decimal? = nil
     ) {
         self.id = id
         self.title = title
@@ -1100,6 +1205,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         self.imageData = imageData
         self.eventDescription = eventDescription
         self.dressCode = dressCode
+        self.budgetCap = budgetCap
     }
 
     var location: String? {

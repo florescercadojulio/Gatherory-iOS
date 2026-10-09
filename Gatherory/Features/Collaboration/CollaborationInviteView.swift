@@ -18,6 +18,7 @@ private struct CollaborationInviteScreen: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.openURL) private var openURL
     @State private var didCopyLink = false
+    @State private var participantEditorTarget: ParticipantEditorTarget?
 
     private var invitationMessage: String {
         "Join \(workspace.selectedEventTitle): \(workspace.collaboratorInviteURL.absoluteString)"
@@ -105,6 +106,14 @@ private struct CollaborationInviteScreen: View {
                 }
                 .tint(.white)
             }
+        }
+        .sheet(item: $participantEditorTarget) { target in
+            NavigationStack {
+                ParticipantEditorView(target: target)
+            }
+            .environment(workspace)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -265,7 +274,20 @@ private struct CollaborationInviteScreen: View {
 
                         VStack(spacing: 0) {
                             ForEach(people) { member in
-                                participantRow(member, isCurrentUser: member.id == workspace.members.first?.id)
+                                let isCurrentUser = member.id == workspace.members.first?.id
+
+                                Button {
+                                    participantEditorTarget = ParticipantEditorTarget(
+                                        member: member,
+                                        eventReference: workspace.selectedEventReference,
+                                        eventTitle: workspace.selectedEventTitle,
+                                        isCurrentUser: isCurrentUser
+                                    )
+                                } label: {
+                                    participantRow(member, isCurrentUser: isCurrentUser)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityHint("Edits this participant's role and event access")
 
                                 if member.id != people.last?.id {
                                     Divider()
@@ -378,6 +400,184 @@ private struct CollaborationInviteScreen: View {
             return
         }
         openURL(url)
+    }
+}
+
+private struct ParticipantEditorTarget: Identifiable {
+    let member: WeddingMember
+    let eventReference: EventReference
+    let eventTitle: String
+    let isCurrentUser: Bool
+
+    var id: UUID { member.id }
+}
+
+private struct ParticipantEditorView: View {
+    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(\.dismiss) private var dismiss
+    @State private var role: WeddingParticipantRole
+    @State private var planningPermission: PlanningPermission
+    @State private var isConfirmingRemoval = false
+
+    let target: ParticipantEditorTarget
+
+    init(target: ParticipantEditorTarget) {
+        self.target = target
+        _role = State(initialValue: target.member.participantRole)
+        _planningPermission = State(initialValue: target.member.planningPermission)
+    }
+
+    private var canEdit: Bool {
+        !target.isCurrentUser
+    }
+
+    private var canRemove: Bool {
+        canEdit && workspace.canRemoveParticipant(
+            target.member.id,
+            from: target.eventReference
+        )
+    }
+
+    private var canSave: Bool {
+        canEdit && workspace.canAssignParticipantRole(role, to: target.member.id)
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                HStack(spacing: AppTheme.Spacing.standard) {
+                    Text(target.member.initials)
+                        .font(.title3.bold())
+                        .foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .background(AppTheme.ColorToken.accent, in: Circle())
+                        .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(target.isCurrentUser ? "\(target.member.name) (You)" : target.member.name)
+                            .font(.headline)
+
+                        if let email = target.member.email {
+                            Text(email)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            Section {
+                Picker("Role", selection: $role) {
+                    ForEach(WeddingParticipantRole.allCases) { option in
+                        Label(option.title, systemImage: option.symbol)
+                            .tag(option)
+                            .disabled(!workspace.canAssignParticipantRole(option, to: target.member.id))
+                    }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+                .disabled(!canEdit)
+
+                Text(role.detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Role")
+            } footer: {
+                if target.isCurrentUser {
+                    Text("Your own role is managed from workspace settings.")
+                } else if !workspace.canAssignParticipantRole(role, to: target.member.id) {
+                    Text("Assign another host before changing the workspace's only host.")
+                }
+            }
+
+            if role == .collaborator {
+                Section {
+                    Picker("Access", selection: $planningPermission) {
+                        ForEach(PlanningPermission.inviteOptions) { permission in
+                            Label(permission.title, systemImage: permission.symbol)
+                                .tag(permission)
+                        }
+                    }
+                    .disabled(!canEdit)
+
+                    Text(planningPermission.detail)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Planning Access")
+                }
+            }
+
+            if canEdit {
+                Section {
+                    Button("Remove from Event", systemImage: "person.badge.minus", role: .destructive) {
+                        isConfirmingRemoval = true
+                    }
+                    .disabled(!canRemove)
+                } footer: {
+                    Text(
+                        canRemove
+                            ? "Removes this person from \(target.eventTitle) only. Their access to other events stays the same."
+                            : "Every main event needs at least one host."
+                    )
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .appSoftScrollEdges()
+        .background(AppTheme.ColorToken.background)
+        .navigationTitle("Participant")
+        .navigationBarTitleDisplayMode(.inline)
+        .appClearNavigationBar()
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(canEdit ? "Cancel" : "Done") {
+                    dismiss()
+                }
+            }
+
+            if canEdit {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        save()
+                    }
+                    .disabled(!canSave)
+                }
+            }
+        }
+        .onChange(of: role) { _, newRole in
+            planningPermission = newRole.defaultPlanningPermission
+        }
+        .confirmationDialog(
+            "Remove \(target.member.name) from \(target.eventTitle)?",
+            isPresented: $isConfirmingRemoval,
+            titleVisibility: .visible
+        ) {
+            Button("Remove from Event", role: .destructive) {
+                if workspace.removeParticipant(
+                    target.member.id,
+                    from: target.eventReference
+                ) {
+                    dismiss()
+                }
+            }
+
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This does not remove them from other events in the workspace.")
+        }
+    }
+
+    private func save() {
+        guard workspace.updateParticipant(
+            target.member.id,
+            role: role,
+            planningPermission: planningPermission
+        ) else { return }
+
+        dismiss()
     }
 }
 
