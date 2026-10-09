@@ -81,7 +81,7 @@ struct IdeasView: View {
         }
         .sheet(isPresented: $isAddingIdea) {
             NavigationStack {
-                AddIdeaView { detent in
+                IdeaEditorView { detent in
                     withAnimation(.snappy) {
                         addIdeaDetent = detent
                     }
@@ -330,6 +330,8 @@ private extension IdeaCategory {
 
 struct IdeaDetailView: View {
     @Environment(WeddingWorkspace.self) private var workspace
+    @State private var isEditingIdea = false
+    @State private var editorDetent: PresentationDetent = .large
     let ideaID: UUID
     let transitionNamespace: Namespace.ID
 
@@ -355,6 +357,14 @@ struct IdeaDetailView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
             if let idea {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Edit idea", systemImage: "pencil") {
+                        editorDetent = .large
+                        isEditingIdea = true
+                    }
+                    .labelStyle(.iconOnly)
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("Idea actions", systemImage: "ellipsis") {
                         if idea.status != .new {
@@ -406,6 +416,19 @@ struct IdeaDetailView: View {
                         }
                     }
                 }
+            }
+        }
+        .sheet(isPresented: $isEditingIdea) {
+            if let idea {
+                NavigationStack {
+                    IdeaEditorView(existingIdea: idea) { detent in
+                        withAnimation(.snappy) {
+                            editorDetent = detent
+                        }
+                    }
+                }
+                .presentationDetents([.medium, .large], selection: $editorDetent)
+                .presentationDragIndicator(.visible)
             }
         }
         .navigationTransition(.zoom(sourceID: ideaID, in: transitionNamespace))
@@ -1070,7 +1093,7 @@ private struct IdeaMetadataRow: View {
     }
 }
 
-private struct AddIdeaView: View {
+private struct IdeaEditorView: View {
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -1114,7 +1137,72 @@ private struct AddIdeaView: View {
     @State private var registryPrice = ""
     @State private var registryQuantity = 1
 
+    let existingIdea: WeddingIdea?
     let setDetent: (PresentationDetent) -> Void
+
+    init(
+        existingIdea: WeddingIdea? = nil,
+        setDetent: @escaping (PresentationDetent) -> Void
+    ) {
+        self.existingIdea = existingIdea
+        self.setDetent = setDetent
+
+        guard let existingIdea else { return }
+
+        _title = State(initialValue: existingIdea.title)
+        _note = State(initialValue: existingIdea.note)
+        _category = State(initialValue: existingIdea.category)
+        _isChoosingCategory = State(initialValue: false)
+        _categoryPage = State(initialValue: [.decor, .invitations, .honeymoon].contains(existingIdea.category) ? 1 : 0)
+        _estimatedCost = State(initialValue: existingIdea.estimatedCost?.formatted() ?? "")
+        _imageData = State(initialValue: existingIdea.imageData)
+
+        switch existingIdea.configuration {
+        case .standard:
+            break
+        case .attire(let configuration):
+            _attireStyle = State(initialValue: configuration.style)
+            _attireRestrictions = State(initialValue: configuration.restrictions)
+        case .venue(let configuration):
+            _venueSetting = State(initialValue: configuration.setting)
+            _venueCapacity = State(initialValue: configuration.capacity?.formatted() ?? "")
+            _venueArea = State(initialValue: configuration.area)
+        case .food(let configuration):
+            _foodType = State(initialValue: configuration.type)
+            _foodServings = State(initialValue: configuration.servings?.formatted() ?? "")
+            _dietaryNotes = State(initialValue: configuration.dietaryNotes)
+        case .flowers(let configuration):
+            _flowerFocus = State(initialValue: configuration.focus)
+            _flowerPalette = State(initialValue: configuration.palette)
+        case .photography(let configuration):
+            _photographyStyle = State(initialValue: configuration.style)
+            _photographyHours = State(initialValue: configuration.coverageHours?.formatted() ?? "")
+            _photographyPriorities = State(initialValue: configuration.priorities)
+        case .decor(let configuration):
+            _decorFocus = State(initialValue: configuration.focus)
+            _decorPalette = State(initialValue: configuration.paletteOrMaterials)
+        case .invitations(let configuration):
+            _invitationFormat = State(initialValue: configuration.format)
+            _invitationQuantity = State(initialValue: configuration.quantity?.formatted() ?? "")
+            _invitationNotes = State(initialValue: configuration.productionNotes)
+        case .honeymoon(let configuration):
+            _tripStyle = State(initialValue: configuration.style)
+            _tripDestination = State(initialValue: configuration.destination)
+            _tripNights = State(initialValue: configuration.nights?.formatted() ?? "")
+        case .music(let configuration):
+            _musicTracks = State(initialValue: configuration.tracks)
+        case .event(let configuration):
+            _eventCategory = State(initialValue: configuration.category)
+            _eventPurpose = State(initialValue: configuration.purpose)
+            _includesProposedDate = State(initialValue: configuration.proposedDate != nil)
+            _eventProposedDate = State(initialValue: configuration.proposedDate ?? .now)
+            _eventLocation = State(initialValue: configuration.location)
+        case .registry(let configuration):
+            _registryCategory = State(initialValue: configuration.category)
+            _registryPrice = State(initialValue: configuration.price.map { NSDecimalNumber(decimal: $0).stringValue } ?? "")
+            _registryQuantity = State(initialValue: configuration.quantity)
+        }
+    }
 
     private var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1296,7 +1384,7 @@ private struct AddIdeaView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        .navigationTitle(isChoosingCategory ? "Choose a Category" : "New Idea")
+        .navigationTitle(isChoosingCategory ? "Choose a Category" : existingIdea == nil ? "New Idea" : "Edit Idea")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -1313,8 +1401,8 @@ private struct AddIdeaView: View {
                 }
             } else {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        addIdea()
+                    Button(existingIdea == nil ? "Add" : "Save") {
+                        saveIdea()
                     }
                     .disabled(!hasValidEstimate || !hasValidCategoryNumbers)
                 }
@@ -1852,18 +1940,26 @@ private struct AddIdeaView: View {
         }
     }
 
-    private func addIdea() {
-        workspace.addIdea(
-            WeddingIdea(
+    private func saveIdea() {
+        let updatedIdea = WeddingIdea(
+                id: existingIdea?.id ?? UUID(),
+                eventID: existingIdea?.eventID,
                 title: resolvedTitle,
                 note: trimmedNote,
                 category: category,
-                submittedBy: workspace.members.first?.name ?? "You",
+                submittedBy: existingIdea?.submittedBy ?? workspace.members.first?.name ?? "You",
                 estimatedCost: parsedEstimate,
+                status: existingIdea?.status ?? .new,
+                submittedAt: existingIdea?.submittedAt ?? .now,
                 imageData: imageData,
                 configuration: ideaConfiguration
             )
-        )
+
+        if existingIdea == nil {
+            workspace.addIdea(updatedIdea)
+        } else {
+            workspace.updateIdea(updatedIdea)
+        }
         dismiss()
     }
 }

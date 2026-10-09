@@ -20,14 +20,42 @@ private struct CollaborationInviteScreen: View {
     @State private var didCopyLink = false
 
     private var invitationMessage: String {
-        "Join the planning circle for \(workspace.title): \(workspace.collaboratorInviteURL.absoluteString)"
+        "Join \(workspace.selectedEventTitle): \(workspace.collaboratorInviteURL.absoluteString)"
+    }
+
+    private var selectedTimelineEvent: TimelineItem? {
+        guard case .subevent(let id) = workspace.selectedEventReference else { return nil }
+        return workspace.timeline.first(where: { $0.id == id })
+    }
+
+    private var selectedEventDate: Date {
+        workspace.eventDate(for: workspace.selectedEventReference)
+    }
+
+    private var selectedEventLocation: String? {
+        if workspace.isMainEventContext {
+            return workspace.mainEventLocation?.formatted
+        }
+        return selectedTimelineEvent?.eventLocation?.formatted
+    }
+
+    private var selectedEventCategory: TimelineCategory {
+        selectedTimelineEvent?.category ?? .ceremony
+    }
+
+    private var selectedEventImageData: Data? {
+        workspace.isMainEventContext ? workspace.mainEventImageData : selectedTimelineEvent?.imageData
     }
 
     var body: some View {
         @Bindable var workspace = workspace
 
         ZStack {
-            CollaborationBackdrop()
+            CollaborationBackdrop(
+                imageData: selectedEventImageData,
+                assetName: workspace.isMainEventContext ? "WeddingVenueHero" : nil,
+                category: selectedEventCategory
+            )
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
@@ -82,9 +110,14 @@ private struct CollaborationInviteScreen: View {
 
     private var eventPreview: some View {
         ZStack(alignment: .bottom) {
-            Image("WeddingVenueHero")
-                .resizable()
-                .scaledToFill()
+            MediaArtwork(
+                imageData: selectedEventImageData,
+                assetName: workspace.isMainEventContext ? "WeddingVenueHero" : nil,
+                symbol: selectedEventCategory.symbol,
+                colors: selectedEventCategory.artworkColors,
+                accent: selectedEventCategory.artworkAccent,
+                progressiveBlurRadius: 0
+            )
 
             LinearGradient(
                 colors: [.clear, .black.opacity(0.78)],
@@ -93,18 +126,20 @@ private struct CollaborationInviteScreen: View {
             )
 
             VStack(spacing: 5) {
-                Text(workspace.title)
+                Text(workspace.selectedEventTitle)
                     .font(.headline)
                     .lineLimit(2)
 
-                Text(workspace.weddingDate, format: .dateTime.month(.abbreviated).day().year())
+                Text(selectedEventDate, format: .dateTime.month(.abbreviated).day().year())
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.84))
 
-                Text(workspace.location)
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.72))
-                    .lineLimit(1)
+                if let selectedEventLocation {
+                    Text(selectedEventLocation)
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .lineLimit(1)
+                }
             }
             .multilineTextAlignment(.center)
             .padding(AppTheme.Spacing.standard)
@@ -121,9 +156,15 @@ private struct CollaborationInviteScreen: View {
         }
         .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(workspace.title), \(workspace.weddingDate.formatted(date: .long, time: .omitted)), \(workspace.location)"
-        )
+        .accessibilityLabel(eventPreviewAccessibilityLabel)
+    }
+
+    private var eventPreviewAccessibilityLabel: String {
+        let date = selectedEventDate.formatted(date: .long, time: .omitted)
+        guard let selectedEventLocation else {
+            return "\(workspace.selectedEventTitle), \(date)"
+        }
+        return "\(workspace.selectedEventTitle), \(date), \(selectedEventLocation)"
     }
 
     private func linkSharingCard(
@@ -158,9 +199,9 @@ private struct CollaborationInviteScreen: View {
 
                 ShareLink(
                     item: workspace.collaboratorInviteURL,
-                    subject: Text("Join \(workspace.title)'s planning circle"),
+                    subject: Text("Join \(workspace.selectedEventTitle)"),
                     message: Text(invitationMessage),
-                    preview: SharePreview(workspace.title, image: Image("WeddingVenueHero"))
+                    preview: SharePreview(workspace.selectedEventTitle, image: Image("WeddingVenueHero"))
                 ) {
                     inviteActionLabel(title: "Share Link", systemImage: "square.and.arrow.up")
                 }
@@ -204,14 +245,18 @@ private struct CollaborationInviteScreen: View {
                 Text("People")
                     .font(.title2.bold())
 
-                Text("Keep planning access separate from the guest list.")
+                Text(
+                    workspace.isMainEventContext
+                        ? "Everyone connected to the main event."
+                        : "People included in \(workspace.selectedEventTitle)."
+                )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             ForEach(WeddingParticipantRole.allCases) { role in
-                let people = workspace.members.filter { $0.participantRole == role }
+                let people = workspace.selectedEventParticipants.filter { $0.participantRole == role }
 
                 if !people.isEmpty {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
@@ -231,6 +276,17 @@ private struct CollaborationInviteScreen: View {
                         .collaborationCard(reduceTransparency: reduceTransparency)
                     }
                 }
+            }
+
+            if workspace.selectedEventParticipants.isEmpty {
+                ContentUnavailableView(
+                    "No Participants",
+                    systemImage: "person.2.slash",
+                    description: Text("Add someone to include them in this event.")
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppTheme.Spacing.standard)
+                .collaborationCard(reduceTransparency: reduceTransparency)
             }
 
         }
@@ -315,7 +371,7 @@ private struct CollaborationInviteScreen: View {
     }
 
     private func sendEmail() {
-        let subject = "Join \(workspace.title)'s planning circle"
+        let subject = "Join \(workspace.selectedEventTitle)"
         guard let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let encodedMessage = invitationMessage.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "mailto:?subject=\(encodedSubject)&body=\(encodedMessage)") else {
@@ -329,14 +385,23 @@ private struct CollaborationBackdrop: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorScheme) private var colorScheme
 
+    let imageData: Data?
+    let assetName: String?
+    let category: TimelineCategory
+
     var body: some View {
         ZStack {
             if reduceTransparency {
                 Color(uiColor: .systemBackground)
             } else {
-                Image("WeddingVenueHero")
-                    .resizable()
-                    .scaledToFill()
+                MediaArtwork(
+                    imageData: imageData,
+                    assetName: assetName,
+                    symbol: category.symbol,
+                    colors: category.artworkColors,
+                    accent: category.artworkAccent,
+                    progressiveBlurRadius: 0
+                )
                     .scaleEffect(1.16)
                     .glur(radius: 42, noise: 0.035)
 
@@ -407,15 +472,21 @@ private struct CollaboratorPickerView: View {
 
     private let suggestions = SuggestedCollaborator.samples
 
+    private var availableMainEventParticipants: [WeddingMember] {
+        guard !workspace.isMainEventContext else { return [] }
+        let includedIDs = Set(workspace.selectedEventParticipants.map(\.id))
+        return workspace.participants(for: .main).filter { !includedIDs.contains($0.id) }
+    }
+
     private var filteredSuggestions: [SuggestedCollaborator] {
         suggestions.filter { suggestion in
-            let isNew = !workspace.members.contains {
+            let isNewToEvent = !workspace.selectedEventParticipants.contains {
                 $0.name.localizedCaseInsensitiveCompare(suggestion.name) == .orderedSame
             }
             let matchesSearch = searchText.isEmpty
                 || suggestion.name.localizedCaseInsensitiveContains(searchText)
                 || suggestion.email.localizedCaseInsensitiveContains(searchText)
-            return isNew && matchesSearch
+            return isNewToEvent && matchesSearch
         }
     }
 
@@ -439,6 +510,20 @@ private struct CollaboratorPickerView: View {
                     NewParticipantView(initialRole: role)
                 } label: {
                     Label("New Person", systemImage: "plus.circle")
+                }
+            }
+
+            if !availableMainEventParticipants.isEmpty {
+                Section("From Main Event") {
+                    ForEach(availableMainEventParticipants) { member in
+                        Button {
+                            workspace.addParticipant(member.id)
+                            dismiss()
+                        } label: {
+                            ExistingParticipantRow(member: member)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
 
@@ -467,6 +552,33 @@ private struct CollaboratorPickerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .searchable(text: $searchText, prompt: "Name or email")
+    }
+}
+
+private struct ExistingParticipantRow: View {
+    let member: WeddingMember
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.standard) {
+            Text(member.initials)
+                .font(.subheadline.bold())
+                .foregroundStyle(.white)
+                .frame(width: 42, height: 42)
+                .background(AppTheme.ColorToken.accent, in: Circle())
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(member.name)
+                    .foregroundStyle(.primary)
+
+                Text(member.participantRole.title)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Adds this person to the selected event")
     }
 }
 

@@ -167,6 +167,41 @@ struct GatheroryTests {
         #expect(dates == dates.sorted())
     }
 
+    @Test("Home shortcut prefers the current event, then the next event")
+    func homeShortcutFindsCurrentOrNextEvent() throws {
+        let workspace = WeddingWorkspace.sample
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let currentID = UUID()
+        let nextID = UUID()
+
+        workspace.timeline = [
+            TimelineItem(
+                id: currentID,
+                title: "Current event",
+                category: .other,
+                scheduledAt: now.addingTimeInterval(-900),
+                eventLocation: nil,
+                endsAt: now.addingTimeInterval(900),
+                participantIDs: [],
+                parentEventID: workspace.mainEventID
+            ),
+            TimelineItem(
+                id: nextID,
+                title: "Next event",
+                category: .other,
+                scheduledAt: now.addingTimeInterval(3_600),
+                eventLocation: nil,
+                participantIDs: [],
+                parentEventID: workspace.mainEventID
+            )
+        ]
+
+        #expect(workspace.currentOrNextChildEventReference(at: now) == .subevent(currentID))
+
+        workspace.timeline[0].completionStatus = .complete
+        #expect(workspace.currentOrNextChildEventReference(at: now) == .subevent(nextID))
+    }
+
     @Test("Notes are scoped to the selected event")
     func notesFollowSelectedEventContext() throws {
         let workspace = WeddingWorkspace.sample
@@ -201,6 +236,25 @@ struct GatheroryTests {
 
         let archivedIdea = try #require(workspace.ideas.first { $0.id == idea.id })
         #expect(archivedIdea.status == .archived)
+    }
+
+    @Test("Idea edits replace content without changing identity or status")
+    func editIdea() throws {
+        let workspace = WeddingWorkspace.sample
+        let original = try #require(workspace.ideas.first)
+        var edited = original
+        edited.title = "Updated idea"
+        edited.note = "Updated details"
+        edited.estimatedCost = 425
+
+        workspace.updateIdea(edited)
+
+        let saved = try #require(workspace.ideas.first { $0.id == original.id })
+        #expect(saved.title == "Updated idea")
+        #expect(saved.note == "Updated details")
+        #expect(saved.estimatedCost == 425)
+        #expect(saved.status == original.status)
+        #expect(saved.eventID == original.eventID)
     }
 
     @Test("Guests can reserve an available registry item")
@@ -256,6 +310,50 @@ struct GatheroryTests {
         )
 
         #expect(workspace.members.count == originalCount)
+    }
+
+    @Test("Adding a participant follows the selected event context")
+    func participantInvitationsFollowSelectedEvent() throws {
+        let workspace = WeddingWorkspace.sample
+        let child = try #require(workspace.childEvents.first)
+        let originalDirectoryCount = workspace.members.count
+        let originalMainEventParticipantIDs = workspace.mainEventParticipantIDs
+        workspace.selectEventContext(.subevent(child.id))
+
+        workspace.inviteParticipant(
+            name: "Taylor Event",
+            email: "taylor.event@example.com",
+            initials: "TE",
+            role: .collaborator
+        )
+
+        let participant = try #require(workspace.members.first { $0.name == "Taylor Event" })
+        let updatedChild = try #require(workspace.timeline.first { $0.id == child.id })
+        #expect(workspace.members.count == originalDirectoryCount + 1)
+        #expect(workspace.mainEventParticipantIDs == originalMainEventParticipantIDs)
+        #expect(updatedChild.participantIDs.contains(participant.id))
+        #expect(workspace.selectedEventParticipants.contains { $0.id == participant.id })
+    }
+
+    @Test("An existing main-event participant can join a selected subevent")
+    func existingParticipantCanJoinSelectedSubevent() throws {
+        let workspace = WeddingWorkspace.sample
+        let child = try #require(workspace.childEvents.first)
+        let originalIDs = Set(child.participantIDs)
+        let participant = try #require(workspace.members.first { !originalIDs.contains($0.id) })
+        let originalMemberCount = workspace.members.count
+        workspace.selectEventContext(.subevent(child.id))
+
+        workspace.inviteParticipant(
+            name: participant.name,
+            email: participant.email,
+            initials: participant.initials,
+            role: participant.participantRole
+        )
+
+        let updatedChild = try #require(workspace.timeline.first { $0.id == child.id })
+        #expect(workspace.members.count == originalMemberCount)
+        #expect(updatedChild.participantIDs.contains(participant.id))
     }
 
     @Test("Guests are excluded from timeline assignments")

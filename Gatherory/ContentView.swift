@@ -24,7 +24,6 @@ struct ContentView: View {
             get: { selectedTab },
             set: { newValue in
                 if newValue == .home, selectedTab == .home {
-                    workspace.selectEventContext(.main)
                     homeReselectionTrigger += 1
                 }
                 selectedTab = newValue
@@ -36,7 +35,7 @@ struct ContentView: View {
         TabView(selection: tabSelection) {
             Tab("Home", systemImage: "house.fill", value: .home) {
                 NavigationStack {
-                    HomeView(resetToMainEventTrigger: homeReselectionTrigger)
+                    HomeView(homeReselectionTrigger: homeReselectionTrigger)
                 }
             }
 
@@ -52,11 +51,9 @@ struct ContentView: View {
                 }
             }
 
-            if workspace.isMainEventContext {
-                Tab("Timeline", systemImage: "calendar", value: .timeline) {
-                    NavigationStack {
-                        TimelineView()
-                    }
+            Tab("Timeline", systemImage: "calendar", value: .timeline) {
+                NavigationStack {
+                    TimelineView()
                 }
             }
         }
@@ -67,11 +64,6 @@ struct ContentView: View {
                 : .onScrollDown
         )
         .tint(AppTheme.ColorToken.accent)
-        .onChange(of: workspace.selectedEventReference) { _, _ in
-            if !workspace.isMainEventContext && selectedTab == .timeline {
-                selectedTab = .home
-            }
-        }
     }
 }
 

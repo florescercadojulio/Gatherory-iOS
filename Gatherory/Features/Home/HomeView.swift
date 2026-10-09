@@ -5,7 +5,7 @@ import SwiftUI
 import UIKit
 
 struct HomeView: View {
-    var resetToMainEventTrigger = 0
+    var homeReselectionTrigger = 0
 
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -25,9 +25,11 @@ struct HomeView: View {
     @State private var scrollInteractionStartOffset: CGFloat?
     @State private var swipeOriginEventReference: EventReference?
     @State private var didUpdateContextForSwipe = false
+    @State private var isHandlingHomeReselection = false
+    @State private var homeReselectionTask: Task<Void, Never>?
     @Namespace private var invitationTransition
 
-    private let pullToCreateThreshold: CGFloat = 168
+    private let pullToCreateThreshold: CGFloat = 200
     private let pullToCreateItemHeight: CGFloat = 184
     private let pullToCreateRevealInset: CGFloat = 56
 
@@ -203,6 +205,8 @@ struct HomeView: View {
         }
         .onScrollPhaseChange { oldPhase, newPhase in
             if newPhase == .interacting {
+                homeReselectionTask?.cancel()
+                isHandlingHomeReselection = false
                 isScrollInteractionActive = true
                 scrollInteractionStartOffset = currentScrollOffset
                 swipeOriginEventReference = visibleEventReference ?? workspace.selectedEventReference
@@ -214,7 +218,9 @@ struct HomeView: View {
                 completePullToCreateIfNeeded()
             }
 
-            guard newPhase == .idle, !isScrubbingEvents else { return }
+            guard newPhase == .idle,
+                  !isScrubbingEvents,
+                  !isHandlingHomeReselection else { return }
             commitVisibleScrollTarget()
             scrollInteractionStartOffset = nil
             swipeOriginEventReference = nil
@@ -222,18 +228,22 @@ struct HomeView: View {
         }
         .onChange(of: workspace.selectedEventReference) { _, reference in
             let target = HomeScrollTarget.event(reference)
-            guard !isScrollInteractionActive,
+            guard !isHandlingHomeReselection,
+                  !isScrollInteractionActive,
                   !isScrubbingEvents,
                   visibleScrollTarget != target else { return }
             withAnimation(.snappy) {
                 visibleScrollTarget = target
             }
         }
-        .onChange(of: resetToMainEventTrigger) { _, _ in
-            scrollToMainEvent()
+        .onChange(of: homeReselectionTrigger) { _, _ in
+            handleHomeReselection()
         }
         .sensoryFeedback(.selection, trigger: scrubbedEventIndex)
         .sensoryFeedback(.success, trigger: pullToCreateHaptic)
+        .onDisappear {
+            homeReselectionTask?.cancel()
+        }
     }
 
     private func eventHero(for reference: EventReference) -> some View {
@@ -457,16 +467,36 @@ struct HomeView: View {
         return reference
     }
 
-    private func scrollToMainEvent() {
+    private func handleHomeReselection() {
+        homeReselectionTask?.cancel()
         isScrubbingEvents = false
         scrubbedEventIndex = nil
-        workspace.selectEventContext(.main)
+        isHandlingHomeReselection = true
 
-        Task { @MainActor in
-            await Task.yield()
+        let activeReference = visibleEventReference ?? workspace.selectedEventReference
+        let targetReference: EventReference = if activeReference == .main {
+            workspace.currentOrNextChildEventReference() ?? .main
+        } else {
+            .main
+        }
+
+        workspace.selectEventContext(targetReference)
+        // A selected system tab performs its own scroll-to-top action. Clear
+        // the binding first, then restore our shortcut destination after that
+        // action so the event jump wins even when it was already selected.
+        visibleScrollTarget = nil
+
+        homeReselectionTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
             withAnimation(.snappy) {
-                visibleScrollTarget = .event(.main)
+                visibleScrollTarget = .event(targetReference)
             }
+
+            try? await Task.sleep(for: .milliseconds(420))
+            guard !Task.isCancelled else { return }
+            isHandlingHomeReselection = false
+            homeReselectionTask = nil
         }
     }
 

@@ -54,46 +54,56 @@ struct TimelineView: View {
     }
 
     var body: some View {
-        ScrollView {
-            eventCollection
-            .padding(.horizontal, AppTheme.Layout.screenHorizontal)
-            .padding(.top, AppTheme.Layout.screenTop)
-            .padding(.bottom, AppTheme.Layout.screenBottom)
+        Group {
+            if workspace.isMainEventContext {
+                ScrollView {
+                    eventCollection
+                        .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+                        .padding(.top, AppTheme.Layout.screenTop)
+                        .padding(.bottom, AppTheme.Layout.screenBottom)
+                }
+                .scrollIndicators(.hidden)
+                .appSoftScrollEdges()
+            } else {
+                mainEventRequiredView
+            }
         }
-        .scrollIndicators(.hidden)
-        .appSoftScrollEdges()
         .background(AppTheme.ColorToken.background)
         .navigationTitle("Timeline")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Menu {
-                    ForEach(TimelineFilter.allCases) { option in
-                        Button {
-                            withAnimation(.snappy) {
-                                filter = option
+            if workspace.isMainEventContext {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        ForEach(TimelineFilter.allCases) { option in
+                            Button {
+                                withAnimation(.snappy) {
+                                    filter = option
+                                }
+                            } label: {
+                                Label(
+                                    option.title,
+                                    systemImage: option == filter ? "checkmark" : option.symbol
+                                )
                             }
-                        } label: {
-                            Label(
-                                option.title,
-                                systemImage: option == filter ? "checkmark" : option.symbol
-                            )
                         }
+                    } label: {
+                        Label(filter.title, systemImage: "line.3.horizontal.decrease")
                     }
-                } label: {
-                    Label(filter.title, systemImage: "line.3.horizontal.decrease")
+                    .accessibilityLabel("Filter timeline")
+                    .accessibilityValue(filter.title)
                 }
-                .accessibilityLabel("Filter timeline")
-                .accessibilityValue(filter.title)
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Add event", systemImage: "plus") {
+                        isAddingTimelineItem = true
+                    }
+                    .labelStyle(.iconOnly)
+                }
             }
 
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Add event", systemImage: "plus") {
-                    isAddingTimelineItem = true
-                }
-                    .labelStyle(.iconOnly)
-
+            ToolbarItem(placement: .topBarTrailing) {
                 AccountToolbarButton()
             }
         }
@@ -110,6 +120,21 @@ struct TimelineView: View {
                 transitionNamespace: timelineTransition
             )
         }
+    }
+
+    private var mainEventRequiredView: some View {
+        ContentUnavailableView {
+            Label("Main Event Timeline", systemImage: "calendar.badge.exclamationmark")
+        } description: {
+            Text("Timeline management is available from the main event context.")
+        } actions: {
+            Button("Switch to Main Event") {
+                workspace.selectEventContext(.main)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(AppTheme.Layout.screenHorizontal)
     }
 
     @ViewBuilder

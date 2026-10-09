@@ -17,6 +17,7 @@ final class WeddingWorkspace {
     var eventMessage: String
     var planningMode: PlanningMode
     var members: [WeddingMember]
+    var mainEventParticipantIDs: [UUID]
     var ideas: [WeddingIdea]
     var timeline: [TimelineItem]
     var notes: [EventNote]
@@ -51,6 +52,7 @@ final class WeddingWorkspace {
         eventMessage: String = "Your presence means the world to us. The ceremony and reception will be outdoors, so please plan for the evening weather.",
         planningMode: PlanningMode,
         members: [WeddingMember],
+        mainEventParticipantIDs: [UUID]? = nil,
         ideas: [WeddingIdea],
         timeline: [TimelineItem],
         notes: [EventNote] = [],
@@ -84,6 +86,7 @@ final class WeddingWorkspace {
         self.eventMessage = eventMessage
         self.planningMode = planningMode
         self.members = members
+        self.mainEventParticipantIDs = mainEventParticipantIDs ?? members.map(\.id)
         self.ideas = ideas.map { idea in
             var scopedIdea = idea
             if scopedIdea.eventID == nil {
@@ -126,6 +129,25 @@ final class WeddingWorkspace {
             }
     }
 
+    /// The child event that is happening now, or the next incomplete child
+    /// event on the calendar. Home-tab reselection uses this as the companion
+    /// destination to the main event.
+    func currentOrNextChildEventReference(at date: Date = .now) -> EventReference? {
+        let candidates = childEvents.filter { $0.completionStatus == .upcoming }
+
+        if let current = candidates.last(where: { event in
+            guard event.scheduledAt <= date else { return false }
+            let effectiveEnd = event.endsAt ?? event.scheduledAt
+            return date <= effectiveEnd
+        }) {
+            return .subevent(current.id)
+        }
+
+        return candidates
+            .first(where: { $0.scheduledAt > date })
+            .map { .subevent($0.id) }
+    }
+
     var selectedEventID: UUID {
         switch selectedEventReference {
         case .main:
@@ -160,14 +182,11 @@ final class WeddingWorkspace {
         notes.filter { ($0.eventID ?? mainEventID) == selectedEventID }
     }
 
-    var mainEventParticipantIDs: [UUID] {
-        members.map(\.id)
-    }
-
     func participants(for reference: EventReference) -> [WeddingMember] {
         switch reference {
         case .main, .idea:
-            return members
+            let participantIDs = Set(mainEventParticipantIDs)
+            return members.filter { participantIDs.contains($0.id) }
         case .subevent(let id):
             guard let event = timeline.first(where: { $0.id == id }) else { return [] }
             let participantIDs = Set(event.participantIDs)
@@ -178,6 +197,24 @@ final class WeddingWorkspace {
     var selectedEventCoordinators: [WeddingMember] {
         participants(for: selectedEventReference)
             .filter { $0.participantRole != .guest }
+    }
+
+    var selectedEventParticipants: [WeddingMember] {
+        participants(for: selectedEventReference)
+    }
+
+    func addParticipant(_ participantID: UUID, to reference: EventReference? = nil) {
+        guard members.contains(where: { $0.id == participantID }) else { return }
+
+        switch reference ?? selectedEventReference {
+        case .main, .idea:
+            guard !mainEventParticipantIDs.contains(participantID) else { return }
+            mainEventParticipantIDs.append(participantID)
+        case .subevent(let eventID):
+            guard let index = timeline.firstIndex(where: { $0.id == eventID }),
+                  !timeline[index].participantIDs.contains(participantID) else { return }
+            timeline[index].participantIDs.append(participantID)
+        }
     }
 
     func selectEventContext(_ reference: EventReference) {
@@ -422,6 +459,11 @@ final class WeddingWorkspace {
         ideas[index].status = status
     }
 
+    func updateIdea(_ idea: WeddingIdea) {
+        guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
+        ideas[index] = idea
+    }
+
     func addIdea(_ idea: WeddingIdea) {
         var scopedIdea = idea
         if scopedIdea.eventID == nil {
@@ -453,23 +495,26 @@ final class WeddingWorkspace {
         initials: String,
         role: WeddingParticipantRole
     ) {
-        guard !members.contains(where: { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }) else {
+        if let existingMember = members.first(where: {
+            $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame
+        }) {
+            addParticipant(existingMember.id)
             return
         }
 
-        members.append(
-            WeddingMember(
-                name: name,
-                participantRole: role,
-                initials: initials,
-                attendance: .invited,
-                email: email,
-                planningPermission: role == .collaborator
-                    ? defaultCollaboratorPermission
-                    : role.defaultPlanningPermission,
-                invitationStatus: .invited
-            )
+        let member = WeddingMember(
+            name: name,
+            participantRole: role,
+            initials: initials,
+            attendance: .invited,
+            email: email,
+            planningPermission: role == .collaborator
+                ? defaultCollaboratorPermission
+                : role.defaultPlanningPermission,
+            invitationStatus: .invited
         )
+        members.append(member)
+        addParticipant(member.id)
     }
 }
 
