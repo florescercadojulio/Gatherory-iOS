@@ -67,16 +67,16 @@ enum IdeaCategory: String, CaseIterable, Identifiable, Codable {
 
     var symbol: String {
         switch self {
-        case .venue: "building.columns.fill"
-        case .attire: "tshirt.fill"
+        case .venue: "building.2.fill"
+        case .attire: "hanger"
         case .flowers: "camera.macro"
         case .food: "fork.knife"
-        case .photography: "camera.fill"
-        case .music: "music.note"
-        case .decor: "lamp.floor.fill"
-        case .invitations: "envelope.fill"
-        case .honeymoon: "airplane"
-        case .other: "sparkles"
+        case .photography: "camera.aperture"
+        case .music: "music.note.list"
+        case .decor: "lamp.ceiling.fill"
+        case .invitations: "envelope.open.fill"
+        case .honeymoon: "suitcase.rolling.fill"
+        case .other: "ellipsis.circle.fill"
         }
     }
 }
@@ -120,6 +120,309 @@ enum DecisionChoice {
     case love
 }
 
+enum AttireStyle: String, CaseIterable, Identifiable, Codable, Hashable {
+    case any
+    case blackTie
+    case formal
+    case cocktail
+    case garden
+    case casual
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .any: "Any"
+        case .blackTie: "Black Tie"
+        case .formal: "Formal"
+        case .cocktail: "Cocktail"
+        case .garden: "Garden"
+        case .casual: "Casual"
+        }
+    }
+}
+
+struct AttireIdeaConfiguration: Codable, Hashable {
+    var style: AttireStyle
+    var restrictions: String
+}
+
+enum FoodIdeaType: String, CaseIterable, Identifiable, Codable, Hashable {
+    case meal
+    case cake
+    case dessert
+    case drinks
+    case tasting
+    case other
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .meal: "Meal"
+        case .cake: "Cake"
+        case .dessert: "Dessert"
+        case .drinks: "Drinks"
+        case .tasting: "Tasting"
+        case .other: "Other"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .meal: "fork.knife"
+        case .cake: "birthday.cake.fill"
+        case .dessert: "takeoutbag.and.cup.and.straw.fill"
+        case .drinks: "wineglass.fill"
+        case .tasting: "checklist"
+        case .other: "ellipsis.circle.fill"
+        }
+    }
+}
+
+struct FoodIdeaConfiguration: Codable, Hashable {
+    var type: FoodIdeaType
+    var servings: Int?
+    var dietaryNotes: String
+}
+
+enum VenueSetting: String, CaseIterable, Identifiable, Codable, Hashable {
+    case indoor
+    case outdoor
+    case both
+    case destination
+    case other
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .indoor: "Indoor"
+        case .outdoor: "Outdoor"
+        case .both: "Both"
+        case .destination: "Destination"
+        case .other: "Other"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .indoor: "building.2.fill"
+        case .outdoor: "tree.fill"
+        case .both: "door.left.hand.open"
+        case .destination: "airplane"
+        case .other: "ellipsis.circle.fill"
+        }
+    }
+}
+
+struct VenueIdeaConfiguration: Codable, Hashable {
+    var setting: VenueSetting
+    var capacity: Int?
+    var area: String
+}
+
+enum FlowerFocus: String, CaseIterable, Identifiable, Codable, Hashable {
+    case bouquet
+    case ceremony
+    case tables
+    case wearable
+    case other
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .bouquet: "Bouquet"
+        case .ceremony: "Ceremony"
+        case .tables: "Tables"
+        case .wearable: "Wearable"
+        case .other: "Other"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .bouquet: "camera.macro"
+        case .ceremony: "rectangle.portrait.and.arrow.forward"
+        case .tables: "table.furniture.fill"
+        case .wearable: "person.crop.circle"
+        case .other: "ellipsis.circle.fill"
+        }
+    }
+}
+
+struct FlowerIdeaConfiguration: Codable, Hashable {
+    var focus: FlowerFocus
+    var palette: String
+}
+
+enum PhotographyStyle: String, CaseIterable, Identifiable, Codable, Hashable {
+    case documentary
+    case editorial
+    case classic
+    case film
+    case other
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .documentary: "Documentary"
+        case .editorial: "Editorial"
+        case .classic: "Classic"
+        case .film: "Film"
+        case .other: "Other"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .documentary: "camera.viewfinder"
+        case .editorial: "photo.artframe"
+        case .classic: "camera.fill"
+        case .film: "film.fill"
+        case .other: "ellipsis.circle.fill"
+        }
+    }
+}
+
+struct PhotographyIdeaConfiguration: Codable, Hashable {
+    var style: PhotographyStyle
+    var coverageHours: Int?
+    var priorities: String
+}
+
+enum DecorFocus: String, CaseIterable, Identifiable, Codable, Hashable {
+    case ceremony
+    case reception
+    case tables
+    case lighting
+    case signage
+    case other
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .ceremony: "Ceremony"
+        case .reception: "Reception"
+        case .tables: "Tables"
+        case .lighting: "Lighting"
+        case .signage: "Signage"
+        case .other: "Other"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .ceremony: "heart.fill"
+        case .reception: "party.popper.fill"
+        case .tables: "table.furniture.fill"
+        case .lighting: "lightbulb.led.fill"
+        case .signage: "signpost.right.fill"
+        case .other: "ellipsis.circle.fill"
+        }
+    }
+}
+
+struct DecorIdeaConfiguration: Codable, Hashable {
+    var focus: DecorFocus
+    var paletteOrMaterials: String
+}
+
+enum InvitationFormat: String, CaseIterable, Identifiable, Codable, Hashable {
+    case printed
+    case digital
+    case both
+    case saveTheDate
+    case other
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .printed: "Printed"
+        case .digital: "Digital"
+        case .both: "Both"
+        case .saveTheDate: "Save the Date"
+        case .other: "Other"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .printed: "envelope.fill"
+        case .digital: "iphone"
+        case .both: "rectangle.2.swap"
+        case .saveTheDate: "calendar.badge.clock"
+        case .other: "ellipsis.circle.fill"
+        }
+    }
+}
+
+struct InvitationIdeaConfiguration: Codable, Hashable {
+    var format: InvitationFormat
+    var quantity: Int?
+    var productionNotes: String
+}
+
+enum TripStyle: String, CaseIterable, Identifiable, Codable, Hashable {
+    case relaxing
+    case adventure
+    case city
+    case nature
+    case roadTrip
+    case other
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .relaxing: "Relaxing"
+        case .adventure: "Adventure"
+        case .city: "City"
+        case .nature: "Nature"
+        case .roadTrip: "Road Trip"
+        case .other: "Other"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .relaxing: "beach.umbrella.fill"
+        case .adventure: "figure.hiking"
+        case .city: "building.2.fill"
+        case .nature: "mountain.2.fill"
+        case .roadTrip: "car.fill"
+        case .other: "ellipsis.circle.fill"
+        }
+    }
+}
+
+struct HoneymoonIdeaConfiguration: Codable, Hashable {
+    var style: TripStyle
+    var destination: String
+    var nights: Int?
+}
+
+struct MusicIdeaConfiguration: Codable, Hashable {
+    var tracks: [MusicTrack]
+}
+
+enum IdeaConfiguration: Codable, Hashable {
+    case standard
+    case attire(AttireIdeaConfiguration)
+    case venue(VenueIdeaConfiguration)
+    case food(FoodIdeaConfiguration)
+    case flowers(FlowerIdeaConfiguration)
+    case photography(PhotographyIdeaConfiguration)
+    case decor(DecorIdeaConfiguration)
+    case invitations(InvitationIdeaConfiguration)
+    case honeymoon(HoneymoonIdeaConfiguration)
+    case music(MusicIdeaConfiguration)
+}
+
 struct WeddingIdea: Identifiable, Hashable {
     let id: UUID
     var title: String
@@ -130,7 +433,7 @@ struct WeddingIdea: Identifiable, Hashable {
     var status: IdeaStatus
     var submittedAt: Date
     var imageData: Data?
-    var musicTrack: MusicTrack?
+    var configuration: IdeaConfiguration
 
     init(
         id: UUID = UUID(),
@@ -142,7 +445,8 @@ struct WeddingIdea: Identifiable, Hashable {
         status: IdeaStatus = .new,
         submittedAt: Date = .now,
         imageData: Data? = nil,
-        musicTrack: MusicTrack? = nil
+        musicTrack: MusicTrack? = nil,
+        configuration: IdeaConfiguration? = nil
     ) {
         self.id = id
         self.title = title
@@ -153,7 +457,81 @@ struct WeddingIdea: Identifiable, Hashable {
         self.status = status
         self.submittedAt = submittedAt
         self.imageData = imageData
-        self.musicTrack = musicTrack
+        if let configuration {
+            self.configuration = configuration
+        } else {
+            self.configuration = switch category {
+            case .attire:
+                .attire(AttireIdeaConfiguration(style: .any, restrictions: ""))
+            case .venue:
+                .venue(VenueIdeaConfiguration(setting: .indoor, capacity: nil, area: ""))
+            case .food:
+                .food(FoodIdeaConfiguration(type: .meal, servings: nil, dietaryNotes: ""))
+            case .flowers:
+                .flowers(FlowerIdeaConfiguration(focus: .bouquet, palette: ""))
+            case .photography:
+                .photography(PhotographyIdeaConfiguration(style: .documentary, coverageHours: nil, priorities: ""))
+            case .decor:
+                .decor(DecorIdeaConfiguration(focus: .reception, paletteOrMaterials: ""))
+            case .invitations:
+                .invitations(InvitationIdeaConfiguration(format: .printed, quantity: nil, productionNotes: ""))
+            case .honeymoon:
+                .honeymoon(HoneymoonIdeaConfiguration(style: .relaxing, destination: "", nights: nil))
+            case .music:
+                .music(MusicIdeaConfiguration(tracks: musicTrack.map { [$0] } ?? []))
+            default:
+                .standard
+            }
+        }
+    }
+
+    var musicTracks: [MusicTrack] {
+        guard case .music(let configuration) = configuration else { return [] }
+        return configuration.tracks
+    }
+
+    var musicTrack: MusicTrack? {
+        musicTracks.first
+    }
+
+    var attireConfiguration: AttireIdeaConfiguration? {
+        guard case .attire(let configuration) = configuration else { return nil }
+        return configuration
+    }
+
+    var foodConfiguration: FoodIdeaConfiguration? {
+        guard case .food(let configuration) = configuration else { return nil }
+        return configuration
+    }
+
+    var venueConfiguration: VenueIdeaConfiguration? {
+        guard case .venue(let configuration) = configuration else { return nil }
+        return configuration
+    }
+
+    var flowerConfiguration: FlowerIdeaConfiguration? {
+        guard case .flowers(let configuration) = configuration else { return nil }
+        return configuration
+    }
+
+    var photographyConfiguration: PhotographyIdeaConfiguration? {
+        guard case .photography(let configuration) = configuration else { return nil }
+        return configuration
+    }
+
+    var decorConfiguration: DecorIdeaConfiguration? {
+        guard case .decor(let configuration) = configuration else { return nil }
+        return configuration
+    }
+
+    var invitationConfiguration: InvitationIdeaConfiguration? {
+        guard case .invitations(let configuration) = configuration else { return nil }
+        return configuration
+    }
+
+    var honeymoonConfiguration: HoneymoonIdeaConfiguration? {
+        guard case .honeymoon(let configuration) = configuration else { return nil }
+        return configuration
     }
 }
 
@@ -340,6 +718,45 @@ enum EventStatus: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum MainEventStatus: String, CaseIterable, Identifiable, Codable {
+    case draft
+    case ongoing
+    case finished
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .draft: "Draft"
+        case .ongoing: "Ongoing"
+        case .finished: "Finished"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .draft:
+            "Hosts and collaborators can keep setting up the event."
+        case .ongoing:
+            "The celebration is happening, including its scheduled events."
+        case .finished:
+            "The event is preserved as a read-only memory."
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .draft: "doc.badge.ellipsis"
+        case .ongoing: "sparkles"
+        case .finished: "checkmark.seal.fill"
+        }
+    }
+
+    var isReadOnly: Bool {
+        self == .finished
+    }
+}
+
 enum EventResponse: String, CaseIterable, Identifiable, Codable {
     case going
     case notSure
@@ -351,7 +768,7 @@ enum EventResponse: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .going: "Going"
         case .notSure: "Not Sure"
-        case .notGoing: "Can't Go"
+        case .notGoing: "Not Going"
         }
     }
 
@@ -373,6 +790,25 @@ struct EventNote: Identifiable, Hashable, Codable {
         self.id = id
         self.body = body
         self.sentAt = sentAt
+    }
+}
+
+struct EventMoment: Identifiable, Hashable {
+    let id: UUID
+    var imageData: Data
+    var addedBy: String
+    var addedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        imageData: Data,
+        addedBy: String,
+        addedAt: Date = .now
+    ) {
+        self.id = id
+        self.imageData = imageData
+        self.addedBy = addedBy
+        self.addedAt = addedAt
     }
 }
 

@@ -306,6 +306,9 @@ private struct TimelineItemEditorView: View {
                 PhotoAttachmentPicker(
                     imageData: $imageData,
                     emptySymbol: category.symbol,
+                    fallbackAssetName: category == .venue ? "WeddingVenueHero" : nil,
+                    fallbackColors: category.artworkColors,
+                    fallbackAccent: category.artworkAccent,
                     suggestedConcept: "Wedding \(category.title.lowercased()) event artwork for \(trimmedTitle.isEmpty ? "our celebration" : trimmedTitle)"
                 )
             }
@@ -544,7 +547,7 @@ private struct TimelineItemEditorView: View {
     }
 }
 
-private struct EventDateTimeEditorView: View {
+struct EventDateTimeEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -773,9 +776,6 @@ struct TimelineCollectionCard: View {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Label(item.purpose.shortTitle, systemImage: item.purpose.symbol)
-                    .font(.caption2.weight(.semibold))
-
                 Text(item.title)
                     .font(.headline)
                     .lineLimit(3)
@@ -784,12 +784,6 @@ struct TimelineCollectionCard: View {
                 Text(scheduleSummary)
                     .font(.caption.weight(.medium))
                     .lineLimit(2)
-
-                if let location = item.location {
-                    Label(location, systemImage: "mappin")
-                        .font(.caption)
-                        .lineLimit(2)
-                }
             }
             .foregroundStyle(.white)
             .shadow(color: .black.opacity(0.36), radius: 5, y: 2)
@@ -1286,7 +1280,7 @@ struct TimelineEventDetailScreen: View {
     }
 }
 
-private struct TimelineWeatherRow: View {
+struct TimelineWeatherRow: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let phase: EventWeatherPhase

@@ -6,15 +6,24 @@ final class WeddingWorkspace {
     let mainEventID: UUID
     var title: String
     var weddingDate: Date
+    var mainEventEndsAt: Date?
+    var mainEventIsAllDay: Bool
+    var mainEventTimeZoneIdentifier: String
+    var mainEventLocation: EventLocation?
+    var mainEventImageData: Data?
     var venueName: String
     var location: String
+    var dressCode: String
+    var eventMessage: String
     var planningMode: PlanningMode
     var members: [WeddingMember]
     var ideas: [WeddingIdea]
     var timeline: [TimelineItem]
     var notes: [EventNote]
-    var mainEventStatus: EventStatus
+    var mainEventStatus: MainEventStatus
     var mainEventResponse: EventResponse?
+    var mainEventMoments: [EventMoment]
+    var isMainEventDeleted: Bool
     var registry: [RegistryItem]
     var isRegistryShared: Bool
     var isCollaboratorLinkEnabled: Bool
@@ -28,15 +37,24 @@ final class WeddingWorkspace {
         mainEventID: UUID = UUID(),
         title: String,
         weddingDate: Date,
+        mainEventEndsAt: Date? = nil,
+        mainEventIsAllDay: Bool = false,
+        mainEventTimeZoneIdentifier: String = TimeZone.autoupdatingCurrent.identifier,
+        mainEventLocation: EventLocation? = nil,
+        mainEventImageData: Data? = nil,
         venueName: String,
         location: String,
+        dressCode: String = "Garden formal",
+        eventMessage: String = "Your presence means the world to us. The ceremony and reception will be outdoors, so please plan for the evening weather.",
         planningMode: PlanningMode,
         members: [WeddingMember],
         ideas: [WeddingIdea],
         timeline: [TimelineItem],
         notes: [EventNote] = [],
-        mainEventStatus: EventStatus = .approved,
+        mainEventStatus: MainEventStatus = .draft,
         mainEventResponse: EventResponse? = nil,
+        mainEventMoments: [EventMoment] = [],
+        isMainEventDeleted: Bool = false,
         registry: [RegistryItem],
         isRegistryShared: Bool = false,
         isCollaboratorLinkEnabled: Bool = true,
@@ -47,8 +65,20 @@ final class WeddingWorkspace {
         self.mainEventID = mainEventID
         self.title = title
         self.weddingDate = weddingDate
+        self.mainEventEndsAt = mainEventEndsAt
+        self.mainEventIsAllDay = mainEventIsAllDay
+        self.mainEventTimeZoneIdentifier = mainEventTimeZoneIdentifier
+        self.mainEventLocation = mainEventLocation ?? EventLocation(
+            address: location,
+            shortAddress: location,
+            placeName: venueName,
+            locationName: venueName
+        )
+        self.mainEventImageData = mainEventImageData
         self.venueName = venueName
         self.location = location
+        self.dressCode = dressCode
+        self.eventMessage = eventMessage
         self.planningMode = planningMode
         self.members = members
         self.ideas = ideas
@@ -60,6 +90,8 @@ final class WeddingWorkspace {
         self.notes = notes
         self.mainEventStatus = mainEventStatus
         self.mainEventResponse = mainEventResponse
+        self.mainEventMoments = mainEventMoments
+        self.isMainEventDeleted = isMainEventDeleted
         self.registry = registry
         self.isRegistryShared = isRegistryShared
         self.isCollaboratorLinkEnabled = isCollaboratorLinkEnabled
@@ -90,6 +122,47 @@ final class WeddingWorkspace {
 
     var planningMembers: [WeddingMember] {
         members.filter { $0.participantRole != .guest }
+    }
+
+    var canManageMainEvent: Bool {
+        members.first?.planningPermission == .manage && !mainEventStatus.isReadOnly
+    }
+
+    var canDeleteMainEvent: Bool {
+        members.first?.planningPermission == .manage && mainEventStatus == .draft
+    }
+
+    var canAddEventMoments: Bool {
+        currentMainEventStatus == .ongoing
+    }
+
+    var mainEventWindow: ClosedRange<Date> {
+        let eventExperiences = timeline.filter {
+            $0.parentEventID == mainEventID
+                && $0.purpose == .eventExperience
+                && $0.status == .approved
+        }
+        let starts = [weddingDate] + eventExperiences.map(\.scheduledAt)
+        let ends = [mainEventEndsAt ?? weddingDate] + eventExperiences.map {
+            $0.endsAt ?? $0.scheduledAt
+        }
+        return (starts.min() ?? weddingDate)...(ends.max() ?? weddingDate)
+    }
+
+    var currentMainEventStatus: MainEventStatus {
+        guard mainEventStatus != .draft, mainEventStatus != .finished else {
+            return mainEventStatus
+        }
+
+        if Date.now > mainEventWindow.upperBound {
+            return .finished
+        }
+
+        if mainEventWindow.contains(Date.now) {
+            return .ongoing
+        }
+
+        return mainEventStatus
     }
 
     var canUndoDecision: Bool {
@@ -148,7 +221,54 @@ final class WeddingWorkspace {
     }
 
     func setMainEventResponse(_ response: EventResponse?) {
+        guard !currentMainEventStatus.isReadOnly else { return }
         mainEventResponse = response
+    }
+
+    func updateMainEvent(
+        title: String,
+        status: MainEventStatus,
+        startsAt: Date,
+        endsAt: Date?,
+        isAllDay: Bool,
+        timeZoneIdentifier: String,
+        eventLocation: EventLocation?,
+        imageData: Data?,
+        dressCode: String,
+        message: String
+    ) {
+        guard canManageMainEvent else { return }
+
+        self.title = title
+        mainEventStatus = status
+        weddingDate = startsAt
+        mainEventEndsAt = endsAt
+        mainEventIsAllDay = isAllDay
+        mainEventTimeZoneIdentifier = timeZoneIdentifier
+        mainEventLocation = eventLocation
+        mainEventImageData = imageData
+        venueName = eventLocation?.title ?? ""
+        location = eventLocation?.detail ?? ""
+        self.dressCode = dressCode
+        eventMessage = message
+        isMainEventDeleted = false
+    }
+
+    func addMainEventMoment(_ imageData: Data) {
+        guard canAddEventMoments else { return }
+        let contributor = members.first?.name ?? "Guest"
+        mainEventMoments.insert(
+            EventMoment(imageData: imageData, addedBy: contributor),
+            at: 0
+        )
+    }
+
+    func deleteMainEvent() {
+        guard canDeleteMainEvent else { return }
+        isMainEventDeleted = true
+        mainEventResponse = nil
+        mainEventMoments.removeAll()
+        timeline.removeAll { $0.parentEventID == mainEventID }
     }
 
     func sendNote(_ body: String) {

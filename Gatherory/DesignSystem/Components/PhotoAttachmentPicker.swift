@@ -8,7 +8,14 @@ struct PhotoAttachmentPicker: View {
     @State private var isChoosingImage = false
 
     let emptySymbol: String
+    var fallbackAssetName: String? = nil
+    var fallbackColors: [Color]? = nil
+    var fallbackAccent: Color = .accentColor
     var suggestedConcept: String = "Wedding celebration artwork"
+
+    private var hasVisibleArtwork: Bool {
+        imageData != nil || fallbackAssetName != nil || fallbackColors != nil
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
@@ -16,7 +23,7 @@ struct PhotoAttachmentPicker: View {
 
             HStack(spacing: AppTheme.Spacing.compact) {
                 Button(
-                    imageData == nil ? "Add Image" : "Change Image",
+                    hasVisibleArtwork ? "Change Image" : "Add Image",
                     systemImage: "photo.badge.plus"
                 ) {
                     isChoosingImage = true
@@ -51,6 +58,19 @@ struct PhotoAttachmentPicker: View {
                 .frame(height: 180)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
                 .accessibilityLabel("Selected image")
+        } else if fallbackAssetName != nil || fallbackColors != nil {
+            MediaArtwork(
+                imageData: nil,
+                assetName: fallbackAssetName,
+                symbol: emptySymbol,
+                colors: fallbackColors ?? [.gray, .secondary],
+                accent: fallbackAccent,
+                progressiveBlurRadius: 0
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: 180)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
+            .accessibilityLabel("Current event artwork")
         } else {
             ContentUnavailableView(
                 "Add an Image",

@@ -1,5 +1,8 @@
 import Glur
+import MapKit
+import PhotosUI
 import SwiftUI
+import UIKit
 
 struct HomeView: View {
     @Environment(WeddingWorkspace.self) private var workspace
@@ -7,6 +10,7 @@ struct HomeView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isInvitingCollaborators = false
     @State private var isComposingNote = false
+    @State private var isEditingMainEvent = false
     @State private var isShowingInvitationPreview = false
     @Namespace private var invitationTransition
 
@@ -22,10 +26,36 @@ struct HomeView: View {
         dynamicTypeSize.isAccessibilitySize ? 720 : 640
     }
 
+    private var eventTimingLabel: String {
+        switch workspace.currentMainEventStatus {
+        case .draft:
+            "\(daysRemaining) days away"
+        case .ongoing:
+            "Happening now"
+        case .finished:
+            "Past event"
+        }
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
-                eventHero
+                if workspace.isMainEventDeleted {
+                    ContentUnavailableView {
+                        Label("No Main Event", systemImage: "calendar.badge.plus")
+                    } description: {
+                        Text("Create the event that anchors this gathering.")
+                    } actions: {
+                        Button("Create Event", systemImage: "plus") {
+                            isEditingMainEvent = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppTheme.Spacing.section)
+                } else {
+                    eventHero
+                }
             }
             .padding(.horizontal, AppTheme.Layout.screenHorizontal)
             .padding(.top, AppTheme.Layout.screenTop)
@@ -38,15 +68,22 @@ struct HomeView: View {
         .appClearNavigationBar()
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Send a note", systemImage: "megaphone") {
-                    isComposingNote = true
-                }
-                .labelStyle(.iconOnly)
+                if workspace.isMainEventDeleted {
+                    Button("Create event", systemImage: "plus") {
+                        isEditingMainEvent = true
+                    }
+                    .labelStyle(.iconOnly)
+                } else {
+                    Button("Send a note", systemImage: "megaphone") {
+                        isComposingNote = true
+                    }
+                    .labelStyle(.iconOnly)
 
-                Button("Invite collaborators", systemImage: "person.badge.plus") {
-                    isInvitingCollaborators = true
+                    Button("Invite collaborators", systemImage: "person.badge.plus") {
+                        isInvitingCollaborators = true
+                    }
+                    .labelStyle(.iconOnly)
                 }
-                .labelStyle(.iconOnly)
 
                 AccountToolbarButton()
             }
@@ -61,6 +98,14 @@ struct HomeView: View {
         .sheet(isPresented: $isComposingNote) {
             NoteComposerView()
                 .environment(workspace)
+        }
+        .sheet(isPresented: $isEditingMainEvent) {
+            NavigationStack {
+                MainEventEditorView()
+            }
+            .environment(workspace)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -101,13 +146,15 @@ struct HomeView: View {
                         .font(.headline)
                         .multilineTextAlignment(.center)
 
-                    Label("\(workspace.venueName) · \(workspace.location)", systemImage: "mappin.and.ellipse")
-                        .font(.subheadline.weight(.medium))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.white.opacity(0.88))
-                        .fixedSize(horizontal: false, vertical: true)
+                    if let eventLocation = workspace.mainEventLocation {
+                        Label(eventLocation.formatted, systemImage: "mappin.and.ellipse")
+                            .font(.subheadline.weight(.medium))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.white.opacity(0.88))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
-                    Text("\(daysRemaining) days away")
+                    Text(eventTimingLabel)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.72))
                 }
@@ -120,7 +167,7 @@ struct HomeView: View {
 
                     VStack {
                         HStack {
-                            EventStatusBadge(status: workspace.mainEventStatus)
+                            MainEventStatusBadge(status: workspace.currentMainEventStatus)
 
                             Spacer(minLength: 0)
                         }
@@ -137,8 +184,8 @@ struct HomeView: View {
                 .accessibilityHint("Opens the guest invitation preview")
                 .accessibilityLabel(
                     "\(workspace.title), \(workspace.weddingDate.formatted(date: .long, time: .omitted)), " +
-                    "at \(workspace.venueName), \(workspace.location). \(goingMembers.count) going. " +
-                    "\(daysRemaining) days to go."
+                    (workspace.mainEventLocation.map { "at \($0.formatted). " } ?? "") +
+                    "\(goingMembers.count) going. \(eventTimingLabel)."
                 )
             }
             .frame(width: proxy.size.width, height: eventHeroHeight)
@@ -154,14 +201,20 @@ struct HomeView: View {
 
     @ViewBuilder
     private var venueArtwork: some View {
-        let artwork = Image("WeddingVenueHero")
-            .resizable()
-            .scaledToFill()
+        let artwork: Image = if let imageData = workspace.mainEventImageData,
+                                let image = UIImage(data: imageData) {
+            Image(uiImage: image)
+        } else {
+            Image("WeddingVenueHero")
+        }
 
         if reduceTransparency {
-            artwork
+            artwork.resizable().scaledToFill()
         } else {
-            artwork.glur(
+            artwork
+                .resizable()
+                .scaledToFill()
+                .glur(
                 radius: 24,
                 mask: .linear(
                     stops: [
@@ -175,7 +228,7 @@ struct HomeView: View {
                     endPoint: .bottom
                 ),
                 noise: 0.025
-            )
+                )
         }
     }
 
@@ -199,6 +252,262 @@ struct HomeView: View {
         .accessibilityElement(children: .combine)
     }
 
+}
+
+private struct MainEventStatusBadge: View {
+    let status: MainEventStatus
+
+    var body: some View {
+        Label(status.title, systemImage: status.symbol)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10)
+            .frame(minHeight: 30)
+            .background(.ultraThinMaterial, in: Capsule())
+            .environment(\.colorScheme, .dark)
+            .accessibilityLabel("Main event status: \(status.title)")
+    }
+}
+
+private struct MainEventEditorView: View {
+    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var title = ""
+    @State private var status: MainEventStatus = .draft
+    @State private var startsAt = Date.now
+    @State private var endsAt: Date?
+    @State private var isAllDay = false
+    @State private var timeZoneIdentifier = TimeZone.autoupdatingCurrent.identifier
+    @State private var eventLocation: EventLocation?
+    @State private var imageData: Data?
+    @State private var dressCode = ""
+    @State private var message = ""
+    @State private var isEditingDateAndTime = false
+    @State private var isEditingLocation = false
+    @State private var isConfirmingDeletion = false
+    @State private var didLoad = false
+
+    private var trimmedTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var startSummary: String {
+        startsAt.formatted(date: .abbreviated, time: isAllDay ? .omitted : .shortened)
+    }
+
+    private var endSummary: String? {
+        endsAt?.formatted(date: .abbreviated, time: isAllDay ? .omitted : .shortened)
+    }
+
+    var body: some View {
+        Form {
+            Section("Event") {
+                TextField("Event name", text: $title)
+                    .textInputAutocapitalization(.words)
+
+                Picker("Status", selection: $status) {
+                    ForEach(MainEventStatus.allCases) { option in
+                        Label(option.title, systemImage: option.symbol)
+                            .tag(option)
+                    }
+                }
+
+                Text(status.detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Cover") {
+                PhotoAttachmentPicker(
+                    imageData: $imageData,
+                    emptySymbol: "calendar.badge.plus",
+                    fallbackAssetName: "WeddingVenueHero",
+                    suggestedConcept: "Artwork for \(trimmedTitle.isEmpty ? "our gathering" : trimmedTitle)"
+                )
+            }
+
+            Section {
+                Button {
+                    isEditingDateAndTime = true
+                } label: {
+                    HStack(spacing: AppTheme.Spacing.standard) {
+                        Image(systemName: "calendar.badge.clock")
+                            .foregroundStyle(AppTheme.ColorToken.accent)
+                            .frame(width: 28)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(isAllDay ? "All-day" : "Starts")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text(startSummary)
+                                .foregroundStyle(.primary)
+
+                            if let endSummary {
+                                Text("Ends \(endSummary)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } header: {
+                Text("Event Window")
+            } footer: {
+                Text("The event window also includes approved schedule items, including a later afterparty.")
+            }
+
+            Section {
+                Button {
+                    isEditingLocation = true
+                } label: {
+                    HStack(spacing: AppTheme.Spacing.standard) {
+                        Image(systemName: "mappin.and.ellipse")
+                            .foregroundStyle(AppTheme.ColorToken.accent)
+                            .frame(width: 28)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let eventLocation {
+                                Text(eventLocation.title)
+                                    .foregroundStyle(.primary)
+
+                                if !eventLocation.detail.isEmpty {
+                                    Text(eventLocation.detail)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                            } else {
+                                Text("Add Location")
+                                    .foregroundStyle(AppTheme.ColorToken.accent)
+                            }
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } header: {
+                Text("Location")
+            } footer: {
+                Text("Optional. Guests only see a location after you add one.")
+            }
+
+            Section("Invitation Details") {
+                TextField("Dress code (optional)", text: $dressCode)
+                    .textInputAutocapitalization(.sentences)
+
+                TextEditor(text: $message)
+                    .frame(minHeight: 120, alignment: .topLeading)
+                    .accessibilityLabel("Message to guests")
+                    .onChange(of: message) { _, newValue in
+                        if newValue.count > 750 {
+                            message = String(newValue.prefix(750))
+                        }
+                    }
+
+                Text("\(message.count)/750")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+
+            if workspace.canDeleteMainEvent && !workspace.isMainEventDeleted {
+                Section {
+                    Button("Delete Event", systemImage: "trash", role: .destructive) {
+                        isConfirmingDeletion = true
+                    }
+                } footer: {
+                    Text("A main event can only be deleted while it is still a draft.")
+                }
+            }
+        }
+        .navigationTitle(workspace.isMainEventDeleted ? "New Event" : "Edit Event")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    dismiss()
+                }
+            }
+
+            ToolbarItem(placement: .confirmationAction) {
+                Button(workspace.isMainEventDeleted ? "Add" : "Save") {
+                    workspace.updateMainEvent(
+                        title: trimmedTitle,
+                        status: status,
+                        startsAt: startsAt,
+                        endsAt: endsAt,
+                        isAllDay: isAllDay,
+                        timeZoneIdentifier: timeZoneIdentifier,
+                        eventLocation: eventLocation,
+                        imageData: imageData,
+                        dressCode: dressCode.trimmingCharacters(in: .whitespacesAndNewlines),
+                        message: message.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                    dismiss()
+                }
+                .disabled(trimmedTitle.isEmpty)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .sheet(isPresented: $isEditingDateAndTime) {
+            EventDateTimeEditorView(
+                startsAt: startsAt,
+                endsAt: endsAt,
+                isAllDay: isAllDay,
+                timeZoneIdentifier: timeZoneIdentifier
+            ) { updatedStart, updatedEnd, updatedAllDay, updatedTimeZone in
+                startsAt = updatedStart
+                endsAt = updatedEnd
+                isAllDay = updatedAllDay
+                timeZoneIdentifier = updatedTimeZone
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isEditingLocation) {
+            EventLocationEditorView(location: eventLocation) { updatedLocation in
+                eventLocation = updatedLocation
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .confirmationDialog(
+            "Delete this event?",
+            isPresented: $isConfirmingDeletion,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Event", role: .destructive) {
+                workspace.deleteMainEvent()
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This also removes its schedule and shared event moments.")
+        }
+        .task {
+            guard !didLoad else { return }
+            title = workspace.title
+            status = workspace.mainEventStatus
+            startsAt = workspace.weddingDate
+            endsAt = workspace.mainEventEndsAt
+            isAllDay = workspace.mainEventIsAllDay
+            timeZoneIdentifier = workspace.mainEventTimeZoneIdentifier
+            eventLocation = workspace.mainEventLocation
+            imageData = workspace.mainEventImageData
+            dressCode = workspace.dressCode
+            message = workspace.eventMessage
+            didLoad = true
+        }
+    }
 }
 
 private struct NoteComposerView: View {
@@ -275,6 +584,9 @@ private struct InvitationPreviewView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var scrollOffset: CGFloat = 0
     @State private var selectedScheduleItem: TimelineItem?
+    @State private var selectedMomentPhoto: PhotosPickerItem?
+    @State private var isEditingMainEvent = false
+    @State private var weather = EventWeatherModel()
 
     let transitionNamespace: Namespace.ID
     @Namespace private var scheduleTransition
@@ -301,8 +613,16 @@ private struct InvitationPreviewView: View {
     private var schedule: [TimelineItem] {
         workspace.approvedChildEvents.filter {
             $0.purpose == .eventExperience
-                && Calendar.current.isDate($0.scheduledAt, inSameDayAs: workspace.weddingDate)
         }
+    }
+
+    private var weatherRequestID: String {
+        [
+            workspace.weddingDate.timeIntervalSinceReferenceDate.formatted(),
+            workspace.mainEventLocation?.latitude?.formatted() ?? "no-latitude",
+            workspace.mainEventLocation?.longitude?.formatted() ?? "no-longitude"
+        ]
+        .joined(separator: "|")
     }
 
     var body: some View {
@@ -314,6 +634,7 @@ private struct InvitationPreviewView: View {
 
             ZStack {
                 InvitationFixedBackdrop(
+                    imageData: workspace.mainEventImageData,
                     blurProgress: blurProgress,
                     reduceMotion: reduceMotion,
                     reduceTransparency: reduceTransparency
@@ -342,6 +663,23 @@ private struct InvitationPreviewView: View {
         .appClearNavigationBar()
         .toolbarColorScheme(.dark, for: .navigationBar)
         .preferredColorScheme(.dark)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if workspace.canAddEventMoments {
+                    PhotosPicker(selection: $selectedMomentPhoto, matching: .images) {
+                        Label("Add Photo", systemImage: "photo.badge.plus")
+                            .labelStyle(.iconOnly)
+                    }
+                }
+
+                if workspace.canManageMainEvent {
+                    Button("Edit Event", systemImage: "pencil") {
+                        isEditingMainEvent = true
+                    }
+                    .labelStyle(.iconOnly)
+                }
+            }
+        }
         .navigationTransition(
             .zoom(sourceID: InvitationTransitionID.mainEvent, in: transitionNamespace)
         )
@@ -349,6 +687,29 @@ private struct InvitationPreviewView: View {
             TimelineEventReadOnlyView(
                 item: item,
                 transitionNamespace: scheduleTransition
+            )
+        }
+        .sheet(isPresented: $isEditingMainEvent) {
+            NavigationStack {
+                MainEventEditorView()
+            }
+            .environment(workspace)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .onChange(of: selectedMomentPhoto) { _, item in
+            guard let item else { return }
+
+            Task {
+                guard let imageData = try? await item.loadTransferable(type: Data.self) else { return }
+                workspace.addMainEventMoment(imageData)
+                selectedMomentPhoto = nil
+            }
+        }
+        .task(id: weatherRequestID) {
+            await weather.load(
+                on: workspace.weddingDate,
+                location: workspace.mainEventLocation
             )
         }
     }
@@ -380,12 +741,16 @@ private struct InvitationPreviewView: View {
                 )
                 .font(.headline)
 
-                Text(workspace.venueName)
-                    .font(.subheadline.weight(.semibold))
+                if let eventLocation = workspace.mainEventLocation {
+                    Text(eventLocation.title)
+                        .font(.subheadline.weight(.semibold))
 
-                Text(workspace.location)
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.84))
+                    if !eventLocation.detail.isEmpty {
+                        Text(eventLocation.detail)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.84))
+                    }
+                }
             }
             .multilineTextAlignment(.center)
         }
@@ -400,6 +765,13 @@ private struct InvitationPreviewView: View {
     private var invitationInformation: some View {
         LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
             rsvpCard
+
+            if workspace.currentMainEventStatus == .ongoing || workspace.currentMainEventStatus == .finished {
+                momentsCard
+            }
+
+            lifecycleCard
+
             eventDetails
             scheduleCard
             musicCard
@@ -413,13 +785,69 @@ private struct InvitationPreviewView: View {
         .environment(\.colorScheme, .dark)
     }
 
+    @ViewBuilder
+    private var lifecycleCard: some View {
+        switch workspace.currentMainEventStatus {
+        case .draft, .ongoing:
+            EmptyView()
+        case .finished:
+            InvitationSection(title: "A Past Event", symbol: "checkmark.seal.fill") {
+                Text("This event is finished and preserved as a read-only memory.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var momentsCard: some View {
+        InvitationSection(title: "Moments", symbol: "photo.on.rectangle.angled") {
+            if workspace.mainEventMoments.isEmpty {
+                Label("Share photos from the celebration using the photo button above.", systemImage: "photo.badge.plus")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: AppTheme.Spacing.compact),
+                        GridItem(.flexible(), spacing: AppTheme.Spacing.compact)
+                    ],
+                    spacing: AppTheme.Spacing.compact
+                ) {
+                    ForEach(workspace.mainEventMoments) { moment in
+                        if let image = UIImage(data: moment.imageData) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(maxWidth: .infinity)
+                                .aspectRatio(0.82, contentMode: .fit)
+                                .clipShape(
+                                    RoundedRectangle(
+                                        cornerRadius: AppTheme.Radius.control,
+                                        style: .continuous
+                                    )
+                                )
+                                .accessibilityLabel("Photo added by \(moment.addedBy)")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var rsvpCard: some View {
-        InvitationSection(title: "Will You Join Us?", symbol: "envelope.open.fill") {
-            Text("Kindly respond by \(responseDeadline.formatted(date: .long, time: .omitted)).")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        InvitationSection(
+            title: workspace.currentMainEventStatus == .finished ? "Your Response" : "Will You Join Us?",
+            symbol: "envelope.open.fill"
+        ) {
+            if workspace.currentMainEventStatus != .finished {
+                Text("Kindly respond by \(responseDeadline.formatted(date: .long, time: .omitted)).")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
 
             responseButtons
+                .disabled(workspace.currentMainEventStatus == .finished)
 
             if let response = workspace.mainEventResponse {
                 Label(
@@ -446,15 +874,25 @@ private struct InvitationPreviewView: View {
         InvitationSection(title: "Details", symbol: "calendar") {
             InvitationDetailRow(
                 symbol: "calendar",
-                title: "Date",
-                value: workspace.weddingDate.formatted(date: .long, time: .omitted)
+                title: "Date and Time",
+                value: mainEventScheduleSummary
             )
 
-            InvitationDetailRow(
-                symbol: "mappin.and.ellipse",
-                title: "Location",
-                value: "\(workspace.venueName)\n\(workspace.location)"
-            )
+            if let eventLocation = workspace.mainEventLocation {
+                InvitationLocationView(location: eventLocation)
+
+                TimelineWeatherRow(
+                    phase: weather.phase,
+                    attribution: weather.attribution
+                ) {
+                    Task {
+                        await weather.load(
+                            on: workspace.weddingDate,
+                            location: workspace.mainEventLocation
+                        )
+                    }
+                }
+            }
 
             InvitationDetailRow(
                 symbol: "person.2.fill",
@@ -462,6 +900,19 @@ private struct InvitationPreviewView: View {
                 value: hosts.map(\.name).formatted()
             )
         }
+    }
+
+    private var mainEventScheduleSummary: String {
+        let start = workspace.weddingDate.formatted(
+            date: .long,
+            time: workspace.mainEventIsAllDay ? .omitted : .shortened
+        )
+
+        guard let endsAt = workspace.mainEventEndsAt else {
+            return workspace.mainEventIsAllDay ? "\(start) · All-day" : start
+        }
+
+        return "\(start) – \(endsAt.formatted(date: .abbreviated, time: workspace.mainEventIsAllDay ? .omitted : .shortened))"
     }
 
     private var scheduleCard: some View {
@@ -516,21 +967,20 @@ private struct InvitationPreviewView: View {
 
     private var dressCodeCard: some View {
         InvitationSection(title: "Dress Code", symbol: "tshirt.fill") {
-            Text("Garden formal")
-                .font(.headline)
-
-            Text("Dress for an outdoor ceremony and an evening of dinner and dancing.")
-                .font(.body)
-                .foregroundStyle(.secondary)
+            if workspace.dressCode.isEmpty {
+                Text("No dress code has been added.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(workspace.dressCode)
+                    .font(.headline)
+            }
         }
     }
 
     private var notesCard: some View {
         InvitationSection(title: "A Note From Us", symbol: "heart.text.square.fill") {
-            Text(
-                "Your presence means the world to us. The ceremony and reception will be outdoors, " +
-                "so please plan for the evening weather."
-            )
+            Text(workspace.eventMessage.isEmpty ? "The hosts haven't added a note yet." : workspace.eventMessage)
             .font(.body)
             .foregroundStyle(.secondary)
 
@@ -544,6 +994,91 @@ private struct InvitationPreviewView: View {
         }
     }
 
+}
+
+private struct InvitationLocationView: View {
+    let location: EventLocation
+
+    private var coordinate: CLLocationCoordinate2D? {
+        guard let latitude = location.latitude,
+              let longitude = location.longitude else {
+            return nil
+        }
+
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    private var mapsURL: URL? {
+        guard let coordinate else { return nil }
+
+        var components = URLComponents(string: "https://maps.apple.com/")
+        components?.queryItems = [
+            URLQueryItem(name: "daddr", value: "\(coordinate.latitude),\(coordinate.longitude)"),
+            URLQueryItem(name: "q", value: location.title)
+        ]
+        return components?.url
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+            HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(AppTheme.ColorToken.accent)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Location")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Text(location.formatted)
+                        .font(.body.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: AppTheme.Spacing.compact)
+
+                if let mapsURL {
+                    Link(destination: mapsURL) {
+                        Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                            .labelStyle(.iconOnly)
+                            .frame(
+                                minWidth: AppTheme.Layout.minimumTouchTarget,
+                                minHeight: AppTheme.Layout.minimumTouchTarget
+                            )
+                    }
+                    .accessibilityHint("Opens directions in Apple Maps")
+                }
+            }
+
+            if let coordinate {
+                Map(
+                    initialPosition: .region(
+                        MKCoordinateRegion(
+                            center: coordinate,
+                            span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
+                        )
+                    ),
+                    interactionModes: [.pan, .zoom]
+                ) {
+                    Marker(location.title, coordinate: coordinate)
+                }
+                .mapStyle(.standard(elevation: .realistic))
+                .frame(height: 220)
+                .clipShape(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                        .stroke(.white.opacity(0.14), lineWidth: 0.5)
+                }
+                .accessibilityLabel("Map showing \(location.formatted)")
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
 }
 
 private struct InvitationSection<Content: View>: View {
@@ -586,6 +1121,7 @@ private struct InvitationSection<Content: View>: View {
 }
 
 private struct InvitationFixedBackdrop: View {
+    let imageData: Data?
     let blurProgress: CGFloat
     let reduceMotion: Bool
     let reduceTransparency: Bool
@@ -601,9 +1137,7 @@ private struct InvitationFixedBackdrop: View {
             ZStack {
                 Color.black
 
-                Image("WeddingVenueHero")
-                    .resizable()
-                    .scaledToFill()
+                backdropImage
                     .frame(width: proxy.size.width, height: proxy.size.height)
                     .scaleEffect(1 + (0.06 * activeBlurProgress))
                     .blur(radius: blurRadius, opaque: true)
@@ -627,6 +1161,19 @@ private struct InvitationFixedBackdrop: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private var backdropImage: some View {
+        if let imageData, let image = UIImage(data: imageData) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        } else {
+            Image("WeddingVenueHero")
+                .resizable()
+                .scaledToFill()
+        }
     }
 }
 

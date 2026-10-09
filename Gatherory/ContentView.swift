@@ -51,7 +51,11 @@ struct ContentView: View {
             }
         }
         .tabViewStyle(.sidebarAdaptable)
-        .tabBarMinimizeBehavior(.onScrollDown)
+        .tabBarMinimizeBehavior(
+            selectedTab == .home || selectedTab == .decide
+                ? .never
+                : .onScrollDown
+        )
         .tint(AppTheme.ColorToken.accent)
     }
 }

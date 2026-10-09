@@ -100,17 +100,29 @@ final class EventWeatherModel {
     }
 
     func load(for item: TimelineItem, calendar: Calendar = .autoupdatingCurrent) async {
+        await load(
+            on: item.scheduledAt,
+            location: item.eventLocation,
+            calendar: calendar
+        )
+    }
+
+    func load(
+        on eventDate: Date,
+        location: EventLocation?,
+        calendar: Calendar = .autoupdatingCurrent
+    ) async {
         let currentRequestID = UUID()
         requestID = currentRequestID
         attribution = nil
 
-        guard item.scheduledAt >= calendar.startOfDay(for: .now) else {
+        guard eventDate >= calendar.startOfDay(for: .now) else {
             phase = .pastEvent
             return
         }
 
-        guard let latitude = item.eventLocation?.latitude,
-              let longitude = item.eventLocation?.longitude else {
+        guard let latitude = location?.latitude,
+              let longitude = location?.longitude else {
             phase = .missingLocation
             return
         }
@@ -128,7 +140,7 @@ final class EventWeatherModel {
             guard requestID == currentRequestID else { return }
 
             attribution = loadedAttribution
-            if let day = Self.forecast(on: item.scheduledAt, from: forecast, calendar: calendar) {
+            if let day = Self.forecast(on: eventDate, from: forecast, calendar: calendar) {
                 phase = .forecast(day)
             } else {
                 phase = .outsideForecastRange

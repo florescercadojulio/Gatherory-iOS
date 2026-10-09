@@ -60,7 +60,15 @@ private struct CollaborationInviteScreen: View {
                 .tint(.white)
             }
 
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                NavigationLink {
+                    CollaboratorPickerView()
+                } label: {
+                    Label("Add Person", systemImage: "person.badge.plus")
+                        .labelStyle(.iconOnly)
+                }
+                .tint(.white)
+
                 NavigationLink {
                     CollaborationSharingSettingsView()
                 } label: {
@@ -225,15 +233,6 @@ private struct CollaborationInviteScreen: View {
                 }
             }
 
-            NavigationLink {
-                CollaboratorPickerView()
-            } label: {
-                Label("Add Person", systemImage: "person.badge.plus")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .controlSize(.large)
         }
     }
 

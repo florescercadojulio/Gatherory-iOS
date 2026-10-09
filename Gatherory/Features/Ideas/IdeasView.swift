@@ -7,6 +7,7 @@ struct IdeasView: View {
     @Environment(\.layoutDirection) private var layoutDirection
     @State private var filter: IdeaFilter = .all
     @State private var isAddingIdea = false
+    @State private var addIdeaDetent: PresentationDetent = .medium
     @State private var selectedIdeaID: UUID?
     @Namespace private var ideaTransition
 
@@ -66,6 +67,7 @@ struct IdeasView: View {
 
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Add idea", systemImage: "plus") {
+                    addIdeaDetent = .medium
                     isAddingIdea = true
                 }
                     .labelStyle(.iconOnly)
@@ -75,8 +77,14 @@ struct IdeasView: View {
         }
         .sheet(isPresented: $isAddingIdea) {
             NavigationStack {
-                AddIdeaView()
+                AddIdeaView { detent in
+                    withAnimation(.snappy) {
+                        addIdeaDetent = detent
+                    }
+                }
             }
+            .presentationDetents([.medium, .large], selection: $addIdeaDetent)
+            .presentationDragIndicator(.visible)
         }
         .navigationDestination(item: $selectedIdeaID) { ideaID in
             IdeaDetailView(
@@ -409,6 +417,7 @@ private struct IdeaDetailScreen: View {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
                         Spacer(minLength: max(proxy.size.height * 0.42, 260))
                         ideaIdentity
+                        IdeaCategoryDetailContent(idea: idea)
                         metadata
                     }
                     .padding(.horizontal, AppTheme.Layout.screenHorizontal)
@@ -468,41 +477,12 @@ private struct IdeaDetailScreen: View {
                 .font(.largeTitle.bold())
                 .tracking(-0.7)
                 .fixedSize(horizontal: false, vertical: true)
-
-            if !idea.note.isEmpty {
-                Text(idea.note)
-                    .font(.body)
-                    .foregroundStyle(.white.opacity(0.84))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
         .foregroundStyle(.white)
     }
 
     private var metadata: some View {
         VStack(spacing: 0) {
-            if let track = idea.musicTrack {
-                IdeaMetadataRow(
-                    title: "Artist",
-                    value: track.artistName,
-                    symbol: "person.wave.2.fill"
-                )
-
-                if let albumTitle = track.albumTitle {
-                    Divider()
-                        .padding(.leading, 44)
-
-                    IdeaMetadataRow(
-                        title: "Album",
-                        value: albumTitle,
-                        symbol: "square.stack.fill"
-                    )
-                }
-
-                Divider()
-                    .padding(.leading, 44)
-            }
-
             IdeaMetadataRow(
                 title: "Shared by",
                 value: idea.submittedBy,
@@ -514,30 +494,10 @@ private struct IdeaDetailScreen: View {
                     .padding(.leading, 44)
 
                 IdeaMetadataRow(
-                    title: "Estimated cost",
+                    title: estimatedCostLabel,
                     value: estimatedCost.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")),
                     symbol: "tag.fill"
                 )
-            }
-
-            if let track = idea.musicTrack, let externalURL = track.externalURL {
-                Divider()
-                    .padding(.leading, 44)
-
-                Link(destination: externalURL) {
-                    LabeledContent {
-                        Label("Open", systemImage: "arrow.up.forward")
-                            .font(.body.weight(.semibold))
-                    } label: {
-                        Label(track.providerID.displayName, systemImage: "music.note")
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.body)
-                    .padding(.horizontal, AppTheme.Spacing.standard)
-                    .frame(minHeight: 56)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opens this song in \(track.providerID.displayName)")
             }
         }
         .padding(.vertical, 4)
@@ -546,6 +506,344 @@ private struct IdeaDetailScreen: View {
             in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
         )
         .environment(\.colorScheme, .dark)
+    }
+
+    private var estimatedCostLabel: String {
+        switch idea.category {
+        case .attire: "Estimated attire cost"
+        case .food: "Estimated food budget"
+        case .music: "Estimated music cost"
+        case .venue: "Estimated venue cost"
+        case .flowers: "Estimated floral budget"
+        case .photography: "Estimated photography cost"
+        case .decor: "Estimated decor budget"
+        case .invitations: "Estimated stationery cost"
+        case .honeymoon: "Estimated trip budget"
+        case .other: "Estimated cost"
+        }
+    }
+}
+
+private struct IdeaCategoryDetailContent: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    let idea: WeddingIdea
+
+    @ViewBuilder
+    var body: some View {
+        switch idea.category {
+        case .venue:
+            if let configuration = idea.venueConfiguration {
+                configurationContent(
+                    primaryTitle: "Setting",
+                    primaryValue: configuration.setting.title,
+                    primarySymbol: configuration.setting.symbol,
+                    facts: [
+                        configuration.area.isEmpty ? nil : IdeaDetailFact(title: "Area", value: configuration.area, symbol: "mappin.and.ellipse"),
+                        configuration.capacity.map { IdeaDetailFact(title: "Capacity", value: "About \($0) guests", symbol: "person.3.fill") }
+                    ].compactMap { $0 }
+                )
+            } else {
+                genericContent
+            }
+
+        case .attire:
+            if let configuration = idea.attireConfiguration {
+                attireContent(configuration)
+            } else {
+                genericContent
+            }
+
+        case .food:
+            if let configuration = idea.foodConfiguration {
+                foodContent(configuration)
+            } else {
+                genericContent
+            }
+
+        case .flowers:
+            if let configuration = idea.flowerConfiguration {
+                configurationContent(
+                    primaryTitle: "Floral Focus",
+                    primaryValue: configuration.focus.title,
+                    primarySymbol: configuration.focus.symbol,
+                    facts: configuration.palette.isEmpty ? [] : [
+                        IdeaDetailFact(title: "Palette", value: configuration.palette, symbol: "paintpalette.fill")
+                    ]
+                )
+            } else {
+                genericContent
+            }
+
+        case .photography:
+            if let configuration = idea.photographyConfiguration {
+                configurationContent(
+                    primaryTitle: "Photography Style",
+                    primaryValue: configuration.style.title,
+                    primarySymbol: configuration.style.symbol,
+                    facts: [
+                        configuration.coverageHours.map { IdeaDetailFact(title: "Coverage", value: "\($0) hours", symbol: "clock.fill") },
+                        configuration.priorities.isEmpty ? nil : IdeaDetailFact(title: "Priorities", value: configuration.priorities, symbol: "camera.viewfinder")
+                    ].compactMap { $0 }
+                )
+            } else {
+                genericContent
+            }
+
+        case .music:
+            musicContent
+
+        case .decor:
+            if let configuration = idea.decorConfiguration {
+                configurationContent(
+                    primaryTitle: "Decor Area",
+                    primaryValue: configuration.focus.title,
+                    primarySymbol: configuration.focus.symbol,
+                    facts: configuration.paletteOrMaterials.isEmpty ? [] : [
+                        IdeaDetailFact(title: "Colors & Materials", value: configuration.paletteOrMaterials, symbol: "paintbrush.fill")
+                    ]
+                )
+            } else {
+                genericContent
+            }
+
+        case .invitations:
+            if let configuration = idea.invitationConfiguration {
+                configurationContent(
+                    primaryTitle: "Format",
+                    primaryValue: configuration.format.title,
+                    primarySymbol: configuration.format.symbol,
+                    facts: [
+                        configuration.quantity.map { IdeaDetailFact(title: "Quantity", value: $0.formatted(), symbol: "number") },
+                        configuration.productionNotes.isEmpty ? nil : IdeaDetailFact(title: "Production", value: configuration.productionNotes, symbol: "printer.fill")
+                    ].compactMap { $0 }
+                )
+            } else {
+                genericContent
+            }
+
+        case .honeymoon:
+            if let configuration = idea.honeymoonConfiguration {
+                configurationContent(
+                    primaryTitle: "Trip Style",
+                    primaryValue: configuration.style.title,
+                    primarySymbol: configuration.style.symbol,
+                    facts: [
+                        configuration.destination.isEmpty ? nil : IdeaDetailFact(title: "Destination", value: configuration.destination, symbol: "mappin.and.ellipse"),
+                        configuration.nights.map { IdeaDetailFact(title: "Length", value: "\($0) nights", symbol: "moon.stars.fill") }
+                    ].compactMap { $0 }
+                )
+            } else {
+                genericContent
+            }
+
+        case .other:
+            genericContent
+        }
+    }
+
+    private func configurationContent(
+        primaryTitle: String,
+        primaryValue: String,
+        primarySymbol: String,
+        facts: [IdeaDetailFact]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+            HStack(spacing: AppTheme.Spacing.standard) {
+                Image(systemName: primarySymbol)
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.title2)
+                    .foregroundStyle(AppTheme.ColorToken.accent)
+                    .frame(width: 48, height: 48)
+                    .background(.white.opacity(0.10), in: Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(primaryTitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text(primaryValue)
+                        .font(.title3.bold())
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if !idea.note.isEmpty {
+                Divider()
+                detailText(title: "Why It Works", text: idea.note, symbol: "text.quote")
+            }
+
+            ForEach(facts) { fact in
+                Divider()
+                detailText(title: fact.title, text: fact.value, symbol: fact.symbol)
+            }
+        }
+        .ideaDetailCard(reduceTransparency: reduceTransparency)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func attireContent(_ configuration: AttireIdeaConfiguration) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+            HStack(spacing: AppTheme.Spacing.standard) {
+                AttireStyleSilhouette(style: configuration.style, color: .white)
+                    .frame(width: 58, height: 72)
+                    .padding(AppTheme.Spacing.compact)
+                    .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: AppTheme.Radius.control))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Dress Code")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text(configuration.style.title)
+                        .font(.title2.bold())
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            if !idea.note.isEmpty {
+                detailText(title: "Inspiration", text: idea.note, symbol: "sparkles")
+            }
+
+            if !configuration.restrictions.isEmpty {
+                detailText(title: "Guidance", text: configuration.restrictions, symbol: "checklist")
+            }
+        }
+        .ideaDetailCard(reduceTransparency: reduceTransparency)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func foodContent(_ configuration: FoodIdeaConfiguration) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+            HStack(spacing: AppTheme.Spacing.standard) {
+                Label(configuration.type.title, systemImage: configuration.type.symbol)
+                    .font(.headline)
+
+                Spacer(minLength: AppTheme.Spacing.compact)
+
+                if let servings = configuration.servings {
+                    Label("Serves \(servings)", systemImage: "person.2.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !idea.note.isEmpty {
+                detailText(title: "Concept", text: idea.note, symbol: "fork.knife")
+            }
+
+            if !configuration.dietaryNotes.isEmpty {
+                detailText(
+                    title: "Dietary Considerations",
+                    text: configuration.dietaryNotes,
+                    symbol: "leaf.fill"
+                )
+            }
+        }
+        .ideaDetailCard(reduceTransparency: reduceTransparency)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var musicContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !idea.note.isEmpty {
+                detailText(title: "Playlist Direction", text: idea.note, symbol: "music.note.list")
+                    .padding(.bottom, idea.musicTracks.isEmpty ? 0 : AppTheme.Spacing.compact)
+            }
+
+            ForEach(Array(idea.musicTracks.enumerated()), id: \.element.id) { index, track in
+                if index > 0 || !idea.note.isEmpty {
+                    Divider()
+                }
+
+                if let externalURL = track.externalURL {
+                    Link(destination: externalURL) {
+                        trackRow(track)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens this song in \(track.providerID.displayName)")
+                } else {
+                    trackRow(track)
+                }
+            }
+
+            if idea.note.isEmpty && idea.musicTracks.isEmpty {
+                Text("No songs have been added yet.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .ideaDetailCard(reduceTransparency: reduceTransparency)
+    }
+
+    private var genericContent: some View {
+        Group {
+            if !idea.note.isEmpty {
+                detailText(title: "About This Idea", text: idea.note, symbol: idea.category.symbol)
+                    .ideaDetailCard(reduceTransparency: reduceTransparency)
+            }
+        }
+    }
+
+    private func detailText(title: String, text: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(title, systemImage: symbol)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Text(text)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func trackRow(_ track: MusicTrack) -> some View {
+        HStack(spacing: AppTheme.Spacing.compact) {
+            Image(systemName: "music.note")
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .frame(width: 28, height: 44)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(track.title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(track.artistName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: AppTheme.Spacing.compact)
+
+            if track.externalURL != nil {
+                Image(systemName: "arrow.up.forward")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(minHeight: 56)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct IdeaDetailFact: Identifiable {
+    let title: String
+    let value: String
+    let symbol: String
+
+    var id: String { title }
+}
+
+private extension View {
+    func ideaDetailCard(reduceTransparency: Bool) -> some View {
+        self
+            .padding(AppTheme.Spacing.standard)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                reduceTransparency ? AnyShapeStyle(.black.opacity(0.82)) : AnyShapeStyle(.regularMaterial),
+                in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+            )
+            .environment(\.colorScheme, .dark)
     }
 }
 
@@ -574,13 +872,39 @@ private struct IdeaMetadataRow: View {
 private struct AddIdeaView: View {
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var title = ""
     @State private var note = ""
-    @State private var category = IdeaCategory.other
+    @State private var category: IdeaCategory = .other
+    @State private var isChoosingCategory = true
+    @State private var categoryPage = 0
     @State private var estimatedCost = ""
     @State private var imageData: Data?
-    @State private var selectedTrack: MusicTrack?
+    @State private var attireStyle: AttireStyle = .any
+    @State private var attireRestrictions = ""
+    @State private var venueSetting: VenueSetting = .indoor
+    @State private var venueCapacity = ""
+    @State private var venueArea = ""
+    @State private var foodType: FoodIdeaType = .meal
+    @State private var foodServings = ""
+    @State private var dietaryNotes = ""
+    @State private var flowerFocus: FlowerFocus = .bouquet
+    @State private var flowerPalette = ""
+    @State private var photographyStyle: PhotographyStyle = .documentary
+    @State private var photographyHours = ""
+    @State private var photographyPriorities = ""
+    @State private var decorFocus: DecorFocus = .reception
+    @State private var decorPalette = ""
+    @State private var invitationFormat: InvitationFormat = .printed
+    @State private var invitationQuantity = ""
+    @State private var invitationNotes = ""
+    @State private var tripStyle: TripStyle = .relaxing
+    @State private var tripDestination = ""
+    @State private var tripNights = ""
+    @State private var musicTracks: [MusicTrack] = []
+
+    let setDetent: (PresentationDetent) -> Void
 
     private var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -588,6 +912,52 @@ private struct AddIdeaView: View {
 
     private var trimmedNote: String {
         note.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var suggestedTitle: String {
+        switch category {
+        case .attire:
+            return attireStyle == .any ? "Attire" : "\(attireStyle.title) Attire"
+        case .venue:
+            return venueSetting == .other ? "Venue" : "\(venueSetting.title) Venue"
+        case .food:
+            return switch foodType {
+            case .tasting: "Food Tasting"
+            case .other: "Food & Cake"
+            default: foodType.title
+            }
+        case .music:
+            if musicTracks.count == 1, let track = musicTracks.first {
+                return track.title
+            } else if musicTracks.count > 1 {
+                return "Music Playlist"
+            } else {
+                return "Music"
+            }
+        case .flowers:
+            return flowerFocus == .other ? "Flowers" : "\(flowerFocus.title) Flowers"
+        case .photography:
+            return photographyStyle == .other ? "Photography" : "\(photographyStyle.title) Photography"
+        case .decor:
+            return decorFocus == .other ? "Decor" : "\(decorFocus.title) Decor"
+        case .invitations:
+            return invitationFormat == .other ? "Invitations" : "\(invitationFormat.title) Invitations"
+        case .honeymoon:
+            let destination = tripDestination.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !destination.isEmpty {
+                return destination
+            } else if tripStyle == .other {
+                return "Honeymoon"
+            } else {
+                return "\(tripStyle.title) Honeymoon"
+            }
+        case .other:
+            return "Other Idea"
+        }
+    }
+
+    private var resolvedTitle: String {
+        trimmedTitle.isEmpty ? suggestedTitle : trimmedTitle
     }
 
     private var parsedEstimate: Int? {
@@ -599,69 +969,101 @@ private struct AddIdeaView: View {
         estimatedCost.isEmpty || parsedEstimate != nil
     }
 
+    private func parsedOptionalInt(_ value: String) -> Int? {
+        guard !value.isEmpty else { return nil }
+        return Int(value)
+    }
+
+    private func isValidOptionalInt(_ value: String) -> Bool {
+        value.isEmpty || parsedOptionalInt(value) != nil
+    }
+
+    private var hasValidCategoryNumbers: Bool {
+        [foodServings, venueCapacity, photographyHours, invitationQuantity, tripNights]
+            .allSatisfy(isValidOptionalInt)
+    }
+
+    private var ideaConfiguration: IdeaConfiguration {
+        switch category {
+        case .attire:
+            return .attire(
+                AttireIdeaConfiguration(
+                    style: attireStyle,
+                    restrictions: attireRestrictions.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+        case .venue:
+            return .venue(
+                VenueIdeaConfiguration(
+                    setting: venueSetting,
+                    capacity: parsedOptionalInt(venueCapacity),
+                    area: venueArea.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+        case .food:
+            return .food(
+                FoodIdeaConfiguration(
+                    type: foodType,
+                    servings: parsedOptionalInt(foodServings),
+                    dietaryNotes: dietaryNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+        case .flowers:
+            return .flowers(
+                FlowerIdeaConfiguration(
+                    focus: flowerFocus,
+                    palette: flowerPalette.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+        case .photography:
+            return .photography(
+                PhotographyIdeaConfiguration(
+                    style: photographyStyle,
+                    coverageHours: parsedOptionalInt(photographyHours),
+                    priorities: photographyPriorities.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+        case .decor:
+            return .decor(
+                DecorIdeaConfiguration(
+                    focus: decorFocus,
+                    paletteOrMaterials: decorPalette.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+        case .invitations:
+            return .invitations(
+                InvitationIdeaConfiguration(
+                    format: invitationFormat,
+                    quantity: parsedOptionalInt(invitationQuantity),
+                    productionNotes: invitationNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+        case .honeymoon:
+            return .honeymoon(
+                HoneymoonIdeaConfiguration(
+                    style: tripStyle,
+                    destination: tripDestination.trimmingCharacters(in: .whitespacesAndNewlines),
+                    nights: parsedOptionalInt(tripNights)
+                )
+            )
+        case .music:
+            return .music(MusicIdeaConfiguration(tracks: musicTracks))
+        case .other:
+            return .standard
+        }
+    }
+
     var body: some View {
-        Form {
-            Section("Idea") {
-                TextField("Title", text: $title)
-
-                TextField("What makes it special? (optional)", text: $note, axis: .vertical)
-                    .lineLimit(3...6)
-
-                Picker("Category", selection: $category) {
-                    ForEach(IdeaCategory.allCases) { category in
-                        Label(category.title, systemImage: category.symbol)
-                            .tag(category)
-                    }
-                }
-            }
-
-            if category == .music {
-                Section {
-                    NavigationLink {
-                        MusicSearchView { track in
-                            let shouldUseSongTitle = trimmedTitle.isEmpty || title == selectedTrack?.title
-                            selectedTrack = track
-                            if shouldUseSongTitle {
-                                title = track.title
-                            }
-                        }
-                    } label: {
-                        if let selectedTrack {
-                            MusicTrackRow(track: selectedTrack)
-                        } else {
-                            Label("Choose from Apple Music", systemImage: "music.note.list")
-                                .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-                        }
-                    }
-
-                    if selectedTrack != nil {
-                        Button("Remove Song", systemImage: "minus.circle", role: .destructive) {
-                            selectedTrack = nil
-                        }
-                    }
-                } header: {
-                    Text("Song")
-                } footer: {
-                    Text("Optional. The song reference stays connected to its music service while the idea remains shareable with everyone.")
-                }
-            }
-
-            if selectedTrack == nil {
-                Section("Photo") {
-                    PhotoAttachmentPicker(
-                        imageData: $imageData,
-                        emptySymbol: category.symbol,
-                        suggestedConcept: "Wedding \(category.title.lowercased()) inspiration for \(trimmedTitle.isEmpty ? "our celebration" : trimmedTitle)"
-                    )
-                }
-            }
-
-            Section("Optional") {
-                TextField("Estimated cost", text: $estimatedCost)
-                    .keyboardType(.numberPad)
+        Group {
+            if isChoosingCategory {
+                categoryChooser
+                    .transition(.opacity)
+            } else {
+                ideaEditor(for: category)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        .navigationTitle("Add idea")
+        .navigationTitle(isChoosingCategory ? "Choose a Category" : "New Idea")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -670,24 +1072,615 @@ private struct AddIdeaView: View {
                 }
             }
 
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Add") {
-                    workspace.addIdea(
-                        WeddingIdea(
-                            title: trimmedTitle,
-                            note: trimmedNote,
-                            category: category,
-                            submittedBy: workspace.members.first?.name ?? "You",
-                            estimatedCost: parsedEstimate,
-                            imageData: imageData,
-                            musicTrack: category == .music ? selectedTrack : nil
-                        )
-                    )
-                    dismiss()
+            if isChoosingCategory {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Next") {
+                        beginEditing()
+                    }
                 }
-                .disabled(trimmedTitle.isEmpty || !hasValidEstimate)
+            } else {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        addIdea()
+                    }
+                    .disabled(!hasValidEstimate || !hasValidCategoryNumbers)
+                }
             }
         }
+    }
+
+    private var categoryChooser: some View {
+        Form {
+            Section("Category") {
+                categoryGrid(selectedCategory: category)
+                    .listRowInsets(categoryGridInsets)
+                    .listRowBackground(Color.clear)
+            }
+        }
+    }
+
+    private func ideaEditor(for category: IdeaCategory) -> some View {
+        ScrollViewReader { proxy in
+            Form {
+                Section("Category") {
+                    categoryGrid(selectedCategory: category)
+                        .listRowInsets(categoryGridInsets)
+                        .listRowBackground(Color.clear)
+                }
+
+                Section {
+                    TextField("Custom title (optional)", text: $title)
+
+                    TextField("What makes it special? (optional)", text: $note, axis: .vertical)
+                        .lineLimit(3...6)
+                } header: {
+                    Text("Idea")
+                } footer: {
+                    Text("Leave the title blank to use “\(suggestedTitle)”.")
+                }
+                .id(Self.ideaFieldsAnchor)
+
+                categoryConfiguration(for: category)
+
+                Section("Photo") {
+                    PhotoAttachmentPicker(
+                        imageData: $imageData,
+                        emptySymbol: category.symbol,
+                        suggestedConcept: "Wedding \(category.title.lowercased()) inspiration for \(resolvedTitle)"
+                    )
+                }
+
+                Section("Optional") {
+                    TextField("Estimated cost", text: $estimatedCost)
+                        .keyboardType(.numberPad)
+                }
+            }
+            .task(id: category) {
+                try? await Task.sleep(for: .milliseconds(260))
+                withAnimation(.snappy) {
+                    proxy.scrollTo(Self.ideaFieldsAnchor, anchor: .top)
+                }
+            }
+        }
+    }
+
+    private static let ideaFieldsAnchor = "idea-fields"
+    private static let categoryPages: [[IdeaCategory]] = [
+        [.other, .venue, .attire, .food, .flowers, .photography, .music, .decor, .invitations],
+        [.honeymoon]
+    ]
+
+    private var categoryGridInsets: EdgeInsets {
+        EdgeInsets(
+            top: AppTheme.Spacing.compact,
+            leading: 0,
+            bottom: AppTheme.Spacing.compact,
+            trailing: 0
+        )
+    }
+
+    private func categoryGrid(selectedCategory: IdeaCategory?) -> some View {
+        TabView(selection: $categoryPage) {
+            ForEach(Self.categoryPages.indices, id: \.self) { pageIndex in
+                LazyVGrid(
+                    columns: Array(
+                        repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.compact),
+                        count: 3
+                    ),
+                    spacing: AppTheme.Spacing.compact
+                ) {
+                    ForEach(Self.categoryPages[pageIndex]) { option in
+                        categoryTile(option, isSelected: selectedCategory == option)
+                    }
+                }
+                .padding(.horizontal, 2)
+                .tag(pageIndex)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .always))
+        .frame(height: dynamicTypeSize.isAccessibilitySize ? 390 : 300)
+        .accessibilityLabel("Idea categories")
+    }
+
+    private func categoryTile(_ option: IdeaCategory, isSelected: Bool) -> some View {
+        Button {
+            select(option)
+        } label: {
+            VStack(spacing: 6) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: option.symbol)
+                        .symbolRenderingMode(.hierarchical)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(isSelected ? Color.white : option.artworkAccent)
+                        .frame(width: 38, height: 38)
+                        .background(
+                            isSelected ? option.artworkAccent : Color.clear,
+                            in: Circle()
+                        )
+                        .background(.regularMaterial, in: Circle())
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white, AppTheme.ColorToken.accent)
+                            .offset(x: 4, y: -4)
+                    }
+                }
+
+                Text(option.title)
+                    .font(.caption2.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 112 : 76)
+            .padding(4)
+            .background(
+                isSelected ? option.artworkAccent.opacity(0.14) : AppTheme.ColorToken.elevatedSurface,
+                in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                    .stroke(
+                        isSelected ? option.artworkAccent : AppTheme.ColorToken.cardBorder,
+                        lineWidth: isSelected ? 2 : 0.5
+                    )
+            }
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.title)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityHint("Selects the \(option.title.lowercased()) idea form")
+    }
+
+    private func optionStrip<Option: Identifiable & Equatable>(
+        _ options: [Option],
+        selection: Binding<Option>,
+        title: @escaping (Option) -> String,
+        symbol: @escaping (Option) -> String
+    ) -> some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: AppTheme.Spacing.compact) {
+                ForEach(options) { option in
+                    let isSelected = selection.wrappedValue == option
+
+                    Button {
+                        selection.wrappedValue = option
+                    } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: symbol(option))
+                                .symbolRenderingMode(.hierarchical)
+                                .font(.title2)
+
+                            Text(title(option))
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(isSelected ? .white : .primary)
+                        .frame(width: 98, height: 76)
+                        .background(
+                            isSelected ? AppTheme.ColorToken.accent : Color.clear,
+                            in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                            .stroke(
+                                isSelected ? AppTheme.ColorToken.accent : AppTheme.ColorToken.cardBorder,
+                                lineWidth: isSelected ? 2 : 0.5
+                            )
+                    }
+                    .accessibilityLabel(title(option))
+                    .accessibilityValue(isSelected ? "Selected" : "Not selected")
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .scrollIndicators(.hidden)
+        .contentMargins(.horizontal, 0, for: .scrollContent)
+    }
+
+    @ViewBuilder
+    private func categoryConfiguration(for category: IdeaCategory) -> some View {
+        switch category {
+        case .venue:
+            Section {
+                optionStrip(
+                    VenueSetting.allCases,
+                    selection: $venueSetting,
+                    title: \.title,
+                    symbol: \.symbol
+                )
+
+                TextField("City, neighborhood, or area (optional)", text: $venueArea)
+
+                TextField("Guest capacity (optional)", text: $venueCapacity)
+                    .keyboardType(.numberPad)
+            } header: {
+                Text("Venue Details")
+            } footer: {
+                Text("Capture the setting and approximate size now. A precise event address can be added after the venue is selected.")
+            }
+
+        case .attire:
+            Section {
+                ScrollView(.horizontal) {
+                    HStack(spacing: AppTheme.Spacing.compact) {
+                        ForEach(AttireStyle.allCases) { style in
+                            let isSelected = attireStyle == style
+
+                            Button {
+                                attireStyle = style
+                            } label: {
+                                VStack(spacing: 6) {
+                                    AttireStyleSilhouette(
+                                        style: style,
+                                        color: isSelected ? .white : .primary
+                                    )
+                                    .frame(width: 44, height: 54)
+
+                                    Text(style.title)
+                                        .font(.caption.weight(.semibold))
+                                        .lineLimit(1)
+                                }
+                                .foregroundStyle(isSelected ? .white : .primary)
+                                .frame(width: 92, height: 88)
+                                .background(
+                                    isSelected ? AppTheme.ColorToken.accent : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                                )
+                                .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                                    .stroke(
+                                        isSelected ? AppTheme.ColorToken.accent : AppTheme.ColorToken.cardBorder,
+                                        lineWidth: isSelected ? 2 : 0.5
+                                    )
+                            }
+                            .accessibilityLabel(style.title)
+                            .accessibilityValue(isSelected ? "Selected" : "Not selected")
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .scrollIndicators(.hidden)
+                .contentMargins(.horizontal, 0, for: .scrollContent)
+
+                TextField(
+                    "Restrictions or guidance (optional)",
+                    text: $attireRestrictions,
+                    axis: .vertical
+                )
+                .lineLimit(3...6)
+            } header: {
+                Text("Attire Style")
+            } footer: {
+                Text("Choose the closest style, or choose Any to leave the dress code open. Add color, fabric, or other guidance below.")
+            }
+
+        case .food:
+            Section {
+                optionStrip(
+                    FoodIdeaType.allCases,
+                    selection: $foodType,
+                    title: \.title,
+                    symbol: \.symbol
+                )
+
+                TextField("Number of servings (optional)", text: $foodServings)
+                    .keyboardType(.numberPad)
+
+                TextField(
+                    "Dietary considerations (optional)",
+                    text: $dietaryNotes,
+                    axis: .vertical
+                )
+                .lineLimit(2...5)
+            } header: {
+                Text("Food & Cake Details")
+            } footer: {
+                Text("Choose what kind of food idea this is. Serving count and dietary considerations help collaborators compare practical options.")
+            }
+
+        case .flowers:
+            Section {
+                optionStrip(
+                    FlowerFocus.allCases,
+                    selection: $flowerFocus,
+                    title: \.title,
+                    symbol: \.symbol
+                )
+
+                TextField("Colors or flower palette (optional)", text: $flowerPalette, axis: .vertical)
+                    .lineLimit(2...4)
+            } header: {
+                Text("Flower Details")
+            } footer: {
+                Text("Choose where this floral idea belongs and describe the colors or varieties that matter.")
+            }
+
+        case .photography:
+            Section {
+                optionStrip(
+                    PhotographyStyle.allCases,
+                    selection: $photographyStyle,
+                    title: \.title,
+                    symbol: \.symbol
+                )
+
+                TextField("Coverage hours (optional)", text: $photographyHours)
+                    .keyboardType(.numberPad)
+
+                TextField("Moments or shots to prioritize (optional)", text: $photographyPriorities, axis: .vertical)
+                    .lineLimit(2...5)
+            } header: {
+                Text("Photography Details")
+            } footer: {
+                Text("Describe the visual style and the moments that should receive the most attention.")
+            }
+
+        case .decor:
+            Section {
+                optionStrip(
+                    DecorFocus.allCases,
+                    selection: $decorFocus,
+                    title: \.title,
+                    symbol: \.symbol
+                )
+
+                TextField("Colors, materials, or finish (optional)", text: $decorPalette, axis: .vertical)
+                    .lineLimit(2...4)
+            } header: {
+                Text("Decor Details")
+            } footer: {
+                Text("Choose the part of the event this idea supports, then note its colors or materials.")
+            }
+
+        case .invitations:
+            Section {
+                optionStrip(
+                    InvitationFormat.allCases,
+                    selection: $invitationFormat,
+                    title: \.title,
+                    symbol: \.symbol
+                )
+
+                TextField("Quantity (optional)", text: $invitationQuantity)
+                    .keyboardType(.numberPad)
+
+                TextField("Paper, printing, or delivery notes (optional)", text: $invitationNotes, axis: .vertical)
+                    .lineLimit(2...5)
+            } header: {
+                Text("Invitation Details")
+            } footer: {
+                Text("Specify the format and any production details collaborators should consider.")
+            }
+
+        case .honeymoon:
+            Section {
+                optionStrip(
+                    TripStyle.allCases,
+                    selection: $tripStyle,
+                    title: \.title,
+                    symbol: \.symbol
+                )
+
+                TextField("Destination (optional)", text: $tripDestination)
+
+                TextField("Number of nights (optional)", text: $tripNights)
+                    .keyboardType(.numberPad)
+            } header: {
+                Text("Honeymoon Details")
+            } footer: {
+                Text("A destination can stay open while the group explores a preferred trip style.")
+            }
+
+        case .music:
+            Section {
+                ForEach(musicTracks) { track in
+                    MusicTrackRow(track: track)
+                        .swipeActions {
+                            Button("Remove", systemImage: "trash", role: .destructive) {
+                                musicTracks.removeAll { $0.id == track.id }
+                            }
+                        }
+                }
+
+                NavigationLink {
+                    MusicSearchView { track in
+                        guard !musicTracks.contains(where: { $0.id == track.id }) else { return }
+                        musicTracks.append(track)
+                    }
+                } label: {
+                    Label(
+                        musicTracks.isEmpty ? "Start Playlist" : "Add Another Song",
+                        systemImage: "music.note.list"
+                    )
+                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                }
+            } header: {
+                Text("Playlist")
+            } footer: {
+                Text("Search Apple Music now. The provider-based music architecture leaves room for Spotify and other catalogs later.")
+            }
+
+        case .other:
+            EmptyView()
+        }
+    }
+
+    private func select(_ category: IdeaCategory) {
+        withAnimation(.snappy) {
+            self.category = category
+            if isChoosingCategory {
+                beginEditing()
+            }
+        }
+    }
+
+    private func beginEditing() {
+        withAnimation(.snappy) {
+            isChoosingCategory = false
+            setDetent(.large)
+        }
+    }
+
+    private func addIdea() {
+        workspace.addIdea(
+            WeddingIdea(
+                title: resolvedTitle,
+                note: trimmedNote,
+                category: category,
+                submittedBy: workspace.members.first?.name ?? "You",
+                estimatedCost: parsedEstimate,
+                imageData: imageData,
+                configuration: ideaConfiguration
+            )
+        )
+        dismiss()
+    }
+}
+
+private struct AttireStyleSilhouette: View {
+    let style: AttireStyle
+    let color: Color
+
+    var body: some View {
+        Canvas { context, size in
+            if style == .any {
+                drawNeutralFigure(in: &context, size: size, xOffset: -size.width * 0.15, scale: 0.78)
+                drawNeutralFigure(in: &context, size: size, xOffset: size.width * 0.15, scale: 0.78)
+                return
+            }
+
+            context.fill(
+                Path(ellipseIn: CGRect(
+                    x: size.width * 0.38,
+                    y: size.height * 0.03,
+                    width: size.width * 0.24,
+                    height: size.width * 0.24
+                )),
+                with: .color(color)
+            )
+
+            var garment = Path()
+            switch style {
+            case .blackTie:
+                garment.move(to: CGPoint(x: size.width * 0.28, y: size.height * 0.30))
+                garment.addLine(to: CGPoint(x: size.width * 0.72, y: size.height * 0.30))
+                garment.addLine(to: CGPoint(x: size.width * 0.66, y: size.height * 0.68))
+                garment.addLine(to: CGPoint(x: size.width * 0.54, y: size.height * 0.68))
+                garment.addLine(to: CGPoint(x: size.width * 0.54, y: size.height * 0.97))
+                garment.addLine(to: CGPoint(x: size.width * 0.42, y: size.height * 0.97))
+                garment.addLine(to: CGPoint(x: size.width * 0.42, y: size.height * 0.68))
+                garment.addLine(to: CGPoint(x: size.width * 0.34, y: size.height * 0.68))
+                garment.closeSubpath()
+
+            case .formal:
+                garment.move(to: CGPoint(x: size.width * 0.39, y: size.height * 0.29))
+                garment.addLine(to: CGPoint(x: size.width * 0.61, y: size.height * 0.29))
+                garment.addLine(to: CGPoint(x: size.width * 0.84, y: size.height * 0.96))
+                garment.addLine(to: CGPoint(x: size.width * 0.16, y: size.height * 0.96))
+                garment.closeSubpath()
+
+            case .cocktail:
+                garment.move(to: CGPoint(x: size.width * 0.36, y: size.height * 0.29))
+                garment.addLine(to: CGPoint(x: size.width * 0.64, y: size.height * 0.29))
+                garment.addLine(to: CGPoint(x: size.width * 0.74, y: size.height * 0.70))
+                garment.addLine(to: CGPoint(x: size.width * 0.26, y: size.height * 0.70))
+                garment.closeSubpath()
+                garment.addRect(CGRect(x: size.width * 0.33, y: size.height * 0.68, width: size.width * 0.10, height: size.height * 0.29))
+                garment.addRect(CGRect(x: size.width * 0.57, y: size.height * 0.68, width: size.width * 0.10, height: size.height * 0.29))
+
+            case .garden:
+                garment.move(to: CGPoint(x: size.width * 0.34, y: size.height * 0.30))
+                garment.addLine(to: CGPoint(x: size.width * 0.66, y: size.height * 0.30))
+                garment.addLine(to: CGPoint(x: size.width * 0.78, y: size.height * 0.90))
+                garment.addQuadCurve(
+                    to: CGPoint(x: size.width * 0.22, y: size.height * 0.90),
+                    control: CGPoint(x: size.width * 0.50, y: size.height * 1.04)
+                )
+                garment.closeSubpath()
+
+            case .casual:
+                garment.move(to: CGPoint(x: size.width * 0.25, y: size.height * 0.31))
+                garment.addLine(to: CGPoint(x: size.width * 0.75, y: size.height * 0.31))
+                garment.addLine(to: CGPoint(x: size.width * 0.66, y: size.height * 0.63))
+                garment.addLine(to: CGPoint(x: size.width * 0.56, y: size.height * 0.63))
+                garment.addLine(to: CGPoint(x: size.width * 0.56, y: size.height * 0.97))
+                garment.addLine(to: CGPoint(x: size.width * 0.44, y: size.height * 0.97))
+                garment.addLine(to: CGPoint(x: size.width * 0.44, y: size.height * 0.63))
+                garment.addLine(to: CGPoint(x: size.width * 0.34, y: size.height * 0.63))
+                garment.closeSubpath()
+
+            case .any:
+                break
+            }
+            context.fill(garment, with: .color(color))
+
+            if style == .blackTie {
+                var lapels = Path()
+                lapels.move(to: CGPoint(x: size.width * 0.38, y: size.height * 0.31))
+                lapels.addLine(to: CGPoint(x: size.width * 0.50, y: size.height * 0.47))
+                lapels.addLine(to: CGPoint(x: size.width * 0.62, y: size.height * 0.31))
+                context.stroke(lapels, with: .color(color.opacity(0.45)), lineWidth: 2)
+
+                let bow = Path(roundedRect: CGRect(
+                    x: size.width * 0.43,
+                    y: size.height * 0.29,
+                    width: size.width * 0.14,
+                    height: size.height * 0.07
+                ), cornerRadius: 2)
+                context.fill(bow, with: .color(color))
+            }
+
+            if style == .garden {
+                var leaf = Path()
+                leaf.addEllipse(in: CGRect(
+                    x: size.width * 0.57,
+                    y: size.height * 0.50,
+                    width: size.width * 0.12,
+                    height: size.height * 0.18
+                ))
+                context.stroke(leaf, with: .color(color.opacity(0.55)), lineWidth: 2)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func drawNeutralFigure(
+        in context: inout GraphicsContext,
+        size: CGSize,
+        xOffset: CGFloat,
+        scale: CGFloat
+    ) {
+        let centerX = size.width * 0.5 + xOffset
+        let headSize = size.width * 0.22 * scale
+        context.fill(
+            Path(ellipseIn: CGRect(
+                x: centerX - headSize / 2,
+                y: size.height * 0.08,
+                width: headSize,
+                height: headSize
+            )),
+            with: .color(color)
+        )
+
+        var body = Path()
+        body.move(to: CGPoint(x: centerX - size.width * 0.16 * scale, y: size.height * 0.35))
+        body.addLine(to: CGPoint(x: centerX + size.width * 0.16 * scale, y: size.height * 0.35))
+        body.addLine(to: CGPoint(x: centerX + size.width * 0.11 * scale, y: size.height * 0.70))
+        body.addLine(to: CGPoint(x: centerX + size.width * 0.06 * scale, y: size.height * 0.96))
+        body.addLine(to: CGPoint(x: centerX - size.width * 0.06 * scale, y: size.height * 0.96))
+        body.addLine(to: CGPoint(x: centerX - size.width * 0.11 * scale, y: size.height * 0.70))
+        body.closeSubpath()
+        context.fill(body, with: .color(color))
     }
 }
 
