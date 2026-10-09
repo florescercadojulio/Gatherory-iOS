@@ -182,8 +182,8 @@ struct EventEditorView: View {
             }
 
             if !isMainEvent {
-                Section("Planning Team") {
-                    ForEach(workspace.planningMembers) { member in
+                Section {
+                    ForEach(workspace.members) { member in
                         Button {
                             toggle(member)
                         } label: {
@@ -193,20 +193,33 @@ struct EventEditorView: View {
                                     .foregroundStyle(.white)
                                     .frame(width: 34, height: 34)
                                     .background(AppTheme.ColorToken.accent, in: Circle())
+                                    .accessibilityHidden(true)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(member.name).foregroundStyle(.primary)
-                                    Text(member.participantRole.title).font(.caption).foregroundStyle(.secondary)
+                                    Text(member.name)
+                                        .foregroundStyle(.primary)
+                                    Text(member.participantRole.title)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
-                                Spacer()
+
+                                Spacer(minLength: 0)
+
                                 if selectedParticipantIDs.contains(member.id) {
-                                    Image(systemName: "checkmark").fontWeight(.semibold).foregroundStyle(AppTheme.ColorToken.accent)
+                                    Image(systemName: "checkmark")
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(AppTheme.ColorToken.accent)
                                 }
                             }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityValue(selectedParticipantIDs.contains(member.id) ? "Selected" : "Not selected")
                     }
+                } header: {
+                    Text("Participants")
+                } footer: {
+                    Text("New events start with everyone from the main event. Changes here only affect this event.")
                 }
             }
 
@@ -265,7 +278,7 @@ struct EventEditorView: View {
             if isMainEvent {
                 loadMainEventIfNeeded()
             } else if isCreating && selectedParticipantIDs.isEmpty {
-                selectedParticipantIDs = Set(workspace.planningMembers.filter { $0.participantRole == .host }.map(\.id))
+                selectedParticipantIDs = Set(workspace.mainEventParticipantIDs)
             }
         }
     }
@@ -275,6 +288,18 @@ struct EventEditorView: View {
         guard let endsAt else { return start }
         return "\(start) – \(endsAt.formatted(date: .abbreviated, time: isAllDay ? .omitted : .shortened))"
     }
+
+    private static let categoryOrder: [TimelineCategory] = [
+        .other,
+        .venue,
+        .foodTasting,
+        .attireFitting,
+        .weddingShower,
+        .bachelorBachelorette,
+        .rehearsal,
+        .ceremony,
+        .reception
+    ]
 
     private func editorRow(symbol: String, title: String, value: String) -> some View {
         HStack(spacing: AppTheme.Spacing.standard) {
@@ -295,16 +320,69 @@ struct EventEditorView: View {
             columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: dynamicTypeSize.isAccessibilitySize ? 2 : 3),
             spacing: 8
         ) {
-            ForEach(TimelineCategory.allCases) { option in
-                selectionTile(
-                    title: option.title,
-                    symbol: option.symbol,
-                    tint: option.artworkAccent,
-                    isSelected: category == option
-                ) { category = option }
+            ForEach(Self.categoryOrder) { option in
+                eventTypeTile(option)
             }
         }
         .padding(2)
+        .accessibilityLabel("Event types")
+    }
+
+    private func eventTypeTile(_ option: TimelineCategory) -> some View {
+        let isSelected = category == option
+
+        return Button {
+            withAnimation(.snappy) {
+                category = option
+            }
+        } label: {
+            VStack(spacing: 6) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: option.symbol)
+                        .symbolRenderingMode(.hierarchical)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(isSelected ? Color.white : option.artworkAccent)
+                        .frame(width: 38, height: 38)
+                        .background(
+                            isSelected ? option.artworkAccent : Color.clear,
+                            in: Circle()
+                        )
+                        .background(.regularMaterial, in: Circle())
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white, AppTheme.ColorToken.accent)
+                            .offset(x: 4, y: -4)
+                    }
+                }
+
+                Text(option.title)
+                    .font(.caption2.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 112 : 76)
+            .padding(4)
+            .background(
+                isSelected ? option.artworkAccent.opacity(0.14) : AppTheme.ColorToken.elevatedSurface,
+                in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? option.artworkAccent : AppTheme.ColorToken.cardBorder,
+                        lineWidth: isSelected ? 2 : 0.5
+                    )
+            }
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.title)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityHint("Selects the \(option.title.lowercased()) event type")
     }
 
     @ViewBuilder

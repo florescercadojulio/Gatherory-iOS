@@ -18,15 +18,15 @@ struct IdeasView: View {
     private func ideas(for filter: IdeaFilter) -> [WeddingIdea] {
         switch filter {
         case .all:
-            workspace.ideas.filter { $0.status != .passed && $0.status != .archived }
+            workspace.contextualIdeas.filter { $0.status != .passed && $0.status != .archived }
         case .inbox:
-            workspace.ideas.filter { $0.status == .new }
+            workspace.contextualIdeas.filter { $0.status == .new }
         case .saved:
-            workspace.ideas.filter { $0.status == .maybe || $0.status == .shortlisted }
+            workspace.contextualIdeas.filter { $0.status == .maybe || $0.status == .shortlisted }
         case .approved:
-            workspace.ideas.filter { $0.status == .chosen }
+            workspace.contextualIdeas.filter { $0.status == .chosen }
         case .archived:
-            workspace.ideas.filter { $0.status == .archived }
+            workspace.contextualIdeas.filter { $0.status == .archived }
         }
     }
 
@@ -44,6 +44,10 @@ struct IdeasView: View {
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                EventContextLabel(section: "Ideas", eventTitle: workspace.selectedEventTitle)
+            }
+
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
                     ForEach(IdeaFilter.allCases) { option in
@@ -1388,6 +1392,14 @@ private struct AddIdeaView: View {
         [.decor, .invitations, .honeymoon]
     ]
 
+    private var visibleCategoryPages: [[IdeaCategory]] {
+        Self.categoryPages
+            .map { page in
+                page.filter { workspace.isMainEventContext || $0 != .event }
+            }
+            .filter { !$0.isEmpty }
+    }
+
     private var categoryGridInsets: EdgeInsets {
         EdgeInsets(
             top: AppTheme.Spacing.compact,
@@ -1399,7 +1411,7 @@ private struct AddIdeaView: View {
 
     private func categoryGrid(selectedCategory: IdeaCategory?) -> some View {
         TabView(selection: $categoryPage) {
-            ForEach(Self.categoryPages.indices, id: \.self) { pageIndex in
+            ForEach(visibleCategoryPages.indices, id: \.self) { pageIndex in
                 LazyVGrid(
                     columns: Array(
                         repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.compact),
@@ -1407,7 +1419,7 @@ private struct AddIdeaView: View {
                     ),
                     spacing: AppTheme.Spacing.compact
                 ) {
-                    ForEach(Self.categoryPages[pageIndex]) { option in
+                    ForEach(visibleCategoryPages[pageIndex]) { option in
                         categoryTile(option, isSelected: selectedCategory == option)
                     }
                 }

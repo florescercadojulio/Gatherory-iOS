@@ -52,8 +52,14 @@ struct EventInvitationScreen: View {
 
         case .subevent(let id):
             guard let item = workspace.timeline.first(where: { $0.id == id }) else { return nil }
+            let participantIDs = Set(item.participantIDs)
             let participants = workspace.members
-                .filter { item.participantIDs.contains($0.id) }
+                .filter {
+                    guard participantIDs.contains($0.id) else { return false }
+                    return item.purpose == .eventExperience
+                        ? $0.participantRole == .host
+                        : $0.participantRole != .guest
+                }
                 .map(\.name)
                 .formatted()
 
@@ -74,7 +80,9 @@ struct EventInvitationScreen: View {
                 statusTitle: item.status.title,
                 statusSymbol: item.status.symbol,
                 peopleLabel: item.purpose == .eventExperience ? "Hosted By" : "Planning Team",
-                people: participants.isEmpty ? "Unassigned" : participants,
+                people: participants.isEmpty
+                    ? (item.purpose == .eventExperience ? "Your hosts" : "Planning team")
+                    : participants,
                 response: item.response,
                 permitsResponse: item.status != .archived,
                 note: item.eventDescription,

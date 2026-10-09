@@ -104,6 +104,84 @@ struct GatheroryTests {
         #expect(workspace.timeline.count == originalCount)
     }
 
+    @Test("A new subevent starts with a snapshot of the main event participants")
+    func newSubeventCopiesMainEventParticipants() throws {
+        let workspace = WeddingWorkspace.sample
+        let newEvent = TimelineItem(
+            title: "Welcome drinks",
+            category: .reception,
+            scheduledAt: .now,
+            eventLocation: nil,
+            participantIDs: [],
+            parentEventID: workspace.mainEventID
+        )
+
+        workspace.addTimelineItem(newEvent)
+
+        let storedEvent = try #require(workspace.timeline.first { $0.id == newEvent.id })
+        #expect(Set(storedEvent.participantIDs) == Set(workspace.mainEventParticipantIDs))
+    }
+
+    @Test("Ideas and decisions follow the selected event context")
+    func ideasFollowSelectedEventContext() throws {
+        let workspace = WeddingWorkspace.sample
+        let child = try #require(workspace.childEvents.first)
+
+        workspace.selectEventContext(.subevent(child.id))
+        #expect(workspace.contextualIdeas.isEmpty)
+        #expect(workspace.decisionQueue.isEmpty)
+
+        workspace.addIdea(
+            WeddingIdea(
+                title: "Welcome table for this event",
+                note: "Keep it specific to the selected subevent.",
+                category: .decor,
+                submittedBy: "Alex"
+            )
+        )
+
+        let scopedIdea = try #require(workspace.contextualIdeas.first)
+        #expect(scopedIdea.eventID == child.id)
+        #expect(workspace.decisionQueue.first?.id == scopedIdea.id)
+
+        workspace.selectEventContext(.main)
+        #expect(workspace.contextualIdeas.contains { $0.id == scopedIdea.id } == false)
+    }
+
+    @Test("Removing the active subevent returns planning to the main event")
+    func deletingActiveSubeventRestoresMainContext() throws {
+        let workspace = WeddingWorkspace.sample
+        let child = try #require(workspace.childEvents.first)
+
+        workspace.selectEventContext(.subevent(child.id))
+        workspace.deleteTimelineItem(child)
+
+        #expect(workspace.selectedEventReference == .main)
+    }
+
+    @Test("Event contexts are ordered chronologically")
+    func eventContextsAreChronological() {
+        let workspace = WeddingWorkspace.sample
+        let dates = workspace.availableEventContexts.map(workspace.eventDate(for:))
+
+        #expect(dates == dates.sorted())
+    }
+
+    @Test("Notes are scoped to the selected event")
+    func notesFollowSelectedEventContext() throws {
+        let workspace = WeddingWorkspace.sample
+        let child = try #require(workspace.childEvents.first)
+
+        workspace.selectEventContext(.subevent(child.id))
+        workspace.sendNote("Meet at the side entrance.")
+
+        let note = try #require(workspace.contextualNotes.first)
+        #expect(note.eventID == child.id)
+
+        workspace.selectEventContext(.main)
+        #expect(workspace.contextualNotes.contains { $0.id == note.id } == false)
+    }
+
     @Test("Timeline events can be deleted from their details")
     func deleteTimelineItem() throws {
         let workspace = WeddingWorkspace.sample

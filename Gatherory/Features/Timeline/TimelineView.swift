@@ -450,7 +450,7 @@ private struct TimelineItemEditorView: View {
             }
 
             Section {
-                ForEach(workspace.planningMembers) { member in
+                ForEach(workspace.members) { member in
                     Button {
                         toggle(member)
                     } label: {
@@ -484,10 +484,11 @@ private struct TimelineItemEditorView: View {
                     .accessibilityValue(selectedParticipantIDs.contains(member.id) ? "Selected" : "Not selected")
                 }
             } header: {
-                Label("Planning Team", systemImage: "person.2.fill")
+                Label("Participants", systemImage: "person.3.fill")
             } footer: {
-                Text("Hosts and collaborators can be assigned. Guests stay on the invitation list.")
+                Text("New events start with everyone from the main event. Changes here only affect this event.")
             }
+
         }
         .navigationTitle(isEditing ? "Edit Event" : "New Event")
         .navigationBarTitleDisplayMode(.inline)
@@ -554,11 +555,7 @@ private struct TimelineItemEditorView: View {
         }
         .onAppear {
             guard !isEditing else { return }
-            selectedParticipantIDs = Set(
-                workspace.members
-                    .filter { $0.participantRole == .host }
-                    .map(\.id)
-            )
+            selectedParticipantIDs = Set(workspace.mainEventParticipantIDs)
             scheduledAt = max(scheduledAt, Date.now)
         }
     }
@@ -716,6 +713,7 @@ private struct TimelineItemEditorView: View {
             selectedParticipantIDs.insert(member.id)
         }
     }
+
 }
 
 struct EventDateTimeEditorView: View {
@@ -1225,12 +1223,14 @@ struct TimelineEventDetailScreen: View {
     let audience: TimelineEventAudience
 
     private var participantNames: String {
+        let participantIDs = Set(item.participantIDs)
         let names = workspace.members.filter { member in
+            guard participantIDs.contains(member.id) else { return false }
             switch audience {
             case .planning:
-                item.participantIDs.contains(member.id)
+                return member.participantRole != .guest
             case .invitation:
-                member.participantRole == .host
+                return member.participantRole == .host
             }
         }
             .map(\.name)

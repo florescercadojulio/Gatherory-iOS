@@ -5,14 +5,31 @@ import SwiftUI
 import UIKit
 
 struct HomeView: View {
+    var resetToMainEventTrigger = 0
+
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isInvitingCollaborators = false
     @State private var isComposingNote = false
-    @State private var isEditingMainEvent = false
-    @State private var isShowingInvitationPreview = false
+    @State private var editorTarget: HomeEventEditorTarget?
+    @State private var openedEventReference: EventReference?
+    @State private var visibleScrollTarget: HomeScrollTarget?
+    @State private var scrubbedEventIndex: Int?
+    @State private var isScrubbingEvents = false
+    @State private var pullToCreateProgress: CGFloat = 0
+    @State private var isPullToCreateArmed = false
+    @State private var pullToCreateHaptic = 0
+    @State private var isScrollInteractionActive = false
+    @State private var currentScrollOffset: CGFloat = 0
+    @State private var scrollInteractionStartOffset: CGFloat?
+    @State private var swipeOriginEventReference: EventReference?
+    @State private var didUpdateContextForSwipe = false
     @Namespace private var invitationTransition
+
+    private let pullToCreateThreshold: CGFloat = 168
+    private let pullToCreateItemHeight: CGFloat = 184
+    private let pullToCreateRevealInset: CGFloat = 56
 
     private var daysRemaining: Int {
         max(Calendar.current.dateComponents([.day], from: .now, to: workspace.weddingDate).day ?? 0, 0)
@@ -26,7 +43,7 @@ struct HomeView: View {
         dynamicTypeSize.isAccessibilitySize ? 720 : 640
     }
 
-    private var eventTimingLabel: String {
+    private var mainEventTimingLabel: String {
         switch workspace.currentMainEventStatus {
         case .draft:
             "\(daysRemaining) days away"
@@ -38,75 +55,112 @@ struct HomeView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
-                if workspace.isMainEventDeleted {
-                    ContentUnavailableView {
-                        Label("No Main Event", systemImage: "calendar.badge.plus")
-                    } description: {
-                        Text("Create the event that anchors this gathering.")
-                    } actions: {
-                        Button("Create Event", systemImage: "plus") {
-                            isEditingMainEvent = true
+        ScrollView(.vertical) {
+            VStack(spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+                    if workspace.isMainEventDeleted {
+                        ContentUnavailableView {
+                            Label("No Main Event", systemImage: "calendar.badge.plus")
+                        } description: {
+                            Text("Create the event that anchors this gathering.")
+                        } actions: {
+                            Button("Create Event", systemImage: "plus") {
+                                editorTarget = .main
+                            }
+                            .buttonStyle(.borderedProminent)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppTheme.Spacing.section)
+                    } else {
+                        ForEach(workspace.availableEventContexts, id: \.self) { reference in
+                            eventHero(for: reference)
+                                .id(HomeScrollTarget.event(reference))
+                        }
                     }
+                }
+                .scrollTargetLayout()
+
+                if workspace.canManageMainEvent, !workspace.isMainEventDeleted {
+                    PullToCreateEventIndicator(
+                        progress: pullToCreateProgress,
+                        isArmed: isPullToCreateArmed
+                    )
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppTheme.Spacing.section)
-                } else {
-                    eventHero
+                    .frame(height: pullToCreateItemHeight)
+                    .accessibilityHint("Pull until the progress ring closes, then release")
                 }
             }
             .padding(.horizontal, AppTheme.Layout.screenHorizontal)
             .padding(.top, AppTheme.Layout.screenTop)
             .padding(.bottom, AppTheme.Layout.screenBottom)
         }
+        .scrollIndicators(.hidden)
+        .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+        .scrollPosition(id: $visibleScrollTarget, anchor: .center)
         .appSoftScrollEdges()
         .background(AppTheme.ColorToken.background)
-        .navigationTitle("Our wedding")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
+        .overlay(alignment: .trailing) {
+            if workspace.availableEventContexts.count > 1 {
+                eventDateScrubber
+                    .padding(.trailing, 6)
+            }
+        }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                eventCollaboratorButton
+            }
+
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if workspace.isMainEventDeleted {
                     Button("Create event", systemImage: "plus") {
-                        isEditingMainEvent = true
+                        editorTarget = .main
                     }
                     .labelStyle(.iconOnly)
+                    .foregroundStyle(.primary)
+                    .tint(.primary)
                 } else {
                     Button("Send a note", systemImage: "megaphone") {
                         isComposingNote = true
                     }
                     .labelStyle(.iconOnly)
+                    .foregroundStyle(.primary)
+                    .tint(.primary)
 
-                    Button("Invite collaborators", systemImage: "person.badge.plus") {
-                        isInvitingCollaborators = true
+                    if workspace.isMainEventContext {
+                        Button("Add event", systemImage: "calendar.badge.plus") {
+                            editorTarget = .newSubevent
+                        }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.primary)
+                        .tint(.primary)
                     }
-                    .labelStyle(.iconOnly)
                 }
 
-                AccountToolbarButton()
+                AccountToolbarButton(monochrome: true)
             }
         }
-        .navigationDestination(isPresented: $isShowingInvitationPreview) {
-            EventInvitationScreen(reference: .main)
+        .navigationDestination(item: $openedEventReference) { reference in
+            EventInvitationScreen(reference: reference)
                 .navigationTitle("Invitation")
                 .navigationBarTitleDisplayMode(.inline)
                 .appClearNavigationBar()
                 .toolbarColorScheme(.dark, for: .navigationBar)
                 .preferredColorScheme(.dark)
                 .toolbar {
-                    if workspace.canManageMainEvent {
+                    if canEdit(reference) {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Edit Event", systemImage: "pencil") {
-                                isEditingMainEvent = true
+                                editorTarget = editorTarget(for: reference)
                             }
                             .labelStyle(.iconOnly)
                         }
                     }
                 }
                 .navigationTransition(
-                    .zoom(sourceID: InvitationTransitionID.mainEvent, in: invitationTransition)
+                    .zoom(sourceID: reference, in: invitationTransition)
                 )
         }
         .fullScreenCover(isPresented: $isInvitingCollaborators) {
@@ -117,24 +171,79 @@ struct HomeView: View {
             NoteComposerView()
                 .environment(workspace)
         }
-        .sheet(isPresented: $isEditingMainEvent) {
+        .sheet(item: $editorTarget) { target in
             NavigationStack {
-                EventEditorView(mode: .main)
+                EventEditorView(mode: editorMode(for: target))
             }
             .environment(workspace)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .task {
+            // ScrollPosition needs the target layout to exist before it can
+            // resolve a non-leading event during the initial presentation.
+            await Task.yield()
+            visibleScrollTarget = .event(workspace.selectedEventReference)
+        }
+        .onScrollGeometryChange(for: HomeScrollGeometry.self) { geometry in
+            let itemTop = geometry.contentSize.height
+                - AppTheme.Layout.screenBottom
+                - pullToCreateItemHeight
+            return HomeScrollGeometry(
+                offset: geometry.contentOffset.y,
+                pullToCreateDistance: max(
+                    geometry.visibleRect.maxY - itemTop - pullToCreateRevealInset,
+                    0
+                )
+            )
+        } action: { _, geometry in
+            currentScrollOffset = geometry.offset
+            updateEventContextAtSwipeStart(offset: geometry.offset)
+            updatePullToCreate(distance: geometry.pullToCreateDistance)
+        }
+        .onScrollPhaseChange { oldPhase, newPhase in
+            if newPhase == .interacting {
+                isScrollInteractionActive = true
+                scrollInteractionStartOffset = currentScrollOffset
+                swipeOriginEventReference = visibleEventReference ?? workspace.selectedEventReference
+                didUpdateContextForSwipe = false
+            }
+
+            if oldPhase == .interacting, newPhase != .interacting {
+                isScrollInteractionActive = false
+                completePullToCreateIfNeeded()
+            }
+
+            guard newPhase == .idle, !isScrubbingEvents else { return }
+            commitVisibleScrollTarget()
+            scrollInteractionStartOffset = nil
+            swipeOriginEventReference = nil
+            didUpdateContextForSwipe = false
+        }
+        .onChange(of: workspace.selectedEventReference) { _, reference in
+            let target = HomeScrollTarget.event(reference)
+            guard !isScrollInteractionActive,
+                  !isScrubbingEvents,
+                  visibleScrollTarget != target else { return }
+            withAnimation(.snappy) {
+                visibleScrollTarget = target
+            }
+        }
+        .onChange(of: resetToMainEventTrigger) { _, _ in
+            scrollToMainEvent()
+        }
+        .sensoryFeedback(.selection, trigger: scrubbedEventIndex)
+        .sensoryFeedback(.success, trigger: pullToCreateHaptic)
     }
 
-    private var eventHero: some View {
+    private func eventHero(for reference: EventReference) -> some View {
         GeometryReader { proxy in
             ZStack(alignment: .bottom) {
                 Button {
-                    isShowingInvitationPreview = true
+                    openedEventReference = reference
                 } label: {
                     ZStack(alignment: .bottom) {
-                        venueArtwork
+                        eventArtwork(for: reference)
                             .frame(width: proxy.size.width, height: eventHeroHeight)
                             .clipped()
 
@@ -152,19 +261,21 @@ struct HomeView: View {
                     VStack(spacing: AppTheme.Spacing.standard) {
                 Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 120 : 220)
 
-                attendeeSummary
+                if reference == .main {
+                    attendeeSummary
+                }
 
                 VStack(spacing: 8) {
-                    Text(workspace.title)
+                    Text(title(for: reference))
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text(workspace.weddingDate, format: .dateTime.weekday(.wide).month(.wide).day().year())
+                    Text(date(for: reference), format: .dateTime.weekday(.wide).month(.wide).day().year())
                         .font(.headline)
                         .multilineTextAlignment(.center)
 
-                    if let eventLocation = workspace.mainEventLocation {
+                    if let eventLocation = location(for: reference) {
                         Label(eventLocation.formatted, systemImage: "mappin.and.ellipse")
                             .font(.subheadline.weight(.medium))
                             .multilineTextAlignment(.center)
@@ -172,7 +283,7 @@ struct HomeView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    Text(eventTimingLabel)
+                    Text(secondaryLabel(for: reference))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.72))
                 }
@@ -185,7 +296,11 @@ struct HomeView: View {
 
                     VStack {
                         HStack {
-                            MainEventStatusBadge(status: workspace.currentMainEventStatus)
+                            EventContextStatusBadge(
+                                title: status(for: reference).title,
+                                symbol: status(for: reference).symbol,
+                                context: reference == .main ? "Main event" : "Subevent"
+                            )
 
                             Spacer(minLength: 0)
                         }
@@ -196,14 +311,14 @@ struct HomeView: View {
                 }
                     .frame(width: proxy.size.width, height: eventHeroHeight)
                     .clipped()
-                    .matchedTransitionSource(id: InvitationTransitionID.mainEvent, in: invitationTransition)
+                    .matchedTransitionSource(id: reference, in: invitationTransition)
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint("Opens the guest invitation preview")
+                .accessibilityHint("Opens event details")
                 .accessibilityLabel(
-                    "\(workspace.title), \(workspace.weddingDate.formatted(date: .long, time: .omitted)), " +
-                    (workspace.mainEventLocation.map { "at \($0.formatted). " } ?? "") +
-                    "\(goingMembers.count) going. \(eventTimingLabel)."
+                    "\(title(for: reference)), \(date(for: reference).formatted(date: .long, time: .omitted)), " +
+                    (location(for: reference).map { "at \($0.formatted). " } ?? "") +
+                    secondaryLabel(for: reference)
                 )
             }
             .frame(width: proxy.size.width, height: eventHeroHeight)
@@ -218,35 +333,50 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private var venueArtwork: some View {
-        let artwork: Image = if let imageData = workspace.mainEventImageData,
+    private func eventArtwork(for reference: EventReference) -> some View {
+        if reference == .main {
+            let artwork: Image = if let imageData = workspace.mainEventImageData,
                                 let image = UIImage(data: imageData) {
-            Image(uiImage: image)
-        } else {
-            Image("WeddingVenueHero")
-        }
+                Image(uiImage: image)
+            } else {
+                Image("WeddingVenueHero")
+            }
 
-        if reduceTransparency {
-            artwork.resizable().scaledToFill()
+            if reduceTransparency {
+                artwork.resizable().scaledToFill()
+            } else {
+                artwork
+                    .resizable()
+                    .scaledToFill()
+                    .glur(
+                    radius: 24,
+                    mask: .linear(
+                        stops: [
+                            .init(intensity: 0, location: 0),
+                            .init(intensity: 0, location: 0.48),
+                            .init(intensity: 0.18, location: 0.60),
+                            .init(intensity: 0.74, location: 0.78),
+                            .init(intensity: 1, location: 1)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    noise: 0.025
+                    )
+            }
+        } else if let item = timelineItem(for: reference) {
+            MediaArtwork(
+                imageData: item.imageData,
+                remoteURL: nil,
+                symbol: item.category.symbol,
+                colors: item.category.artworkColors,
+                accent: item.category.artworkAccent,
+                ambientBlurRadius: 10,
+                progressiveBlurRadius: 24,
+                blurStart: 0.42
+            )
         } else {
-            artwork
-                .resizable()
-                .scaledToFill()
-                .glur(
-                radius: 24,
-                mask: .linear(
-                    stops: [
-                        .init(intensity: 0, location: 0),
-                        .init(intensity: 0, location: 0.48),
-                        .init(intensity: 0.18, location: 0.60),
-                        .init(intensity: 0.74, location: 0.78),
-                        .init(intensity: 1, location: 1)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                noise: 0.025
-                )
+            Color.secondary.opacity(0.16)
         }
     }
 
@@ -270,19 +400,443 @@ struct HomeView: View {
         .accessibilityElement(children: .combine)
     }
 
+    private var eventCollaboratorButton: some View {
+        let coordinators = workspace.selectedEventCoordinators
+
+        return Button {
+            isInvitingCollaborators = true
+        } label: {
+            HStack(spacing: -7) {
+                ForEach(coordinators.prefix(3)) { member in
+                    Text(member.initials)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.primary)
+                        .frame(width: 28, height: 28)
+                        .background(.thinMaterial, in: Circle())
+                        .overlay(Circle().stroke(.primary.opacity(0.24), lineWidth: 0.5))
+                }
+
+                if coordinators.count > 3 {
+                    Text("+\(coordinators.count - 3)")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.primary)
+                        .frame(width: 28, height: 28)
+                        .background(.thinMaterial, in: Circle())
+                        .overlay(Circle().stroke(.primary.opacity(0.24), lineWidth: 0.5))
+                }
+
+                Image(systemName: "person.badge.plus")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 28, height: 28)
+                    .background(.thinMaterial, in: Circle())
+                    .overlay(Circle().stroke(.primary.opacity(0.24), lineWidth: 0.5))
+            }
+            .padding(.horizontal, 4)
+            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Event collaborators and invitations")
+        .accessibilityValue("\(coordinators.count) coordinating \(workspace.selectedEventTitle)")
+    }
+
+    private var eventDateScrubber: some View {
+        EventDateScrubber(
+            references: workspace.availableEventContexts,
+            selectedReference: visibleEventReference ?? workspace.selectedEventReference,
+            previewIndex: scrubbedEventIndex,
+            title: title(for:),
+            date: date(for:),
+            onPreview: previewEvent(at:),
+            onCommit: commitScrubbedEvent(at:)
+        )
+    }
+
+    private var visibleEventReference: EventReference? {
+        guard case .some(.event(let reference)) = visibleScrollTarget else { return nil }
+        return reference
+    }
+
+    private func scrollToMainEvent() {
+        isScrubbingEvents = false
+        scrubbedEventIndex = nil
+        workspace.selectEventContext(.main)
+
+        Task { @MainActor in
+            await Task.yield()
+            withAnimation(.snappy) {
+                visibleScrollTarget = .event(.main)
+            }
+        }
+    }
+
+    private func previewEvent(at index: Int) {
+        let references = workspace.availableEventContexts
+        guard references.indices.contains(index) else { return }
+        isScrubbingEvents = true
+        guard scrubbedEventIndex != index else { return }
+        scrubbedEventIndex = index
+        withAnimation(.snappy(duration: 0.22)) {
+            visibleScrollTarget = .event(references[index])
+        }
+    }
+
+    private func commitScrubbedEvent(at index: Int) {
+        let references = workspace.availableEventContexts
+        guard references.indices.contains(index) else {
+            isScrubbingEvents = false
+            scrubbedEventIndex = nil
+            return
+        }
+
+        let reference = references[index]
+        visibleScrollTarget = .event(reference)
+        workspace.selectEventContext(reference)
+        isScrubbingEvents = false
+        scrubbedEventIndex = nil
+    }
+
+    private func commitVisibleScrollTarget() {
+        guard case .some(.event(let reference)) = visibleScrollTarget else { return }
+        workspace.selectEventContext(reference)
+    }
+
+    private func updateEventContextAtSwipeStart(offset: CGFloat) {
+        guard isScrollInteractionActive,
+              !isScrubbingEvents,
+              !didUpdateContextForSwipe,
+              let startOffset = scrollInteractionStartOffset,
+              let originReference = swipeOriginEventReference else { return }
+
+        let delta = offset - startOffset
+        guard abs(delta) >= 8 else { return }
+
+        let references = workspace.availableEventContexts
+        guard let originIndex = references.firstIndex(of: originReference) else { return }
+
+        let destinationIndex = delta > 0 ? originIndex + 1 : originIndex - 1
+        didUpdateContextForSwipe = true
+
+        guard references.indices.contains(destinationIndex) else { return }
+        workspace.selectEventContext(references[destinationIndex])
+    }
+
+    private func updatePullToCreate(distance: CGFloat) {
+        guard workspace.canManageMainEvent, isScrollInteractionActive else { return }
+
+        let progress = min(max(distance / pullToCreateThreshold, 0), 1)
+        let wasArmed = isPullToCreateArmed
+
+        pullToCreateProgress = progress
+        isPullToCreateArmed = progress >= 1
+
+        if isPullToCreateArmed, !wasArmed {
+            pullToCreateHaptic += 1
+        }
+    }
+
+    private func completePullToCreateIfNeeded() {
+        let shouldCreate = isPullToCreateArmed && pullToCreateProgress >= 1
+        resetPullToCreate()
+        guard shouldCreate else { return }
+
+        Task { @MainActor in
+            await Task.yield()
+            editorTarget = .newSubevent
+        }
+    }
+
+    private func resetPullToCreate() {
+        pullToCreateProgress = 0
+        isPullToCreateArmed = false
+    }
+
+    private func timelineItem(for reference: EventReference) -> TimelineItem? {
+        guard case .subevent(let id) = reference else { return nil }
+        return workspace.timeline.first(where: { $0.id == id })
+    }
+
+    private func title(for reference: EventReference) -> String {
+        reference == .main ? workspace.title : timelineItem(for: reference)?.title ?? "Event"
+    }
+
+    private func date(for reference: EventReference) -> Date {
+        reference == .main ? workspace.weddingDate : timelineItem(for: reference)?.scheduledAt ?? workspace.weddingDate
+    }
+
+    private func location(for reference: EventReference) -> EventLocation? {
+        reference == .main ? workspace.mainEventLocation : timelineItem(for: reference)?.eventLocation
+    }
+
+    private func secondaryLabel(for reference: EventReference) -> String {
+        if reference == .main { return mainEventTimingLabel }
+        guard let item = timelineItem(for: reference) else { return "Subevent" }
+        return item.purpose == .planning ? "Planning & Scouting" : "Part of the Event"
+    }
+
+    private func status(for reference: EventReference) -> (title: String, symbol: String) {
+        if reference == .main {
+            return (workspace.currentMainEventStatus.title, workspace.currentMainEventStatus.symbol)
+        }
+        guard let item = timelineItem(for: reference) else { return ("Event", "calendar") }
+        return (item.status.title, item.status.symbol)
+    }
+
+    private func canEdit(_ reference: EventReference) -> Bool {
+        switch reference {
+        case .main:
+            workspace.canManageMainEvent
+        case .subevent(let id):
+            workspace.timeline.contains(where: { $0.id == id })
+        case .idea:
+            false
+        }
+    }
+
+    private func editorTarget(for reference: EventReference) -> HomeEventEditorTarget? {
+        switch reference {
+        case .main: .main
+        case .subevent(let id): .subevent(id)
+        case .idea: nil
+        }
+    }
+
+    private func editorMode(for target: HomeEventEditorTarget) -> EventEditorMode {
+        switch target {
+        case .main:
+            .main
+        case .newSubevent:
+            .subevent(nil)
+        case .subevent(let id):
+            .subevent(workspace.timeline.first(where: { $0.id == id }))
+        }
+    }
+
 }
 
-private struct MainEventStatusBadge: View {
-    let status: MainEventStatus
+private enum HomeScrollTarget: Hashable {
+    case event(EventReference)
+}
+
+private struct HomeScrollGeometry: Equatable {
+    let offset: CGFloat
+    let pullToCreateDistance: CGFloat
+}
+
+private struct PullToCreateEventIndicator: View {
+    let progress: CGFloat
+    let isArmed: Bool
 
     var body: some View {
-        Label(status.title, systemImage: status.symbol)
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .stroke(.secondary.opacity(0.22), lineWidth: 5)
+
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(
+                        AppTheme.ColorToken.accent,
+                        style: StrokeStyle(lineWidth: 5, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+
+                if isArmed {
+                    Circle()
+                        .fill(AppTheme.ColorToken.accent)
+                        .padding(5)
+                }
+
+                Image(systemName: "calendar.badge.plus")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(isArmed ? .white : AppTheme.ColorToken.accent)
+                    .symbolEffect(.bounce, value: isArmed)
+            }
+            .frame(width: 54, height: 54)
+
+            VStack(spacing: 2) {
+                Text(isArmed ? "Release to Add Event" : "Add an Event")
+                    .font(.headline)
+
+                Text("Keep pulling through the schedule to plan what comes next.")
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.primary)
+            .frame(maxWidth: 290)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(isArmed ? "Release to add an event" : "Pull to add an event")
+        .accessibilityValue("\(Int(progress * 100)) percent")
+    }
+}
+
+/// A compact date-ordered index inspired by the system section index.
+/// Small collections show one marker per event; large collections use a
+/// continuous track so rendering cost stays constant.
+private struct EventDateScrubber: View {
+    let references: [EventReference]
+    let selectedReference: EventReference
+    let previewIndex: Int?
+    let title: (EventReference) -> String
+    let date: (EventReference) -> Date
+    let onPreview: (Int) -> Void
+    let onCommit: (Int) -> Void
+
+    private let railHeight: CGFloat = 196
+    private let markerLimit = 14
+    private let verticalInset: CGFloat = 8
+
+    private var currentIndex: Int {
+        if let previewIndex { return previewIndex }
+        return references.firstIndex(of: selectedReference) ?? 0
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                if references.count <= markerLimit {
+                    VStack(spacing: 0) {
+                        ForEach(references.indices, id: \.self) { index in
+                            let reference = references[index]
+                            let isMainEvent = reference == .main
+                            let isCurrent = index == currentIndex
+                            Circle()
+                                .fill(
+                                    isMainEvent
+                                        ? Color.orange
+                                        : isCurrent ? AppTheme.ColorToken.accent : Color.white.opacity(0.68)
+                                )
+                                .frame(
+                                    width: isMainEvent ? 10 : isCurrent ? 9 : 4,
+                                    height: isMainEvent ? 10 : isCurrent ? 9 : 4
+                                )
+                                .overlay {
+                                    if isMainEvent || isCurrent {
+                                        Circle()
+                                            .stroke(.white.opacity(0.95), lineWidth: 1.5)
+                                    }
+                                }
+                                .shadow(color: .black.opacity(0.34), radius: 1, y: 1)
+                                .frame(maxHeight: .infinity)
+                        }
+                    }
+                    .padding(.vertical, verticalInset)
+                } else {
+                    let currentReference = references[currentIndex]
+                    Capsule()
+                        .fill(currentReference == .main ? Color.orange : AppTheme.ColorToken.accent)
+                        .frame(width: 6, height: 20)
+                        .overlay {
+                            Capsule()
+                                .stroke(.white.opacity(0.95), lineWidth: 1.5)
+                        }
+                        .shadow(color: .black.opacity(0.34), radius: 1, y: 1)
+                        .position(
+                            x: proxy.size.width / 2,
+                            y: markerPosition(for: currentIndex, height: proxy.size.height)
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onChanged { value in
+                        onPreview(index(at: value.location.y, height: proxy.size.height))
+                    }
+                    .onEnded { value in
+                        onCommit(index(at: value.location.y, height: proxy.size.height))
+                    }
+            )
+        }
+        .frame(width: 44, height: railHeight)
+        .overlay(alignment: .leading) {
+            if let previewIndex, references.indices.contains(previewIndex) {
+                let reference = references[previewIndex]
+                VStack(alignment: .trailing) {
+                    Text(date(reference), format: .dateTime.month(.abbreviated).day().year())
+                        .font(.caption.bold())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .frame(width: 140, alignment: .trailing)
+                .background(.black.opacity(0.78), in: Capsule())
+                .offset(x: -148)
+                .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .trailing)))
+                .allowsHitTesting(false)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Event index")
+        .accessibilityValue(accessibilityValue)
+        .accessibilityHint("Swipe up or down to preview events, then release to select")
+        .accessibilityAdjustableAction { direction in
+            let nextIndex: Int
+            switch direction {
+            case .increment:
+                nextIndex = min(currentIndex + 1, references.count - 1)
+            case .decrement:
+                nextIndex = max(currentIndex - 1, 0)
+            @unknown default:
+                return
+            }
+            onPreview(nextIndex)
+            onCommit(nextIndex)
+        }
+    }
+
+    private var accessibilityValue: String {
+        guard references.indices.contains(currentIndex) else { return "No event" }
+        let reference = references[currentIndex]
+        return "\(title(reference)), \(date(reference).formatted(date: .abbreviated, time: .omitted))"
+    }
+
+    private func index(at yPosition: CGFloat, height: CGFloat) -> Int {
+        guard references.count > 1 else { return 0 }
+        let usableHeight = max(height - (verticalInset * 2), 1)
+        let clamped = min(max(yPosition - verticalInset, 0), usableHeight)
+        return Int((clamped / usableHeight * CGFloat(references.count - 1)).rounded())
+    }
+
+    private func markerPosition(for index: Int, height: CGFloat) -> CGFloat {
+        guard references.count > 1 else { return height / 2 }
+        let usableHeight = max(height - (verticalInset * 2), 1)
+        return verticalInset + (CGFloat(index) / CGFloat(references.count - 1) * usableHeight)
+    }
+}
+
+private enum HomeEventEditorTarget: Identifiable {
+    case main
+    case newSubevent
+    case subevent(UUID)
+
+    var id: String {
+        switch self {
+        case .main: "main"
+        case .newSubevent: "new-subevent"
+        case .subevent(let id): "subevent-\(id.uuidString)"
+        }
+    }
+}
+
+private struct EventContextStatusBadge: View {
+    let title: String
+    let symbol: String
+    let context: String
+
+    var body: some View {
+        Label(title, systemImage: symbol)
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 10)
             .frame(minHeight: 30)
             .background(.ultraThinMaterial, in: Capsule())
             .environment(\.colorScheme, .dark)
-            .accessibilityLabel("Main event status: \(status.title)")
+            .accessibilityLabel("\(context) status: \(title)")
     }
 }
 
@@ -557,7 +1111,7 @@ private struct NoteComposerView: View {
                     Text("Message")
                 } footer: {
                     HStack {
-                        Text("Share an update with everyone helping plan this event.")
+                        Text("Share an update with everyone coordinating \(workspace.selectedEventTitle).")
 
                         Spacer(minLength: AppTheme.Spacing.compact)
 

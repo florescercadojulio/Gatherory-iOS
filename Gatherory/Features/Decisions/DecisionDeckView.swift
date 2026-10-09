@@ -13,6 +13,9 @@ struct DecisionDeckView: View {
 
     var body: some View {
         VStack(spacing: AppTheme.Spacing.compact) {
+            EventContextLabel(section: "Decide", eventTitle: workspace.selectedEventTitle)
+                .padding(.bottom, 2)
+
             if let idea = currentIdea {
                 DecisionCard(
                     idea: idea,

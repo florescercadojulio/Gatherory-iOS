@@ -15,13 +15,28 @@ private enum AppTab: Hashable {
 }
 
 struct ContentView: View {
+    @Environment(WeddingWorkspace.self) private var workspace
     @State private var selectedTab = AppTab.home
+    @State private var homeReselectionTrigger = 0
+
+    private var tabSelection: Binding<AppTab> {
+        Binding(
+            get: { selectedTab },
+            set: { newValue in
+                if newValue == .home, selectedTab == .home {
+                    workspace.selectEventContext(.main)
+                    homeReselectionTrigger += 1
+                }
+                selectedTab = newValue
+            }
+        )
+    }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
+        TabView(selection: tabSelection) {
             Tab("Home", systemImage: "house.fill", value: .home) {
                 NavigationStack {
-                    HomeView()
+                    HomeView(resetToMainEventTrigger: homeReselectionTrigger)
                 }
             }
 
@@ -37,9 +52,11 @@ struct ContentView: View {
                 }
             }
 
-            Tab("Timeline", systemImage: "calendar", value: .timeline) {
-                NavigationStack {
-                    TimelineView()
+            if workspace.isMainEventContext {
+                Tab("Timeline", systemImage: "calendar", value: .timeline) {
+                    NavigationStack {
+                        TimelineView()
+                    }
                 }
             }
         }
@@ -50,6 +67,11 @@ struct ContentView: View {
                 : .onScrollDown
         )
         .tint(AppTheme.ColorToken.accent)
+        .onChange(of: workspace.selectedEventReference) { _, _ in
+            if !workspace.isMainEventContext && selectedTab == .timeline {
+                selectedTab = .home
+            }
+        }
     }
 }
 

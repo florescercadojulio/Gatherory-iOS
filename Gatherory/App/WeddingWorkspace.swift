@@ -30,6 +30,9 @@ final class WeddingWorkspace {
     var requiresCollaboratorApproval: Bool
     var defaultCollaboratorPermission: PlanningPermission
     var collaboratorInviteURL: URL
+    /// The event currently being planned across Home, Ideas, and Decide.
+    /// It is always either the root event or one of its direct children.
+    var selectedEventReference: EventReference = .main
 
     private var decisionHistory: [DecisionRecord] = []
 
@@ -81,13 +84,22 @@ final class WeddingWorkspace {
         self.eventMessage = eventMessage
         self.planningMode = planningMode
         self.members = members
-        self.ideas = ideas
+        self.ideas = ideas.map { idea in
+            var scopedIdea = idea
+            if scopedIdea.eventID == nil {
+                scopedIdea.eventID = mainEventID
+            }
+            return scopedIdea
+        }
         self.timeline = timeline.map { event in
             var childEvent = event
             childEvent.parentEventID = mainEventID
             return childEvent
         }
-        self.notes = notes
+        self.notes = notes.map { note in
+            guard note.eventID == nil else { return note }
+            return EventNote(id: note.id, eventID: mainEventID, body: note.body, sentAt: note.sentAt)
+        }
         self.mainEventStatus = mainEventStatus
         self.mainEventResponse = mainEventResponse
         self.mainEventMoments = mainEventMoments
@@ -101,7 +113,94 @@ final class WeddingWorkspace {
     }
 
     var decisionQueue: [WeddingIdea] {
-        ideas.filter { $0.status == .new }
+        contextualIdeas.filter { $0.status == .new }
+    }
+
+    var availableEventContexts: [EventReference] {
+        ([.main] + childEvents.map { .subevent($0.id) })
+            .sorted { lhs, rhs in
+                let lhsDate = eventDate(for: lhs)
+                let rhsDate = eventDate(for: rhs)
+                if lhsDate == rhsDate { return lhs == .main }
+                return lhsDate < rhsDate
+            }
+    }
+
+    var selectedEventID: UUID {
+        switch selectedEventReference {
+        case .main:
+            mainEventID
+        case .subevent(let id):
+            id
+        case .idea:
+            mainEventID
+        }
+    }
+
+    var isMainEventContext: Bool {
+        selectedEventReference == .main
+    }
+
+    var selectedEventTitle: String {
+        switch selectedEventReference {
+        case .main:
+            title
+        case .subevent(let id):
+            timeline.first(where: { $0.id == id })?.title ?? title
+        case .idea:
+            title
+        }
+    }
+
+    var contextualIdeas: [WeddingIdea] {
+        ideas.filter { ($0.eventID ?? mainEventID) == selectedEventID }
+    }
+
+    var contextualNotes: [EventNote] {
+        notes.filter { ($0.eventID ?? mainEventID) == selectedEventID }
+    }
+
+    var mainEventParticipantIDs: [UUID] {
+        members.map(\.id)
+    }
+
+    func participants(for reference: EventReference) -> [WeddingMember] {
+        switch reference {
+        case .main, .idea:
+            return members
+        case .subevent(let id):
+            guard let event = timeline.first(where: { $0.id == id }) else { return [] }
+            let participantIDs = Set(event.participantIDs)
+            return members.filter { participantIDs.contains($0.id) }
+        }
+    }
+
+    var selectedEventCoordinators: [WeddingMember] {
+        participants(for: selectedEventReference)
+            .filter { $0.participantRole != .guest }
+    }
+
+    func selectEventContext(_ reference: EventReference) {
+        switch reference {
+        case .main:
+            selectedEventReference = .main
+        case .subevent(let id):
+            guard childEvents.contains(where: { $0.id == id }) else { return }
+            selectedEventReference = .subevent(id)
+        case .idea:
+            return
+        }
+    }
+
+    func eventDate(for reference: EventReference) -> Date {
+        switch reference {
+        case .main:
+            weddingDate
+        case .subevent(let id):
+            timeline.first(where: { $0.id == id })?.scheduledAt ?? .distantFuture
+        case .idea:
+            .distantFuture
+        }
     }
 
     var upcomingTimeline: [TimelineItem] {
@@ -223,6 +322,9 @@ final class WeddingWorkspace {
         guard canAddChildEvent(to: item.parentEventID ?? mainEventID) else { return }
         var childEvent = item
         childEvent.parentEventID = mainEventID
+        if childEvent.participantIDs.isEmpty {
+            childEvent.participantIDs = mainEventParticipantIDs
+        }
         timeline.append(childEvent)
     }
 
@@ -242,6 +344,9 @@ final class WeddingWorkspace {
     func setEventStatus(_ status: EventStatus, for item: TimelineItem) {
         guard let index = timeline.firstIndex(where: { $0.id == item.id }) else { return }
         timeline[index].status = status
+        if status == .archived, selectedEventReference == .subevent(item.id) {
+            selectedEventReference = .main
+        }
     }
 
     func setMainEventResponse(_ response: EventResponse?) {
@@ -293,16 +398,23 @@ final class WeddingWorkspace {
         mainEventResponse = nil
         mainEventMoments.removeAll()
         timeline.removeAll { $0.parentEventID == mainEventID }
+        selectedEventReference = .main
     }
 
     func sendNote(_ body: String) {
         let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedBody.isEmpty else { return }
-        notes.insert(EventNote(body: String(trimmedBody.prefix(750))), at: 0)
+        notes.insert(
+            EventNote(eventID: selectedEventID, body: String(trimmedBody.prefix(750))),
+            at: 0
+        )
     }
 
     func deleteTimelineItem(_ item: TimelineItem) {
         timeline.removeAll { $0.id == item.id }
+        if selectedEventReference == .subevent(item.id) {
+            selectedEventReference = .main
+        }
     }
 
     func updateIdea(_ idea: WeddingIdea, status: IdeaStatus) {
@@ -311,7 +423,11 @@ final class WeddingWorkspace {
     }
 
     func addIdea(_ idea: WeddingIdea) {
-        ideas.insert(idea, at: 0)
+        var scopedIdea = idea
+        if scopedIdea.eventID == nil {
+            scopedIdea.eventID = selectedEventID
+        }
+        ideas.insert(scopedIdea, at: 0)
     }
 
     func addRegistryItem(_ item: RegistryItem) {

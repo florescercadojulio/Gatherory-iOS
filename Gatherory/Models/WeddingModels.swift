@@ -446,6 +446,9 @@ enum IdeaConfiguration: Codable, Hashable {
 
 struct WeddingIdea: Identifiable, Hashable {
     let id: UUID
+    /// The root event or direct child event this idea helps plan.
+    /// Older mock data is attached to the root event by `WeddingWorkspace`.
+    var eventID: UUID?
     var title: String
     var note: String
     var category: IdeaCategory
@@ -458,6 +461,7 @@ struct WeddingIdea: Identifiable, Hashable {
 
     init(
         id: UUID = UUID(),
+        eventID: UUID? = nil,
         title: String,
         note: String,
         category: IdeaCategory,
@@ -470,6 +474,7 @@ struct WeddingIdea: Identifiable, Hashable {
         configuration: IdeaConfiguration? = nil
     ) {
         self.id = id
+        self.eventID = eventID
         self.title = title
         self.note = note
         self.category = category
@@ -831,11 +836,13 @@ enum EventResponse: String, CaseIterable, Identifiable, Codable {
 
 struct EventNote: Identifiable, Hashable, Codable {
     let id: UUID
+    let eventID: UUID?
     let body: String
     let sentAt: Date
 
-    init(id: UUID = UUID(), body: String, sentAt: Date = .now) {
+    init(id: UUID = UUID(), eventID: UUID? = nil, body: String, sentAt: Date = .now) {
         self.id = id
+        self.eventID = eventID
         self.body = body
         self.sentAt = sentAt
     }
@@ -1001,6 +1008,8 @@ struct TimelineItem: Identifiable, Hashable {
     var isAllDay: Bool
     var timeZoneIdentifier: String
     var eventLocation: EventLocation?
+    /// A snapshot of the main event roster for this event. New child events
+    /// start with the root roster, then can diverge without changing it.
     var participantIDs: [UUID]
     var parentEventID: UUID?
     var status: EventStatus
