@@ -99,7 +99,7 @@ struct TimelineView: View {
         }
         .sheet(isPresented: $isAddingTimelineItem) {
             NavigationStack {
-                TimelineItemEditorView()
+                EventEditorView(mode: .subevent(nil))
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -1115,7 +1115,7 @@ private struct TimelineEventDetailView: View {
     var body: some View {
         Group {
             if let item {
-                TimelineEventDetailScreen(item: item, audience: .planning)
+                EventInvitationScreen(reference: .subevent(item.id))
             } else {
                 ContentUnavailableView("Event unavailable", systemImage: "calendar.badge.exclamationmark")
             }
@@ -1183,7 +1183,7 @@ private struct TimelineEventDetailView: View {
         .sheet(isPresented: $isEditingEvent) {
             if let item {
                 NavigationStack {
-                    TimelineItemEditorView(item: item)
+                    EventEditorView(mode: .subevent(item))
                 }
             }
         }
@@ -1207,7 +1207,7 @@ struct TimelineEventReadOnlyView: View {
     }
 
     var body: some View {
-        TimelineEventDetailScreen(item: currentItem, audience: .invitation)
+        EventInvitationScreen(reference: .subevent(currentItem.id))
             .navigationTitle("Event details")
             .navigationBarTitleDisplayMode(.inline)
             .appClearNavigationBar()

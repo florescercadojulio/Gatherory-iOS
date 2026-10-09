@@ -120,6 +120,28 @@ final class WeddingWorkspace {
         childEvents.filter { $0.status == .approved }
     }
 
+    /// The event hierarchy is deliberately shallow. The root can contain events;
+    /// subevents are leaves and can never acquire children of their own.
+    var eventTree: EventTreeNode {
+        EventTreeNode(
+            id: mainEventID,
+            parentID: nil,
+            kind: .main,
+            children: childEvents.map {
+                EventTreeNode(
+                    id: $0.id,
+                    parentID: mainEventID,
+                    kind: .subevent,
+                    children: []
+                )
+            }
+        )
+    }
+
+    func canAddChildEvent(to parentID: UUID) -> Bool {
+        parentID == mainEventID
+    }
+
     var planningMembers: [WeddingMember] {
         members.filter { $0.participantRole != .guest }
     }
@@ -198,6 +220,7 @@ final class WeddingWorkspace {
     }
 
     func addTimelineItem(_ item: TimelineItem) {
+        guard canAddChildEvent(to: item.parentEventID ?? mainEventID) else { return }
         var childEvent = item
         childEvent.parentEventID = mainEventID
         timeline.append(childEvent)
@@ -205,6 +228,7 @@ final class WeddingWorkspace {
 
     func updateTimelineItem(_ item: TimelineItem) {
         guard let index = timeline.firstIndex(where: { $0.id == item.id }) else { return }
+        guard canAddChildEvent(to: item.parentEventID ?? mainEventID) else { return }
         var childEvent = item
         childEvent.parentEventID = mainEventID
         timeline[index] = childEvent

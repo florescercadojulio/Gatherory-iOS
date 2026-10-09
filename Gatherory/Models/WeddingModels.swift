@@ -1008,6 +1008,8 @@ struct TimelineItem: Identifiable, Hashable {
     var response: EventResponse?
     var linkedIdeaID: UUID?
     var imageData: Data?
+    var eventDescription: String
+    var dressCode: String
 
     init(
         id: UUID = UUID(),
@@ -1025,7 +1027,9 @@ struct TimelineItem: Identifiable, Hashable {
         completionStatus: EventCompletionStatus = .upcoming,
         response: EventResponse? = nil,
         linkedIdeaID: UUID? = nil,
-        imageData: Data? = nil
+        imageData: Data? = nil,
+        eventDescription: String = "",
+        dressCode: String = ""
     ) {
         self.id = id
         self.title = title
@@ -1045,6 +1049,8 @@ struct TimelineItem: Identifiable, Hashable {
         self.response = response
         self.linkedIdeaID = linkedIdeaID
         self.imageData = imageData
+        self.eventDescription = eventDescription
+        self.dressCode = dressCode
     }
 
     init(
@@ -1063,7 +1069,9 @@ struct TimelineItem: Identifiable, Hashable {
         completionStatus: EventCompletionStatus = .upcoming,
         response: EventResponse? = nil,
         linkedIdeaID: UUID? = nil,
-        imageData: Data? = nil
+        imageData: Data? = nil,
+        eventDescription: String = "",
+        dressCode: String = ""
     ) {
         self.id = id
         self.title = title
@@ -1081,10 +1089,51 @@ struct TimelineItem: Identifiable, Hashable {
         self.response = response
         self.linkedIdeaID = linkedIdeaID
         self.imageData = imageData
+        self.eventDescription = eventDescription
+        self.dressCode = dressCode
     }
 
     var location: String? {
         eventLocation?.title
+    }
+}
+
+/// A stable reference to either the root event or one of its direct children.
+/// Gatherory intentionally supports two levels: one main event and its subevents.
+enum EventReference: Identifiable, Hashable {
+    case main
+    case subevent(UUID)
+    case idea(UUID)
+
+    var id: String {
+        switch self {
+        case .main:
+            "main"
+        case .subevent(let id):
+            "subevent-\(id.uuidString)"
+        case .idea(let id):
+            "idea-\(id.uuidString)"
+        }
+    }
+
+    var canHaveChildren: Bool {
+        self == .main
+    }
+}
+
+struct EventTreeNode: Identifiable, Hashable {
+    enum Kind: Hashable {
+        case main
+        case subevent
+    }
+
+    let id: UUID
+    let parentID: UUID?
+    let kind: Kind
+    let children: [EventTreeNode]
+
+    var canHaveChildren: Bool {
+        kind == .main
     }
 }
 

@@ -89,7 +89,25 @@ struct HomeView: View {
             }
         }
         .navigationDestination(isPresented: $isShowingInvitationPreview) {
-            InvitationPreviewView(transitionNamespace: invitationTransition)
+            EventInvitationScreen(reference: .main)
+                .navigationTitle("Invitation")
+                .navigationBarTitleDisplayMode(.inline)
+                .appClearNavigationBar()
+                .toolbarColorScheme(.dark, for: .navigationBar)
+                .preferredColorScheme(.dark)
+                .toolbar {
+                    if workspace.canManageMainEvent {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Edit Event", systemImage: "pencil") {
+                                isEditingMainEvent = true
+                            }
+                            .labelStyle(.iconOnly)
+                        }
+                    }
+                }
+                .navigationTransition(
+                    .zoom(sourceID: InvitationTransitionID.mainEvent, in: invitationTransition)
+                )
         }
         .fullScreenCover(isPresented: $isInvitingCollaborators) {
             CollaborationInviteView()
@@ -101,7 +119,7 @@ struct HomeView: View {
         }
         .sheet(isPresented: $isEditingMainEvent) {
             NavigationStack {
-                MainEventEditorView()
+                EventEditorView(mode: .main)
             }
             .environment(workspace)
             .presentationDetents([.large])
@@ -573,7 +591,7 @@ private struct NoteComposerView: View {
     }
 }
 
-private enum InvitationTransitionID: Hashable {
+enum InvitationTransitionID: Hashable {
     case mainEvent
 }
 

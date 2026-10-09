@@ -336,7 +336,11 @@ struct IdeaDetailView: View {
     var body: some View {
         Group {
             if let idea {
-                IdeaDetailScreen(idea: idea)
+                if idea.category == .event, idea.eventConfiguration != nil {
+                    EventInvitationScreen(reference: .idea(idea.id))
+                } else {
+                    IdeaDetailScreen(idea: idea)
+                }
             } else {
                 ContentUnavailableView("Idea unavailable", systemImage: "sparkles")
             }

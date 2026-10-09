@@ -61,12 +61,47 @@ struct GatheroryTests {
     @Test("Timeline items toggle between upcoming and complete")
     func toggleTimelineItem() throws {
         let workspace = WeddingWorkspace.sample
-        let item = try #require(workspace.timeline.first { $0.status == .upcoming })
+        let item = try #require(workspace.timeline.first { $0.completionStatus == .upcoming })
 
         workspace.toggleTimelineItem(item)
 
         let completedItem = try #require(workspace.timeline.first { $0.id == item.id })
-        #expect(completedItem.status == .complete)
+        #expect(completedItem.completionStatus == .complete)
+    }
+
+    @Test("The event tree is limited to a root and direct subevents")
+    func eventTreeHasOnlyTwoLevels() {
+        let workspace = WeddingWorkspace.sample
+        let tree = workspace.eventTree
+
+        #expect(tree.id == workspace.mainEventID)
+        #expect(tree.parentID == nil)
+        #expect(tree.canHaveChildren)
+        #expect(tree.children.count == workspace.childEvents.count)
+        #expect(tree.children.allSatisfy { child in
+            child.parentID == workspace.mainEventID
+                && !child.canHaveChildren
+                && child.children.isEmpty
+        })
+    }
+
+    @Test("A subevent cannot become the parent of another event")
+    func subeventsCannotHaveChildren() throws {
+        let workspace = WeddingWorkspace.sample
+        let proposedParent = try #require(workspace.timeline.first)
+        let originalCount = workspace.timeline.count
+        let nestedEvent = TimelineItem(
+            title: "Nested event",
+            category: .other,
+            scheduledAt: .now,
+            eventLocation: nil,
+            participantIDs: [],
+            parentEventID: proposedParent.id
+        )
+
+        workspace.addTimelineItem(nestedEvent)
+
+        #expect(workspace.timeline.count == originalCount)
     }
 
     @Test("Timeline events can be deleted from their details")
