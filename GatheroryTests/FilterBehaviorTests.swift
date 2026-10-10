@@ -29,9 +29,15 @@ struct FilterBehaviorTests {
         let upcoming = makeEvent(status: .draft, completion: .upcoming)
         let completed = makeEvent(status: .approved, completion: .complete)
         let archived = makeEvent(status: .archived, completion: .upcoming)
-        let events = [upcoming, completed, archived]
+        let needsDate = makeEvent(
+            status: .approved,
+            completion: .upcoming,
+            schedulingState: .unscheduled
+        )
+        let events = [upcoming, completed, archived, needsDate]
 
-        #expect(events.filter(TimelineFilter.all.includes).map(\.id) == [upcoming.id, completed.id])
+        #expect(events.filter(TimelineFilter.all.includes).map(\.id) == [upcoming.id, completed.id, needsDate.id])
+        #expect(events.filter(TimelineFilter.needsDate.includes).map(\.id) == [needsDate.id])
         #expect(events.filter(TimelineFilter.upcoming.includes).map(\.id) == [upcoming.id])
         #expect(events.filter(TimelineFilter.completed.includes).map(\.id) == [completed.id])
         #expect(events.filter(TimelineFilter.archived.includes).map(\.id) == [archived.id])
@@ -50,12 +56,14 @@ struct FilterBehaviorTests {
 
     private func makeEvent(
         status: EventStatus,
-        completion: EventCompletionStatus
+        completion: EventCompletionStatus,
+        schedulingState: EventSchedulingState = .scheduled
     ) -> TimelineItem {
         TimelineItem(
             title: "Event",
             category: .other,
             scheduledAt: .now,
+            schedulingState: schedulingState,
             location: "",
             participantIDs: [],
             status: status,

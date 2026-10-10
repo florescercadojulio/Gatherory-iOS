@@ -158,6 +158,7 @@ struct EventEditorView: View {
     @State private var mainStatus: MainEventStatus
     @State private var childStatus: EventStatus
     @State private var startsAt: Date
+    @State private var hasScheduledDate: Bool
     @State private var endsAt: Date?
     @State private var isAllDay: Bool
     @State private var timeZoneIdentifier: String
@@ -190,6 +191,7 @@ struct EventEditorView: View {
         _mainStatus = State(initialValue: .draft)
         _childStatus = State(initialValue: item?.status ?? .approved)
         _startsAt = State(initialValue: item?.scheduledAt ?? Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now)
+        _hasScheduledDate = State(initialValue: item?.hasScheduledDate ?? true)
         _endsAt = State(initialValue: item?.endsAt)
         _isAllDay = State(initialValue: item?.isAllDay ?? false)
         _timeZoneIdentifier = State(initialValue: item?.timeZoneIdentifier ?? TimeZone.autoupdatingCurrent.identifier)
@@ -331,12 +333,32 @@ struct EventEditorView: View {
                 Button {
                     isEditingDateAndTime = true
                 } label: {
-                    EventScheduleRow(
-                        startsAt: startsAt,
-                        endsAt: endsAt,
-                        isAllDay: isAllDay,
-                        timeZoneIdentifier: timeZoneIdentifier
-                    )
+                    if !isMainEvent && !hasScheduledDate {
+                        HStack(spacing: AppTheme.Spacing.standard) {
+                            Image(systemName: "calendar.badge.exclamationmark")
+                                .foregroundStyle(AppTheme.ColorToken.accent)
+                                .frame(width: 28)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Set Date & Time")
+                                    .foregroundStyle(AppTheme.ColorToken.accent)
+                                Text("Required before this event appears on Home")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: 0)
+                        }
+                        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                        .contentShape(Rectangle())
+                    } else {
+                        EventScheduleRow(
+                            startsAt: startsAt,
+                            endsAt: endsAt,
+                            isAllDay: isAllDay,
+                            timeZoneIdentifier: timeZoneIdentifier
+                        )
+                    }
                 }
                 .buttonStyle(.plain)
 
@@ -503,6 +525,7 @@ struct EventEditorView: View {
                 timeZoneIdentifier: timeZoneIdentifier
             ) { start, end, allDay, timeZone in
                 startsAt = start
+                hasScheduledDate = true
                 endsAt = end
                 isAllDay = allDay
                 timeZoneIdentifier = timeZone
@@ -695,6 +718,7 @@ struct EventEditorView: View {
                 category: category,
                 purpose: purpose,
                 scheduledAt: startsAt,
+                schedulingState: hasScheduledDate ? .scheduled : .unscheduled,
                 eventLocation: eventLocation,
                 endsAt: endsAt,
                 isAllDay: isAllDay,

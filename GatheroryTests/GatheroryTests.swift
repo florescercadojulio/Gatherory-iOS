@@ -331,6 +331,35 @@ struct GatheroryTests {
         #expect(workspace.timeline.contains { $0.linkedIdeaID == idea.id })
     }
 
+    @Test("Loving an undated event idea sends it to Timeline without adding it to Home")
+    func loveUndatedEventIdeaNeedsDate() throws {
+        let workspace = WeddingWorkspace.sample
+        let idea = WeddingIdea(
+            title: "Choose a rehearsal venue",
+            note: "We like the space but have not picked a date.",
+            category: .event,
+            submittedBy: "Alex",
+            configuration: .event(
+                EventIdeaConfiguration(
+                    category: .rehearsal,
+                    purpose: .planning,
+                    proposedDate: nil,
+                    location: nil
+                )
+            )
+        )
+        workspace.addIdea(idea)
+
+        workspace.decide(.love, on: idea)
+
+        let linkedEvent = try #require(
+            workspace.timeline.first { $0.linkedIdeaID == idea.id }
+        )
+        #expect(linkedEvent.hasScheduledDate == false)
+        #expect(TimelineFilter.needsDate.includes(linkedEvent))
+        #expect(workspace.availableEventContexts.contains(.subevent(linkedEvent.id)) == false)
+    }
+
     @Test("Maybe saves an idea for later")
     func saveIdeaForLater() throws {
         let workspace = WeddingWorkspace.sample

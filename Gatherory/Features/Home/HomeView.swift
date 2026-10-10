@@ -102,7 +102,6 @@ struct HomeView: View {
         .overlay(alignment: .trailing) {
             if workspace.availableEventContexts.count > 1 {
                 eventDateScrubber
-                    .padding(.trailing, 6)
             }
         }
         .toolbar {
@@ -744,6 +743,8 @@ private struct EventDateScrubber: View {
     private let railHeight: CGFloat = 196
     private let markerLimit = 14
     private let verticalInset: CGFloat = 8
+    private let markerLaneWidth: CGFloat = 10
+    private let markerTrailingInset: CGFloat = 3
 
     private var currentIndex: Int {
         if let previewIndex { return previewIndex }
@@ -752,7 +753,7 @@ private struct EventDateScrubber: View {
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack {
+            ZStack(alignment: .trailing) {
                 if references.count <= markerLimit {
                     VStack(spacing: 0) {
                         ForEach(references.indices, id: \.self) { index in
@@ -776,10 +777,13 @@ private struct EventDateScrubber: View {
                                     }
                                 }
                                 .shadow(color: .black.opacity(0.34), radius: 1, y: 1)
+                                .frame(width: markerLaneWidth)
                                 .frame(maxHeight: .infinity)
                         }
                     }
                     .padding(.vertical, verticalInset)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                    .padding(.trailing, markerTrailingInset)
                 } else {
                     let currentReference = references[currentIndex]
                     Capsule()
@@ -791,7 +795,7 @@ private struct EventDateScrubber: View {
                         }
                         .shadow(color: .black.opacity(0.34), radius: 1, y: 1)
                         .position(
-                            x: proxy.size.width / 2,
+                            x: proxy.size.width - markerTrailingInset - (markerLaneWidth / 2),
                             y: markerPosition(for: currentIndex, height: proxy.size.height)
                         )
                 }

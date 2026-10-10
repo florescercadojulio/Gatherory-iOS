@@ -1206,12 +1206,21 @@ struct EventLocation: Hashable, Codable, Sendable {
     }
 }
 
+enum EventSchedulingState: String, Hashable, Codable {
+    case scheduled
+    case unscheduled
+}
+
 struct TimelineItem: Identifiable, Hashable, Codable {
     let id: UUID
     var title: String
     var category: TimelineCategory
     var purpose: EventPurpose
     var scheduledAt: Date
+    /// Optional for backwards-compatible decoding of events saved before
+    /// scheduling state was modeled. A missing value represents a scheduled
+    /// legacy event; only `.unscheduled` means the event still needs a date.
+    var schedulingState: EventSchedulingState?
     var endsAt: Date?
     var isAllDay: Bool
     var timeZoneIdentifier: String
@@ -1237,6 +1246,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         category: TimelineCategory,
         purpose: EventPurpose = .planning,
         scheduledAt: Date,
+        schedulingState: EventSchedulingState? = .scheduled,
         location: String,
         endsAt: Date? = nil,
         isAllDay: Bool = false,
@@ -1257,6 +1267,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         self.category = category
         self.purpose = purpose
         self.scheduledAt = scheduledAt
+        self.schedulingState = schedulingState
         self.endsAt = endsAt
         self.isAllDay = isAllDay
         self.timeZoneIdentifier = timeZoneIdentifier
@@ -1281,6 +1292,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         category: TimelineCategory,
         purpose: EventPurpose = .planning,
         scheduledAt: Date,
+        schedulingState: EventSchedulingState? = .scheduled,
         eventLocation: EventLocation? = nil,
         endsAt: Date? = nil,
         isAllDay: Bool = false,
@@ -1301,6 +1313,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         self.category = category
         self.purpose = purpose
         self.scheduledAt = scheduledAt
+        self.schedulingState = schedulingState
         self.endsAt = endsAt
         self.isAllDay = isAllDay
         self.timeZoneIdentifier = timeZoneIdentifier
@@ -1319,6 +1332,10 @@ struct TimelineItem: Identifiable, Hashable, Codable {
 
     var location: String? {
         eventLocation?.title
+    }
+
+    var hasScheduledDate: Bool {
+        schedulingState != .unscheduled
     }
 }
 

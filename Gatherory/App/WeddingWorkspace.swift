@@ -137,6 +137,13 @@ final class WeddingWorkspace {
         self.requiresCollaboratorApproval = requiresCollaboratorApproval
         self.defaultCollaboratorPermission = defaultCollaboratorPermission
         self.collaboratorInviteURL = collaboratorInviteURL
+
+        // Reconcile workspaces created before undated event approvals were
+        // promoted to Timeline. The linked ID keeps this migration idempotent.
+        for idea in self.ideas where idea.category == .event && idea.status == .chosen {
+            guard !self.timeline.contains(where: { $0.linkedIdeaID == idea.id }) else { continue }
+            _ = scheduleEventIdea(idea)
+        }
     }
 
     var decisionQueue: [WeddingIdea] {
@@ -144,7 +151,7 @@ final class WeddingWorkspace {
     }
 
     var availableEventContexts: [EventReference] {
-        ([.main] + childEvents.map { .subevent($0.id) })
+        ([.main] + scheduledChildEvents.map { .subevent($0.id) })
             .sorted { lhs, rhs in
                 let lhsDate = eventDate(for: lhs)
                 let rhsDate = eventDate(for: rhs)
@@ -157,7 +164,7 @@ final class WeddingWorkspace {
     /// event on the calendar. Home-tab reselection uses this as the companion
     /// destination to the main event.
     func currentOrNextChildEventReference(at date: Date = .now) -> EventReference? {
-        let candidates = childEvents.filter { $0.completionStatus == .upcoming }
+        let candidates = scheduledChildEvents.filter { $0.completionStatus == .upcoming }
 
         if let current = candidates.last(where: { event in
             guard event.scheduledAt <= date else { return false }
@@ -543,7 +550,7 @@ final class WeddingWorkspace {
         case .main:
             selectedEventReference = .main
         case .subevent(let id):
-            guard childEvents.contains(where: { $0.id == id }) else { return }
+            guard scheduledChildEvents.contains(where: { $0.id == id }) else { return }
             selectedEventReference = .subevent(id)
         case .idea:
             return
@@ -563,7 +570,11 @@ final class WeddingWorkspace {
 
     var upcomingTimeline: [TimelineItem] {
         timeline
-            .filter { $0.status != .archived && $0.completionStatus == .upcoming }
+            .filter {
+                $0.status != .archived
+                    && $0.completionStatus == .upcoming
+                    && $0.hasScheduledDate
+            }
             .sorted { $0.scheduledAt < $1.scheduledAt }
     }
 
@@ -573,8 +584,12 @@ final class WeddingWorkspace {
             .sorted { $0.scheduledAt < $1.scheduledAt }
     }
 
+    var scheduledChildEvents: [TimelineItem] {
+        childEvents.filter(\.hasScheduledDate)
+    }
+
     var approvedChildEvents: [TimelineItem] {
-        childEvents.filter { $0.status == .approved }
+        scheduledChildEvents.filter { $0.status == .approved }
     }
 
     /// The event hierarchy is deliberately shallow. The root can contain events;
@@ -620,6 +635,7 @@ final class WeddingWorkspace {
             $0.parentEventID == mainEventID
                 && $0.purpose == .eventExperience
                 && $0.status == .approved
+                && $0.hasScheduledDate
         }
         let starts = [weddingDate] + eventExperiences.map(\.scheduledAt)
         let ends = [mainEventEndsAt ?? weddingDate] + eventExperiences.map {
@@ -701,6 +717,10 @@ final class WeddingWorkspace {
         var childEvent = item
         childEvent.parentEventID = mainEventID
         let previousAllocation = timeline[index].budgetCap
+        if !childEvent.hasScheduledDate,
+           selectedEventReference == .subevent(childEvent.id) {
+            selectedEventReference = .main
+        }
         guard workspaceBudgetCap != nil else {
             childEvent.budgetCap = nil
             timeline[index] = childEvent
@@ -827,13 +847,13 @@ final class WeddingWorkspace {
         reconcileExpense(for: scopedIdea)
     }
 
-    /// Moves an approved, dated event proposal into the timeline without
-    /// duplicating it. Undated ideas stay in Ideas until someone schedules them.
+    /// Moves an approved event proposal into the timeline without duplicating
+    /// it. Undated approvals remain explicit timeline items that need a date;
+    /// they do not become selectable Home contexts until they are scheduled.
     @discardableResult
     func scheduleEventIdea(_ idea: WeddingIdea) -> UUID? {
         guard idea.status == .chosen,
-              let configuration = idea.eventConfiguration,
-              let startsAt = configuration.proposedDate else {
+              let configuration = idea.eventConfiguration else {
             return nil
         }
 
@@ -845,12 +865,21 @@ final class WeddingWorkspace {
             ? hostParticipants
             : inheritedParticipants
         let existing = timeline.first(where: { $0.linkedIdeaID == idea.id })
+        let schedulingState: EventSchedulingState = if configuration.proposedDate != nil {
+            .scheduled
+        } else if existing?.schedulingState == .scheduled {
+            .scheduled
+        } else {
+            .unscheduled
+        }
+        let startsAt = configuration.proposedDate ?? existing?.scheduledAt ?? .now
         let item = TimelineItem(
             id: existing?.id ?? UUID(),
             title: idea.title,
             category: configuration.category,
             purpose: configuration.purpose,
             scheduledAt: startsAt,
+            schedulingState: schedulingState,
             eventLocation: configuration.location,
             endsAt: configuration.proposedEndDate,
             isAllDay: configuration.isAllDay,
@@ -887,8 +916,8 @@ final class WeddingWorkspace {
     }
 
     /// Keeps approved event ideas and real child events as one lifecycle.
-    /// A dated approval creates or updates its linked event; revoking approval
-    /// removes only the event that was generated from that idea.
+    /// Approval creates a linked event even when its date still needs to be
+    /// configured; revoking approval removes only that generated event.
     private func reconcileScheduledEvent(for idea: WeddingIdea) {
         guard idea.category == .event else { return }
 

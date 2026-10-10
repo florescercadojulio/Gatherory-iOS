@@ -69,7 +69,7 @@ struct EventInvitationScreen: View {
                 eyebrow: item.purpose.title,
                 categoryTitle: item.category.title,
                 categorySymbol: item.category.symbol,
-                startsAt: item.scheduledAt,
+                startsAt: item.hasScheduledDate ? item.scheduledAt : nil,
                 endsAt: item.endsAt,
                 isAllDay: item.isAllDay,
                 timeZoneIdentifier: item.timeZoneIdentifier,

@@ -5,8 +5,10 @@ struct DecisionDeckView: View {
 
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("hasSeenDecideTimelinePrimer") private var hasSeenTimelinePrimer = false
     @State private var dragOffset: CGSize = .zero
     @State private var selectedIdeaID: UUID?
+    @State private var isShowingTimelinePrimer = false
     @Namespace private var decisionTransition
 
     private var currentIdea: WeddingIdea? {
@@ -87,6 +89,23 @@ struct DecisionDeckView: View {
                 transitionNamespace: decisionTransition
             )
         }
+        .sheet(isPresented: $isShowingTimelinePrimer) {
+            DecideTimelinePrimer {
+                hasSeenTimelinePrimer = true
+                isShowingTimelinePrimer = false
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .task {
+            guard !hasSeenTimelinePrimer else { return }
+            isShowingTimelinePrimer = true
+        }
+        .onChange(of: isShowingTimelinePrimer) { wasShowing, isShowing in
+            if wasShowing && !isShowing {
+                hasSeenTimelinePrimer = true
+            }
+        }
     }
 
     private func dragGesture(for idea: WeddingIdea) -> some Gesture {
@@ -118,6 +137,73 @@ struct DecisionDeckView: View {
         guard abs(dragOffset.width) < 10, abs(dragOffset.height) < 10 else { return }
         dragOffset = .zero
         selectedIdeaID = idea.id
+    }
+}
+
+private struct DecideTimelinePrimer: View {
+    let continueAction: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.title.bold())
+                    .foregroundStyle(AppTheme.ColorToken.accent)
+                    .accessibilityHidden(true)
+
+                Text("Decide what moves forward")
+                    .font(.title2.bold())
+
+                Text("Love an idea to approve it. Gatherory sends approved event ideas to Timeline so the next step is always clear.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+                primerRow(
+                    symbol: "calendar.badge.checkmark",
+                    title: "Already has a date",
+                    detail: "It joins your scheduled events."
+                )
+                primerRow(
+                    symbol: "calendar.badge.exclamationmark",
+                    title: "Still needs a date",
+                    detail: "It waits in Timeline under Needs Date and stays off Home until you schedule it."
+                )
+            }
+
+            Spacer(minLength: 0)
+
+            Button(action: continueAction) {
+                Text("Start Deciding")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .controlSize(.large)
+        }
+        .padding(AppTheme.Spacing.spacious)
+        .background(AppTheme.ColorToken.background)
+    }
+
+    private func primerRow(symbol: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
+            Image(systemName: symbol)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .frame(width: 32)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline)
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

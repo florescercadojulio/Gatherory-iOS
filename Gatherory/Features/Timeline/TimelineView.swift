@@ -16,7 +16,11 @@ struct TimelineView: View {
         workspace.timeline
             .filter(filter.includes)
             .sorted { lhs, rhs in
-                filter == .completed
+                if filter != .completed,
+                   lhs.hasScheduledDate != rhs.hasScheduledDate {
+                    return !lhs.hasScheduledDate
+                }
+                return filter == .completed
                     ? chronologicallyBefore(rhs, lhs)
                     : chronologicallyBefore(lhs, rhs)
         }
@@ -187,6 +191,7 @@ struct TimelineView: View {
 
 enum TimelineFilter: String, CaseIterable, Identifiable {
     case all
+    case needsDate
     case upcoming
     case completed
     case archived
@@ -196,6 +201,7 @@ enum TimelineFilter: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .all: "All"
+        case .needsDate: "Needs Date"
         case .upcoming: "Upcoming"
         case .completed: "Completed"
         case .archived: "Archive"
@@ -205,6 +211,7 @@ enum TimelineFilter: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .all: "calendar"
+        case .needsDate: "calendar.badge.exclamationmark"
         case .upcoming: "calendar.badge.clock"
         case .completed: "checkmark.circle"
         case .archived: "archivebox"
@@ -214,6 +221,7 @@ enum TimelineFilter: String, CaseIterable, Identifiable {
     var emptyTitle: String {
         switch self {
         case .all: "No events yet"
+        case .needsDate: "Everything is scheduled"
         case .upcoming: "No upcoming events"
         case .completed: "No completed events"
         case .archived: "No archived events"
@@ -223,6 +231,7 @@ enum TimelineFilter: String, CaseIterable, Identifiable {
     var emptyDescription: String {
         switch self {
         case .all: "Add an event to start building the timeline."
+        case .needsDate: "Approved event ideas without dates appear here."
         case .upcoming: "New and scheduled events appear here."
         case .completed: "Events appear here after they are marked complete."
         case .archived: "Archived events appear here."
@@ -233,10 +242,16 @@ enum TimelineFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all:
             item.status != .archived
+        case .needsDate:
+            item.status != .archived && !item.hasScheduledDate
         case .upcoming:
-            item.status != .archived && item.completionStatus == .upcoming
+            item.status != .archived
+                && item.completionStatus == .upcoming
+                && item.hasScheduledDate
         case .completed:
-            item.status != .archived && item.completionStatus == .complete
+            item.status != .archived
+                && item.completionStatus == .complete
+                && item.hasScheduledDate
         case .archived:
             item.status == .archived
         }
@@ -1063,6 +1078,7 @@ struct TimelineCollectionCard: View {
     var cardAspectRatio: CGFloat? = nil
 
     private var scheduleSummary: String {
+        guard item.hasScheduledDate else { return "Date not set" }
         let start = item.scheduledAt.formatted(
             date: .abbreviated,
             time: item.isAllDay ? .omitted : .shortened
@@ -1154,7 +1170,7 @@ struct TimelineCollectionCard: View {
         .matchedTransitionSource(id: item.id, in: transitionNamespace)
         .accessibilityElement(children: .combine)
         .accessibilityValue(
-            "\(item.purpose.title), \(item.completionStatus == .complete ? "Completed" : "Upcoming")"
+            "\(item.purpose.title), \(item.hasScheduledDate ? (item.completionStatus == .complete ? "Completed" : "Upcoming") : "Needs a date")"
         )
     }
 }
