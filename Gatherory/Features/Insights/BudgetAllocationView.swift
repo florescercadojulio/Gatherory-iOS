@@ -1,30 +1,45 @@
 import SwiftUI
 
-/// A target-first budget editor. Add mode chooses where money comes from;
-/// subtract mode chooses where the selected event's money should go.
+/// Edits the selected event's final allocation. The direction of the transfer
+/// is derived from the proposed value so people only decide the result they want.
 struct BudgetAllocationView: View {
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let target: EventReference
 
-    @State private var mode: BudgetAdjustmentMode = .add
-    @State private var transferAmount = "100"
-    @State private var feedback: BudgetTransferFeedback?
-    @State private var completedTransferCount = 0
+    @State private var proposedAllocation = ""
+    @State private var selectedAccount: BudgetAccount?
+    @State private var feedbackMessage: String?
+    @State private var didInitialize = false
 
     private var currencyCode: String {
         Locale.current.currency?.identifier ?? "USD"
     }
 
-    private var parsedTransferAmount: Decimal? {
+    private var currentAllocation: Decimal {
+        workspace.budgetCap(for: target) ?? .zero
+    }
+
+    private var spentAmount: Decimal {
+        workspace.costTotal(for: target)
+    }
+
+    private var parsedAllocation: Decimal? {
         let decimalSeparator = Locale.current.decimalSeparator ?? "."
-        let normalized = transferAmount
+        let normalized = proposedAllocation
             .replacingOccurrences(of: decimalSeparator, with: ".")
             .replacingOccurrences(of: ",", with: "")
-        guard let amount = Decimal(string: normalized), amount > .zero else { return nil }
+        guard let amount = Decimal(string: normalized), amount >= .zero else { return nil }
         return amount
+    }
+
+    private var change: BudgetAllocationChange {
+        guard let parsedAllocation else { return .invalid }
+        let difference = parsedAllocation - currentAllocation
+        if difference > .zero { return .increase(difference) }
+        if difference < .zero { return .decrease(abs(difference)) }
+        return .unchanged
     }
 
     private var transferOptions: [BudgetAccount] {
@@ -34,293 +49,283 @@ struct BudgetAllocationView: View {
         let eventAccounts = eventReferences
             .filter { $0 != target }
             .map(BudgetAccount.event)
-
         return [.freePool] + eventAccounts
     }
 
-    private var columns: [GridItem] {
-        Array(
-            repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.compact),
-            count: dynamicTypeSize.isAccessibilitySize ? 1 : 2
-        )
+    private var canSave: Bool {
+        guard let selectedAccount else { return false }
+        switch change {
+        case .increase(let amount):
+            return (workspace.budgetBalance(for: selectedAccount) ?? .zero) >= amount
+        case .decrease:
+            return true
+        case .unchanged, .invalid:
+            return false
+        }
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
-                workspaceSummary
-                targetCard
-                modePicker
-                transferAmountControl
-                transferOptionsSection
+        Form {
+            Section("Event") {
+                targetRow
             }
-            .padding(.horizontal, AppTheme.Layout.screenHorizontal)
-            .padding(.vertical, AppTheme.Layout.screenTop)
+
+            Section {
+                LabeledContent("Current Allocation") {
+                    Text(
+                        currentAllocation,
+                        format: .currency(code: currencyCode).precision(.fractionLength(0))
+                    )
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                }
+
+                LabeledContent("New Allocation") {
+                    TextField("Amount", text: $proposedAllocation)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .fontWeight(.semibold)
+                        .monospacedDigit()
+                        .frame(minWidth: 110)
+                        .accessibilityLabel("New allocation")
+                }
+
+                changeSummary
+            } header: {
+                Text("Allocation")
+            } footer: {
+                Text("Enter the total budget this event should have. Gatherory handles the transfer.")
+            }
+
+            if change.needsAccount {
+                Section {
+                    ForEach(transferOptions, id: \.self) { account in
+                        accountRow(account)
+                    }
+                } header: {
+                    Text(change.accountSectionTitle)
+                } footer: {
+                    Text(accountSectionHelp)
+                }
+            }
+
+            if let feedbackMessage {
+                Section {
+                    Label(feedbackMessage, systemImage: "exclamationmark.circle")
+                        .foregroundStyle(.red)
+                }
+            }
         }
+        .appKeyboardDismissal()
+        .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
-        .navigationTitle("Edit Budget")
+        .navigationTitle("Event Budget")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+
             ToolbarItem(placement: .confirmationAction) {
-                Button("Done") { dismiss() }
+                Button("Save") { save() }
+                    .disabled(!canSave)
+                    .keyboardShortcut(.defaultAction)
             }
         }
-        .sensoryFeedback(.success, trigger: completedTransferCount)
-        .onChange(of: mode) { _, _ in feedback = nil }
+        .task {
+            guard !didInitialize else { return }
+            proposedAllocation = NSDecimalNumber(decimal: currentAllocation).stringValue
+            didInitialize = true
+        }
+        .onChange(of: proposedAllocation) { _, _ in
+            feedbackMessage = nil
+            chooseDefaultAccountIfNeeded()
+        }
     }
 
-    private var workspaceSummary: some View {
-        HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.standard) {
-            summaryValue(
-                title: "Workspace Budget",
-                value: workspace.workspaceBudgetCap ?? .zero,
-                alignment: .leading
-            )
+    private var targetRow: some View {
+        HStack(spacing: AppTheme.Spacing.standard) {
+            Image(systemName: symbol(for: target))
+                .font(.headline)
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .frame(width: 36, height: 36)
+                .background(AppTheme.ColorToken.accent.opacity(0.12), in: Circle())
 
-            Spacer(minLength: AppTheme.Spacing.standard)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title(for: target))
+                    .font(.body.weight(.medium))
+                    .lineLimit(2)
+                Text("\(spentAmount.formatted(.currency(code: currencyCode))) spent")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
 
-            summaryValue(
-                title: "Free Pool",
-                value: workspace.freeBudgetPool,
-                alignment: .trailing
-            )
+            Spacer(minLength: 0)
         }
-        .appCard(background: AppTheme.ColorToken.surface)
+        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
         .accessibilityElement(children: .combine)
     }
 
-    private func summaryValue(
-        title: String,
-        value: Decimal,
-        alignment: HorizontalAlignment
-    ) -> some View {
-        VStack(alignment: alignment, spacing: 4) {
-            Text(title)
-                .font(.subheadline)
+    @ViewBuilder
+    private var changeSummary: some View {
+        switch change {
+        case .increase(let amount):
+            Label(
+                "Add \(amount.formatted(.currency(code: currencyCode)))",
+                systemImage: "arrow.down.circle.fill"
+            )
+            .foregroundStyle(AppTheme.ColorToken.accent)
+
+        case .decrease(let amount):
+            VStack(alignment: .leading, spacing: 6) {
+                Label(
+                    "Release \(amount.formatted(.currency(code: currencyCode)))",
+                    systemImage: "arrow.up.circle.fill"
+                )
+                .foregroundStyle(AppTheme.ColorToken.accent)
+
+                if let parsedAllocation, parsedAllocation < spentAmount {
+                    Label(
+                        "This leaves the event \((spentAmount - parsedAllocation).formatted(.currency(code: currencyCode))) over budget.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                }
+            }
+
+        case .unchanged:
+            Label("No change", systemImage: "equal.circle")
                 .foregroundStyle(.secondary)
-            Text(value, format: .currency(code: currencyCode).precision(.fractionLength(0)))
-                .font(.title3.weight(.bold))
-                .monospacedDigit()
+
+        case .invalid:
+            Label("Enter a valid amount", systemImage: "exclamationmark.circle")
+                .foregroundStyle(.red)
         }
     }
 
-    private var targetCard: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-            Label("Editing Allocation", systemImage: "slider.horizontal.3")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(AppTheme.ColorToken.accent)
+    private func accountRow(_ account: BudgetAccount) -> some View {
+        let isSelected = selectedAccount == account
+        let isAvailable = accountCanFundChange(account)
 
+        return Button {
+            guard isAvailable else { return }
+            selectedAccount = account
+            feedbackMessage = nil
+        } label: {
             HStack(spacing: AppTheme.Spacing.standard) {
-                Image(systemName: symbol(for: target))
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(AppTheme.ColorToken.accent)
-                    .frame(width: 42, height: 42)
-                    .background(AppTheme.ColorToken.accent.opacity(0.12), in: Circle())
+                Image(systemName: symbol(for: account))
+                    .foregroundStyle(isAvailable ? AppTheme.ColorToken.accent : .secondary)
+                    .frame(width: 28)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title(for: target))
-                        .font(.headline)
-                        .lineLimit(2)
-                    Text("Current allocation")
-                        .font(.caption)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title(for: account))
+                        .foregroundStyle(.primary)
+                    Text(accountDetail(account))
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: AppTheme.Spacing.compact)
 
                 Text(
-                    workspace.budgetCap(for: target) ?? .zero,
-                    format: .currency(code: currencyCode).precision(.fractionLength(0))
-                )
-                .font(.headline)
-                .monospacedDigit()
-            }
-        }
-        .appCard(background: AppTheme.ColorToken.elevatedSurface)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var modePicker: some View {
-        Picker("Adjustment", selection: $mode) {
-            ForEach(BudgetAdjustmentMode.allCases) { option in
-                Label(option.title, systemImage: option.symbol)
-                    .tag(option)
-            }
-        }
-        .pickerStyle(.segmented)
-        .accessibilityHint("Choose whether to add to or subtract from this event's budget")
-    }
-
-    private var transferAmountControl: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-            Text("Amount")
-                .font(AppTheme.Typography.sectionTitle)
-
-            HStack(spacing: AppTheme.Spacing.compact) {
-                Button("Decrease", systemImage: "minus") {
-                    adjustTransferAmount(by: -50)
-                }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-
-                TextField("Amount", text: $transferAmount)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.center)
-                    .font(.title3.weight(.semibold))
-                    .monospacedDigit()
-                    .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
-                    .background(AppTheme.ColorToken.elevatedSurface, in: Capsule())
-                    .accessibilityLabel("Transfer amount")
-
-                Button("Increase", systemImage: "plus") {
-                    adjustTransferAmount(by: 50)
-                }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-            }
-
-            if let feedback {
-                Label(
-                    feedback.message,
-                    systemImage: feedback.isError
-                        ? "exclamationmark.circle"
-                        : "checkmark.circle"
-                )
-                .font(.footnote)
-                .foregroundStyle(
-                    feedback.isError ? Color.red : AppTheme.ColorToken.textSecondary
-                )
-                .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var transferOptionsSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-            Text(mode == .add ? "Take From" : "Send To")
-                .font(AppTheme.Typography.sectionTitle)
-            Text(instructionText)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            LazyVGrid(columns: columns, spacing: AppTheme.Spacing.compact) {
-                ForEach(transferOptions, id: \.self) { account in
-                    accountTile(account)
-                }
-            }
-        }
-    }
-
-    private var instructionText: String {
-        switch mode {
-        case .add:
-            "Tap the free pool or another event to fund \(title(for: target))."
-        case .subtract:
-            "Tap where the budget removed from \(title(for: target)) should go."
-        }
-    }
-
-    private func accountTile(_ account: BudgetAccount) -> some View {
-        Button {
-            performTransfer(with: account)
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                Label(title(for: account), systemImage: symbol(for: account))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-
-                Text(
                     workspace.budgetBalance(for: account) ?? .zero,
                     format: .currency(code: currencyCode).precision(.fractionLength(0))
                 )
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.primary)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isAvailable ? .primary : .secondary)
                 .monospacedDigit()
 
-                Text(mode == .add ? "Available" : "Current allocation")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? AppTheme.ColorToken.accent : .secondary)
+                    .accessibilityHidden(true)
             }
-            .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
-            .appCard(background: AppTheme.ColorToken.elevatedSurface)
+            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!canTransfer(with: account))
-        .accessibilityHint(accessibilityHint(for: account))
+        .disabled(!isAvailable)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
     }
 
-    private func canTransfer(with account: BudgetAccount) -> Bool {
-        guard let amount = parsedTransferAmount else { return false }
-        switch mode {
-        case .add:
-            return (workspace.budgetBalance(for: account) ?? .zero) >= amount
-        case .subtract:
-            return (workspace.budgetCap(for: target) ?? .zero) >= amount
+    private func accountCanFundChange(_ account: BudgetAccount) -> Bool {
+        switch change {
+        case .increase(let amount):
+            (workspace.budgetBalance(for: account) ?? .zero) >= amount
+        case .decrease:
+            true
+        case .unchanged, .invalid:
+            false
         }
     }
 
-    private func accessibilityHint(for account: BudgetAccount) -> String {
-        switch mode {
-        case .add:
-            "Moves the entered amount from \(title(for: account)) into this event"
-        case .subtract:
-            "Moves the entered amount from this event into \(title(for: account))"
+    private var accountSectionHelp: String {
+        if case .increase = change,
+           !transferOptions.contains(where: accountCanFundChange) {
+            return "No single source can cover this increase. Enter a smaller allocation and make another transfer if needed."
+        }
+        return change.accountSectionHelp(for: title(for: target))
+    }
+
+    private func accountDetail(_ account: BudgetAccount) -> String {
+        switch change {
+        case .increase:
+            account == .freePool ? "Unallocated budget" : "Available from this event"
+        case .decrease:
+            account == .freePool ? "Leave unallocated" : "Add to this event"
+        case .unchanged, .invalid:
+            ""
         }
     }
 
-    private func adjustTransferAmount(by change: Decimal) {
-        let current = parsedTransferAmount ?? .zero
-        let updated = max(Decimal(50), current + change)
-        transferAmount = NSDecimalNumber(decimal: updated).stringValue
-        feedback = nil
-    }
-
-    private func performTransfer(with account: BudgetAccount) {
-        guard let amount = parsedTransferAmount else {
-            feedback = BudgetTransferFeedback(
-                message: "Enter an amount greater than zero.",
-                isError: true
-            )
+    private func chooseDefaultAccountIfNeeded() {
+        guard change.needsAccount else {
+            selectedAccount = nil
             return
         }
 
-        let source: BudgetAccount = mode == .add ? account : .event(target)
-        let destination: BudgetAccount = mode == .add ? .event(target) : account
-
-        guard workspace.transferBudget(amount, from: source, to: destination) else {
-            let available = workspace.budgetBalance(for: source) ?? .zero
-            feedback = BudgetTransferFeedback(
-                message: "Only \(available.formatted(.currency(code: currencyCode))) is available from \(title(for: source)).",
-                isError: true
-            )
+        if let selectedAccount, accountCanFundChange(selectedAccount) {
             return
         }
 
-        let direction = mode == .add ? "Added" : "Moved"
-        feedback = BudgetTransferFeedback(
-            message: "\(direction) \(amount.formatted(.currency(code: currencyCode))) \(transferDescription(for: account)).",
-            isError: false
-        )
-        completedTransferCount += 1
+        if accountCanFundChange(.freePool) {
+            selectedAccount = .freePool
+        } else {
+            selectedAccount = transferOptions.first(where: accountCanFundChange)
+        }
     }
 
-    private func transferDescription(for account: BudgetAccount) -> String {
-        switch mode {
-        case .add:
-            "from \(title(for: account))"
-        case .subtract:
-            "to \(title(for: account))"
+    private func save() {
+        guard let selectedAccount else { return }
+
+        let transfer: (amount: Decimal, source: BudgetAccount, destination: BudgetAccount)? = switch change {
+        case .increase(let amount):
+            (amount, selectedAccount, .event(target))
+        case .decrease(let amount):
+            (amount, .event(target), selectedAccount)
+        case .unchanged, .invalid:
+            nil
         }
+
+        guard let transfer,
+              workspace.transferBudget(
+                transfer.amount,
+                from: transfer.source,
+                to: transfer.destination
+              ) else {
+            feedbackMessage = "That budget changed elsewhere. Review the amounts and try again."
+            chooseDefaultAccountIfNeeded()
+            return
+        }
+
+        dismiss()
     }
 
     private func title(for account: BudgetAccount) -> String {
         switch account {
         case .freePool:
-            "Free Pool"
+            "Unallocated"
         case .event(let reference):
             title(for: reference)
         }
@@ -358,28 +363,40 @@ struct BudgetAllocationView: View {
     }
 }
 
-private enum BudgetAdjustmentMode: String, CaseIterable, Identifiable {
-    case add
-    case subtract
+private enum BudgetAllocationChange: Equatable {
+    case increase(Decimal)
+    case decrease(Decimal)
+    case unchanged
+    case invalid
 
-    var id: Self { self }
-
-    var title: String {
+    var needsAccount: Bool {
         switch self {
-        case .add: "Add"
-        case .subtract: "Subtract"
+        case .increase, .decrease:
+            true
+        case .unchanged, .invalid:
+            false
         }
     }
 
-    var symbol: String {
+    var accountSectionTitle: String {
         switch self {
-        case .add: "plus"
-        case .subtract: "minus"
+        case .increase:
+            "Fund Increase From"
+        case .decrease:
+            "Send Difference To"
+        case .unchanged, .invalid:
+            ""
         }
     }
-}
 
-private struct BudgetTransferFeedback {
-    let message: String
-    let isError: Bool
+    func accountSectionHelp(for eventTitle: String) -> String {
+        switch self {
+        case .increase:
+            "Choose one source for the increase to \(eventTitle)."
+        case .decrease:
+            "Choose where the released budget should go."
+        case .unchanged, .invalid:
+            ""
+        }
+    }
 }

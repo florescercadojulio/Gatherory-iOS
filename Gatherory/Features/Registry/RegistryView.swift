@@ -7,21 +7,8 @@ struct RegistryView: View {
     @State private var selectedItemID: UUID?
     @Namespace private var registryTransition
 
-    private var availableItems: [RegistryItem] {
-        workspace.registry.filter { !$0.isFulfilled }
-    }
-
-    private var reservedItems: [RegistryItem] {
-        workspace.registry.filter(\.isFulfilled)
-    }
-
     private var visibleItems: [RegistryItem] {
-        switch selectedCollection {
-        case .available:
-            availableItems
-        case .reserved:
-            reservedItems
-        }
+        workspace.registry.filter(selectedCollection.includes)
     }
 
     var body: some View {
@@ -128,7 +115,7 @@ struct RegistryView: View {
     }
 }
 
-private enum RegistryCollection: String, CaseIterable, Identifiable {
+enum RegistryCollection: String, CaseIterable, Identifiable {
     case available
     case reserved
 
@@ -158,7 +145,16 @@ private enum RegistryCollection: String, CaseIterable, Identifiable {
     var emptyDescription: String {
         switch self {
         case .available: "Add a gift or wait for a reserved gift to become available again."
-        case .reserved: "Gifts appear here after guests reserve every available quantity."
+        case .reserved: "Gifts appear here after at least one has been reserved."
+        }
+    }
+
+    func includes(_ item: RegistryItem) -> Bool {
+        switch self {
+        case .available:
+            item.remainingCount > 0
+        case .reserved:
+            item.committedCount > 0
         }
     }
 }
@@ -252,7 +248,7 @@ private struct RegistryItemDetailView: View {
         .navigationTitle("Gift details")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
-        .toolbarColorScheme(.dark, for: .navigationBar)
+        .appImageNavigationBarAppearance()
         .toolbar {
             if let item {
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -402,7 +398,7 @@ private struct RegistryItemDetailScreen: View {
             reduceTransparency ? AnyShapeStyle(.black.opacity(0.82)) : AnyShapeStyle(.regularMaterial),
             in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
         )
-        .environment(\.colorScheme, .dark)
+        .appImageOverlayAppearance()
     }
 }
 
@@ -501,6 +497,7 @@ private struct RegistryItemEditorView: View {
                 }
             }
         }
+        .appKeyboardDismissal()
         .navigationTitle(item == nil ? "Add to registry" : "Edit gift")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

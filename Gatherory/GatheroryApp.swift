@@ -9,16 +9,18 @@ import SwiftUI
 
 @main
 struct GatheroryApp: App {
-    @State private var workspaceLibrary = WorkspaceLibrary.sample
+    @State private var authentication = AuthenticationSession.bootstrap()
+    @State private var workspaceLibrary = WorkspaceLibrary.bootstrap()
     @State private var musicCatalog = MusicCatalog()
-    @AppStorage("appAppearance") private var appearance = AppAppearance.system.rawValue
+    @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
 
     var body: some Scene {
         WindowGroup {
             GatheroryLaunchContainer()
+                .environment(authentication)
                 .environment(workspaceLibrary)
                 .environment(musicCatalog)
-                .preferredColorScheme(AppAppearance(rawValue: appearance)?.colorScheme)
+                .appUserAppearance(AppAppearance(rawValue: appearance) ?? .system)
         }
     }
 }

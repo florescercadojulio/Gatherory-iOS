@@ -1,4 +1,5 @@
 import MapKit
+import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -11,6 +12,7 @@ struct EventInvitationScreen: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var scrollOffset: CGFloat = 0
     @State private var selectedChild: TimelineItem?
+    @State private var selectedMomentPhoto: PhotosPickerItem?
     @State private var weather = EventWeatherModel()
     @Namespace private var childTransition
 
@@ -22,7 +24,6 @@ struct EventInvitationScreen: View {
             let hosts = workspace.members
                 .filter { $0.participantRole == .host }
                 .map(\.name)
-                .formatted()
 
             return EventPresentation(
                 title: workspace.title,
@@ -32,6 +33,7 @@ struct EventInvitationScreen: View {
                 startsAt: workspace.weddingDate,
                 endsAt: workspace.mainEventEndsAt,
                 isAllDay: workspace.mainEventIsAllDay,
+                timeZoneIdentifier: workspace.mainEventTimeZoneIdentifier,
                 location: workspace.mainEventLocation,
                 imageData: workspace.mainEventImageData,
                 fallbackAssetName: "WeddingVenueHero",
@@ -41,7 +43,7 @@ struct EventInvitationScreen: View {
                 statusTitle: workspace.currentMainEventStatus.title,
                 statusSymbol: workspace.currentMainEventStatus.symbol,
                 peopleLabel: "Hosted By",
-                people: hosts.isEmpty ? "Your hosts" : hosts,
+                people: hosts.isEmpty ? ["Your hosts"] : hosts,
                 response: workspace.mainEventResponse,
                 permitsResponse: !workspace.currentMainEventStatus.isReadOnly,
                 note: workspace.eventMessage,
@@ -61,7 +63,6 @@ struct EventInvitationScreen: View {
                         : $0.participantRole != .guest
                 }
                 .map(\.name)
-                .formatted()
 
             return EventPresentation(
                 title: item.title,
@@ -71,6 +72,7 @@ struct EventInvitationScreen: View {
                 startsAt: item.scheduledAt,
                 endsAt: item.endsAt,
                 isAllDay: item.isAllDay,
+                timeZoneIdentifier: item.timeZoneIdentifier,
                 location: item.eventLocation,
                 imageData: item.imageData,
                 fallbackAssetName: item.category == .venue ? "WeddingVenueHero" : nil,
@@ -81,7 +83,7 @@ struct EventInvitationScreen: View {
                 statusSymbol: item.status.symbol,
                 peopleLabel: item.purpose == .eventExperience ? "Hosted By" : "Planning Team",
                 people: participants.isEmpty
-                    ? (item.purpose == .eventExperience ? "Your hosts" : "Planning team")
+                    ? [item.purpose == .eventExperience ? "Your hosts" : "Planning team"]
                     : participants,
                 response: item.response,
                 permitsResponse: item.status != .archived,
@@ -101,8 +103,9 @@ struct EventInvitationScreen: View {
                 categoryTitle: configuration.category.title,
                 categorySymbol: configuration.category.symbol,
                 startsAt: configuration.proposedDate,
-                endsAt: nil,
-                isAllDay: false,
+                endsAt: configuration.proposedEndDate,
+                isAllDay: configuration.isAllDay,
+                timeZoneIdentifier: configuration.timeZoneIdentifier,
                 location: configuration.location,
                 imageData: idea.imageData,
                 fallbackAssetName: configuration.category == .venue ? "WeddingVenueHero" : nil,
@@ -112,7 +115,7 @@ struct EventInvitationScreen: View {
                 statusTitle: idea.status.title,
                 statusSymbol: idea.status.symbol,
                 peopleLabel: "Proposed By",
-                people: idea.submittedBy,
+                people: [idea.submittedBy],
                 response: nil,
                 permitsResponse: false,
                 note: idea.note,
@@ -178,6 +181,15 @@ struct EventInvitationScreen: View {
             guard let presentation, let startsAt = presentation.startsAt else { return }
             await weather.load(on: startsAt, location: presentation.location)
         }
+        .onChange(of: selectedMomentPhoto) { _, item in
+            guard reference == .main, let item else { return }
+
+            Task {
+                guard let imageData = try? await item.loadTransferable(type: Data.self) else { return }
+                workspace.addMainEventMoment(imageData)
+                selectedMomentPhoto = nil
+            }
+        }
     }
 
     private var blurProgress: CGFloat {
@@ -215,12 +227,6 @@ struct EventInvitationScreen: View {
                     if let location = event.location {
                         Text(location.title)
                             .font(.subheadline.weight(.semibold))
-
-                        if !location.detail.isEmpty {
-                            Text(location.detail)
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.84))
-                        }
                     }
                 }
                 .multilineTextAlignment(.center)
@@ -235,7 +241,7 @@ struct EventInvitationScreen: View {
                 }
                 .disabled(!event.permitsResponse)
                 .padding(.top, AppTheme.Spacing.compact)
-                .environment(\.colorScheme, .dark)
+                .appImageOverlayAppearance()
                 .accessibilityLabel("Attendance response")
             }
         }
@@ -248,11 +254,29 @@ struct EventInvitationScreen: View {
 
     private func information(_ event: EventPresentation) -> some View {
         LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
-            if !event.moments.isEmpty {
-                momentsCard(event.moments)
+            hostCard(event)
+            timingCard(event)
+
+            if let location = event.location {
+                if event.startsAt != nil {
+                    EventInvitationWeatherView(
+                        phase: weather.phase,
+                        attribution: weather.attribution,
+                        eventDate: event.startsAt
+                    ) {
+                        Task {
+                            guard let startsAt = event.startsAt else { return }
+                            await weather.load(on: startsAt, location: event.location)
+                        }
+                    }
+                }
+
+                EventInvitationLocationView(location: location)
             }
 
-            detailsCard(event)
+            if reference == .main || !event.moments.isEmpty {
+                momentsCard(event.moments)
+            }
 
             if reference.canHaveChildren, !event.children.isEmpty {
                 scheduleCard(event.children)
@@ -280,50 +304,67 @@ struct EventInvitationScreen: View {
         .padding(.top, AppTheme.Spacing.section)
         .padding(.bottom, AppTheme.Layout.screenBottom + AppTheme.Spacing.section)
         .foregroundStyle(.white)
-        .environment(\.colorScheme, .dark)
+        .appImageOverlayAppearance()
     }
 
-    private func detailsCard(_ event: EventPresentation) -> some View {
-        EventInvitationSection(title: "Details", symbol: "calendar") {
-            EventInvitationDetailRow(
-                symbol: "calendar",
-                title: "Date and Time",
-                value: scheduleSummary(event)
-            )
+    private func hostCard(_ event: EventPresentation) -> some View {
+        EventInvitationFeatureCard {
+            VStack(spacing: AppTheme.Spacing.standard) {
+                Text(event.peopleLabel)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.68))
 
-            if let purpose = event.purpose {
-                EventInvitationDetailRow(
-                    symbol: purpose.symbol,
-                    title: "Purpose",
-                    value: purpose.title
-                )
+                EventPeopleBubbles(names: event.people)
+
+                Text(event.people.formatted())
+                    .font(.title3.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .combine)
+        }
+    }
 
-            if let location = event.location {
-                EventInvitationLocationView(location: location)
+    private func timingCard(_ event: EventPresentation) -> some View {
+        EventInvitationFeatureCard {
+            VStack(spacing: AppTheme.Spacing.standard) {
+                Label(event.categoryTitle, systemImage: event.categorySymbol)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.70))
 
-                if event.startsAt != nil {
-                    TimelineWeatherRow(phase: weather.phase, attribution: weather.attribution) {
-                        Task {
-                            guard let startsAt = event.startsAt else { return }
-                            await weather.load(on: startsAt, location: event.location)
+                Text(scheduleSummary(event))
+                    .font(.title2.weight(.bold))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: AppTheme.Spacing.compact) {
+                        eventMetadataPill(event.statusTitle, symbol: event.statusSymbol)
+                        if let purpose = event.purpose {
+                            eventMetadataPill(purpose.shortTitle, symbol: purpose.symbol)
+                        }
+                    }
+
+                    VStack(spacing: AppTheme.Spacing.compact) {
+                        eventMetadataPill(event.statusTitle, symbol: event.statusSymbol)
+                        if let purpose = event.purpose {
+                            eventMetadataPill(purpose.shortTitle, symbol: purpose.symbol)
                         }
                     }
                 }
             }
-
-            EventInvitationDetailRow(
-                symbol: "person.2.fill",
-                title: event.peopleLabel,
-                value: event.people
-            )
-
-            EventInvitationDetailRow(
-                symbol: event.statusSymbol,
-                title: reference == .main ? "Event Status" : "Planning Status",
-                value: event.statusTitle
-            )
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .combine)
         }
+    }
+
+    private func eventMetadataPill(_ title: String, symbol: String) -> some View {
+        Label(title, systemImage: symbol)
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, AppTheme.Spacing.standard)
+            .padding(.vertical, 8)
+            .background(.white.opacity(0.12), in: Capsule())
     }
 
     private func scheduleCard(_ children: [TimelineItem]) -> some View {
@@ -355,31 +396,85 @@ struct EventInvitationScreen: View {
     }
 
     private func momentsCard(_ moments: [EventMoment]) -> some View {
-        EventInvitationSection(title: "Moments", symbol: "photo.on.rectangle.angled") {
-            LazyVGrid(
-                columns: [GridItem(.flexible()), GridItem(.flexible())],
-                spacing: AppTheme.Spacing.compact
-            ) {
-                ForEach(moments) { moment in
-                    if let image = UIImage(data: moment.imageData) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .aspectRatio(0.82, contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+        EventInvitationFeatureCard {
+            VStack(spacing: AppTheme.Spacing.standard) {
+                Label("Shared Album", systemImage: "photo.on.rectangle.angled")
+                    .font(.title3.bold())
+
+                if moments.isEmpty {
+                    Image(systemName: "photo.stack")
+                        .font(.system(size: 52, weight: .light))
+                        .foregroundStyle(.white.opacity(0.74))
+                        .frame(height: 112)
+
+                    Text("Photos shared during the event will gather here.")
+                        .font(.body)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .multilineTextAlignment(.center)
+                } else {
+                    GeometryReader { proxy in
+                        let visibleMoments = Array(moments.prefix(3))
+                        let overlap: CGFloat = 24
+                        let photoWidth = min(
+                            118,
+                            max(82, (proxy.size.width + overlap * CGFloat(visibleMoments.count - 1)) / CGFloat(visibleMoments.count))
+                        )
+                        let centerIndex = Double(visibleMoments.count - 1) / 2
+
+                        HStack(spacing: -overlap) {
+                            ForEach(Array(visibleMoments.enumerated()), id: \.element.id) { index, moment in
+                                if let image = UIImage(data: moment.imageData) {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: photoWidth, height: min(photoWidth * 1.25, 148))
+                                        .clipShape(
+                                            RoundedRectangle(
+                                                cornerRadius: AppTheme.Radius.control,
+                                                style: .continuous
+                                            )
+                                        )
+                                        .overlay {
+                                            RoundedRectangle(
+                                                cornerRadius: AppTheme.Radius.control,
+                                                style: .continuous
+                                            )
+                                            .stroke(.white.opacity(0.26), lineWidth: 0.5)
+                                        }
+                                        .rotationEffect(.degrees((Double(index) - centerIndex) * 5))
+                                        .zIndex(Double(visibleMoments.count - index))
+                                        .accessibilityLabel("Photo added by \(moment.addedBy)")
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+                    .frame(height: 158)
+                }
+
+                if reference == .main, workspace.canAddEventMoments {
+                    PhotosPicker(selection: $selectedMomentPhoto, matching: .images) {
+                        Label("Add Photos", systemImage: "photo.badge.plus")
+                            .font(.headline)
+                            .padding(.horizontal, AppTheme.Spacing.spacious)
+                            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.capsule)
                 }
             }
+            .frame(maxWidth: .infinity)
         }
     }
 
     private func scheduleSummary(_ event: EventPresentation) -> String {
         guard let startsAt = event.startsAt else { return "To be decided" }
-        let start = startsAt.formatted(date: .long, time: event.isAllDay ? .omitted : .shortened)
-        guard let endsAt = event.endsAt else {
-            return event.isAllDay ? "\(start) · All-day" : start
-        }
-        return "\(start) – \(endsAt.formatted(date: .abbreviated, time: event.isAllDay ? .omitted : .shortened))"
+        return EventSchedule(
+            startsAt: startsAt,
+            endsAt: event.endsAt,
+            isAllDay: event.isAllDay,
+            timeZoneIdentifier: event.timeZoneIdentifier
+        ).summary
     }
 
     private func setResponse(_ response: EventResponse) {
@@ -403,6 +498,7 @@ private struct EventPresentation {
     let startsAt: Date?
     let endsAt: Date?
     let isAllDay: Bool
+    let timeZoneIdentifier: String
     let location: EventLocation?
     let imageData: Data?
     let fallbackAssetName: String?
@@ -412,7 +508,7 @@ private struct EventPresentation {
     let statusTitle: String
     let statusSymbol: String
     let peopleLabel: String
-    let people: String
+    let people: [String]
     let response: EventResponse?
     let permitsResponse: Bool
     let note: String
@@ -479,6 +575,202 @@ private struct EventInvitationBackdrop: View {
     }
 }
 
+private struct EventInvitationFeatureCard<Content: View>: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    let contentPadding: CGFloat
+    @ViewBuilder let content: Content
+
+    init(
+        contentPadding: CGFloat = AppTheme.Spacing.spacious,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.contentPadding = contentPadding
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(contentPadding)
+            .frame(maxWidth: .infinity)
+            .background {
+                let shape = RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                if reduceTransparency {
+                    shape.fill(.black.opacity(0.92))
+                } else {
+                    shape
+                        .fill(.regularMaterial)
+                        .overlay(shape.fill(.black.opacity(0.38)))
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                    .stroke(.white.opacity(reduceTransparency ? 0.14 : 0.22), lineWidth: 0.5)
+            }
+            .foregroundStyle(.white)
+    }
+}
+
+private struct EventPeopleBubbles: View {
+    let names: [String]
+
+    var body: some View {
+        HStack(spacing: -10) {
+            ForEach(Array(names.prefix(5).enumerated()), id: \.offset) { index, name in
+                Text(initials(for: name))
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(bubbleColor(at: index), in: Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.72), lineWidth: 2))
+                    .accessibilityHidden(true)
+            }
+
+            if names.count > 5 {
+                Text("+\(names.count - 5)")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(.white.opacity(0.18), in: Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.72), lineWidth: 2))
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private func initials(for name: String) -> String {
+        let initials = name
+            .split(separator: " ")
+            .prefix(2)
+            .compactMap(\.first)
+        return String(initials).uppercased()
+    }
+
+    private func bubbleColor(at index: Int) -> Color {
+        let palette: [Color] = [.blue, .indigo, .teal, .purple, .cyan]
+        return palette[index % palette.count].opacity(0.88)
+    }
+}
+
+private struct EventInvitationWeatherView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let phase: EventWeatherPhase
+    let attribution: EventWeatherAttribution?
+    let eventDate: Date?
+    let retry: () -> Void
+
+    var body: some View {
+        EventInvitationFeatureCard {
+            VStack(spacing: AppTheme.Spacing.standard) {
+                VStack(spacing: 3) {
+                    Text("Weather")
+                        .font(.title3.bold())
+
+                    if let eventDate {
+                        Text(eventDate, format: .dateTime.month(.wide).day())
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.68))
+                    }
+                }
+
+                weatherContent
+            }
+            .frame(maxWidth: .infinity)
+            .multilineTextAlignment(.center)
+        }
+    }
+
+    @ViewBuilder
+    private var weatherContent: some View {
+        switch phase {
+        case .idle, .loading:
+            ProgressView("Checking the forecast…")
+                .tint(.white)
+                .foregroundStyle(.white)
+                .frame(minHeight: 76)
+
+        case .forecast(let forecast):
+            Image(systemName: forecast.symbolName)
+                .symbolRenderingMode(.multicolor)
+                .font(.system(size: 42))
+                .accessibilityHidden(true)
+
+            Text(
+                "Expect \(forecast.conditionDescription.lowercased()), with a high of " +
+                "\(forecast.highTemperatureText) and a low of \(forecast.lowTemperatureText)."
+            )
+            .font(.title3.weight(.medium))
+            .fixedSize(horizontal: false, vertical: true)
+
+            Label(
+                "\(forecast.precipitationChanceText) chance of precipitation",
+                systemImage: "drop.fill"
+            )
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.white.opacity(0.72))
+
+            if let attribution {
+                weatherAttribution(attribution)
+            }
+
+        case .outsideForecastRange:
+            weatherMessage(
+                "A forecast will appear within 10 days of the event.",
+                symbol: "calendar.badge.clock"
+            )
+
+        case .pastEvent:
+            weatherMessage("This event has already taken place.", symbol: "clock.arrow.circlepath")
+
+        case .missingLocation:
+            weatherMessage("Add a mapped location to see weather here.", symbol: "mappin.slash")
+
+        case .unavailable:
+            weatherMessage("The forecast isn’t available right now.", symbol: "cloud.sun")
+            Button("Try Again", systemImage: "arrow.clockwise", action: retry)
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+        }
+    }
+
+    private func weatherMessage(_ message: String, symbol: String) -> some View {
+        VStack(spacing: AppTheme.Spacing.compact) {
+            Image(systemName: symbol)
+                .font(.system(size: 36))
+                .foregroundStyle(.white.opacity(0.76))
+                .accessibilityHidden(true)
+            Text(message)
+                .font(.body.weight(.medium))
+                .foregroundStyle(.white.opacity(0.82))
+        }
+        .frame(minHeight: 88)
+    }
+
+    private func weatherAttribution(_ attribution: EventWeatherAttribution) -> some View {
+        Link(destination: attribution.legalPageURL) {
+            AsyncImage(
+                url: colorScheme == .light
+                    ? attribution.combinedMarkLightURL
+                    : attribution.combinedMarkDarkURL
+            ) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFit()
+                default:
+                    Text(attribution.serviceName)
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.68))
+                }
+            }
+            .frame(width: 92, height: 22)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Weather data attribution")
+        .accessibilityHint("Opens Apple Weather data sources")
+    }
+}
+
 private struct EventInvitationSection<Content: View>: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let title: String
@@ -508,28 +800,6 @@ private struct EventInvitationSection<Content: View>: View {
     }
 }
 
-private struct EventInvitationDetailRow: View {
-    let symbol: String
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
-            Image(systemName: symbol)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(AppTheme.ColorToken.accent)
-                .frame(width: 24)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.subheadline).foregroundStyle(.secondary)
-                Text(value).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
-}
-
 private struct EventInvitationLocationView: View {
     let location: EventLocation
 
@@ -547,36 +817,65 @@ private struct EventInvitationLocationView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
-                Image(systemName: "mappin.and.ellipse")
-                    .foregroundStyle(AppTheme.ColorToken.accent)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Location").font(.subheadline).foregroundStyle(.secondary)
-                    Text(location.formatted).font(.body.weight(.semibold))
+        EventInvitationFeatureCard(contentPadding: 0) {
+            VStack(spacing: 0) {
+                VStack(spacing: AppTheme.Spacing.standard) {
+                    Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                        .font(.title3.bold())
+
+                    Text(location.formatted)
+                        .font(.title3.weight(.medium))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+
                 }
-                Spacer(minLength: 0)
-                if let mapsURL {
-                    Link(destination: mapsURL) {
-                        Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
-                            .labelStyle(.iconOnly)
-                            .frame(minWidth: 44, minHeight: 44)
+                .padding(AppTheme.Spacing.spacious)
+
+                if let coordinate {
+                    if let mapsURL {
+                        Link(destination: mapsURL) {
+                            staticMap(coordinate: coordinate)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Open \(location.title) in Maps")
+                        .accessibilityHint("Opens directions in Apple Maps")
+                    } else {
+                        staticMap(coordinate: coordinate)
                     }
                 }
             }
+            .frame(maxWidth: .infinity)
+        }
+        .accessibilityElement(children: .contain)
+    }
 
-            if let coordinate {
-                Map(initialPosition: .region(MKCoordinateRegion(
+    private func staticMap(coordinate: CLLocationCoordinate2D) -> some View {
+        Map(
+            initialPosition: .region(
+                MKCoordinateRegion(
                     center: coordinate,
                     span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
-                ))) {
-                    Marker(location.title, coordinate: coordinate)
-                }
-                .mapStyle(.standard(elevation: .realistic))
-                .frame(height: 220)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
-            }
+                )
+            ),
+            interactionModes: []
+        ) {
+            Marker(location.title, coordinate: coordinate)
         }
+        .mapStyle(.standard(elevation: .realistic))
+        .frame(height: 260)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(.white.opacity(0.16))
+                .frame(height: 0.5)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            Label("Open in Maps", systemImage: "arrow.up.forward.app.fill")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 12)
+                .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                .background(.regularMaterial, in: Capsule())
+                .padding(AppTheme.Spacing.compact)
+        }
+        .accessibilityHidden(true)
     }
 }

@@ -12,38 +12,13 @@ struct TimelineView: View {
     @State private var selectedTimelineItemID: UUID?
     @Namespace private var timelineTransition
 
-    private var upcoming: [TimelineItem] {
-        workspace.timeline
-            .filter { $0.status != .archived && $0.completionStatus == .upcoming }
-            .sorted(by: chronologicallyBefore)
-    }
-
-    private var completed: [TimelineItem] {
-        workspace.timeline
-            .filter { $0.status != .archived && $0.completionStatus == .complete }
-            .sorted { lhs, rhs in
-                chronologicallyBefore(rhs, lhs)
-            }
-    }
-
-    private var archived: [TimelineItem] {
-        workspace.timeline
-            .filter { $0.status == .archived }
-            .sorted(by: chronologicallyBefore)
-    }
-
     private var filteredEvents: [TimelineItem] {
-        switch filter {
-        case .all:
-            workspace.timeline
-                .filter { $0.status != .archived }
-                .sorted(by: chronologicallyBefore)
-        case .upcoming:
-            upcoming
-        case .completed:
-            completed
-        case .archived:
-            archived
+        workspace.timeline
+            .filter(filter.includes)
+            .sorted { lhs, rhs in
+                filter == .completed
+                    ? chronologicallyBefore(rhs, lhs)
+                    : chronologicallyBefore(lhs, rhs)
         }
     }
 
@@ -210,7 +185,7 @@ struct TimelineView: View {
     }
 }
 
-private enum TimelineFilter: String, CaseIterable, Identifiable {
+enum TimelineFilter: String, CaseIterable, Identifiable {
     case all
     case upcoming
     case completed
@@ -251,6 +226,19 @@ private enum TimelineFilter: String, CaseIterable, Identifiable {
         case .upcoming: "New and scheduled events appear here."
         case .completed: "Events appear here after they are marked complete."
         case .archived: "Archived events appear here."
+        }
+    }
+
+    func includes(_ item: TimelineItem) -> Bool {
+        switch self {
+        case .all:
+            item.status != .archived
+        case .upcoming:
+            item.status != .archived && item.completionStatus == .upcoming
+        case .completed:
+            item.status != .archived && item.completionStatus == .complete
+        case .archived:
+            item.status == .archived
         }
     }
 }
@@ -320,6 +308,10 @@ private struct TimelineItemEditorView: View {
             purpose == .planning ? "Venue Visit" : "Venue"
         case .foodTasting:
             "Food Tasting"
+        case .photography:
+            "Photography"
+        case .honeymoon:
+            "Honeymoon"
         case .attireFitting:
             "Attire Fitting"
         case .weddingShower:
@@ -337,20 +329,6 @@ private struct TimelineItemEditorView: View {
         }
     }
 
-    private var startSummary: String {
-        scheduledAt.formatted(
-            date: .abbreviated,
-            time: isAllDay ? .omitted : .shortened
-        )
-    }
-
-    private var endSummary: String? {
-        endsAt?.formatted(
-            date: .abbreviated,
-            time: isAllDay ? .omitted : .shortened
-        )
-    }
-
     var body: some View {
         Form {
             Section {
@@ -364,13 +342,22 @@ private struct TimelineItemEditorView: View {
             }
 
             Section {
-                purposePicker
-                    .listRowInsets(categoryGridInsets)
-                    .listRowBackground(Color.clear)
+                if category == .honeymoon {
+                    Label("Part of the Event", systemImage: EventPurpose.eventExperience.symbol)
+                        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                } else {
+                    purposePicker
+                        .listRowInsets(categoryGridInsets)
+                        .listRowBackground(Color.clear)
+                }
             } header: {
                 Text("Purpose")
             } footer: {
-                Text(purpose.description)
+                Text(
+                    category == .honeymoon
+                        ? "A honeymoon is an event experience for the hosts."
+                        : purpose.description
+                )
             }
 
             Section {
@@ -407,29 +394,12 @@ private struct TimelineItemEditorView: View {
                     focusedField = nil
                     isEditingDateAndTime = true
                 } label: {
-                    HStack(spacing: AppTheme.Spacing.standard) {
-                        Image(systemName: "calendar.badge.clock")
-                            .foregroundStyle(AppTheme.ColorToken.accent)
-                            .frame(width: 28)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(isAllDay ? "All-day" : "Starts")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Text(startSummary)
-                                .foregroundStyle(.primary)
-
-                            if let endSummary {
-                                Text("Ends \(endSummary)")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        Spacer(minLength: 0)
-                    }
-                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-                    .contentShape(Rectangle())
+                    EventScheduleRow(
+                        startsAt: scheduledAt,
+                        endsAt: endsAt,
+                        isAllDay: isAllDay,
+                        timeZoneIdentifier: timeZoneIdentifier
+                    )
                 }
                 .buttonStyle(.plain)
             } header: {
@@ -485,7 +455,7 @@ private struct TimelineItemEditorView: View {
             }
 
             Section {
-                ForEach(workspace.members) { member in
+                ForEach(eventParticipantOptions) { member in
                     Button {
                         toggle(member)
                     } label: {
@@ -521,7 +491,11 @@ private struct TimelineItemEditorView: View {
             } header: {
                 Label("Participants", systemImage: "person.3.fill")
             } footer: {
-                Text("New events start with everyone from the main event. Changes here only affect this event.")
+                if category == .honeymoon {
+                    Text("Honeymoons start with the hosts only.")
+                } else {
+                    Text("New events start with everyone from the main event. Changes here only affect this event.")
+                }
             }
 
         }
@@ -593,12 +567,34 @@ private struct TimelineItemEditorView: View {
             selectedParticipantIDs = Set(workspace.mainEventParticipantIDs)
             scheduledAt = max(scheduledAt, Date.now)
         }
+        .onChange(of: category) { previousCategory, updatedCategory in
+            if updatedCategory == .honeymoon {
+                purpose = .eventExperience
+                selectedParticipantIDs = Set(hostParticipantIDs)
+            } else if previousCategory == .honeymoon, !isEditing {
+                selectedParticipantIDs = Set(workspace.mainEventParticipantIDs)
+            }
+        }
+    }
+
+    private var hostParticipantIDs: [UUID] {
+        workspace.members
+            .filter { $0.participantRole == .host }
+            .map(\.id)
+    }
+
+    private var eventParticipantOptions: [WeddingMember] {
+        category == .honeymoon
+            ? workspace.members.filter { $0.participantRole == .host }
+            : workspace.members
     }
 
     private static let categoryOrder: [TimelineCategory] = [
         .other,
         .venue,
         .foodTasting,
+        .photography,
+        .honeymoon,
         .attireFitting,
         .weddingShower,
         .bachelorBachelorette,
@@ -780,10 +776,6 @@ struct EventDateTimeEditorView: View {
         TimeZone(identifier: timeZoneIdentifier) ?? .autoupdatingCurrent
     }
 
-    private var earliestStart: Date {
-        Calendar.current.startOfDay(for: .now)
-    }
-
     var body: some View {
         NavigationStack {
             Form {
@@ -792,22 +784,20 @@ struct EventDateTimeEditorView: View {
 
                     datePickerRow(
                         title: "Starts",
-                        selection: $startsAt,
-                        range: earliestStart...
+                        selection: $startsAt
                     )
 
                     if endsAt != nil {
                         datePickerRow(
                             title: "Ends",
-                            selection: endDateBinding,
-                            range: startsAt...
+                            selection: endDateBinding
                         )
 
-                        Button("Remove End Time", systemImage: "minus.circle", role: .destructive) {
+                        Button("Remove End", systemImage: "minus.circle", role: .destructive) {
                             endsAt = nil
                         }
                     } else {
-                        Button("Add End Time", systemImage: "plus.circle") {
+                        Button("Add End", systemImage: "plus.circle") {
                             endsAt = defaultEndDate
                         }
                     }
@@ -836,7 +826,13 @@ struct EventDateTimeEditorView: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", systemImage: "checkmark") {
-                        save(startsAt, endsAt, isAllDay, timeZoneIdentifier)
+                        let schedule = normalizedSchedule
+                        save(
+                            schedule.startsAt,
+                            schedule.endsAt,
+                            schedule.isAllDay,
+                            schedule.timeZoneIdentifier
+                        )
                         dismiss()
                     }
                     .labelStyle(.iconOnly)
@@ -848,13 +844,16 @@ struct EventDateTimeEditorView: View {
             guard let endsAt, endsAt < newStart else { return }
             self.endsAt = defaultEndDate
         }
+        .onChange(of: endsAt) { _, newEnd in
+            guard let newEnd, newEnd < startsAt else { return }
+            endsAt = startsAt
+        }
     }
 
     @ViewBuilder
     private func datePickerRow(
         title: String,
-        selection: Binding<Date>,
-        range: PartialRangeFrom<Date>
+        selection: Binding<Date>
     ) -> some View {
         if dynamicTypeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
@@ -864,7 +863,6 @@ struct EventDateTimeEditorView: View {
                 DatePicker(
                     "Date",
                     selection: selection,
-                    in: range,
                     displayedComponents: .date
                 )
 
@@ -872,7 +870,6 @@ struct EventDateTimeEditorView: View {
                     DatePicker(
                         "Time",
                         selection: selection,
-                        in: range,
                         displayedComponents: .hourAndMinute
                     )
                 }
@@ -887,7 +884,6 @@ struct EventDateTimeEditorView: View {
                 DatePicker(
                     "\(title) date",
                     selection: selection,
-                    in: range,
                     displayedComponents: .date
                 )
                 .labelsHidden()
@@ -896,7 +892,6 @@ struct EventDateTimeEditorView: View {
                     DatePicker(
                         "\(title) time",
                         selection: selection,
-                        in: range,
                         displayedComponents: .hourAndMinute
                     )
                     .labelsHidden()
@@ -906,7 +901,8 @@ struct EventDateTimeEditorView: View {
     }
 
     private var defaultEndDate: Date {
-        Calendar.current.date(byAdding: .hour, value: 1, to: startsAt) ?? startsAt
+        guard !isAllDay else { return startsAt }
+        return Calendar.current.date(byAdding: .hour, value: 1, to: startsAt) ?? startsAt
     }
 
     private var endDateBinding: Binding<Date> {
@@ -931,6 +927,132 @@ struct EventDateTimeEditorView: View {
         return minutes == 0
             ? "GMT\(sign)\(hours)"
             : "GMT\(sign)\(hours):\(String(format: "%02d", minutes))"
+    }
+
+    private var normalizedSchedule: EventSchedule {
+        EventSchedule(
+            startsAt: startsAt,
+            endsAt: endsAt,
+            isAllDay: isAllDay,
+            timeZoneIdentifier: timeZoneIdentifier
+        ).normalized
+    }
+}
+
+struct EventSchedule: Equatable {
+    var startsAt: Date
+    var endsAt: Date?
+    var isAllDay: Bool
+    var timeZoneIdentifier: String
+
+    var normalized: EventSchedule {
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .autoupdatingCurrent
+
+        let normalizedStart = isAllDay ? calendar.startOfDay(for: startsAt) : startsAt
+        let candidateEnd = endsAt.map { isAllDay ? calendar.startOfDay(for: $0) : $0 }
+        let normalizedEnd = candidateEnd.map { max($0, normalizedStart) }
+
+        return EventSchedule(
+            startsAt: normalizedStart,
+            endsAt: normalizedEnd,
+            isAllDay: isAllDay,
+            timeZoneIdentifier: timeZoneIdentifier
+        )
+    }
+
+    var summary: String {
+        let start = EventScheduleFormatter.string(
+            from: startsAt,
+            includesTime: !isAllDay,
+            timeZoneIdentifier: timeZoneIdentifier
+        )
+        guard let endsAt else {
+            return isAllDay ? "\(start) · All-day" : start
+        }
+
+        let end = EventScheduleFormatter.string(
+            from: endsAt,
+            includesTime: !isAllDay,
+            timeZoneIdentifier: timeZoneIdentifier
+        )
+        return "\(start) – \(end)"
+    }
+}
+
+private enum EventScheduleFormatter {
+    static func string(
+        from date: Date,
+        includesTime: Bool,
+        timeZoneIdentifier: String
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .autoupdatingCurrent
+        formatter.dateStyle = .medium
+        formatter.timeStyle = includesTime ? .short : .none
+        return formatter.string(from: date)
+    }
+}
+
+struct EventScheduleRow: View {
+    let startsAt: Date
+    let endsAt: Date?
+    let isAllDay: Bool
+    let timeZoneIdentifier: String
+
+    private var schedule: EventSchedule {
+        EventSchedule(
+            startsAt: startsAt,
+            endsAt: endsAt,
+            isAllDay: isAllDay,
+            timeZoneIdentifier: timeZoneIdentifier
+        )
+    }
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.standard) {
+            Image(systemName: "calendar.badge.clock")
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .frame(width: 28)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(isAllDay ? "All-day" : "Date and Time")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Text(schedule.summary)
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+
+                if !isAllDay {
+                    Text(timeZoneName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.forward")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+        }
+        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(isAllDay ? "All-day schedule" : "Date and time")
+        .accessibilityValue(schedule.summary)
+        .accessibilityHint("Opens schedule editor")
+    }
+
+    private var timeZoneName: String {
+        guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
+            return timeZoneIdentifier
+        }
+        return timeZone.localizedName(for: .generic, locale: .current) ?? timeZoneIdentifier
     }
 }
 
@@ -1067,7 +1189,7 @@ struct EventStatusBadge: View {
             .padding(.horizontal, 10)
             .frame(minHeight: 30)
             .background(.ultraThinMaterial, in: Capsule())
-            .environment(\.colorScheme, .dark)
+            .appImageOverlayAppearance()
             .accessibilityLabel("Event status: \(status.title)")
     }
 }
@@ -1156,7 +1278,7 @@ private struct TimelineEventDetailView: View {
         .navigationTitle("Event details")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
-        .toolbarColorScheme(.dark, for: .navigationBar)
+        .appImageNavigationBarAppearance()
         .toolbar {
             if let item {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1244,7 +1366,7 @@ struct TimelineEventReadOnlyView: View {
             .navigationTitle("Event details")
             .navigationBarTitleDisplayMode(.inline)
             .appClearNavigationBar()
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .appImageNavigationBarAppearance()
             .navigationTransition(.zoom(sourceID: item.id, in: transitionNamespace))
     }
 }
@@ -1285,31 +1407,12 @@ struct TimelineEventDetailScreen: View {
     }
 
     private var scheduleSummary: String {
-        let start = item.scheduledAt.formatted(
-            date: .long,
-            time: item.isAllDay ? .omitted : .shortened
-        )
-
-        guard let endsAt = item.endsAt else {
-            return item.isAllDay ? "\(start) · All-day" : start
-        }
-
-        if Calendar.current.isDate(item.scheduledAt, inSameDayAs: endsAt) {
-            let date = item.scheduledAt.formatted(date: .long, time: .omitted)
-            if item.isAllDay {
-                return "\(date) · All-day"
-            }
-
-            let startTime = item.scheduledAt.formatted(date: .omitted, time: .shortened)
-            let endTime = endsAt.formatted(date: .omitted, time: .shortened)
-            return "\(date) · \(startTime)–\(endTime)"
-        }
-
-        let end = endsAt.formatted(
-            date: .long,
-            time: item.isAllDay ? .omitted : .shortened
-        )
-        return "\(start) – \(end)"
+        EventSchedule(
+            startsAt: item.scheduledAt,
+            endsAt: item.endsAt,
+            isAllDay: item.isAllDay,
+            timeZoneIdentifier: item.timeZoneIdentifier
+        ).summary
     }
 
     var body: some View {
@@ -1420,7 +1523,7 @@ struct TimelineEventDetailScreen: View {
             RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
                 .stroke(.white.opacity(0.16), lineWidth: 0.5)
         }
-        .environment(\.colorScheme, .dark)
+        .appImageOverlayAppearance()
     }
 
     private var metadata: some View {
@@ -1482,7 +1585,7 @@ struct TimelineEventDetailScreen: View {
                 .stroke(.white.opacity(0.14), lineWidth: 0.5)
         }
         .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
-        .environment(\.colorScheme, .dark)
+        .appImageOverlayAppearance()
     }
 }
 
@@ -1701,6 +1804,8 @@ private extension TimelineCategory {
         switch self {
         case .venue: 0.84
         case .foodTasting: 1.18
+        case .photography: 1.08
+        case .honeymoon: 0.82
         case .attireFitting: 0.76
         case .weddingShower: 0.92
         case .bachelorBachelorette: 0.78

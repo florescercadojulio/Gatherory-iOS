@@ -416,11 +416,109 @@ struct MusicIdeaConfiguration: Codable, Hashable {
     var tracks: [MusicTrack]
 }
 
+enum EventAudience: String, Codable, Hashable {
+    case inherited
+    case hostsOnly
+
+    var title: String {
+        switch self {
+        case .inherited: "Everyone in the event"
+        case .hostsOnly: "Hosts only"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .inherited: "person.3.fill"
+        case .hostsOnly: "person.2.fill"
+        }
+    }
+}
+
 struct EventIdeaConfiguration: Codable, Hashable {
     var category: TimelineCategory
     var purpose: EventPurpose
+    var audience: EventAudience
+    var requiresBudget: Bool
+    var proposedBudget: Decimal?
     var proposedDate: Date?
+    var proposedEndDate: Date?
+    var isAllDay: Bool
+    var timeZoneIdentifier: String
     var location: EventLocation?
+    var attireStyle: AttireStyle
+    var attireGuidance: String
+
+    init(
+        category: TimelineCategory,
+        purpose: EventPurpose,
+        audience: EventAudience = .inherited,
+        requiresBudget: Bool = false,
+        proposedBudget: Decimal? = nil,
+        proposedDate: Date?,
+        proposedEndDate: Date? = nil,
+        isAllDay: Bool = false,
+        timeZoneIdentifier: String = TimeZone.autoupdatingCurrent.identifier,
+        location: EventLocation?,
+        attireStyle: AttireStyle = .any,
+        attireGuidance: String = ""
+    ) {
+        self.category = category
+        self.purpose = purpose
+        self.audience = audience
+        self.requiresBudget = requiresBudget || proposedBudget != nil
+        self.proposedBudget = proposedBudget
+        self.proposedDate = proposedDate
+        self.proposedEndDate = proposedEndDate
+        self.isAllDay = isAllDay
+        self.timeZoneIdentifier = timeZoneIdentifier
+        self.location = location
+        self.attireStyle = attireStyle
+        self.attireGuidance = attireGuidance
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case category
+        case purpose
+        case audience
+        case requiresBudget
+        case proposedBudget
+        case proposedDate
+        case proposedEndDate
+        case isAllDay
+        case timeZoneIdentifier
+        case location
+        case attireStyle
+        case attireGuidance
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        category = try container.decode(TimelineCategory.self, forKey: .category)
+        purpose = try container.decode(EventPurpose.self, forKey: .purpose)
+        audience = try container.decodeIfPresent(EventAudience.self, forKey: .audience) ?? .inherited
+        proposedBudget = try container.decodeIfPresent(Decimal.self, forKey: .proposedBudget)
+        requiresBudget = (try container.decodeIfPresent(Bool.self, forKey: .requiresBudget) ?? false)
+            || proposedBudget != nil
+        proposedDate = try container.decodeIfPresent(Date.self, forKey: .proposedDate)
+        proposedEndDate = try container.decodeIfPresent(Date.self, forKey: .proposedEndDate)
+        isAllDay = try container.decodeIfPresent(Bool.self, forKey: .isAllDay) ?? false
+        timeZoneIdentifier = try container.decodeIfPresent(String.self, forKey: .timeZoneIdentifier)
+            ?? TimeZone.autoupdatingCurrent.identifier
+        location = try container.decodeIfPresent(EventLocation.self, forKey: .location)
+        attireStyle = try container.decodeIfPresent(AttireStyle.self, forKey: .attireStyle) ?? .any
+        attireGuidance = try container.decodeIfPresent(String.self, forKey: .attireGuidance) ?? ""
+    }
+
+    var attireDescription: String {
+        let guidance = attireGuidance.trimmingCharacters(in: .whitespacesAndNewlines)
+        return switch (attireStyle, guidance.isEmpty) {
+        case (.any, true): ""
+        case (.any, false): guidance
+        case (_, true): attireStyle.title
+        case (_, false): "\(attireStyle.title) · \(guidance)"
+        }
+    }
 }
 
 struct RegistryIdeaConfiguration: Codable, Hashable {
@@ -941,6 +1039,9 @@ enum EventExpenseCategory: String, CaseIterable, Identifiable, Codable {
 struct EventExpense: Identifiable, Hashable, Codable {
     let id: UUID
     var eventID: UUID
+    /// Set when this cost is derived from an idea. The stable relationship
+    /// lets the workspace update one ledger entry instead of creating copies.
+    var sourceIdeaID: UUID?
     var title: String
     var amount: Decimal
     var category: EventExpenseCategory
@@ -950,6 +1051,7 @@ struct EventExpense: Identifiable, Hashable, Codable {
     init(
         id: UUID = UUID(),
         eventID: UUID,
+        sourceIdeaID: UUID? = nil,
         title: String,
         amount: Decimal,
         category: EventExpenseCategory = .other,
@@ -958,6 +1060,7 @@ struct EventExpense: Identifiable, Hashable, Codable {
     ) {
         self.id = id
         self.eventID = eventID
+        self.sourceIdeaID = sourceIdeaID
         self.title = title
         self.amount = amount
         self.category = category
@@ -969,6 +1072,8 @@ struct EventExpense: Identifiable, Hashable, Codable {
 enum TimelineCategory: String, CaseIterable, Identifiable, Codable {
     case venue
     case foodTasting
+    case photography
+    case honeymoon
     case attireFitting
     case weddingShower
     case bachelorBachelorette
@@ -983,6 +1088,8 @@ enum TimelineCategory: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .venue: "Venue"
         case .foodTasting: "Food Tasting"
+        case .photography: "Photography"
+        case .honeymoon: "Honeymoon"
         case .attireFitting: "Attire Fitting"
         case .weddingShower: "Wedding Shower"
         case .bachelorBachelorette: "Bachelor or Bachelorette"
@@ -997,6 +1104,8 @@ enum TimelineCategory: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .venue: "building.columns.fill"
         case .foodTasting: "fork.knife"
+        case .photography: "camera.fill"
+        case .honeymoon: "airplane.departure"
         case .attireFitting: "tshirt.fill"
         case .weddingShower: "gift.fill"
         case .bachelorBachelorette: "party.popper.fill"

@@ -1,0 +1,5 @@
+// App Store and other release builds use the normal first-run onboarding state.
+APP_ENVIRONMENT = production
+FORCE_ONBOARDING = NO
+SEED_DEVELOPMENT_DATA = NO
+SKIP_AUTH_LOGIN = NO

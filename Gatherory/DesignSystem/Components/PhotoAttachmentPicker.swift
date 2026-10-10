@@ -8,6 +8,7 @@ struct PhotoAttachmentPicker: View {
     @State private var isChoosingImage = false
 
     let emptySymbol: String
+    var showsPreview = true
     var fallbackAssetName: String? = nil
     var fallbackColors: [Color]? = nil
     var fallbackAccent: Color = .accentColor
@@ -18,32 +19,66 @@ struct PhotoAttachmentPicker: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            preview
-
-            HStack(spacing: AppTheme.Spacing.compact) {
-                Button(
-                    hasVisibleArtwork ? "Change Image" : "Add Image",
-                    systemImage: "photo.badge.plus"
-                ) {
+        Group {
+            if showsPreview {
+                Button {
                     isChoosingImage = true
+                } label: {
+                    preview
+                        .overlay(alignment: .bottomTrailing) {
+                            Label(
+                                hasVisibleArtwork ? "Edit Image" : "Add Image",
+                                systemImage: hasVisibleArtwork
+                                    ? "slider.horizontal.3"
+                                    : "photo.badge.plus"
+                            )
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, AppTheme.Spacing.standard)
+                            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                            .background(.regularMaterial, in: Capsule())
+                            .appImageOverlayAppearance()
+                            .padding(AppTheme.Spacing.compact)
+                        }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    isChoosingImage = true
+                } label: {
+                    HStack(spacing: AppTheme.Spacing.compact) {
+                        Label(
+                            hasVisibleArtwork ? "Edit Image" : "Add Image",
+                            systemImage: hasVisibleArtwork
+                                ? "slider.horizontal.3"
+                                : "photo.badge.plus"
+                        )
 
-                if imageData != nil {
-                    Button("Remove", systemImage: "trash", role: .destructive) {
-                        imageData = nil
+                        Spacer(minLength: 0)
+
+                        Image(systemName: "chevron.forward")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
                     }
-                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
+        .accessibilityLabel(hasVisibleArtwork ? "Edit image" : "Add image")
+        .accessibilityHint("Opens image choices")
         .sheet(isPresented: $isChoosingImage) {
             AddImageView(
                 imageData: $imageData,
+                emptySymbol: emptySymbol,
+                fallbackAssetName: fallbackAssetName,
+                fallbackColors: fallbackColors,
+                fallbackAccent: fallbackAccent,
                 suggestedConcept: suggestedConcept
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
     }
@@ -55,7 +90,7 @@ struct PhotoAttachmentPicker: View {
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)
-                .frame(height: 180)
+                .frame(height: 210)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
                 .accessibilityLabel("Selected image")
         } else if fallbackAssetName != nil || fallbackColors != nil {
@@ -68,7 +103,7 @@ struct PhotoAttachmentPicker: View {
                 progressiveBlurRadius: 0
             )
             .frame(maxWidth: .infinity)
-            .frame(height: 180)
+            .frame(height: 210)
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
             .accessibilityLabel("Current event artwork")
         } else {
@@ -78,7 +113,7 @@ struct PhotoAttachmentPicker: View {
                 description: Text("Choose or create artwork that helps everyone recognize it.")
             )
             .frame(maxWidth: .infinity)
-            .frame(height: 180)
+            .frame(height: 210)
             .background(
                 AppTheme.ColorToken.elevatedSurface,
                 in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
@@ -92,11 +127,16 @@ private struct AddImageView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isLoadingPhoto = false
     @State private var isShowingCamera = false
     @State private var isShowingImagePlayground = false
     @State private var playgroundConcept = ""
     @State private var errorMessage: String?
 
+    let emptySymbol: String
+    let fallbackAssetName: String?
+    let fallbackColors: [Color]?
+    let fallbackAccent: Color
     let suggestedConcept: String
 
     private var sourceImage: Image? {
@@ -114,18 +154,88 @@ private struct AddImageView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
-                    sourceControls
-                    imagePlaygroundSection
+            Form {
+                if imageData != nil || fallbackAssetName != nil || fallbackColors != nil {
+                    Section("Current Image") {
+                        currentPreview
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                    }
                 }
-                .padding(.horizontal, AppTheme.Layout.screenHorizontal)
-                .padding(.top, AppTheme.Spacing.standard)
-                .padding(.bottom, AppTheme.Layout.screenBottom)
+
+                Section {
+                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                        ImageSourceRow(
+                            title: "Choose from Photos",
+                            detail: "Select an image from your photo library.",
+                            systemImage: "photo.on.rectangle.angled"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .overlay(alignment: .trailing) {
+                        if isLoadingPhoto {
+                            ProgressView()
+                        }
+                    }
+
+                    Button {
+                        isShowingCamera = true
+                    } label: {
+                        ImageSourceRow(
+                            title: "Take Photo",
+                            detail: cameraAvailable
+                                ? "Use the camera to create a new image."
+                                : "Camera isn’t available on this device.",
+                            systemImage: "camera.fill"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!cameraAvailable)
+
+                    Button {
+                        playgroundConcept = suggestedConcept
+                        isShowingImagePlayground = true
+                    } label: {
+                        ImageSourceRow(
+                            title: "Create with Image Playground",
+                            detail: imagePlaygroundAvailable
+                                ? "Generate original artwork using Apple’s experience."
+                                : "Image Playground isn’t available on this device.",
+                            systemImage: "apple.intelligence"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!imagePlaygroundAvailable)
+                } header: {
+                    Text("Choose a Source")
+                } footer: {
+                    if let errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.circle.fill")
+                            .foregroundStyle(.red)
+                    } else {
+                        Text("You’ll review a photo or generated image before it becomes part of the event.")
+                    }
+                }
+
+                if imageData != nil {
+                    Section {
+                        if fallbackAssetName != nil || fallbackColors != nil {
+                            Button("Use Default Artwork", systemImage: "arrow.counterclockwise") {
+                                imageData = nil
+                                dismiss()
+                            }
+                        } else {
+                            Button("Remove Image", systemImage: "trash", role: .destructive) {
+                                imageData = nil
+                                dismiss()
+                            }
+                        }
+                    }
+                }
             }
-            .scrollIndicators(.hidden)
+            .scrollContentBackground(.hidden)
             .background(AppTheme.ColorToken.background)
-            .navigationTitle(imageData == nil ? "Add Image" : "Change Image")
+            .navigationTitle("Choose Image")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -138,8 +248,11 @@ private struct AddImageView: View {
         }
         .onChange(of: selectedPhoto) { _, newValue in
             guard let newValue else { return }
+            errorMessage = nil
+            isLoadingPhoto = true
 
             Task {
+                defer { isLoadingPhoto = false }
                 guard let data = try? await newValue.loadTransferable(type: Data.self) else {
                     errorMessage = "The selected image couldn’t be loaded. Choose another image and try again."
                     return
@@ -164,121 +277,32 @@ private struct AddImageView: View {
             sourceImage: sourceImage,
             onCompletion: saveGeneratedImage
         )
-        .alert("Image Unavailable", isPresented: errorIsPresented) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage ?? "Try again.")
+    }
+
+    @ViewBuilder
+    private var currentPreview: some View {
+        if let imageData, let image = UIImage(data: imageData) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: 210)
+                .clipped()
+                .accessibilityLabel("Current image")
+        } else {
+            MediaArtwork(
+                imageData: nil,
+                assetName: fallbackAssetName,
+                symbol: emptySymbol,
+                colors: fallbackColors ?? [.gray, .secondary],
+                accent: fallbackAccent,
+                progressiveBlurRadius: 0
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: 210)
+            .clipped()
+            .accessibilityLabel("Default artwork")
         }
-    }
-
-    private var errorIsPresented: Binding<Bool> {
-        Binding(
-            get: { errorMessage != nil },
-            set: { isPresented in
-                if !isPresented {
-                    errorMessage = nil
-                }
-            }
-        )
-    }
-
-    private var sourceControls: some View {
-        HStack(alignment: .top, spacing: AppTheme.Spacing.spacious) {
-            PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                ImageSourceControl(
-                    title: "Photos",
-                    systemImage: "photo.on.rectangle.angled"
-                )
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                isShowingCamera = true
-            } label: {
-                ImageSourceControl(
-                    title: "Camera",
-                    systemImage: "camera.fill"
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(!cameraAvailable)
-            .opacity(cameraAvailable ? 1 : 0.45)
-            .accessibilityHint(cameraAvailable ? "Takes a new photo" : "Camera unavailable on this device")
-
-            Spacer(minLength: 0)
-        }
-    }
-
-    private var imagePlaygroundSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Image Playground")
-                    .font(.title2.bold())
-
-                Text(
-                    imagePlaygroundAvailable
-                        ? "Choose a direction to create original artwork."
-                        : "Image Playground isn’t available on this device."
-                )
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            }
-
-            ScrollView(.horizontal) {
-                HStack(spacing: AppTheme.Spacing.standard) {
-                    PlaygroundConceptButton(
-                        title: "Original",
-                        systemImage: "plus",
-                        colors: [.gray, .secondary]
-                    ) {
-                        openImagePlayground(with: suggestedConcept)
-                    }
-
-                    PlaygroundConceptButton(
-                        title: "Elegant",
-                        systemImage: "sparkles",
-                        colors: [.indigo, .blue]
-                    ) {
-                        openImagePlayground(
-                            with: "\(suggestedConcept), elegant editorial composition, refined details"
-                        )
-                    }
-
-                    PlaygroundConceptButton(
-                        title: "Garden",
-                        systemImage: "leaf.fill",
-                        colors: [.green, .teal]
-                    ) {
-                        openImagePlayground(
-                            with: "\(suggestedConcept), romantic garden setting, botanical details"
-                        )
-                    }
-
-                    PlaygroundConceptButton(
-                        title: "Celebration",
-                        systemImage: "party.popper.fill",
-                        colors: [.orange, .pink]
-                    ) {
-                        openImagePlayground(
-                            with: "\(suggestedConcept), joyful wedding celebration, colorful details"
-                        )
-                    }
-                }
-            }
-            .scrollIndicators(.hidden)
-            .contentMargins(.horizontal, 0, for: .scrollContent)
-            .disabled(!imagePlaygroundAvailable)
-            .opacity(imagePlaygroundAvailable ? 1 : 0.45)
-
-            Text("Apple presents the generation experience and lets you approve the final image.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func openImagePlayground(with concept: String) {
-        playgroundConcept = concept
-        isShowingImagePlayground = true
     }
 
     private func saveGeneratedImage(at url: URL) {
@@ -291,62 +315,37 @@ private struct AddImageView: View {
     }
 }
 
-private struct ImageSourceControl: View {
+private struct ImageSourceRow: View {
     let title: String
+    let detail: String
     let systemImage: String
 
     var body: some View {
-        VStack(spacing: AppTheme.Spacing.compact) {
+        HStack(spacing: AppTheme.Spacing.standard) {
             Image(systemName: systemImage)
-                .font(.system(size: 29, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 76, height: 76)
-                .background(AppTheme.ColorToken.accent.gradient, in: Circle())
-
-            Text(title)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-        }
-        .frame(minWidth: 82)
-        .contentShape(Rectangle())
-    }
-}
-
-private struct PlaygroundConceptButton: View {
-    let title: String
-    let systemImage: String
-    let colors: [Color]
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            ZStack(alignment: .bottomLeading) {
-                LinearGradient(
-                    colors: colors,
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                .symbolRenderingMode(.hierarchical)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .frame(width: 38, height: 38)
+                .background(
+                    AppTheme.ColorToken.accent.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                 )
 
-                Image(systemName: systemImage)
-                    .font(.system(size: 42, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .padding(AppTheme.Spacing.standard)
-                    .shadow(color: .black.opacity(0.28), radius: 4, y: 2)
+                    .foregroundStyle(.primary)
+
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
             }
-            .frame(width: 150, height: 210)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                    .stroke(.white.opacity(0.20), lineWidth: 0.5)
-            }
+
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Create \(title.lowercased()) artwork")
+        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+        .contentShape(Rectangle())
     }
 }
 

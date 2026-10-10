@@ -23,9 +23,9 @@ final class WeddingWorkspace {
     var planningMode: PlanningMode
     var members: [WeddingMember]
     var mainEventParticipantIDs: [UUID]
-    var ideas: [WeddingIdea]
+    private(set) var ideas: [WeddingIdea]
     var timeline: [TimelineItem]
-    var eventExpenses: [EventExpense]
+    private(set) var eventExpenses: [EventExpense]
     /// The top-level spending limit. Event allocations always add up to this cap.
     var workspaceBudgetCap: Decimal?
     /// The main event owns the portion that hasn't been allocated to child events.
@@ -276,6 +276,35 @@ final class WeddingWorkspace {
         } else if timeline[index].budgetCap != nil {
             timeline[index].budgetCap = nil
         }
+        return true
+    }
+
+    /// Allocates a requested starting budget to a newly created child event.
+    /// The unallocated pool is used first, then the main event supplies the
+    /// remainder. The workspace cap never changes.
+    @discardableResult
+    func allocateInitialBudget(_ amount: Decimal?, to eventID: UUID) -> Bool {
+        guard let amount, amount > .zero,
+              workspaceBudgetCap != nil,
+              budgetCap(for: .subevent(eventID)) != nil else {
+            return false
+        }
+
+        let poolContribution = min(freeBudgetPool, amount)
+        let mainContribution = amount - poolContribution
+        guard (mainEventBudgetCap ?? .zero) >= mainContribution else { return false }
+
+        let destination = BudgetAccount.event(.subevent(eventID))
+        if poolContribution > .zero,
+           !transferBudget(poolContribution, from: .freePool, to: destination) {
+            return false
+        }
+
+        if mainContribution > .zero,
+           !transferBudget(mainContribution, from: .event(.main), to: destination) {
+            return false
+        }
+
         return true
     }
 
@@ -626,11 +655,13 @@ final class WeddingWorkspace {
             DecisionRecord(ideaID: idea.id, previousStatus: ideas[index].status)
         )
 
-        ideas[index].status = switch choice {
+        var updatedIdea = ideas[index]
+        updatedIdea.status = switch choice {
         case .pass: .passed
         case .maybe: .maybe
-        case .love: .shortlisted
+        case .love: .chosen
         }
+        replaceIdea(at: index, with: updatedIdea)
     }
 
     func undoLastDecision() {
@@ -639,7 +670,9 @@ final class WeddingWorkspace {
             return
         }
 
-        ideas[index].status = decision.previousStatus
+        var restoredIdea = ideas[index]
+        restoredIdea.status = decision.previousStatus
+        replaceIdea(at: index, with: restoredIdea)
     }
 
     func toggleTimelineItem(_ item: TimelineItem) {
@@ -774,12 +807,14 @@ final class WeddingWorkspace {
 
     func updateIdea(_ idea: WeddingIdea, status: IdeaStatus) {
         guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
-        ideas[index].status = status
+        var updatedIdea = ideas[index]
+        updatedIdea.status = status
+        replaceIdea(at: index, with: updatedIdea)
     }
 
     func updateIdea(_ idea: WeddingIdea) {
         guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
-        ideas[index] = idea
+        replaceIdea(at: index, with: idea)
     }
 
     func addIdea(_ idea: WeddingIdea) {
@@ -788,6 +823,115 @@ final class WeddingWorkspace {
             scopedIdea.eventID = selectedEventID
         }
         ideas.insert(scopedIdea, at: 0)
+        reconcileScheduledEvent(for: scopedIdea)
+        reconcileExpense(for: scopedIdea)
+    }
+
+    /// Moves an approved, dated event proposal into the timeline without
+    /// duplicating it. Undated ideas stay in Ideas until someone schedules them.
+    @discardableResult
+    func scheduleEventIdea(_ idea: WeddingIdea) -> UUID? {
+        guard idea.status == .chosen,
+              let configuration = idea.eventConfiguration,
+              let startsAt = configuration.proposedDate else {
+            return nil
+        }
+
+        let inheritedParticipants = mainEventParticipantIDs
+        let hostParticipants = members
+            .filter { $0.participantRole == .host && inheritedParticipants.contains($0.id) }
+            .map(\.id)
+        let participantIDs = configuration.audience == .hostsOnly && !hostParticipants.isEmpty
+            ? hostParticipants
+            : inheritedParticipants
+        let existing = timeline.first(where: { $0.linkedIdeaID == idea.id })
+        let item = TimelineItem(
+            id: existing?.id ?? UUID(),
+            title: idea.title,
+            category: configuration.category,
+            purpose: configuration.purpose,
+            scheduledAt: startsAt,
+            eventLocation: configuration.location,
+            endsAt: configuration.proposedEndDate,
+            isAllDay: configuration.isAllDay,
+            timeZoneIdentifier: configuration.timeZoneIdentifier,
+            participantIDs: participantIDs,
+            parentEventID: mainEventID,
+            status: existing?.status ?? .approved,
+            completionStatus: existing?.completionStatus ?? .upcoming,
+            response: existing?.response,
+            linkedIdeaID: idea.id,
+            imageData: idea.imageData,
+            eventDescription: idea.note,
+            dressCode: existing.flatMap { $0.dressCode.isEmpty ? nil : $0.dressCode }
+                ?? configuration.attireDescription,
+            budgetCap: existing?.budgetCap
+                ?? (configuration.proposedBudget != nil || configuration.requiresBudget ? .zero : nil)
+        )
+        if existing == nil {
+            addTimelineItem(item)
+            allocateInitialBudget(configuration.proposedBudget, to: item.id)
+        } else {
+            updateTimelineItem(item)
+        }
+        return timeline.contains { $0.id == item.id } ? item.id : nil
+    }
+
+    /// This is the single write path for existing ideas. Keeping financial
+    /// reconciliation here prevents individual screens from implementing
+    /// their own budget behavior.
+    private func replaceIdea(at index: Int, with idea: WeddingIdea) {
+        ideas[index] = idea
+        reconcileScheduledEvent(for: idea)
+        reconcileExpense(for: idea)
+    }
+
+    /// Keeps approved event ideas and real child events as one lifecycle.
+    /// A dated approval creates or updates its linked event; revoking approval
+    /// removes only the event that was generated from that idea.
+    private func reconcileScheduledEvent(for idea: WeddingIdea) {
+        guard idea.category == .event else { return }
+
+        if idea.status == .chosen {
+            _ = scheduleEventIdea(idea)
+        } else if let linkedEvent = timeline.first(where: { $0.linkedIdeaID == idea.id }) {
+            deleteTimelineItem(linkedEvent)
+        }
+    }
+
+    /// Mirrors one cost-bearing idea into exactly one event expense.
+    /// Proposed ideas are estimated costs, while approved ideas are committed.
+    /// Ideas that are passed, archived, or have no positive estimate do not
+    /// consume the workspace budget.
+    private func reconcileExpense(for idea: WeddingIdea) {
+        let existingIndex = eventExpenses.firstIndex { $0.sourceIdeaID == idea.id }
+        guard let estimate = idea.estimatedCost,
+              estimate > 0,
+              idea.status != .passed,
+              idea.status != .archived else {
+            if let existingIndex {
+                eventExpenses.remove(at: existingIndex)
+            }
+            return
+        }
+
+        let linkedEventID = timeline.first(where: { $0.linkedIdeaID == idea.id })?.id
+        let expense = EventExpense(
+            id: existingIndex.map { eventExpenses[$0].id } ?? UUID(),
+            eventID: linkedEventID ?? idea.eventID ?? mainEventID,
+            sourceIdeaID: idea.id,
+            title: idea.title,
+            amount: Decimal(estimate),
+            category: idea.expenseCategory,
+            status: idea.status == .chosen ? .committed : .estimated,
+            createdAt: existingIndex.map { eventExpenses[$0].createdAt } ?? idea.submittedAt
+        )
+
+        if let existingIndex {
+            eventExpenses[existingIndex] = expense
+        } else {
+            eventExpenses.append(expense)
+        }
     }
 
     func addRegistryItem(_ item: RegistryItem) {
@@ -836,6 +980,43 @@ final class WeddingWorkspace {
     }
 }
 
+private extension WeddingIdea {
+    var expenseCategory: EventExpenseCategory {
+        switch category {
+        case .venue:
+            .venue
+        case .food:
+            .foodAndDrink
+        case .attire:
+            .attire
+        case .flowers, .decor:
+            .decor
+        case .music:
+            .entertainment
+        case .photography:
+            .photography
+        case .invitations:
+            .stationery
+        case .honeymoon:
+            .travel
+        case .registry:
+            .gifts
+        case .event:
+            switch eventConfiguration?.category {
+            case .venue: .venue
+            case .foodTasting: .foodAndDrink
+            case .photography: .photography
+            case .honeymoon: .travel
+            case .attireFitting: .attire
+            case .reception: .entertainment
+            case .weddingShower, .bachelorBachelorette, .rehearsal, .ceremony, .other, .none: .other
+            }
+        case .other:
+            .other
+        }
+    }
+}
+
 private struct DecisionRecord {
     let ideaID: UUID
     let previousStatus: IdeaStatus
@@ -853,6 +1034,14 @@ extension WeddingWorkspace {
             locationName: "Willow & Stone Estate",
             latitude: 42.2808,
             longitude: -83.7430
+        )
+        let photographyLocation = EventLocation(
+            address: "3000 Fuller Road, Ann Arbor, Michigan 48105",
+            shortAddress: "Ann Arbor, MI",
+            placeName: "Gallup Park",
+            locationName: "Gallup Park",
+            latitude: 42.2778,
+            longitude: -83.6967
         )
         let alex = WeddingMember(
             name: "Alex",
@@ -885,12 +1074,20 @@ extension WeddingWorkspace {
             members: [alex, jordan, sarah, mia, chris],
             ideas: [
                 WeddingIdea(
-                    title: "Willow & Stone Estate",
+                    title: "Venue",
                     note: "Garden ceremony, dinner under the trees, and space for everyone we love.",
-                    category: .venue,
+                    category: .event,
                     submittedBy: "Alex & Jordan",
                     estimatedCost: 12_000,
-                    status: .chosen
+                    status: .chosen,
+                    configuration: .event(
+                        EventIdeaConfiguration(
+                            category: .venue,
+                            purpose: .planning,
+                            proposedDate: nil,
+                            location: venueLocation
+                        )
+                    )
                 ),
                 WeddingIdea(
                     title: "Garden ceremony lighting",
@@ -907,12 +1104,20 @@ extension WeddingWorkspace {
                     estimatedCost: 650
                 ),
                 WeddingIdea(
-                    title: "Documentary-style photographer",
-                    note: "Candid photographs with a few relaxed portraits after the ceremony.",
-                    category: .photography,
+                    title: "Photography",
+                    note: "Golden-hour portraits by the river, with room for candid photographs along the trails.",
+                    category: .event,
                     submittedBy: "Jordan",
                     estimatedCost: 2800,
-                    status: .chosen
+                    status: .chosen,
+                    configuration: .event(
+                        EventIdeaConfiguration(
+                            category: .photography,
+                            purpose: .planning,
+                            proposedDate: nil,
+                            location: photographyLocation
+                        )
+                    )
                 ),
                 WeddingIdea(
                     title: "Letterpress invitation suite",
@@ -931,7 +1136,7 @@ extension WeddingWorkspace {
                     status: .maybe
                 ),
                 WeddingIdea(
-                    title: "Welcome Dinner",
+                    title: "Reception",
                     note: "A relaxed dinner for the planning circle and out-of-town family before the wedding weekend begins.",
                     category: .event,
                     submittedBy: "Alex",

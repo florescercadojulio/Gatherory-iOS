@@ -5,11 +5,150 @@ enum EventEditorMode {
     case subevent(TimelineItem?)
 }
 
+private func attireValues(from description: String) -> (style: AttireStyle, guidance: String) {
+    let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let style = AttireStyle.allCases
+        .filter({ $0 != .any })
+        .first(where: {
+            trimmed.range(
+                of: $0.title,
+                options: [.anchored, .caseInsensitive, .diacriticInsensitive]
+            ) != nil
+        }) else {
+        return (.any, trimmed)
+    }
+
+    let suffix = trimmed.dropFirst(style.title.count)
+        .trimmingCharacters(in: CharacterSet(charactersIn: " ·—-:"))
+    return (style, suffix)
+}
+
+private func attireDescription(style: AttireStyle, guidance: String) -> String {
+    let trimmedGuidance = guidance.trimmingCharacters(in: .whitespacesAndNewlines)
+    return switch (style, trimmedGuidance.isEmpty) {
+    case (.any, true): ""
+    case (.any, false): trimmedGuidance
+    case (_, true): style.title
+    case (_, false): "\(style.title) · \(trimmedGuidance)"
+    }
+}
+
+/// Shared by event creation and event ideas so choosing an event type feels
+/// identical regardless of where the flow starts.
+struct EventCategoryStrip: View {
+    @Binding var selection: TimelineCategory
+
+    private var orderedCategories: [TimelineCategory] {
+        [.other] + TimelineCategory.allCases.filter { $0 != .other }
+    }
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: AppTheme.Spacing.compact) {
+                ForEach(orderedCategories) { option in
+                    let isSelected = selection == option
+
+                    Button {
+                        withAnimation(.snappy) {
+                            selection = option
+                        }
+                    } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: option == .other ? "circle.slash" : option.symbol)
+                                .symbolRenderingMode(.hierarchical)
+                                .font(.title2)
+
+                            Text(option == .other ? "None" : option.title)
+                                .font(.caption.weight(.semibold))
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                        }
+                        .foregroundStyle(isSelected ? .white : .primary)
+                        .frame(width: 98, height: 76)
+                        .background(
+                            isSelected ? option.artworkAccent : AppTheme.ColorToken.elevatedSurface,
+                            in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                                .strokeBorder(
+                                    isSelected ? option.artworkAccent : AppTheme.ColorToken.cardBorder,
+                                    lineWidth: isSelected ? 2 : 0.5
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(option == .other ? "No category" : option.title)
+                    .accessibilityValue(isSelected ? "Selected" : "Not selected")
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .scrollIndicators(.hidden)
+        .contentMargins(.horizontal, 0, for: .scrollContent)
+        .accessibilityLabel("Event categories")
+    }
+}
+
+struct EventPurposeSelector: View {
+    @Binding var selection: EventPurpose
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: AppTheme.Spacing.compact) { purposeTiles }
+            } else {
+                HStack(spacing: AppTheme.Spacing.compact) { purposeTiles }
+            }
+        }
+        .padding(2)
+        .accessibilityLabel("Event purpose")
+    }
+
+    private var purposeTiles: some View {
+        ForEach(EventPurpose.allCases) { option in
+            let isSelected = selection == option
+
+            Button {
+                withAnimation(.snappy) {
+                    selection = option
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(option.title, systemImage: option.symbol)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(2)
+
+                    Text(option.description)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+                .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+                .padding(8)
+                .background(
+                    isSelected ? AppTheme.ColorToken.accent.opacity(0.14) : AppTheme.ColorToken.elevatedSurface,
+                    in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                        .strokeBorder(
+                            isSelected ? AppTheme.ColorToken.accent : AppTheme.ColorToken.cardBorder,
+                            lineWidth: isSelected ? 2 : 0.5
+                        )
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        }
+    }
+}
+
 /// One editor for creating and editing every event in the two-level hierarchy.
 struct EventEditorView: View {
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let mode: EventEditorMode
 
@@ -25,6 +164,7 @@ struct EventEditorView: View {
     @State private var eventLocation: EventLocation?
     @State private var imageData: Data?
     @State private var eventDescription: String
+    @State private var attireStyle: AttireStyle
     @State private var dressCode: String
     @State private var eventExpenses: [EventExpense]
     @State private var usesBudget: Bool
@@ -35,8 +175,8 @@ struct EventEditorView: View {
     @State private var isConfirmingDeletion = false
     @State private var didLoadMain = false
     @State private var didLoadExpenses = false
-    @State private var expenseEditorTarget: EventExpenseEditorTarget?
-    @State private var isAllocatingBudget = false
+    @State private var isEditingBudget = false
+    @State private var isEditingCosts = false
 
     private let draftEventID: UUID
 
@@ -56,10 +196,14 @@ struct EventEditorView: View {
         _eventLocation = State(initialValue: item?.eventLocation)
         _imageData = State(initialValue: item?.imageData)
         _eventDescription = State(initialValue: item?.eventDescription ?? "")
-        _dressCode = State(initialValue: item?.dressCode ?? "")
+        let attire = attireValues(from: item?.dressCode ?? "")
+        _attireStyle = State(initialValue: attire.style)
+        _dressCode = State(initialValue: attire.guidance)
         _eventExpenses = State(initialValue: [])
         _usesBudget = State(initialValue: item?.budgetCap != nil)
-        _mainBudgetAmount = State(initialValue: "")
+        _mainBudgetAmount = State(
+            initialValue: item?.budgetCap.map { NSDecimalNumber(decimal: $0).stringValue } ?? ""
+        )
         _selectedParticipantIDs = State(initialValue: Set(item?.participantIDs ?? []))
     }
 
@@ -81,17 +225,9 @@ struct EventEditorView: View {
 
     private var resolvedTitle: String {
         guard trimmedTitle.isEmpty else { return trimmedTitle }
-        return switch category {
-        case .venue: purpose == .planning ? "Venue Visit" : "Venue"
-        case .foodTasting: "Food Tasting"
-        case .attireFitting: "Attire Fitting"
-        case .weddingShower: "Wedding Shower"
-        case .bachelorBachelorette: "Bachelor or Bachelorette Party"
-        case .rehearsal: "Wedding Rehearsal"
-        case .ceremony: "Ceremony"
-        case .reception: "Reception"
-        case .other: purpose == .planning ? "Planning Event" : "Event"
-        }
+        return category == .other
+            ? (purpose == .planning ? "Planning Event" : "Event")
+            : category.title
     }
 
     private var expenseEventID: UUID {
@@ -125,67 +261,81 @@ struct EventEditorView: View {
             || (parsedMainBudget.map { $0 > .zero && $0 >= currentAllocatedBudget } ?? false)
     }
 
+    private var childBudgetIsValid: Bool {
+        guard !isMainEvent, originalItem?.budgetCap == nil else { return true }
+        guard let parsedMainBudget else { return mainBudgetAmount.isEmpty }
+        return parsedMainBudget > .zero && parsedMainBudget <= availableForNewEvent
+    }
+
+    private var eventIdentitySection: some View {
+        Section {
+            TextField(isMainEvent ? "Event name" : "Custom name (optional)", text: $title)
+                .textInputAutocapitalization(.words)
+
+            if isMainEvent {
+                Picker("Status", selection: $mainStatus) {
+                    ForEach(MainEventStatus.allCases) { status in
+                        Label(status.title, systemImage: status.symbol).tag(status)
+                    }
+                }
+                Text(mainStatus.detail).font(.footnote).foregroundStyle(.secondary)
+            } else {
+                Picker("Planning Status", selection: $childStatus) {
+                    ForEach(EventStatus.allCases.filter { $0 != .archived }) { status in
+                        Label(status.title, systemImage: status.symbol).tag(status)
+                    }
+                }
+            }
+        } header: {
+            Text(isMainEvent ? "Main Event" : "Event")
+        } footer: {
+            if !isMainEvent && trimmedTitle.isEmpty {
+                Text("The event will be named “\(resolvedTitle)”.")
+            }
+        }
+    }
+
     var body: some View {
         Form {
             if !isMainEvent {
-                Section("Event Type") {
-                    categoryGrid
+                Section("Event Category") {
+                    EventCategoryStrip(selection: $category)
                         .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                         .listRowBackground(Color.clear)
                 }
 
                 Section("Purpose") {
-                    purposePicker
+                    EventPurposeSelector(selection: $purpose)
                         .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                         .listRowBackground(Color.clear)
                 }
             }
 
+            if isMainEvent {
+                eventIdentitySection
+            }
+
             Section {
-                TextField(isMainEvent ? "Event name" : "Custom name (optional)", text: $title)
-                    .textInputAutocapitalization(.words)
+                AttireStylePicker(selection: $attireStyle)
 
-                if isMainEvent {
-                    Picker("Status", selection: $mainStatus) {
-                        ForEach(MainEventStatus.allCases) { status in
-                            Label(status.title, systemImage: status.symbol).tag(status)
-                        }
-                    }
-                    Text(mainStatus.detail).font(.footnote).foregroundStyle(.secondary)
-                } else {
-                    Picker("Planning Status", selection: $childStatus) {
-                        ForEach(EventStatus.allCases.filter { $0 != .archived }) { status in
-                            Label(status.title, systemImage: status.symbol).tag(status)
-                        }
-                    }
-                }
+                TextField("Colors, fabrics, or guidance (optional)", text: $dressCode, axis: .vertical)
+                    .textInputAutocapitalization(.sentences)
+                    .lineLimit(2...5)
             } header: {
-                Text(isMainEvent ? "Main Event" : "Event")
+                Text("Attire")
             } footer: {
-                if !isMainEvent && trimmedTitle.isEmpty {
-                    Text("The event will be named “\(resolvedTitle)”.")
-                }
+                Text("Choose Any when this event doesn’t need attire guidance.")
             }
 
-            Section("Cover") {
-                PhotoAttachmentPicker(
-                    imageData: $imageData,
-                    emptySymbol: isMainEvent ? "heart.fill" : category.symbol,
-                    fallbackAssetName: isMainEvent || category == .venue ? "WeddingVenueHero" : nil,
-                    fallbackColors: isMainEvent ? nil : category.artworkColors,
-                    fallbackAccent: isMainEvent ? AppTheme.ColorToken.accent : category.artworkAccent,
-                    suggestedConcept: "Event artwork for \(resolvedTitle)"
-                )
-            }
-
-            Section("Date and Location") {
+            Section("When & Where") {
                 Button {
                     isEditingDateAndTime = true
                 } label: {
-                    editorRow(
-                        symbol: "calendar.badge.clock",
-                        title: isAllDay ? "All-day" : "Date and Time",
-                        value: scheduleSummary
+                    EventScheduleRow(
+                        startsAt: startsAt,
+                        endsAt: endsAt,
+                        isAllDay: isAllDay,
+                        timeZoneIdentifier: timeZoneIdentifier
                     )
                 }
                 .buttonStyle(.plain)
@@ -202,104 +352,13 @@ struct EventEditorView: View {
                 .buttonStyle(.plain)
             }
 
-            if isMainEvent {
-                Section {
-                    TextField("Budget cap", text: $mainBudgetAmount)
-                        .keyboardType(.decimalPad)
-                } header: {
-                    Text("Workspace Budget (Optional)")
-                } footer: {
-                    if !mainBudgetIsValid && currentAllocatedBudget > .zero {
-                        Text("At least \(currentAllocatedBudget.formatted(.currency(code: currencyCode))) is already allocated to events.")
-                    } else {
-                        Text("This cap powers budget signals across the workspace.")
-                    }
-                }
-            } else if workspace.workspaceBudgetCap != nil {
-                Section {
-                    Toggle("Uses a budget", isOn: $usesBudget)
-
-                    if usesBudget {
-                        LabeledContent(
-                            "Allocated",
-                            value: currentChildBudget.formatted(
-                                .currency(code: currencyCode)
-                            )
-                        )
-
-                        if originalItem?.budgetCap != nil {
-                            Button("Allocate Budget", systemImage: "arrow.left.arrow.right") {
-                                isAllocatingBudget = true
-                            }
-                        }
-                    }
-                } header: {
-                    Text("Budget")
-                } footer: {
-                    Text(
-                        usesBudget
-                            ? "Allocate existing workspace budget without changing the workspace cap."
-                            : "Leave this off for events that don't need spending."
-                    )
-                }
-            }
-
-            Section {
-                if eventExpenses.isEmpty {
-                    Text("No costs added")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(eventExpenses) { expense in
-                        Button {
-                            expenseEditorTarget = EventExpenseEditorTarget(expense: expense)
-                        } label: {
-                            expenseRow(expense)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .onDelete(perform: deleteExpenses)
-                }
-
-                Button("Add Cost", systemImage: "plus.circle") {
-                    expenseEditorTarget = EventExpenseEditorTarget(expense: nil)
-                }
-            } header: {
-                HStack {
-                    Text("Costs")
-                    Spacer()
-                    if !eventExpenses.isEmpty {
-                        Text(eventCostTotal, format: .currency(code: currencyCode))
-                    }
-                }
-            } footer: {
-                Text("Track estimates, commitments, and payments for this event.")
-            }
-
-            Section {
-                TextField("Dress code (optional)", text: $dressCode)
-                    .textInputAutocapitalization(.sentences)
-
-                TextEditor(text: $eventDescription)
-                    .frame(minHeight: 110, alignment: .topLeading)
-                    .accessibilityLabel("Event description")
-                    .onChange(of: eventDescription) { _, value in
-                        if value.count > 750 { eventDescription = String(value.prefix(750)) }
-                    }
-
-                Text("\(eventDescription.count)/750")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            } header: {
-                Text("Guest Details")
-            } footer: {
-                Text("This information appears in the event invitation.")
+            if !isMainEvent {
+                eventIdentitySection
             }
 
             if !isMainEvent {
                 Section {
-                    ForEach(workspace.members) { member in
+                    ForEach(eventParticipantOptions) { member in
                         Button {
                             toggle(member)
                         } label: {
@@ -335,7 +394,75 @@ struct EventEditorView: View {
                 } header: {
                     Text("Participants")
                 } footer: {
-                    Text("New events start with everyone from the main event. Changes here only affect this event.")
+                    if category == .honeymoon {
+                        Text("Honeymoons start with the hosts only.")
+                    } else {
+                        Text("New events start with everyone from the main event. Changes here only affect this event.")
+                    }
+                }
+            }
+
+            Section {
+                TextEditor(text: $eventDescription)
+                    .frame(minHeight: 110, alignment: .topLeading)
+                    .accessibilityLabel("Event description")
+                    .onChange(of: eventDescription) { _, value in
+                        if value.count > 750 { eventDescription = String(value.prefix(750)) }
+                    }
+
+                Text("\(eventDescription.count)/750")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            } header: {
+                Text("Description")
+            } footer: {
+                Text("This information appears in the invitation.")
+            }
+
+            Section("Cover") {
+                PhotoAttachmentPicker(
+                    imageData: $imageData,
+                    emptySymbol: isMainEvent ? "heart.fill" : category.symbol,
+                    fallbackAssetName: isMainEvent || category == .venue ? "WeddingVenueHero" : nil,
+                    fallbackColors: isMainEvent ? nil : category.artworkColors,
+                    fallbackAccent: isMainEvent ? AppTheme.ColorToken.accent : category.artworkAccent,
+                    suggestedConcept: "Event artwork for \(resolvedTitle)"
+                )
+            }
+
+            Section {
+                if isMainEvent || workspace.workspaceBudgetCap != nil {
+                    Button {
+                        isEditingBudget = true
+                    } label: {
+                        planningRow(
+                            symbol: "chart.pie.fill",
+                            title: "Budget",
+                            value: budgetSummary
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button {
+                    isEditingCosts = true
+                } label: {
+                    planningRow(
+                        symbol: "list.bullet.rectangle.portrait",
+                        title: "Costs",
+                        value: costSummary
+                    )
+                }
+                .buttonStyle(.plain)
+            } header: {
+                Text("Planning")
+            } footer: {
+                if isMainEvent || workspace.workspaceBudgetCap != nil {
+                    Text("Budget is the spending limit. Costs are the individual estimates, commitments, and payments.")
+                } else {
+                    Text("Track individual estimates, commitments, and payments for this event.")
                 }
             }
 
@@ -349,6 +476,9 @@ struct EventEditorView: View {
                 }
             }
         }
+        .appKeyboardDismissal()
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.ColorToken.background)
         .navigationTitle(isCreating || workspace.isMainEventDeleted ? "New Event" : "Edit Event")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -360,7 +490,7 @@ struct EventEditorView: View {
                     .disabled(
                         isMainEvent
                             ? trimmedTitle.isEmpty || !mainBudgetIsValid
-                            : selectedParticipantIDs.isEmpty
+                            : selectedParticipantIDs.isEmpty || !childBudgetIsValid
                     )
                     .keyboardShortcut(.defaultAction)
             }
@@ -385,25 +515,32 @@ struct EventEditorView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(item: $expenseEditorTarget) { target in
+        .sheet(isPresented: $isEditingBudget) {
             NavigationStack {
-                EventExpenseEditorView(
-                    expense: target.expense,
-                    eventID: expenseEventID,
-                    onSave: upsertExpense
-                )
+                EventBudgetSettingsView(
+                    isMainEvent: isMainEvent,
+                    originalItem: originalItem,
+                    initialUsesBudget: usesBudget,
+                    initialMainBudgetAmount: mainBudgetAmount,
+                    allocatedWorkspaceBudget: currentAllocatedBudget,
+                    availableForNewEvent: availableForNewEvent
+                ) { updatedUsesBudget, updatedMainBudgetAmount in
+                    usesBudget = updatedUsesBudget
+                    mainBudgetAmount = updatedMainBudgetAmount
+                }
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $isAllocatingBudget) {
-            if let originalItem {
-                NavigationStack {
-                    BudgetAllocationView(target: .subevent(originalItem.id))
-                }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+        .sheet(isPresented: $isEditingCosts) {
+            NavigationStack {
+                EventCostsEditorView(
+                    expenses: $eventExpenses,
+                    eventID: expenseEventID
+                )
             }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .confirmationDialog("Delete this event?", isPresented: $isConfirmingDeletion, titleVisibility: .visible) {
             Button("Delete Event", role: .destructive) {
@@ -422,13 +559,434 @@ struct EventEditorView: View {
             }
             loadExpensesIfNeeded()
         }
+        .onChange(of: category) { previousCategory, updatedCategory in
+            guard !isMainEvent else { return }
+            if updatedCategory == .honeymoon {
+                purpose = .eventExperience
+                selectedParticipantIDs = Set(hostParticipantIDs)
+            } else if previousCategory == .honeymoon, isCreating {
+                selectedParticipantIDs = Set(workspace.mainEventParticipantIDs)
+            }
+        }
+    }
+
+    private var hostParticipantIDs: [UUID] {
+        workspace.members
+            .filter { $0.participantRole == .host }
+            .map(\.id)
+    }
+
+    private var eventParticipantOptions: [WeddingMember] {
+        category == .honeymoon
+            ? workspace.members.filter { $0.participantRole == .host }
+            : workspace.members
     }
 
     private var currencyCode: String {
         Locale.current.currency?.identifier ?? "USD"
     }
 
-    private func expenseRow(_ expense: EventExpense) -> some View {
+    private var budgetSummary: String {
+        if isMainEvent {
+            return parsedMainBudget?.formatted(.currency(code: currencyCode)) ?? "Not Set"
+        }
+        guard workspace.workspaceBudgetCap != nil else { return "Workspace Budget Not Set" }
+        guard usesBudget, let parsedMainBudget else { return "Not Set" }
+        if originalItem == nil { return parsedMainBudget.formatted(.currency(code: currencyCode)) }
+        return currentChildBudget.formatted(.currency(code: currencyCode))
+    }
+
+    private var availableForNewEvent: Decimal {
+        workspace.freeBudgetPool + (workspace.mainEventBudgetCap ?? .zero)
+    }
+
+    private var costSummary: String {
+        guard !eventExpenses.isEmpty else { return "None Added" }
+        let total = eventCostTotal.formatted(.currency(code: currencyCode))
+        return "\(total) · \(eventExpenses.count) \(eventExpenses.count == 1 ? "item" : "items")"
+    }
+
+    private func planningRow(symbol: String, title: String, value: String) -> some View {
+        HStack(spacing: AppTheme.Spacing.standard) {
+            Image(systemName: symbol)
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .foregroundStyle(.primary)
+                Text(value)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.forward")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens \(title.lowercased()) settings")
+    }
+
+    private func editorRow(symbol: String, title: String, value: String) -> some View {
+        HStack(spacing: AppTheme.Spacing.standard) {
+            Image(systemName: symbol).foregroundStyle(AppTheme.ColorToken.accent).frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline).foregroundStyle(.secondary)
+                Text(value).foregroundStyle(value == "Add Location" ? AppTheme.ColorToken.accent : .primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+        .contentShape(Rectangle())
+    }
+
+    private func loadMainEventIfNeeded() {
+        guard !didLoadMain else { return }
+        title = workspace.title
+        mainStatus = workspace.mainEventStatus
+        startsAt = workspace.weddingDate
+        endsAt = workspace.mainEventEndsAt
+        isAllDay = workspace.mainEventIsAllDay
+        timeZoneIdentifier = workspace.mainEventTimeZoneIdentifier
+        eventLocation = workspace.mainEventLocation
+        imageData = workspace.mainEventImageData
+        let attire = attireValues(from: workspace.dressCode)
+        attireStyle = attire.style
+        dressCode = attire.guidance
+        eventDescription = workspace.eventMessage
+        mainBudgetAmount = workspace.workspaceBudgetCap.map {
+            NSDecimalNumber(decimal: $0).stringValue
+        } ?? ""
+        didLoadMain = true
+    }
+
+    private func loadExpensesIfNeeded() {
+        guard !didLoadExpenses else { return }
+        eventExpenses = workspace.expenses(forEventID: expenseEventID)
+        didLoadExpenses = true
+    }
+
+    private func save() {
+        if isMainEvent {
+            _ = workspace.updateWorkspaceBudgetCap(parsedMainBudget)
+            workspace.updateMainEvent(
+                title: trimmedTitle,
+                status: mainStatus,
+                startsAt: startsAt,
+                endsAt: endsAt,
+                isAllDay: isAllDay,
+                timeZoneIdentifier: timeZoneIdentifier,
+                eventLocation: eventLocation,
+                imageData: imageData,
+                dressCode: attireDescription(style: attireStyle, guidance: dressCode),
+                message: eventDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        } else {
+            let item = TimelineItem(
+                id: draftEventID,
+                title: resolvedTitle,
+                category: category,
+                purpose: purpose,
+                scheduledAt: startsAt,
+                eventLocation: eventLocation,
+                endsAt: endsAt,
+                isAllDay: isAllDay,
+                timeZoneIdentifier: timeZoneIdentifier,
+                participantIDs: Array(selectedParticipantIDs),
+                parentEventID: workspace.mainEventID,
+                status: childStatus,
+                completionStatus: originalItem?.completionStatus ?? .upcoming,
+                response: originalItem?.response,
+                linkedIdeaID: originalItem?.linkedIdeaID,
+                imageData: imageData,
+                eventDescription: eventDescription.trimmingCharacters(in: .whitespacesAndNewlines),
+                dressCode: attireDescription(style: attireStyle, guidance: dressCode),
+                budgetCap: usesBudget ? (originalItem?.budgetCap ?? .zero) : nil
+            )
+            if originalItem == nil {
+                workspace.addTimelineItem(item)
+                workspace.allocateInitialBudget(parsedMainBudget, to: item.id)
+            } else {
+                let needsInitialAllocation = originalItem?.budgetCap == nil && usesBudget
+                workspace.updateTimelineItem(item)
+                if needsInitialAllocation {
+                    workspace.allocateInitialBudget(parsedMainBudget, to: item.id)
+                }
+            }
+        }
+        workspace.replaceExpenses(eventExpenses, forEventID: expenseEventID)
+        dismiss()
+    }
+
+    private func toggle(_ member: WeddingMember) {
+        if selectedParticipantIDs.contains(member.id) {
+            selectedParticipantIDs.remove(member.id)
+        } else {
+            selectedParticipantIDs.insert(member.id)
+        }
+    }
+}
+
+/// Keeps the financial decision focused: a budget is an optional limit, not a cost entry.
+private struct EventBudgetSettingsView: View {
+    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(\.dismiss) private var dismiss
+
+    let isMainEvent: Bool
+    let originalItem: TimelineItem?
+    let allocatedWorkspaceBudget: Decimal
+    let availableForNewEvent: Decimal
+    let onSave: (Bool, String) -> Void
+
+    @State private var usesBudget: Bool
+    @State private var mainBudgetAmount: String
+    @State private var isAllocatingBudget = false
+
+    init(
+        isMainEvent: Bool,
+        originalItem: TimelineItem?,
+        initialUsesBudget: Bool,
+        initialMainBudgetAmount: String,
+        allocatedWorkspaceBudget: Decimal,
+        availableForNewEvent: Decimal,
+        onSave: @escaping (Bool, String) -> Void
+    ) {
+        self.isMainEvent = isMainEvent
+        self.originalItem = originalItem
+        self.allocatedWorkspaceBudget = allocatedWorkspaceBudget
+        self.availableForNewEvent = availableForNewEvent
+        self.onSave = onSave
+        _usesBudget = State(initialValue: initialUsesBudget)
+        _mainBudgetAmount = State(initialValue: initialMainBudgetAmount)
+    }
+
+    private var currencyCode: String {
+        Locale.current.currency?.identifier ?? "USD"
+    }
+
+    private var parsedMainBudget: Decimal? {
+        guard !mainBudgetAmount.isEmpty else { return nil }
+        let decimalSeparator = Locale.current.decimalSeparator ?? "."
+        let normalized = mainBudgetAmount
+            .replacingOccurrences(of: decimalSeparator, with: ".")
+            .replacingOccurrences(of: ",", with: "")
+        return Decimal(string: normalized)
+    }
+
+    private var mainBudgetIsValid: Bool {
+        mainBudgetAmount.isEmpty
+            || (parsedMainBudget.map { $0 > .zero && $0 >= allocatedWorkspaceBudget } ?? false)
+    }
+
+    private var childBudgetIsValid: Bool {
+        guard !isMainEvent, originalItem?.budgetCap == nil else { return true }
+        guard let parsedMainBudget else { return mainBudgetAmount.isEmpty }
+        return parsedMainBudget > .zero && parsedMainBudget <= availableForNewEvent
+    }
+
+    private var budgetIsValid: Bool {
+        isMainEvent ? mainBudgetIsValid : childBudgetIsValid
+    }
+
+    private var currentAllocation: Decimal {
+        guard let originalItem else { return .zero }
+        return workspace.budgetCap(for: .subevent(originalItem.id)) ?? .zero
+    }
+
+    var body: some View {
+        Form {
+            if isMainEvent {
+                Section {
+                    EventBudgetAmountField(amount: $mainBudgetAmount)
+
+                    if allocatedWorkspaceBudget > .zero {
+                        LabeledContent("Already Allocated") {
+                            Text(
+                                allocatedWorkspaceBudget,
+                                format: .currency(code: currencyCode)
+                            )
+                            .monospacedDigit()
+                        }
+                    }
+                } header: {
+                    Text("Workspace Budget")
+                } footer: {
+                    if !mainBudgetIsValid {
+                        Text("The limit cannot be lower than the amount already allocated to events.")
+                            .foregroundStyle(.red)
+                    } else {
+                        Text("This optional limit powers remaining-budget and over-budget signals across the workspace.")
+                    }
+                }
+            } else if originalItem == nil {
+                Section {
+                    EventBudgetAmountField(amount: $mainBudgetAmount)
+                } header: {
+                    Text("Event Budget")
+                } footer: {
+                    if !childBudgetIsValid {
+                        Text("Enter an amount up to \(availableForNewEvent.formatted(.currency(code: currencyCode))), or leave it blank.")
+                            .foregroundStyle(.red)
+                    } else {
+                        Text("This amount is allocated from the workspace when the event is scheduled.")
+                    }
+                }
+            } else {
+                Section {
+                    if usesBudget {
+                        LabeledContent("Current Allocation") {
+                            Text(currentAllocation, format: .currency(code: currencyCode))
+                                .fontWeight(.semibold)
+                                .monospacedDigit()
+                        }
+
+                        Button("Change Allocation", systemImage: "arrow.left.arrow.right") {
+                            isAllocatingBudget = true
+                        }
+
+                        Button("Remove Budget", systemImage: "trash", role: .destructive) {
+                            usesBudget = false
+                            mainBudgetAmount = ""
+                        }
+                    } else {
+                        EventBudgetAmountField(amount: $mainBudgetAmount)
+                    }
+                } header: {
+                    Text("Event Budget")
+                } footer: {
+                    if usesBudget {
+                        Text("Use budget allocation to move funds between this event, the main event, and the unallocated pool.")
+                    } else if !childBudgetIsValid {
+                        Text("Enter an amount up to \(availableForNewEvent.formatted(.currency(code: currencyCode))), or leave it blank.")
+                            .foregroundStyle(.red)
+                    } else {
+                        Text("Set an amount to add this event to the workspace budget.")
+                    }
+                }
+            }
+        }
+        .appKeyboardDismissal()
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.ColorToken.background)
+        .navigationTitle("Budget")
+        .navigationBarTitleDisplayMode(.inline)
+        .appClearNavigationBar()
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    let updatedUsesBudget = originalItem?.budgetCap == nil
+                        ? parsedMainBudget != nil
+                        : usesBudget
+                    onSave(updatedUsesBudget, mainBudgetAmount)
+                    dismiss()
+                }
+                .disabled(!budgetIsValid)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .sheet(isPresented: $isAllocatingBudget) {
+            if let originalItem {
+                NavigationStack {
+                    BudgetAllocationView(target: .subevent(originalItem.id))
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+        }
+    }
+}
+
+/// A small ledger kept out of the main event form so setup remains about the event itself.
+private struct EventCostsEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    @Binding var expenses: [EventExpense]
+    let eventID: UUID
+
+    @State private var editorTarget: EventExpenseEditorTarget?
+
+    private var currencyCode: String {
+        Locale.current.currency?.identifier ?? "USD"
+    }
+
+    private var total: Decimal {
+        expenses.reduce(Decimal.zero) { $0 + $1.amount }
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Tracked Total") {
+                    Text(total, format: .currency(code: currencyCode))
+                        .fontWeight(.semibold)
+                        .monospacedDigit()
+                }
+            } footer: {
+                Text("This total includes estimated, committed, and paid items. Each item keeps its own status.")
+            }
+
+            Section {
+                if expenses.isEmpty {
+                    ContentUnavailableView(
+                        "No Costs Yet",
+                        systemImage: "list.bullet.rectangle.portrait",
+                        description: Text("Add an estimate now and update its status when it is committed or paid.")
+                    )
+                    .listRowBackground(Color.clear)
+                } else {
+                    ForEach(expenses) { expense in
+                        Button {
+                            editorTarget = EventExpenseEditorTarget(expense: expense)
+                        } label: {
+                            costRow(expense)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .onDelete(perform: deleteExpenses)
+                }
+
+                Button("Add Cost", systemImage: "plus.circle") {
+                    editorTarget = EventExpenseEditorTarget(expense: nil)
+                }
+            } header: {
+                Text("Cost Items")
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.ColorToken.background)
+        .navigationTitle("Costs")
+        .navigationBarTitleDisplayMode(.inline)
+        .appClearNavigationBar()
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { dismiss() }
+            }
+        }
+        .sheet(item: $editorTarget) { target in
+            NavigationStack {
+                EventExpenseEditorView(
+                    expense: target.expense,
+                    eventID: eventID,
+                    onSave: upsertExpense
+                )
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    private func costRow(_ expense: EventExpense) -> some View {
         HStack(spacing: AppTheme.Spacing.standard) {
             Image(systemName: expense.category.symbol)
                 .foregroundStyle(AppTheme.ColorToken.accent)
@@ -455,243 +1013,16 @@ struct EventEditorView: View {
         .accessibilityHint("Edits this cost")
     }
 
-    private var scheduleSummary: String {
-        let start = startsAt.formatted(date: .abbreviated, time: isAllDay ? .omitted : .shortened)
-        guard let endsAt else { return start }
-        return "\(start) – \(endsAt.formatted(date: .abbreviated, time: isAllDay ? .omitted : .shortened))"
-    }
-
-    private static let categoryOrder: [TimelineCategory] = [
-        .other,
-        .venue,
-        .foodTasting,
-        .attireFitting,
-        .weddingShower,
-        .bachelorBachelorette,
-        .rehearsal,
-        .ceremony,
-        .reception
-    ]
-
-    private func editorRow(symbol: String, title: String, value: String) -> some View {
-        HStack(spacing: AppTheme.Spacing.standard) {
-            Image(systemName: symbol).foregroundStyle(AppTheme.ColorToken.accent).frame(width: 28)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline).foregroundStyle(.secondary)
-                Text(value).foregroundStyle(value == "Add Location" ? AppTheme.ColorToken.accent : .primary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-        .contentShape(Rectangle())
-    }
-
-    private var categoryGrid: some View {
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: dynamicTypeSize.isAccessibilitySize ? 2 : 3),
-            spacing: 8
-        ) {
-            ForEach(Self.categoryOrder) { option in
-                eventTypeTile(option)
-            }
-        }
-        .padding(2)
-        .accessibilityLabel("Event types")
-    }
-
-    private func eventTypeTile(_ option: TimelineCategory) -> some View {
-        let isSelected = category == option
-
-        return Button {
-            withAnimation(.snappy) {
-                category = option
-            }
-        } label: {
-            VStack(spacing: 6) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: option.symbol)
-                        .symbolRenderingMode(.hierarchical)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(isSelected ? Color.white : option.artworkAccent)
-                        .frame(width: 38, height: 38)
-                        .background(
-                            isSelected ? option.artworkAccent : Color.clear,
-                            in: Circle()
-                        )
-                        .background(.regularMaterial, in: Circle())
-
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.white, AppTheme.ColorToken.accent)
-                            .offset(x: 4, y: -4)
-                    }
-                }
-
-                Text(option.title)
-                    .font(.caption2.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 112 : 76)
-            .padding(4)
-            .background(
-                isSelected ? option.artworkAccent.opacity(0.14) : AppTheme.ColorToken.elevatedSurface,
-                in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? option.artworkAccent : AppTheme.ColorToken.cardBorder,
-                        lineWidth: isSelected ? 2 : 0.5
-                    )
-            }
-            .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(option.title)
-        .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        .accessibilityHint("Selects the \(option.title.lowercased()) event type")
-    }
-
-    @ViewBuilder
-    private var purposePicker: some View {
-        let tiles = ForEach(EventPurpose.allCases) { option in
-            selectionTile(
-                title: option.title,
-                symbol: option.symbol,
-                tint: AppTheme.ColorToken.accent,
-                isSelected: purpose == option,
-                detail: option.description
-            ) { purpose = option }
-        }
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(spacing: 8) { tiles }.padding(2)
-        } else {
-            HStack(spacing: 8) { tiles }.padding(2)
-        }
-    }
-
-    private func selectionTile(
-        title: String,
-        symbol: String,
-        tint: Color,
-        isSelected: Bool,
-        detail: String? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button {
-            withAnimation(.snappy) { action() }
-        } label: {
-            VStack(alignment: detail == nil ? .center : .leading, spacing: 6) {
-                Label(title, systemImage: symbol)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(2)
-                if let detail {
-                    Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(3)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: detail == nil ? 78 : 104, alignment: detail == nil ? .center : .leading)
-            .padding(8)
-            .background(isSelected ? tint.opacity(0.14) : AppTheme.ColorToken.elevatedSurface,
-                        in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                    .strokeBorder(isSelected ? tint : AppTheme.ColorToken.cardBorder, lineWidth: isSelected ? 2 : 0.5)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityValue(isSelected ? "Selected" : "Not selected")
-    }
-
-    private func loadMainEventIfNeeded() {
-        guard !didLoadMain else { return }
-        title = workspace.title
-        mainStatus = workspace.mainEventStatus
-        startsAt = workspace.weddingDate
-        endsAt = workspace.mainEventEndsAt
-        isAllDay = workspace.mainEventIsAllDay
-        timeZoneIdentifier = workspace.mainEventTimeZoneIdentifier
-        eventLocation = workspace.mainEventLocation
-        imageData = workspace.mainEventImageData
-        dressCode = workspace.dressCode
-        eventDescription = workspace.eventMessage
-        mainBudgetAmount = workspace.workspaceBudgetCap.map {
-            NSDecimalNumber(decimal: $0).stringValue
-        } ?? ""
-        didLoadMain = true
-    }
-
-    private func loadExpensesIfNeeded() {
-        guard !didLoadExpenses else { return }
-        eventExpenses = workspace.expenses(forEventID: expenseEventID)
-        didLoadExpenses = true
-    }
-
-    private func save() {
-        if isMainEvent {
-            _ = workspace.updateWorkspaceBudgetCap(parsedMainBudget)
-            workspace.updateMainEvent(
-                title: trimmedTitle,
-                status: mainStatus,
-                startsAt: startsAt,
-                endsAt: endsAt,
-                isAllDay: isAllDay,
-                timeZoneIdentifier: timeZoneIdentifier,
-                eventLocation: eventLocation,
-                imageData: imageData,
-                dressCode: dressCode.trimmingCharacters(in: .whitespacesAndNewlines),
-                message: eventDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
-        } else {
-            let item = TimelineItem(
-                id: draftEventID,
-                title: resolvedTitle,
-                category: category,
-                purpose: purpose,
-                scheduledAt: startsAt,
-                eventLocation: eventLocation,
-                endsAt: endsAt,
-                isAllDay: isAllDay,
-                timeZoneIdentifier: timeZoneIdentifier,
-                participantIDs: Array(selectedParticipantIDs),
-                parentEventID: workspace.mainEventID,
-                status: childStatus,
-                completionStatus: originalItem?.completionStatus ?? .upcoming,
-                response: originalItem?.response,
-                linkedIdeaID: originalItem?.linkedIdeaID,
-                imageData: imageData,
-                eventDescription: eventDescription.trimmingCharacters(in: .whitespacesAndNewlines),
-                dressCode: dressCode.trimmingCharacters(in: .whitespacesAndNewlines),
-                budgetCap: usesBudget ? (originalItem?.budgetCap ?? .zero) : nil
-            )
-            if originalItem == nil { workspace.addTimelineItem(item) } else { workspace.updateTimelineItem(item) }
-        }
-        workspace.replaceExpenses(eventExpenses, forEventID: expenseEventID)
-        dismiss()
-    }
-
     private func upsertExpense(_ expense: EventExpense) {
-        if let index = eventExpenses.firstIndex(where: { $0.id == expense.id }) {
-            eventExpenses[index] = expense
+        if let index = expenses.firstIndex(where: { $0.id == expense.id }) {
+            expenses[index] = expense
         } else {
-            eventExpenses.append(expense)
+            expenses.append(expense)
         }
     }
 
     private func deleteExpenses(at offsets: IndexSet) {
-        eventExpenses.remove(atOffsets: offsets)
-    }
-
-    private func toggle(_ member: WeddingMember) {
-        if selectedParticipantIDs.contains(member.id) {
-            selectedParticipantIDs.remove(member.id)
-        } else {
-            selectedParticipantIDs.insert(member.id)
-        }
+        expenses.remove(atOffsets: offsets)
     }
 }
 
@@ -778,6 +1109,7 @@ private struct EventExpenseEditorView: View {
                 .pickerStyle(.segmented)
             }
         }
+        .appKeyboardDismissal()
         .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
         .navigationTitle(expense == nil ? "Add Cost" : "Edit Cost")
@@ -802,6 +1134,7 @@ private struct EventExpenseEditorView: View {
             EventExpense(
                 id: expense?.id ?? UUID(),
                 eventID: eventID,
+                sourceIdeaID: expense?.sourceIdeaID,
                 title: trimmedTitle,
                 amount: parsedAmount,
                 category: category,

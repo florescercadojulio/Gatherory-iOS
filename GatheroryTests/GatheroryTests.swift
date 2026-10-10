@@ -37,6 +37,70 @@ struct GatheroryTests {
         #expect(library.selectedWorkspace == nil)
     }
 
+    @Test("Workspace bootstrap honors the development seed setting")
+    func workspaceBootstrapHonorsSeedSetting() {
+        let seededLibrary = WorkspaceLibrary.bootstrap(seedData: true)
+        let emptyLibrary = WorkspaceLibrary.bootstrap(seedData: false)
+
+        #expect(seededLibrary.workspaces.count == 2)
+        #expect(emptyLibrary.workspaces.isEmpty)
+        #expect(seededLibrary.selectedWorkspace == nil)
+        #expect(emptyLibrary.selectedWorkspace == nil)
+    }
+
+    @Test("Development authentication always includes the planner account")
+    func developmentAuthenticationIncludesPlanner() throws {
+        let authentication = AuthenticationSession(
+            environment: .development,
+            skipsAuthentication: false
+        )
+
+        #expect(authentication.currentUser == nil)
+        #expect(authentication.developmentAccounts == [DevelopmentAccountFixtures.planner])
+
+        try authentication.signIn(
+            email: "planner@gatherory.test",
+            password: "password"
+        )
+
+        #expect(authentication.currentUser == DevelopmentAccountFixtures.planner)
+    }
+
+    @Test("Development authentication can bypass the login view")
+    func developmentAuthenticationCanSkipLogin() {
+        let authentication = AuthenticationSession(
+            environment: .development,
+            skipsAuthentication: true
+        )
+
+        #expect(authentication.currentUser == DevelopmentAccountFixtures.planner)
+    }
+
+    @Test("Editing a profile updates the active account")
+    func editingProfileUpdatesCurrentAccount() throws {
+        let authentication = AuthenticationSession(
+            environment: .development,
+            skipsAuthentication: true
+        )
+
+        #expect(authentication.updateProfile(displayName: "  Jordan Lee  "))
+
+        let account = try #require(authentication.currentUser)
+        #expect(account.displayName == "Jordan Lee")
+        #expect(authentication.developmentAccounts.first?.displayName == "Jordan Lee")
+    }
+
+    @Test("Production never installs the simulated planner account")
+    func productionDoesNotInstallDevelopmentAccount() {
+        let authentication = AuthenticationSession(
+            environment: .production,
+            skipsAuthentication: true
+        )
+
+        #expect(authentication.currentUser == nil)
+        #expect(authentication.developmentAccounts.isEmpty)
+    }
+
     @Test("Opening and closing a workspace updates the active context")
     func workspaceSelectionRoundTrip() throws {
         let library = WorkspaceLibrary.sample
@@ -71,7 +135,165 @@ struct GatheroryTests {
         #expect(workspace.mainEventBudgetCap == 5_000)
     }
 
-    @Test("Loving an idea adds it to the shortlist")
+    @Test("Creating an all-day workspace preserves all-day scheduling")
+    func creatingAllDayWorkspace() {
+        let startsAt = Date(timeIntervalSinceReferenceDate: 900_000_000)
+        let endsAt = Date(timeIntervalSinceReferenceDate: 900_086_400)
+        let workspace = WeddingWorkspace.newWorkspace(
+            title: "Neighborhood festival",
+            startsAt: startsAt,
+            endsAt: endsAt,
+            isAllDay: true,
+            timeZoneIdentifier: "America/Detroit",
+            eventLocation: nil,
+            imageData: nil
+        )
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.timeZone = TimeZone(identifier: "America/Detroit") ?? .autoupdatingCurrent
+
+        #expect(workspace.mainEventIsAllDay)
+        #expect(workspace.weddingDate == calendar.startOfDay(for: startsAt))
+        #expect(workspace.mainEventEndsAt == calendar.startOfDay(for: endsAt))
+        #expect(workspace.mainEventTimeZoneIdentifier == "America/Detroit")
+    }
+
+    @Test("All-day schedules normalize dates in their selected time zone")
+    func allDayScheduleNormalization() throws {
+        let timeZone = try #require(TimeZone(identifier: "America/Detroit"))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let startsAt = try #require(
+            calendar.date(from: DateComponents(year: 2026, month: 11, day: 7, hour: 15, minute: 30))
+        )
+        let endsAt = try #require(
+            calendar.date(from: DateComponents(year: 2026, month: 11, day: 8, hour: 18))
+        )
+
+        let schedule = EventSchedule(
+            startsAt: startsAt,
+            endsAt: endsAt,
+            isAllDay: true,
+            timeZoneIdentifier: timeZone.identifier
+        ).normalized
+
+        #expect(schedule.startsAt == calendar.startOfDay(for: startsAt))
+        #expect(schedule.endsAt == calendar.startOfDay(for: endsAt))
+        #expect(schedule.isAllDay)
+    }
+
+    @Test("Event ideas preserve an optional full schedule")
+    func eventIdeaScheduleMetadata() {
+        let startsAt = Date(timeIntervalSinceReferenceDate: 900_000_000)
+        let endsAt = Date(timeIntervalSinceReferenceDate: 900_007_200)
+        let configuration = EventIdeaConfiguration(
+            category: .reception,
+            purpose: .eventExperience,
+            proposedDate: startsAt,
+            proposedEndDate: endsAt,
+            isAllDay: false,
+            timeZoneIdentifier: "America/Detroit",
+            location: nil
+        )
+
+        #expect(configuration.proposedDate == startsAt)
+        #expect(configuration.proposedEndDate == endsAt)
+        #expect(configuration.isAllDay == false)
+        #expect(configuration.timeZoneIdentifier == "America/Detroit")
+        #expect(configuration.audience == .inherited)
+    }
+
+    @Test("Legacy event ideas default to the inherited audience")
+    func legacyEventIdeaAudience() throws {
+        let configuration = EventIdeaConfiguration(
+            category: .photography,
+            purpose: .planning,
+            proposedDate: nil,
+            location: nil
+        )
+        let encoded = try JSONEncoder().encode(configuration)
+        var object = try #require(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object.removeValue(forKey: "audience")
+        object.removeValue(forKey: "requiresBudget")
+        object.removeValue(forKey: "proposedBudget")
+        object.removeValue(forKey: "attireStyle")
+        object.removeValue(forKey: "attireGuidance")
+
+        let legacyData = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(EventIdeaConfiguration.self, from: legacyData)
+
+        #expect(decoded.audience == .inherited)
+        #expect(decoded.requiresBudget == false)
+        #expect(decoded.proposedBudget == nil)
+        #expect(decoded.attireStyle == .any)
+        #expect(decoded.attireGuidance.isEmpty)
+        #expect(decoded.category == .photography)
+    }
+
+    @Test("Honeymoon event ideas can be scoped to hosts")
+    func honeymoonEventAudience() {
+        let configuration = EventIdeaConfiguration(
+            category: .honeymoon,
+            purpose: .eventExperience,
+            audience: .hostsOnly,
+            proposedDate: nil,
+            location: nil
+        )
+
+        #expect(configuration.audience == .hostsOnly)
+        #expect(configuration.category.title == "Honeymoon")
+    }
+
+    @Test("Attendable sample ideas use the event model")
+    func attendableIdeasUseEventModel() {
+        let attendableTypes: Set<TimelineCategory> = [.venue, .photography, .honeymoon]
+        let attendableIdeas = WeddingWorkspace.sample.ideas.filter {
+            guard let eventType = $0.eventConfiguration?.category else { return false }
+            return attendableTypes.contains(eventType)
+        }
+
+        #expect(attendableIdeas.contains { $0.eventConfiguration?.category == .venue })
+        #expect(attendableIdeas.contains { $0.eventConfiguration?.category == .photography })
+        #expect(attendableIdeas.allSatisfy { $0.category == .event })
+    }
+
+    @Test("A dated approved event idea can enter the timeline once")
+    func approvedEventIdeaCanBeScheduled() throws {
+        let workspace = WeddingWorkspace.sample
+        let hosts = Set(workspace.members.filter { $0.participantRole == .host }.map(\.id))
+        let idea = WeddingIdea(
+            title: "Honeymoon",
+            note: "A quiet trip after the celebration.",
+            category: .event,
+            submittedBy: "Alex & Jordan",
+            status: .chosen,
+            configuration: .event(
+                EventIdeaConfiguration(
+                    category: .honeymoon,
+                    purpose: .eventExperience,
+                    audience: .hostsOnly,
+                    proposedDate: Date(timeIntervalSinceReferenceDate: 900_000_000),
+                    location: nil
+                )
+            )
+        )
+        workspace.addIdea(idea)
+
+        let automaticallyScheduled = try #require(
+            workspace.timeline.first { $0.linkedIdeaID == idea.id }
+        )
+        let firstID = try #require(workspace.scheduleEventIdea(idea))
+        let secondID = try #require(workspace.scheduleEventIdea(idea))
+        let scheduled = try #require(workspace.timeline.first { $0.id == firstID })
+
+        #expect(automaticallyScheduled.id == firstID)
+        #expect(firstID == secondID)
+        #expect(Set(scheduled.participantIDs) == hosts)
+        #expect(workspace.timeline.filter { $0.linkedIdeaID == idea.id }.count == 1)
+    }
+
+    @Test("Loving an idea approves it")
     func loveIdea() throws {
         let workspace = WeddingWorkspace.sample
         let idea = try #require(workspace.decisionQueue.first)
@@ -79,8 +301,34 @@ struct GatheroryTests {
         workspace.decide(.love, on: idea)
 
         let updatedIdea = try #require(workspace.ideas.first { $0.id == idea.id })
-        #expect(updatedIdea.status == .shortlisted)
+        #expect(updatedIdea.status == .chosen)
         #expect(workspace.decisionQueue.contains { $0.id == idea.id } == false)
+    }
+
+    @Test("Loving a dated event idea creates its linked event")
+    func loveEventIdeaCreatesEvent() throws {
+        let workspace = WeddingWorkspace.sample
+        let idea = WeddingIdea(
+            title: "Venue",
+            note: "Tour the venue together.",
+            category: .event,
+            submittedBy: "Alex",
+            configuration: .event(
+                EventIdeaConfiguration(
+                    category: .venue,
+                    purpose: .planning,
+                    proposedDate: Date(timeIntervalSinceReferenceDate: 900_000_000),
+                    location: nil
+                )
+            )
+        )
+        workspace.addIdea(idea)
+
+        workspace.decide(.love, on: idea)
+
+        let updatedIdea = try #require(workspace.ideas.first { $0.id == idea.id })
+        #expect(updatedIdea.status == .chosen)
+        #expect(workspace.timeline.contains { $0.linkedIdeaID == idea.id })
     }
 
     @Test("Maybe saves an idea for later")

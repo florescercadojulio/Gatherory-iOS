@@ -36,6 +36,10 @@ final class WorkspaceLibrary {
 }
 
 extension WorkspaceLibrary {
+    static func bootstrap(seedData: Bool = AppRuntimeConfiguration.seedsDevelopmentData) -> WorkspaceLibrary {
+        seedData ? sample : WorkspaceLibrary()
+    }
+
     static var sample: WorkspaceLibrary {
         WorkspaceLibrary(workspaces: [.sample, .secondarySample])
     }
@@ -45,6 +49,9 @@ extension WeddingWorkspace {
     static func newWorkspace(
         title: String,
         startsAt: Date,
+        endsAt: Date? = nil,
+        isAllDay: Bool = false,
+        timeZoneIdentifier: String = TimeZone.autoupdatingCurrent.identifier,
         eventLocation: EventLocation?,
         imageData: Data?,
         budgetCap: Decimal? = nil
@@ -56,9 +63,20 @@ extension WeddingWorkspace {
             planningPermission: .manage
         )
 
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .autoupdatingCurrent
+        let normalizedStart = isAllDay ? calendar.startOfDay(for: startsAt) : startsAt
+        let normalizedEnd = endsAt.map { end in
+            let candidate = isAllDay ? calendar.startOfDay(for: end) : end
+            return max(candidate, normalizedStart)
+        }
+
         return WeddingWorkspace(
             title: title,
-            weddingDate: startsAt,
+            weddingDate: normalizedStart,
+            mainEventEndsAt: normalizedEnd,
+            mainEventIsAllDay: isAllDay,
+            mainEventTimeZoneIdentifier: timeZoneIdentifier,
             mainEventLocation: eventLocation,
             mainEventImageData: imageData,
             venueName: eventLocation?.title ?? "",

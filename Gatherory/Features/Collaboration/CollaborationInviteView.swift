@@ -7,7 +7,7 @@ struct CollaborationInviteView: View {
         NavigationStack {
             CollaborationInviteScreen()
         }
-        .preferredColorScheme(.dark)
+        .appImageDetailAppearance()
     }
 }
 
@@ -46,6 +46,14 @@ private struct CollaborationInviteScreen: View {
 
     private var selectedEventImageData: Data? {
         workspace.isMainEventContext ? workspace.mainEventImageData : selectedTimelineEvent?.imageData
+    }
+
+    private var invitationPreviewImage: Image {
+        if let selectedEventImageData, let image = UIImage(data: selectedEventImageData) {
+            Image(uiImage: image)
+        } else {
+            Image("WeddingVenueHero")
+        }
     }
 
     var body: some View {
@@ -90,6 +98,13 @@ private struct CollaborationInviteScreen: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
+                invitationShareLink {
+                    Label("Share Invitation", systemImage: "square.and.arrow.up")
+                        .labelStyle(.iconOnly)
+                }
+                .tint(.white)
+                .accessibilityHint("Opens sharing options including AirDrop")
+
                 NavigationLink {
                     CollaboratorPickerView()
                 } label: {
@@ -206,16 +221,13 @@ private struct CollaborationInviteScreen: View {
                     sendEmail()
                 }
 
-                ShareLink(
-                    item: workspace.collaboratorInviteURL,
-                    subject: Text("Join \(workspace.selectedEventTitle)"),
-                    message: Text(invitationMessage),
-                    preview: SharePreview(workspace.selectedEventTitle, image: Image("WeddingVenueHero"))
-                ) {
-                    inviteActionLabel(title: "Share Link", systemImage: "square.and.arrow.up")
+                invitationShareLink {
+                    inviteActionLabel(
+                        title: "AirDrop & More",
+                        systemImage: "airplayaudio"
+                    )
                 }
                 .buttonStyle(.plain)
-                .disabled(!workspace.isCollaboratorLinkEnabled)
 
                 inviteAction(
                     title: didCopyLink ? "Copied" : "Copy Link",
@@ -363,6 +375,24 @@ private struct CollaborationInviteScreen: View {
             inviteActionLabel(title: title, systemImage: systemImage)
         }
         .buttonStyle(.plain)
+        .disabled(!workspace.isCollaboratorLinkEnabled)
+    }
+
+    /// Sharing the invitation URL through the system sheet automatically
+    /// includes AirDrop and the system's supported nearby-device behavior.
+    private func invitationShareLink<Label: View>(
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+        ShareLink(
+            item: workspace.collaboratorInviteURL,
+            subject: Text("Join \(workspace.selectedEventTitle)"),
+            message: Text(invitationMessage),
+            preview: SharePreview(
+                workspace.selectedEventTitle,
+                image: invitationPreviewImage
+            ),
+            label: label
+        )
         .disabled(!workspace.isCollaboratorLinkEnabled)
     }
 
@@ -672,21 +702,33 @@ private struct CollaboratorPickerView: View {
 
     private let suggestions = SuggestedCollaborator.samples
 
+    private var normalizedSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func matchesSearch(name: String, email: String?) -> Bool {
+        normalizedSearchText.isEmpty
+            || name.localizedCaseInsensitiveContains(normalizedSearchText)
+            || email?.localizedCaseInsensitiveContains(normalizedSearchText) == true
+    }
+
     private var availableMainEventParticipants: [WeddingMember] {
         guard !workspace.isMainEventContext else { return [] }
         let includedIDs = Set(workspace.selectedEventParticipants.map(\.id))
-        return workspace.participants(for: .main).filter { !includedIDs.contains($0.id) }
+        return workspace.participants(for: .main).filter { member in
+            !includedIDs.contains(member.id)
+                && matchesSearch(name: member.name, email: member.email)
+        }
     }
 
     private var filteredSuggestions: [SuggestedCollaborator] {
         suggestions.filter { suggestion in
-            let isNewToEvent = !workspace.selectedEventParticipants.contains {
-                $0.name.localizedCaseInsensitiveCompare(suggestion.name) == .orderedSame
+            let isNewToEvent = !workspace.selectedEventParticipants.contains { member in
+                let sameName = member.name.localizedCaseInsensitiveCompare(suggestion.name) == .orderedSame
+                let sameEmail = member.email?.localizedCaseInsensitiveCompare(suggestion.email) == .orderedSame
+                return sameName || sameEmail
             }
-            let matchesSearch = searchText.isEmpty
-                || suggestion.name.localizedCaseInsensitiveContains(searchText)
-                || suggestion.email.localizedCaseInsensitiveContains(searchText)
-            return isNewToEvent && matchesSearch
+            return isNewToEvent && matchesSearch(name: suggestion.name, email: suggestion.email)
         }
     }
 
@@ -916,7 +958,7 @@ private extension View {
             .overlay {
                 shape.stroke(.white.opacity(0.18), lineWidth: 0.5)
             }
-            .environment(\.colorScheme, .dark)
+            .appImageOverlayAppearance()
     }
 }
 

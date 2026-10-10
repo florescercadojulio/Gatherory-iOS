@@ -1,11 +1,9 @@
-import Charts
 import SwiftUI
 
 struct InsightsView: View {
     var onExitWorkspace: (() -> Void)?
 
     @Environment(WeddingWorkspace.self) private var workspace
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var allocationTarget: BudgetAllocationTarget?
 
     private var currencyCode: String {
@@ -68,11 +66,10 @@ struct InsightsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
-                totalCard
-
-                if workspace.workspaceBudgetCap != nil {
+                if workspace.workspaceBudgetCap == nil {
+                    totalCard
+                } else {
                     budgetSignal
-                    budgetAllocation
                 }
 
                 if workspace.eventExpenses.isEmpty {
@@ -86,6 +83,13 @@ struct InsightsView: View {
                 } else {
                     statusSummary
                     eventBreakdown
+                }
+
+                if workspace.workspaceBudgetCap != nil {
+                    budgetAllocation
+                }
+
+                if !workspace.eventExpenses.isEmpty {
                     costDetails
                 }
             }
@@ -100,10 +104,6 @@ struct InsightsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                EventContextLabel(section: "Insights", eventTitle: workspace.title)
-            }
-
             if let onExitWorkspace {
                 ToolbarItem(placement: .topBarLeading) {
                     WorkspaceLibraryToolbarButton(action: onExitWorkspace)
@@ -125,7 +125,7 @@ struct InsightsView: View {
 
     private var totalCard: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-            Label("Total Event Cost", systemImage: "sum")
+            Label("Total Spent", systemImage: "sum")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
@@ -134,10 +134,6 @@ struct InsightsView: View {
                 .minimumScaleFactor(0.72)
                 .lineLimit(1)
                 .monospacedDigit()
-
-            Text("Across the main event and every sub-event")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .appCard(background: AppTheme.ColorToken.surface, padding: AppTheme.Spacing.spacious)
@@ -146,37 +142,33 @@ struct InsightsView: View {
 
     private var statusSummary: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            Text("Cost Status")
+            Text("Spending Status")
                 .font(AppTheme.Typography.sectionTitle)
 
-            LazyVGrid(
-                columns: Array(
-                    repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.compact),
-                    count: dynamicTypeSize.isAccessibilitySize ? 1 : 3
-                ),
-                spacing: AppTheme.Spacing.compact
-            ) {
+            VStack(spacing: 0) {
                 ForEach(EventExpenseStatus.allCases) { status in
-                    VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: AppTheme.Spacing.standard) {
                         Label(status.title, systemImage: status.symbol)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .font(.body.weight(.medium))
+
+                        Spacer(minLength: AppTheme.Spacing.compact)
 
                         Text(
                             workspace.costTotal(status: status),
-                            format: .currency(code: currencyCode).precision(.fractionLength(0))
+                            format: .currency(code: currencyCode)
                         )
-                        .font(.headline)
+                        .font(.body.weight(.semibold))
                         .monospacedDigit()
                     }
-                    .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
-                    .appCard(
-                        background: AppTheme.ColorToken.elevatedSurface,
-                        padding: AppTheme.Spacing.compact
-                    )
+                    .frame(minHeight: 52)
                     .accessibilityElement(children: .combine)
+
+                    if status != EventExpenseStatus.allCases.last {
+                        Divider()
+                    }
                 }
             }
+            .appCard(background: AppTheme.ColorToken.surface)
         }
     }
 
@@ -189,41 +181,25 @@ struct InsightsView: View {
             : 0
 
         return VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Label(
-                        isOverBudget ? "Over Budget" : "Budget Remaining",
-                        systemImage: isOverBudget
-                            ? "exclamationmark.triangle.fill"
-                            : "checkmark.circle.fill"
-                    )
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Total Spent")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(isOverBudget ? Color.red : Color.green)
+                    .foregroundStyle(.secondary)
 
-                    Text(
-                        abs(remaining),
-                        format: .currency(code: currencyCode).precision(.fractionLength(0))
-                    )
-                    .font(.system(.title, design: .rounded, weight: .bold))
+                Text(workspace.workspaceCostTotal, format: .currency(code: currencyCode))
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .minimumScaleFactor(0.72)
+                    .lineLimit(1)
                     .monospacedDigit()
 
-                    if isOverBudget {
-                        Text("above the workspace cap")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer(minLength: AppTheme.Spacing.standard)
-
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("Budget")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(cap, format: .currency(code: currencyCode).precision(.fractionLength(0)))
-                        .font(.headline)
-                        .monospacedDigit()
-                }
+                Label(
+                    isOverBudget ? "Over budget" : "Within budget",
+                    systemImage: isOverBudget
+                        ? "exclamationmark.triangle.fill"
+                        : "checkmark.circle.fill"
+                )
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isOverBudget ? Color.red : Color.green)
             }
 
             ProgressView(value: min(progress, 1))
@@ -231,66 +207,70 @@ struct InsightsView: View {
                 .accessibilityLabel("Budget used")
                 .accessibilityValue("\(Int(progress * 100)) percent")
 
-            Text("\(workspace.workspaceCostTotal.formatted(.currency(code: currencyCode))) spent across all events")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 0) {
+                budgetMetric(title: "Budget", amount: cap)
+
+                Divider()
+                    .padding(.horizontal, AppTheme.Spacing.standard)
+
+                budgetMetric(
+                    title: isOverBudget ? "Over" : "Remaining",
+                    amount: abs(remaining),
+                    valueColor: isOverBudget ? .red : .primary
+                )
+            }
+            .fixedSize(horizontal: false, vertical: true)
         }
         .appCard(background: AppTheme.ColorToken.surface)
         .accessibilityElement(children: .contain)
     }
 
+    private func budgetMetric(
+        title: String,
+        amount: Decimal,
+        valueColor: Color = .primary
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text(
+                amount,
+                format: .currency(code: currencyCode).precision(.fractionLength(0))
+            )
+            .font(.headline)
+            .foregroundStyle(valueColor)
+            .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var budgetAllocation: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Budget Allocation")
-                    .font(AppTheme.Typography.sectionTitle)
-                Text("Tap an event to add or subtract budget.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+            Text("Budget Allocation")
+                .font(AppTheme.Typography.sectionTitle)
 
-            HStack(spacing: AppTheme.Spacing.standard) {
-                Image(systemName: "tray.full.fill")
-                    .foregroundStyle(AppTheme.ColorToken.accent)
-                    .frame(width: 28)
+            VStack(spacing: 0) {
+                unallocatedBudgetRow
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Free Pool")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Ready to allocate")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Divider()
 
-                Spacer(minLength: AppTheme.Spacing.compact)
-
-                Text(
-                    workspace.freeBudgetPool,
-                    format: .currency(code: currencyCode).precision(.fractionLength(0))
-                )
-                .font(.headline)
-                .monospacedDigit()
-            }
-            .appCard(background: AppTheme.ColorToken.surface)
-            .accessibilityElement(children: .combine)
-
-            LazyVGrid(
-                columns: Array(
-                    repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.compact),
-                    count: dynamicTypeSize.isAccessibilitySize ? 1 : 2
-                ),
-                spacing: AppTheme.Spacing.compact
-            ) {
                 ForEach(budgetSummaries) { summary in
                     Button {
                         allocationTarget = BudgetAllocationTarget(reference: summary.reference)
                     } label: {
-                        budgetTile(summary)
+                        budgetRow(summary)
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Opens budget allocation for this event")
+
+                    if summary.id != budgetSummaries.last?.id {
+                        Divider()
+                    }
                 }
             }
+            .appCard(background: AppTheme.ColorToken.surface)
 
             if budgetSummaries.count == 1 {
                 Text("Turn on “Uses a budget” while editing a sub-event to allocate part of this budget to it.")
@@ -300,118 +280,133 @@ struct InsightsView: View {
         }
     }
 
-    private func budgetTile(_ summary: EventBudgetSummary) -> some View {
-        let remaining = summary.allocation - summary.spent
-        let isOverBudget = remaining < .zero
+    private var unallocatedBudgetRow: some View {
+        HStack(spacing: AppTheme.Spacing.standard) {
+            Image(systemName: "tray.full.fill")
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .frame(width: 28)
 
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: AppTheme.Spacing.compact) {
-                Image(systemName: summary.symbol)
-                    .foregroundStyle(
-                        summary.isMainEvent
-                            ? AppTheme.ColorToken.accent
-                            : AppTheme.ColorToken.textSecondary
-                    )
-                    .frame(width: 24)
-
-                Text(summary.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-
-                Spacer(minLength: 0)
-
-                Image(systemName: "pencil")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(AppTheme.ColorToken.accent)
-            }
-
-            Text(
-                summary.allocation,
-                format: .currency(code: currencyCode).precision(.fractionLength(0))
-            )
-            .font(.title3.weight(.bold))
-            .foregroundStyle(.primary)
-            .monospacedDigit()
-
-            Text("Allocated")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-            Label(
-                isOverBudget
-                    ? "\(abs(remaining).formatted(.currency(code: currencyCode).precision(.fractionLength(0)))) over"
-                    : "\(remaining.formatted(.currency(code: currencyCode).precision(.fractionLength(0)))) left",
-                systemImage: isOverBudget ? "exclamationmark.circle.fill" : "circle.dashed"
-            )
-            .font(.caption)
-            .foregroundStyle(isOverBudget ? Color.red : AppTheme.ColorToken.textSecondary)
-        }
-        .frame(maxWidth: .infinity, minHeight: 116, alignment: .leading)
-        .appCard(background: AppTheme.ColorToken.elevatedSurface)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var eventBreakdown: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("By Event")
-                    .font(AppTheme.Typography.sectionTitle)
-                Text("Where the event total is accumulating")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Unallocated")
+                    .font(.body.weight(.medium))
+                Text("Available for any event")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
-            Chart(costSummaries) { summary in
-                BarMark(
-                    x: .value("Cost", summary.doubleAmount),
-                    y: .value("Event", summary.title)
+            Spacer(minLength: AppTheme.Spacing.compact)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(
+                    workspace.freeBudgetPool,
+                    format: .currency(code: currencyCode).precision(.fractionLength(0))
                 )
+                .font(.body.weight(.semibold))
+                .monospacedDigit()
+
+                Text("available")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(minHeight: 56)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func budgetRow(_ summary: EventBudgetSummary) -> some View {
+        let remaining = summary.allocation - summary.spent
+        let isOverBudget = remaining < .zero
+
+        return HStack(spacing: AppTheme.Spacing.standard) {
+            Image(systemName: summary.symbol)
                 .foregroundStyle(
                     summary.isMainEvent
                         ? AppTheme.ColorToken.accent
-                        : AppTheme.ColorToken.accent.opacity(0.55)
+                        : AppTheme.ColorToken.textSecondary
                 )
-                .cornerRadius(6)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(summary.title)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                Label(
+                    isOverBudget
+                        ? "\(abs(remaining).formatted(.currency(code: currencyCode).precision(.fractionLength(0)))) over"
+                        : "\(summary.spent.formatted(.currency(code: currencyCode).precision(.fractionLength(0)))) spent",
+                    systemImage: isOverBudget ? "exclamationmark.circle.fill" : "banknote"
+                )
+                .font(.caption)
+                .foregroundStyle(isOverBudget ? Color.red : AppTheme.ColorToken.textSecondary)
             }
-            .chartXAxis(.hidden)
-            .chartYAxis {
-                AxisMarks(position: .leading) { value in
-                    AxisValueLabel {
-                        if let eventTitle = value.as(String.self) {
-                            Text(eventTitle)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(AppTheme.ColorToken.textPrimary)
-                                .lineLimit(2)
-                        }
-                    }
-                }
+
+            Spacer(minLength: AppTheme.Spacing.compact)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(
+                    summary.allocation,
+                    format: .currency(code: currencyCode).precision(.fractionLength(0))
+                )
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary)
+                .monospacedDigit()
+
+                Text("allocated")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .frame(height: max(CGFloat(costSummaries.count) * 48, 120))
-            .accessibilityLabel("Cost by event")
-            .accessibilityValue(
-                costSummaries
-                    .map { "\($0.title), \($0.amount.formatted(.currency(code: currencyCode)))" }
-                    .joined(separator: "; ")
-            )
+
+            Image(systemName: "slider.horizontal.3")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .accessibilityHidden(true)
+        }
+        .frame(minHeight: 58)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    private var eventBreakdown: some View {
+        let largestAmount = max(costSummaries.map(\.doubleAmount).max() ?? 0, 1)
+
+        return VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+            Text("Spending by Event")
+                .font(AppTheme.Typography.sectionTitle)
 
             VStack(spacing: 0) {
                 ForEach(costSummaries) { summary in
-                    HStack(spacing: AppTheme.Spacing.standard) {
-                        Image(systemName: summary.symbol)
-                            .foregroundStyle(AppTheme.ColorToken.accent)
-                            .frame(width: 28)
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                        HStack(spacing: AppTheme.Spacing.standard) {
+                            Image(systemName: summary.symbol)
+                                .foregroundStyle(
+                                    summary.isMainEvent
+                                        ? AppTheme.ColorToken.accent
+                                        : AppTheme.ColorToken.textSecondary
+                                )
+                                .frame(width: 28)
 
-                        Text(summary.title)
-                            .lineLimit(2)
+                            Text(summary.title)
+                                .font(.body.weight(.medium))
+                                .lineLimit(2)
 
-                        Spacer(minLength: AppTheme.Spacing.compact)
+                            Spacer(minLength: AppTheme.Spacing.compact)
 
-                        Text(summary.amount, format: .currency(code: currencyCode))
-                            .fontWeight(.semibold)
-                            .monospacedDigit()
+                            Text(summary.amount, format: .currency(code: currencyCode))
+                                .fontWeight(.semibold)
+                                .monospacedDigit()
+                        }
+
+                        ProgressView(value: summary.doubleAmount, total: largestAmount)
+                            .tint(
+                                summary.isMainEvent
+                                    ? AppTheme.ColorToken.accent
+                                    : AppTheme.ColorToken.accent.opacity(0.55)
+                            )
+                            .accessibilityHidden(true)
                     }
-                    .frame(minHeight: 52)
+                    .padding(.vertical, 10)
                     .accessibilityElement(children: .combine)
 
                     if summary.id != costSummaries.last?.id {
@@ -426,7 +421,7 @@ struct InsightsView: View {
 
     private var costDetails: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            Text("Cost Details")
+            Text("Expenses")
                 .font(AppTheme.Typography.sectionTitle)
 
             VStack(spacing: 0) {

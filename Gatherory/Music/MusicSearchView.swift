@@ -50,6 +50,10 @@ struct MusicSearchView: View {
         musicCatalog.providerName(for: providerID)
     }
 
+    private var searchTerm: String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var permissionView: some View {
         ContentUnavailableView {
             Label("Search \(providerName)", systemImage: "music.note.list")
@@ -96,7 +100,7 @@ struct MusicSearchView: View {
                     description: Text(errorMessage)
                 )
                 .listRowSeparator(.hidden)
-            } else if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            } else if searchTerm.isEmpty {
                 ContentUnavailableView(
                     "Find a Wedding Song",
                     systemImage: "music.note.list",
@@ -104,7 +108,7 @@ struct MusicSearchView: View {
                 )
                 .listRowSeparator(.hidden)
             } else if results.isEmpty {
-                ContentUnavailableView.search(text: query)
+                ContentUnavailableView.search(text: searchTerm)
                     .listRowSeparator(.hidden)
             } else {
                 ForEach(results) { track in
@@ -134,7 +138,7 @@ struct MusicSearchView: View {
     }
 
     private func search() async {
-        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let term = searchTerm
         guard authorizationState == .authorized, !term.isEmpty else {
             results = []
             errorMessage = nil
@@ -143,11 +147,12 @@ struct MusicSearchView: View {
         }
 
         do {
+            isSearching = true
+            errorMessage = nil
+            results = []
             try await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
 
-            isSearching = true
-            errorMessage = nil
             let matches = try await musicCatalog.searchSongs(matching: term, with: providerID)
             guard !Task.isCancelled else { return }
             results = matches

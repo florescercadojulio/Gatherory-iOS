@@ -14,22 +14,7 @@ struct IdeasView: View {
     @Namespace private var ideaTransition
 
     private var filteredIdeas: [WeddingIdea] {
-        ideas(for: filter)
-    }
-
-    private func ideas(for filter: IdeaFilter) -> [WeddingIdea] {
-        switch filter {
-        case .all:
-            workspace.contextualIdeas.filter { $0.status != .passed && $0.status != .archived }
-        case .inbox:
-            workspace.contextualIdeas.filter { $0.status == .new }
-        case .saved:
-            workspace.contextualIdeas.filter { $0.status == .maybe || $0.status == .shortlisted }
-        case .approved:
-            workspace.contextualIdeas.filter { $0.status == .chosen }
-        case .archived:
-            workspace.contextualIdeas.filter { $0.status == .archived }
-        }
+        workspace.contextualIdeas.filter(filter.includes)
     }
 
     var body: some View {
@@ -186,11 +171,12 @@ struct IdeasView: View {
     }
 }
 
-private enum IdeaFilter: String, CaseIterable, Identifiable {
+enum IdeaFilter: String, CaseIterable, Identifiable {
     case all
     case inbox
     case saved
     case approved
+    case passed
     case archived
 
     var id: Self { self }
@@ -201,6 +187,7 @@ private enum IdeaFilter: String, CaseIterable, Identifiable {
         case .inbox: "Inbox"
         case .saved: "Saved"
         case .approved: "Approved"
+        case .passed: "Passed"
         case .archived: "Archive"
         }
     }
@@ -211,6 +198,7 @@ private enum IdeaFilter: String, CaseIterable, Identifiable {
         case .inbox: "tray"
         case .saved: "bookmark"
         case .approved: "checkmark.seal"
+        case .passed: "xmark.circle"
         case .archived: "archivebox"
         }
     }
@@ -221,6 +209,7 @@ private enum IdeaFilter: String, CaseIterable, Identifiable {
         case .inbox: "Inbox is clear"
         case .saved: "No saved ideas"
         case .approved: "No approved ideas"
+        case .passed: "No passed ideas"
         case .archived: "No archived ideas"
         }
     }
@@ -231,7 +220,25 @@ private enum IdeaFilter: String, CaseIterable, Identifiable {
         case .inbox: "New ideas from your planning team appear here."
         case .saved: "Ideas saved for later appear here."
         case .approved: "Ideas appear here after they are approved."
+        case .passed: "Ideas you passed on appear here."
         case .archived: "Archived ideas appear here."
+        }
+    }
+
+    func includes(_ idea: WeddingIdea) -> Bool {
+        switch self {
+        case .all:
+            idea.status != .archived
+        case .inbox:
+            idea.status == .new
+        case .saved:
+            idea.status == .maybe || idea.status == .shortlisted
+        case .approved:
+            idea.status == .chosen
+        case .passed:
+            idea.status == .passed
+        case .archived:
+            idea.status == .archived
         }
     }
 }
@@ -360,7 +367,7 @@ struct IdeaDetailView: View {
         .navigationTitle("Idea details")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
-        .toolbarColorScheme(.dark, for: .navigationBar)
+        .appImageNavigationBarAppearance()
         .toolbar {
             if let idea {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -401,6 +408,24 @@ struct IdeaDetailView: View {
                             Button("Approve", systemImage: "checkmark.circle.fill") {
                                 withAnimation {
                                     workspace.updateIdea(idea, status: .chosen)
+                                }
+                            }
+                        }
+
+                        if idea.category == .event, idea.status == .chosen {
+                            if workspace.timeline.contains(where: { $0.linkedIdeaID == idea.id }) {
+                                Button("Added to Timeline", systemImage: "calendar.badge.checkmark") {}
+                                    .disabled(true)
+                            } else if idea.eventConfiguration?.proposedDate != nil {
+                                Button("Add to Timeline", systemImage: "calendar.badge.plus") {
+                                    _ = withAnimation {
+                                        workspace.scheduleEventIdea(idea)
+                                    }
+                                }
+                            } else {
+                                Button("Add Date to Schedule", systemImage: "calendar.badge.clock") {
+                                    editorDetent = .large
+                                    isEditingIdea = true
                                 }
                             }
                         }
@@ -548,7 +573,7 @@ private struct IdeaDetailScreen: View {
             reduceTransparency ? AnyShapeStyle(.black.opacity(0.82)) : AnyShapeStyle(.regularMaterial),
             in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
         )
-        .environment(\.colorScheme, .dark)
+        .appImageOverlayAppearance()
     }
 
     private var estimatedCostLabel: String {
@@ -912,9 +937,10 @@ private struct EventIdeaDetailCard: View {
 
     private var requestID: String {
         let date = configuration.proposedDate?.timeIntervalSinceReferenceDate ?? 0
+        let endDate = configuration.proposedEndDate?.timeIntervalSinceReferenceDate ?? 0
         let latitude = configuration.location?.latitude ?? 0
         let longitude = configuration.location?.longitude ?? 0
-        return "\(date)-\(latitude)-\(longitude)"
+        return "\(date)-\(endDate)-\(configuration.isAllDay)-\(configuration.timeZoneIdentifier)-\(latitude)-\(longitude)"
     }
 
     var body: some View {
@@ -925,12 +951,44 @@ private struct EventIdeaDetailCard: View {
                 symbol: configuration.purpose.symbol
             )
 
+            divider
+            EventIdeaMetadataRow(
+                title: "Participants",
+                value: configuration.audience.title,
+                symbol: configuration.audience.symbol
+            )
+
             if let proposedDate = configuration.proposedDate {
                 divider
                 EventIdeaMetadataRow(
-                    title: "Proposed Date",
-                    value: proposedDate.formatted(date: .long, time: .shortened),
+                    title: "Proposed Schedule",
+                    value: EventSchedule(
+                        startsAt: proposedDate,
+                        endsAt: configuration.proposedEndDate,
+                        isAllDay: configuration.isAllDay,
+                        timeZoneIdentifier: configuration.timeZoneIdentifier
+                    ).summary,
                     symbol: "calendar"
+                )
+            }
+
+            if let proposedBudget = configuration.proposedBudget {
+                divider
+                EventIdeaMetadataRow(
+                    title: "Budget Limit",
+                    value: proposedBudget.formatted(
+                        .currency(code: Locale.current.currency?.identifier ?? "USD")
+                    ),
+                    symbol: "chart.pie.fill"
+                )
+            }
+
+            if !configuration.attireDescription.isEmpty {
+                divider
+                EventIdeaMetadataRow(
+                    title: "Attire",
+                    value: configuration.attireDescription,
+                    symbol: "hanger"
                 )
             }
 
@@ -986,7 +1044,7 @@ private struct EventIdeaDetailCard: View {
             reduceTransparency ? AnyShapeStyle(.black.opacity(0.82)) : AnyShapeStyle(.regularMaterial),
             in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
         )
-        .environment(\.colorScheme, .dark)
+        .appImageOverlayAppearance()
         .task(id: requestID) {
             loadWeather()
         }
@@ -1073,7 +1131,7 @@ private extension View {
                 reduceTransparency ? AnyShapeStyle(.black.opacity(0.82)) : AnyShapeStyle(.regularMaterial),
                 in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
             )
-            .environment(\.colorScheme, .dark)
+            .appImageOverlayAppearance()
     }
 }
 
@@ -1135,10 +1193,17 @@ private struct IdeaEditorView: View {
     @State private var musicTracks: [MusicTrack] = []
     @State private var eventCategory: TimelineCategory = .other
     @State private var eventPurpose: EventPurpose = .planning
+    @State private var eventAudience: EventAudience = .inherited
+    @State private var eventBudgetAmount = ""
     @State private var includesProposedDate = false
     @State private var eventProposedDate = Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now
+    @State private var eventProposedEndDate: Date?
+    @State private var eventIsAllDay = false
+    @State private var eventTimeZoneIdentifier = TimeZone.autoupdatingCurrent.identifier
+    @State private var isEditingEventDateAndTime = false
     @State private var eventLocation: EventLocation?
     @State private var isEditingEventLocation = false
+    @State private var isShowingEventContextPrompt = false
     @State private var registryCategory: RegistryCategory = .home
     @State private var registryPrice = ""
     @State private var registryQuantity = 1
@@ -1159,7 +1224,7 @@ private struct IdeaEditorView: View {
         _note = State(initialValue: existingIdea.note)
         _category = State(initialValue: existingIdea.category)
         _isChoosingCategory = State(initialValue: false)
-        _categoryPage = State(initialValue: [.decor, .invitations, .honeymoon].contains(existingIdea.category) ? 1 : 0)
+        _categoryPage = State(initialValue: Self.legacyAttendableCategories.contains(existingIdea.category) ? 1 : 0)
         _estimatedCost = State(initialValue: existingIdea.estimatedCost.map { String($0) } ?? "")
         _imageData = State(initialValue: existingIdea.imageData)
 
@@ -1199,10 +1264,29 @@ private struct IdeaEditorView: View {
             _musicTracks = State(initialValue: configuration.tracks)
         case .event(let configuration):
             _eventCategory = State(initialValue: configuration.category)
-            _eventPurpose = State(initialValue: configuration.purpose)
+            _eventPurpose = State(
+                initialValue: configuration.category == .honeymoon
+                    ? .eventExperience
+                    : configuration.purpose
+            )
+            _eventAudience = State(
+                initialValue: configuration.category == .honeymoon
+                    ? .hostsOnly
+                    : configuration.audience
+            )
+            _eventBudgetAmount = State(
+                initialValue: configuration.proposedBudget.map {
+                    NSDecimalNumber(decimal: $0).stringValue
+                } ?? ""
+            )
             _includesProposedDate = State(initialValue: configuration.proposedDate != nil)
             _eventProposedDate = State(initialValue: configuration.proposedDate ?? .now)
+            _eventProposedEndDate = State(initialValue: configuration.proposedEndDate)
+            _eventIsAllDay = State(initialValue: configuration.isAllDay)
+            _eventTimeZoneIdentifier = State(initialValue: configuration.timeZoneIdentifier)
             _eventLocation = State(initialValue: configuration.location)
+            _attireStyle = State(initialValue: configuration.attireStyle)
+            _attireRestrictions = State(initialValue: configuration.attireGuidance)
         case .registry(let configuration):
             _registryCategory = State(initialValue: configuration.category)
             _registryPrice = State(initialValue: configuration.price.map { NSDecimalNumber(decimal: $0).stringValue } ?? "")
@@ -1221,7 +1305,9 @@ private struct IdeaEditorView: View {
     private var suggestedTitle: String {
         switch category {
         case .event:
-            return eventCategory == .other ? "Event Idea" : eventCategory.title
+            return eventCategory == .other
+                ? (eventPurpose == .planning ? "Planning Event" : "Event")
+                : eventCategory.title
         case .registry:
             return registryCategory == .cashFund ? "Cash Fund" : "Registry Gift"
         case .attire:
@@ -1265,12 +1351,62 @@ private struct IdeaEditorView: View {
     }
 
     private var resolvedTitle: String {
-        trimmedTitle.isEmpty ? suggestedTitle : trimmedTitle
+        if category == .event { return suggestedTitle }
+        return trimmedTitle.isEmpty ? suggestedTitle : trimmedTitle
+    }
+
+    private var notePrompt: String {
+        switch category {
+        case .event: "Why should this event happen? (optional)"
+        case .registry: "Why would this be useful? (optional)"
+        case .attire: "Extra guidance (optional)"
+        case .venue: "What stands out about this place? (optional)"
+        case .food: "What should collaborators know? (optional)"
+        case .music: "Playlist direction or moment (optional)"
+        case .flowers: "Varieties or inspiration (optional)"
+        case .photography: "Creative direction (optional)"
+        case .decor: "Mood or inspiration (optional)"
+        case .invitations: "Message or visual direction (optional)"
+        case .honeymoon: "What makes this trip appealing? (optional)"
+        case .other: "What makes it special? (optional)"
+        }
+    }
+
+    private var estimatePrompt: String {
+        switch category {
+        case .event: "Estimated event cost"
+        case .attire: "Estimated attire cost"
+        case .venue: "Estimated venue cost"
+        case .food: "Estimated food cost"
+        case .music: "Estimated music cost"
+        case .flowers: "Estimated floral cost"
+        case .photography: "Estimated photography cost"
+        case .decor: "Estimated decor cost"
+        case .invitations: "Estimated stationery cost"
+        case .honeymoon: "Estimated trip cost"
+        case .other: "Estimated cost"
+        case .registry: "Estimated cost"
+        }
     }
 
     private var parsedEstimate: Int? {
         guard !estimatedCost.isEmpty else { return nil }
         return Int(estimatedCost)
+    }
+
+    private var parsedEventBudget: Decimal? {
+        guard !eventBudgetAmount.isEmpty else { return nil }
+        let decimalSeparator = Locale.current.decimalSeparator ?? "."
+        let normalized = eventBudgetAmount
+            .replacingOccurrences(of: decimalSeparator, with: ".")
+            .replacingOccurrences(of: ",", with: "")
+        return Decimal(string: normalized)
+    }
+
+    private var hasValidEventBudget: Bool {
+        category != .event
+            || eventBudgetAmount.isEmpty
+            || (parsedEventBudget.map { $0 > .zero } ?? false)
     }
 
     private var hasValidEstimate: Bool {
@@ -1294,7 +1430,7 @@ private struct IdeaEditorView: View {
     }
 
     private var isValid: Bool {
-        hasValidEstimate && hasValidCategoryNumbers
+        hasValidEstimate && hasValidCategoryNumbers && hasValidEventBudget
     }
 
     private var editedIdea: WeddingIdea {
@@ -1325,8 +1461,16 @@ private struct IdeaEditorView: View {
                 EventIdeaConfiguration(
                     category: eventCategory,
                     purpose: eventPurpose,
+                    audience: eventAudience,
+                    requiresBudget: parsedEventBudget != nil,
+                    proposedBudget: parsedEventBudget,
                     proposedDate: includesProposedDate ? eventProposedDate : nil,
-                    location: eventLocation
+                    proposedEndDate: includesProposedDate ? eventProposedEndDate : nil,
+                    isAllDay: eventIsAllDay,
+                    timeZoneIdentifier: eventTimeZoneIdentifier,
+                    location: eventLocation,
+                    attireStyle: attireStyle,
+                    attireGuidance: attireRestrictions.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
             )
         case .registry:
@@ -1417,6 +1561,7 @@ private struct IdeaEditorView: View {
         }
         .navigationTitle(isChoosingCategory ? "Choose a Category" : existingIdea == nil ? "New Idea" : "Edit Idea")
         .navigationBarTitleDisplayMode(.inline)
+        .appKeyboardDismissal()
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") {
@@ -1439,6 +1584,14 @@ private struct IdeaEditorView: View {
                 }
             }
         }
+        .alert("Switch to the Main Event?", isPresented: $isShowingEventContextPrompt) {
+            Button("Not Now", role: .cancel) {}
+            Button("Switch & Continue") {
+                switchToMainEventAndContinue()
+            }
+        } message: {
+            Text("Event ideas are only available in the main event context.")
+        }
     }
 
     private var categoryChooser: some View {
@@ -1460,21 +1613,24 @@ private struct IdeaEditorView: View {
                         .listRowBackground(Color.clear)
                 }
 
-                Section {
-                    TextField("Custom title (optional)", text: $title)
+                categoryConfiguration(for: category)
+                    .id(Self.ideaFieldsAnchor)
 
-                    TextField("What makes it special? (optional)", text: $note, axis: .vertical)
+                Section {
+                    if category != .event {
+                        TextField("Custom title (optional)", text: $title)
+                    }
+
+                    TextField(notePrompt, text: $note, axis: .vertical)
                         .lineLimit(3...6)
                 } header: {
-                    Text("Idea")
+                    Text("Context")
                 } footer: {
-                    Text("Leave the title blank to use “\(suggestedTitle)”.")
+                    if category != .event {
+                        Text("Leave the title blank to use “\(suggestedTitle)”.")
+                    }
                 }
-                .id(Self.ideaFieldsAnchor)
-
-                categoryConfiguration(for: category)
-
-                Section("Photo") {
+                Section(category == .event ? "Cover" : "Photo") {
                     PhotoAttachmentPicker(
                         imageData: $imageData,
                         emptySymbol: category.symbol,
@@ -1482,10 +1638,36 @@ private struct IdeaEditorView: View {
                     )
                 }
 
-                if category != .registry {
-                    Section("Optional") {
-                        TextField("Estimated cost", text: $estimatedCost)
+                if category == .event {
+                    Section {
+                        EventBudgetAmountField(amount: $eventBudgetAmount)
+
+                        LabeledContent {
+                            TextField("Optional", text: $estimatedCost)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .monospacedDigit()
+                        } label: {
+                            Text("Estimated Cost")
+                        }
+                    } header: {
+                        Text("Planning")
+                    } footer: {
+                        if !hasValidEventBudget {
+                            Text("Enter a budget greater than zero, or leave it blank.")
+                                .foregroundStyle(.red)
+                        } else {
+                            Text("The budget is the event’s spending limit. Estimated cost becomes a tracked cost when this idea is approved.")
+                        }
+                    }
+                } else if category != .registry {
+                    Section {
+                        TextField(estimatePrompt, text: $estimatedCost)
                             .keyboardType(.numberPad)
+                    } header: {
+                        Text("Cost Estimate")
+                    } footer: {
+                        Text("Optional. The estimate contributes to planning totals and can become a tracked cost when the idea is approved.")
                     }
                 }
             }
@@ -1495,6 +1677,14 @@ private struct IdeaEditorView: View {
                     proxy.scrollTo(Self.ideaFieldsAnchor, anchor: .top)
                 }
             }
+            .onChange(of: eventCategory) { _, updatedCategory in
+                if updatedCategory == .honeymoon {
+                    eventPurpose = .eventExperience
+                    eventAudience = .hostsOnly
+                } else if eventAudience == .hostsOnly {
+                    eventAudience = .inherited
+                }
+            }
             .sheet(isPresented: $isEditingEventLocation) {
                 EventLocationEditorView(location: eventLocation) { updatedLocation in
                     eventLocation = updatedLocation
@@ -1502,21 +1692,39 @@ private struct IdeaEditorView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
+            .sheet(isPresented: $isEditingEventDateAndTime) {
+                EventDateTimeEditorView(
+                    startsAt: eventProposedDate,
+                    endsAt: eventProposedEndDate,
+                    isAllDay: eventIsAllDay,
+                    timeZoneIdentifier: eventTimeZoneIdentifier
+                ) { updatedStart, updatedEnd, updatedAllDay, updatedTimeZone in
+                    eventProposedDate = updatedStart
+                    eventProposedEndDate = updatedEnd
+                    eventIsAllDay = updatedAllDay
+                    eventTimeZoneIdentifier = updatedTimeZone
+                    includesProposedDate = true
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
         }
     }
 
     private static let ideaFieldsAnchor = "idea-fields"
     private static let categoryPages: [[IdeaCategory]] = [
-        [.other, .event, .registry, .venue, .attire, .food, .flowers, .photography, .music],
-        [.decor, .invitations, .honeymoon]
+        [.other, .event, .registry, .attire, .food, .flowers, .music, .decor, .invitations]
     ]
+    private static let legacyAttendableCategories: Set<IdeaCategory> = [.venue, .photography, .honeymoon]
 
     private var visibleCategoryPages: [[IdeaCategory]] {
-        Self.categoryPages
-            .map { page in
-                page.filter { workspace.isMainEventContext || $0 != .event }
-            }
+        var pages = Self.categoryPages
             .filter { !$0.isEmpty }
+
+        if let existingIdea, Self.legacyAttendableCategories.contains(existingIdea.category) {
+            pages.append([existingIdea.category])
+        }
+        return pages
     }
 
     private var categoryGridInsets: EdgeInsets {
@@ -1552,23 +1760,38 @@ private struct IdeaEditorView: View {
     }
 
     private func categoryTile(_ option: IdeaCategory, isSelected: Bool) -> some View {
-        Button {
-            select(option)
+        let isContextRestricted = option == .event && !workspace.isMainEventContext
+
+        return Button {
+            if isContextRestricted {
+                isShowingEventContextPrompt = true
+            } else {
+                select(option)
+            }
         } label: {
             VStack(spacing: 6) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: option.symbol)
                         .symbolRenderingMode(.hierarchical)
                         .font(.title3.weight(.semibold))
-                        .foregroundStyle(isSelected ? Color.white : option.artworkAccent)
+                        .foregroundStyle(
+                            isContextRestricted
+                                ? AppTheme.ColorToken.textSecondary
+                                : isSelected ? Color.white : option.artworkAccent
+                        )
                         .frame(width: 38, height: 38)
                         .background(
-                            isSelected ? option.artworkAccent : Color.clear,
+                            isSelected && !isContextRestricted ? option.artworkAccent : Color.clear,
                             in: Circle()
                         )
                         .background(.regularMaterial, in: Circle())
 
-                    if isSelected {
+                    if isContextRestricted {
+                        Image(systemName: "lock.fill")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(AppTheme.ColorToken.textSecondary)
+                            .offset(x: 3, y: -3)
+                    } else if isSelected {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(.white, AppTheme.ColorToken.accent)
@@ -1579,29 +1802,46 @@ private struct IdeaEditorView: View {
                 Text(option.title)
                     .font(.caption2.weight(.semibold))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(
+                        isContextRestricted
+                            ? AppTheme.ColorToken.textSecondary
+                            : AppTheme.ColorToken.textPrimary
+                    )
                     .lineLimit(2)
             }
             .frame(maxWidth: .infinity)
             .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 112 : 76)
             .padding(4)
             .background(
-                isSelected ? option.artworkAccent.opacity(0.14) : AppTheme.ColorToken.elevatedSurface,
+                isSelected && !isContextRestricted
+                    ? option.artworkAccent.opacity(0.14)
+                    : AppTheme.ColorToken.elevatedSurface,
                 in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
                     .stroke(
-                        isSelected ? option.artworkAccent : AppTheme.ColorToken.cardBorder,
-                        lineWidth: isSelected ? 2 : 0.5
+                        isSelected && !isContextRestricted
+                            ? option.artworkAccent
+                            : AppTheme.ColorToken.cardBorder,
+                        lineWidth: isSelected && !isContextRestricted ? 2 : 0.5
                     )
             }
             .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+            .saturation(isContextRestricted ? 0 : 1)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(option.title)
-        .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        .accessibilityHint("Selects the \(option.title.lowercased()) idea form")
+        .accessibilityValue(
+            isContextRestricted
+                ? "Available from the main event"
+                : isSelected ? "Selected" : "Not selected"
+        )
+        .accessibilityHint(
+            isContextRestricted
+                ? "Offers to switch to the main event and continue"
+                : "Selects the \(option.title.lowercased()) idea form"
+        )
     }
 
     private func optionStrip<Option: Identifiable & Equatable>(
@@ -1654,58 +1894,101 @@ private struct IdeaEditorView: View {
         .contentMargins(.horizontal, 0, for: .scrollContent)
     }
 
+    private var eventScheduleSummary: String {
+        EventSchedule(
+            startsAt: eventProposedDate,
+            endsAt: eventProposedEndDate,
+            isAllDay: eventIsAllDay,
+            timeZoneIdentifier: eventTimeZoneIdentifier
+        ).summary
+    }
+
+    private func eventActionRow(symbol: String, title: String, isEmpty: Bool) -> some View {
+        HStack(spacing: AppTheme.Spacing.standard) {
+            Image(systemName: symbol)
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .frame(width: 28)
+
+            Text(title)
+                .foregroundStyle(isEmpty ? AppTheme.ColorToken.accent : .primary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
     @ViewBuilder
     private func categoryConfiguration(for category: IdeaCategory) -> some View {
         switch category {
         case .event:
+            Section("Event Category") {
+                EventCategoryStrip(selection: $eventCategory)
+            }
+
             Section {
-                optionStrip(
-                    TimelineCategory.allCases,
-                    selection: $eventCategory,
-                    title: \.title,
-                    symbol: \.symbol
-                )
-
-                Picker("Purpose", selection: $eventPurpose) {
-                    ForEach(EventPurpose.allCases) { purpose in
-                        Label(purpose.shortTitle, systemImage: purpose.symbol)
-                            .tag(purpose)
-                    }
+                EventPurposeSelector(selection: $eventPurpose)
+            } header: {
+                Text("Purpose")
+            } footer: {
+                if eventCategory == .honeymoon {
+                    Text("Honeymoon events include the hosts only.")
                 }
-                .pickerStyle(.segmented)
+            }
 
-                Text(eventPurpose.description)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            Section {
+                AttireStylePicker(selection: $attireStyle)
 
-                Toggle("Suggest a date", isOn: $includesProposedDate)
+                TextField(
+                    "Colors, fabrics, or guidance (optional)",
+                    text: $attireRestrictions,
+                    axis: .vertical
+                )
+                .lineLimit(2...5)
+            } header: {
+                Text("Attire")
+            } footer: {
+                Text("Choose Any when this event doesn’t need attire guidance.")
+            }
+
+            Section {
+                Button {
+                    isEditingEventDateAndTime = true
+                } label: {
+                    eventActionRow(
+                        symbol: "calendar",
+                        title: includesProposedDate ? eventScheduleSummary : "Add Date & Time",
+                        isEmpty: !includesProposedDate
+                    )
+                }
+                .buttonStyle(.plain)
 
                 if includesProposedDate {
-                    DatePicker(
-                        "Proposed date",
-                        selection: $eventProposedDate,
-                        in: Date.now...
-                    )
+                    Button {
+                        includesProposedDate = false
+                        eventProposedEndDate = nil
+                    } label: {
+                        Label("Clear Date", systemImage: "calendar.badge.minus")
+                    }
+                    .foregroundStyle(.secondary)
                 }
 
                 Button {
                     isEditingEventLocation = true
                 } label: {
-                    LabeledContent {
-                        Text(eventLocation?.title ?? "Add Location")
-                            .foregroundStyle(eventLocation == nil ? AppTheme.ColorToken.accent : .primary)
-                            .multilineTextAlignment(.trailing)
-                    } label: {
-                        Label("Location", systemImage: "mappin.and.ellipse")
-                    }
-                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-                    .contentShape(Rectangle())
+                    eventActionRow(
+                        symbol: "mappin.and.ellipse",
+                        title: eventLocation?.title ?? "Add Location",
+                        isEmpty: eventLocation == nil
+                    )
                 }
                 .buttonStyle(.plain)
             } header: {
-                Text("Event Idea")
+                Text("When & Where")
             } footer: {
-                Text("This stays in Ideas for discussion. After it’s approved, it can become a scheduled timeline event.")
+                Text("Date and location are optional. Approved ideas with a date become events automatically.")
             }
 
         case .registry:
@@ -1748,49 +2031,7 @@ private struct IdeaEditorView: View {
 
         case .attire:
             Section {
-                ScrollView(.horizontal) {
-                    HStack(spacing: AppTheme.Spacing.compact) {
-                        ForEach(AttireStyle.allCases) { style in
-                            let isSelected = attireStyle == style
-
-                            Button {
-                                attireStyle = style
-                            } label: {
-                                VStack(spacing: 6) {
-                                    AttireStyleSilhouette(
-                                        style: style,
-                                        color: isSelected ? .white : .primary
-                                    )
-                                    .frame(width: 44, height: 54)
-
-                                    Text(style.title)
-                                        .font(.caption.weight(.semibold))
-                                        .lineLimit(1)
-                                }
-                                .foregroundStyle(isSelected ? .white : .primary)
-                                .frame(width: 92, height: 88)
-                                .background(
-                                    isSelected ? AppTheme.ColorToken.accent : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                                )
-                                .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                                    .stroke(
-                                        isSelected ? AppTheme.ColorToken.accent : AppTheme.ColorToken.cardBorder,
-                                        lineWidth: isSelected ? 2 : 0.5
-                                    )
-                            }
-                            .accessibilityLabel(style.title)
-                            .accessibilityValue(isSelected ? "Selected" : "Not selected")
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
-                .scrollIndicators(.hidden)
-                .contentMargins(.horizontal, 0, for: .scrollContent)
+                AttireStylePicker(selection: $attireStyle)
 
                 TextField(
                     "Restrictions or guidance (optional)",
@@ -1969,6 +2210,11 @@ private struct IdeaEditorView: View {
             isChoosingCategory = false
             setDetent(.large)
         }
+    }
+
+    private func switchToMainEventAndContinue() {
+        workspace.selectEventContext(.main)
+        select(.event)
     }
 
     private func saveIdea() {

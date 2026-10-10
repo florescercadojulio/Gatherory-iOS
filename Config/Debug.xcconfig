@@ -1,0 +1,5 @@
+// Development builds intentionally exercise onboarding on every fresh launch.
+APP_ENVIRONMENT = development
+FORCE_ONBOARDING = YES
+SEED_DEVELOPMENT_DATA = NO
+SKIP_AUTH_LOGIN = NO

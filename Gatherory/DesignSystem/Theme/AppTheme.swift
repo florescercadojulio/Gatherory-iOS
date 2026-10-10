@@ -1,6 +1,9 @@
 import SwiftUI
+import UIKit
 
 enum AppAppearance: String, CaseIterable, Identifiable {
+    static let storageKey = "appAppearance"
+
     case system
     case light
     case dark
@@ -94,6 +97,50 @@ enum AppTheme {
 }
 
 extension View {
+    /// Gives form-style editors a consistent way to dismiss keyboards that do
+    /// not provide a Return key, including number and decimal pads.
+    func appKeyboardDismissal() -> some View {
+        scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+
+                    Button("Done") {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil,
+                            from: nil,
+                            for: nil
+                        )
+                    }
+                }
+            }
+    }
+
+    /// Applies the person's app-wide appearance choice. Keep this at the app
+    /// presentation root so feature views inherit one consistent preference.
+    func appUserAppearance(_ appearance: AppAppearance) -> some View {
+        preferredColorScheme(appearance.colorScheme)
+    }
+
+    /// Gives controls placed directly over photography a stable dark-material
+    /// rendering without publishing an appearance preference to parent views.
+    func appImageOverlayAppearance() -> some View {
+        environment(\.colorScheme, .dark)
+    }
+
+    /// Uses light navigation content over an image-led detail screen while
+    /// leaving the rest of the app free to follow its selected appearance.
+    func appImageNavigationBarAppearance() -> some View {
+        toolbarColorScheme(.dark, for: .navigationBar)
+    }
+
+    /// Standard appearance for a complete image-led detail experience.
+    func appImageDetailAppearance() -> some View {
+        appImageOverlayAppearance()
+            .appImageNavigationBarAppearance()
+    }
+
     /// Keeps content legible beneath floating navigation controls without
     /// introducing a hard, opaque boundary as the user scrolls.
     func appSoftScrollEdges() -> some View {

@@ -1,67 +1,82 @@
 import SwiftUI
 
 struct AccountView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("appAppearance") private var appearance = AppAppearance.system.rawValue
+    @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @AppStorage("planningNotifications") private var notificationsEnabled = true
+    @State private var isEditingProfile = false
+
+    private var selectedAppearance: AppAppearance {
+        AppAppearance(rawValue: appearanceRawValue) ?? .system
+    }
+
+    private var appearanceSelection: Binding<AppAppearance> {
+        Binding(
+            get: { selectedAppearance },
+            set: { appearanceRawValue = $0.rawValue }
+        )
+    }
 
     var body: some View {
-        @Bindable var workspace = workspace
-
         Form {
             Section {
                 HStack(spacing: AppTheme.Spacing.standard) {
-                    Image(systemName: "person.crop.circle.fill")
-                        .font(.system(size: 54))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(AppTheme.ColorToken.accent)
-                        .frame(width: 64, height: 64)
+                    UserAvatarView(
+                        account: authentication.currentUser,
+                        size: 64
+                    )
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(workspace.members.first?.name ?? "Your account")
+                        Text(authentication.currentUser?.displayName ?? "Your Account")
                             .font(.headline)
-                        Text(workspace.members.first?.participantRole.title ?? "Host")
+                        Text(authentication.currentUser?.email ?? "Gatherory member")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                 }
                 .padding(.vertical, 6)
 
-                Button("Edit profile", systemImage: "pencil") { }
+                Button("Edit Profile", systemImage: "pencil") {
+                    isEditingProfile = true
+                }
+                .foregroundStyle(AppTheme.ColorToken.accent)
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
-            Section("App settings") {
-                Toggle("Planning notifications", systemImage: "bell.badge", isOn: $notificationsEnabled)
+            Section("App Settings") {
+                Toggle(isOn: $notificationsEnabled) {
+                    Label("Planning Notifications", systemImage: "bell.badge")
+                }
+                .tint(AppTheme.ColorToken.accent)
 
-                Picker("Appearance", systemImage: "circle.lefthalf.filled", selection: $appearance) {
+                Picker(selection: appearanceSelection) {
                     ForEach(AppAppearance.allCases) { option in
-                        Text(option.title).tag(option.rawValue)
+                        Text(option.title).tag(option)
                     }
-                }
-            }
-
-            Section("Current Workspace") {
-                LabeledContent("Workspace", value: workspace.title)
-                Toggle("Registry visible to guests", systemImage: "gift.fill", isOn: $workspace.isRegistryShared)
-
-                NavigationLink {
-                    SupportCircleView()
                 } label: {
-                    Label("People", systemImage: "person.3.fill")
+                    Label("Appearance", systemImage: "circle.lefthalf.filled")
                 }
+                .pickerStyle(.navigationLink)
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
             Section {
-                Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { }
+                Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                    dismiss()
+                    authentication.signOut()
+                }
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
         }
+        .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .appSoftScrollEdges()
         .background(AppTheme.ColorToken.background)
         .navigationTitle("Account")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
+        .appUserAppearance(selectedAppearance)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") {
@@ -69,66 +84,86 @@ struct AccountView: View {
                 }
             }
         }
+        .sheet(isPresented: $isEditingProfile) {
+            NavigationStack {
+                EditProfileView(account: authentication.currentUser) { displayName in
+                    authentication.updateProfile(displayName: displayName)
+                }
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
     }
 }
 
-private struct SupportCircleView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
-    @State private var isInvitingCollaborators = false
+private struct EditProfileView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var displayName: String
+
+    let account: UserAccount?
+    let onSave: (String) -> Void
+
+    init(account: UserAccount?, onSave: @escaping (String) -> Void) {
+        self.account = account
+        self.onSave = onSave
+        _displayName = State(initialValue: account?.displayName ?? "")
+    }
+
+    private var normalizedName: String {
+        displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     var body: some View {
-        List {
-            ForEach(WeddingParticipantRole.allCases) { role in
-                let people = workspace.members.filter { $0.participantRole == role }
+        Form {
+            Section {
+                HStack(spacing: AppTheme.Spacing.standard) {
+                    UserAvatarView(account: account, size: 56)
 
-                if !people.isEmpty {
-                    Section(role.pluralTitle) {
-                        ForEach(people) { member in
-                            HStack(spacing: AppTheme.Spacing.standard) {
-                                Text(member.initials)
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.white)
-                                    .frame(width: 40, height: 40)
-                                    .background(AppTheme.ColorToken.accent, in: Circle())
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(account?.email ?? "Gatherory member")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
 
-                                VStack(alignment: .leading) {
-                                    Text(member.name)
-                                    Text(member.participantRole == .guest
-                                         ? member.attendance.title
-                                         : member.planningPermission.title)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer(minLength: 0)
-
-                                if member.invitationStatus == .invited {
-                                    Label(member.invitationStatus.title, systemImage: member.invitationStatus.symbol)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .accessibilityLabel(member.invitationStatus.title)
-                                }
-                            }
-                        }
+                        Text("Your email is managed by your sign-in provider.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
+                .padding(.vertical, 4)
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
+
+            Section("Name") {
+                TextField("Display name", text: $displayName)
+                    .textContentType(.name)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.done)
+                    .onSubmit(save)
+            }
+            .listRowBackground(AppTheme.ColorToken.surface)
         }
-        .listStyle(.insetGrouped)
+        .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
-        .navigationTitle("People")
+        .navigationTitle("Edit Profile")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("Invite", systemImage: "person.badge.plus") {
-                    isInvitingCollaborators = true
-                }
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save", action: save)
+                    .disabled(normalizedName.isEmpty || normalizedName == account?.displayName)
+                    .keyboardShortcut(.defaultAction)
             }
         }
-        .fullScreenCover(isPresented: $isInvitingCollaborators) {
-            CollaborationInviteView()
-                .environment(workspace)
-        }
+    }
+
+    private func save() {
+        guard !normalizedName.isEmpty else { return }
+        onSave(normalizedName)
+        dismiss()
     }
 }
 
@@ -136,5 +171,11 @@ private struct SupportCircleView: View {
     NavigationStack {
         AccountView()
             .environment(WeddingWorkspace.sample)
+            .environment(
+                AuthenticationSession(
+                    environment: .development,
+                    skipsAuthentication: true
+                )
+            )
     }
 }

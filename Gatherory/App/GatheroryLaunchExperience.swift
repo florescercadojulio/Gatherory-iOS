@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum LaunchExperienceTiming {
     static let standardMilliseconds = 1_400
@@ -7,12 +8,30 @@ enum LaunchExperienceTiming {
 }
 
 struct GatheroryLaunchContainer: View {
+    @Environment(AuthenticationSession.self) private var authentication
+    @Environment(WorkspaceLibrary.self) private var workspaceLibrary
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var isShowingSplash = true
+    @State private var completedOnboardingThisSession = false
+
+    private var shouldShowOnboarding: Bool {
+        guard !completedOnboardingThisSession else { return false }
+        return AppRuntimeConfiguration.alwaysShowsOnboarding || !hasCompletedOnboarding
+    }
 
     var body: some View {
         ZStack {
-            AppRootView()
+            Group {
+                if !authentication.isAuthenticated {
+                    AuthenticationView()
+                } else if shouldShowOnboarding {
+                    OnboardingView(onCreateWorkspace: finishOnboarding)
+                } else {
+                    AppRootView()
+                }
+            }
+            .transition(.opacity)
 
             if isShowingSplash {
                 GatheroryAnimatedSplash(reduceMotion: reduceMotion)
@@ -31,6 +50,20 @@ struct GatheroryLaunchContainer: View {
 
             withAnimation(.easeOut(duration: LaunchExperienceTiming.exitAnimationSeconds)) {
                 isShowingSplash = false
+            }
+        }
+    }
+
+    private func finishOnboarding(with workspace: WeddingWorkspace) {
+        workspaceLibrary.add(workspace)
+
+        if reduceMotion {
+            hasCompletedOnboarding = true
+            completedOnboardingThisSession = true
+        } else {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                hasCompletedOnboarding = true
+                completedOnboardingThisSession = true
             }
         }
     }

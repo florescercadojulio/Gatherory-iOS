@@ -13,6 +13,10 @@ struct EventLocationEditorView: View {
     @State private var isResolvingSelection = false
     private let save: (EventLocation?) -> Void
 
+    private var hasSearchQuery: Bool {
+        !searchModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     init(
         location: EventLocation?,
         save: @escaping (EventLocation?) -> Void
@@ -24,18 +28,18 @@ struct EventLocationEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if searchModel.query.isEmpty {
+                if !hasSearchQuery {
                     currentLocation
                 }
 
-                if !searchModel.query.isEmpty {
+                if hasSearchQuery {
                     searchResults
                 }
 
                 if draft != nil {
                     selectedLocation
                     optionalDetails
-                } else if searchModel.query.isEmpty {
+                } else if !hasSearchQuery {
                     ContentUnavailableView(
                         "Choose a Location",
                         systemImage: "mappin.and.ellipse",
@@ -264,6 +268,8 @@ private final class CurrentLocationModel: NSObject, ObservableObject, CLLocation
     @Published private(set) var isLocating = false
 
     private let manager = CLLocationManager()
+    private var requestsLocationAfterAuthorization = false
+    private var locationUnknownRetryCount = 0
 
     override init() {
         super.init()
@@ -273,11 +279,46 @@ private final class CurrentLocationModel: NSObject, ObservableObject, CLLocation
 
     func requestLocation() {
         errorMessage = nil
-        isLocating = true
-        manager.requestLocation()
+        locationUnknownRetryCount = 0
+
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            isLocating = true
+            requestsLocationAfterAuthorization = true
+            manager.requestWhenInUseAuthorization()
+        case .authorizedAlways, .authorizedWhenInUse:
+            beginLocationRequest()
+        case .denied, .restricted:
+            isLocating = false
+            errorMessage = "Location access is off. Search for the event location instead, or allow access in Settings."
+        @unknown default:
+            isLocating = false
+            errorMessage = "Your location permission couldn’t be determined. Search for the event location instead."
+        }
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        guard requestsLocationAfterAuthorization else { return }
+
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            requestsLocationAfterAuthorization = false
+            beginLocationRequest()
+        case .denied, .restricted:
+            requestsLocationAfterAuthorization = false
+            isLocating = false
+            errorMessage = "Location access is off. Search for the event location instead, or allow access in Settings."
+        case .notDetermined:
+            break
+        @unknown default:
+            requestsLocationAfterAuthorization = false
+            isLocating = false
+            errorMessage = "Your location permission couldn’t be determined. Search for the event location instead."
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        requestsLocationAfterAuthorization = false
         guard let location = locations.last else {
             isLocating = false
             errorMessage = "Your current location couldn’t be determined. Try again or search instead."
@@ -290,13 +331,32 @@ private final class CurrentLocationModel: NSObject, ObservableObject, CLLocation
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: any Error) {
-        isLocating = false
-
         if manager.authorizationStatus == .denied || manager.authorizationStatus == .restricted {
+            requestsLocationAfterAuthorization = false
+            isLocating = false
             errorMessage = "Location access is off. Search for the event location instead, or allow access in Settings."
-        } else {
-            errorMessage = "Your current location couldn’t be determined. Try again or search instead."
+            return
         }
+
+        if let locationError = error as? CLError,
+           locationError.code == .locationUnknown,
+           locationUnknownRetryCount < 1 {
+            locationUnknownRetryCount += 1
+            Task {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                beginLocationRequest()
+            }
+            return
+        }
+
+        isLocating = false
+        errorMessage = "Your current location couldn’t be determined. Try again or search instead."
+    }
+
+    private func beginLocationRequest() {
+        isLocating = true
+        manager.requestLocation()
     }
 
     private func resolve(_ location: CLLocation) async {
@@ -367,12 +427,22 @@ private final class LocationSearchModel: NSObject, ObservableObject, MKLocalSear
     }
 
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            completions = []
+            isSearching = false
+            return
+        }
         completions = completer.results
         errorMessage = nil
         isSearching = false
     }
 
     func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: any Error) {
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            completions = []
+            isSearching = false
+            return
+        }
         completions = []
         errorMessage = "Check your connection and try again."
         isSearching = false
