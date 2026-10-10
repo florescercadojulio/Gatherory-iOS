@@ -358,10 +358,6 @@ struct InsightsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Image(systemName: "slider.horizontal.3")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(AppTheme.ColorToken.accent)
-                .accessibilityHidden(true)
         }
         .frame(minHeight: 58)
         .contentShape(Rectangle())

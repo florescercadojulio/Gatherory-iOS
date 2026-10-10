@@ -12,6 +12,7 @@ struct GatheroryLaunchContainer: View {
     @Environment(WorkspaceLibrary.self) private var workspaceLibrary
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("hasSeenDecideTimelinePrimer") private var hasSeenDecideTimelinePrimer = false
     @State private var isShowingSplash = true
     @State private var completedOnboardingThisSession = false
 
@@ -56,6 +57,11 @@ struct GatheroryLaunchContainer: View {
 
     private func finishOnboarding(with workspace: WeddingWorkspace) {
         workspaceLibrary.add(workspace)
+        // Decide education belongs to the onboarding journey. Development
+        // builds force onboarding, so completing that flow should make the
+        // contextual primer eligible again. In production onboarding only
+        // completes once, preserving the primer's one-time behavior.
+        hasSeenDecideTimelinePrimer = false
 
         if reduceMotion {
             hasCompletedOnboarding = true

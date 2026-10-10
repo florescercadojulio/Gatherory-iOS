@@ -36,6 +36,13 @@ enum PlanningMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum IdeaInvitationVisibility: String, CaseIterable, Identifiable, Codable {
+    case planningOnly
+    case shownToGuests
+
+    var id: Self { self }
+}
+
 enum IdeaCategory: String, CaseIterable, Identifiable, Codable {
     case event
     case registry
@@ -84,6 +91,19 @@ enum IdeaCategory: String, CaseIterable, Identifiable, Codable {
         case .honeymoon: "suitcase.rolling.fill"
         case .other: "ellipsis.circle.fill"
         }
+    }
+
+    /// Event proposals and registry gifts already have dedicated guest-facing
+    /// experiences. The remaining categories can optionally contribute a
+    /// concise detail to the invitation for the event they belong to.
+    var supportsInvitationVisibility: Bool {
+        self != .event && self != .registry
+    }
+
+    /// Attire is normally actionable information for guests. Other ideas stay
+    /// inside planning unless a collaborator deliberately shares them.
+    var defaultInvitationVisibility: IdeaInvitationVisibility {
+        self == .attire ? .shownToGuests : .planningOnly
     }
 }
 
@@ -556,6 +576,9 @@ struct WeddingIdea: Identifiable, Hashable, Codable {
     var submittedAt: Date
     var imageData: Data?
     var configuration: IdeaConfiguration
+    /// Optional so workspaces saved before this setting existed still decode.
+    /// `effectiveInvitationVisibility` supplies the category-aware default.
+    var invitationVisibility: IdeaInvitationVisibility?
 
     init(
         id: UUID = UUID(),
@@ -569,7 +592,8 @@ struct WeddingIdea: Identifiable, Hashable, Codable {
         submittedAt: Date = .now,
         imageData: Data? = nil,
         musicTrack: MusicTrack? = nil,
-        configuration: IdeaConfiguration? = nil
+        configuration: IdeaConfiguration? = nil,
+        invitationVisibility: IdeaInvitationVisibility? = nil
     ) {
         self.id = id
         self.eventID = eventID
@@ -581,6 +605,7 @@ struct WeddingIdea: Identifiable, Hashable, Codable {
         self.status = status
         self.submittedAt = submittedAt
         self.imageData = imageData
+        self.invitationVisibility = invitationVisibility
         if let configuration {
             self.configuration = configuration
         } else {
@@ -683,6 +708,15 @@ struct WeddingIdea: Identifiable, Hashable, Codable {
     var registryConfiguration: RegistryIdeaConfiguration? {
         guard case .registry(let configuration) = configuration else { return nil }
         return configuration
+    }
+
+    var effectiveInvitationVisibility: IdeaInvitationVisibility {
+        guard category.supportsInvitationVisibility else { return .planningOnly }
+        return invitationVisibility ?? category.defaultInvitationVisibility
+    }
+
+    var isShownOnInvitation: Bool {
+        effectiveInvitationVisibility == .shownToGuests
     }
 }
 
@@ -948,17 +982,22 @@ struct EventNote: Identifiable, Hashable, Codable {
 
 struct EventMoment: Identifiable, Hashable, Codable {
     let id: UUID
+    /// The event this photo belongs to. `nil` is retained for decoding older
+    /// main-event photos and is treated as the workspace's main event.
+    var eventID: UUID?
     var imageData: Data
     var addedBy: String
     var addedAt: Date
 
     init(
         id: UUID = UUID(),
+        eventID: UUID? = nil,
         imageData: Data,
         addedBy: String,
         addedAt: Date = .now
     ) {
         self.id = id
+        self.eventID = eventID
         self.imageData = imageData
         self.addedBy = addedBy
         self.addedAt = addedAt

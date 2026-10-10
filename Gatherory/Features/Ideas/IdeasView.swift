@@ -555,6 +555,17 @@ private struct IdeaDetailScreen: View {
                 )
             }
 
+            if idea.category.supportsInvitationVisibility {
+                Divider()
+                    .padding(.leading, 44)
+
+                IdeaMetadataRow(
+                    title: "Guests",
+                    value: guestVisibilityValue,
+                    symbol: "person.crop.rectangle"
+                )
+            }
+
             if let estimatedCost = idea.estimatedCost {
                 if idea.category != .event {
                     Divider()
@@ -574,6 +585,11 @@ private struct IdeaDetailScreen: View {
             in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
         )
         .appImageOverlayAppearance()
+    }
+
+    private var guestVisibilityValue: String {
+        guard idea.isShownOnInvitation else { return "Planning only" }
+        return idea.status == .chosen ? "Shown on invitation" : "Shows when approved"
     }
 
     private var estimatedCostLabel: String {
@@ -1169,6 +1185,7 @@ private struct IdeaEditorView: View {
     @State private var categoryPage = 0
     @State private var estimatedCost = ""
     @State private var imageData: Data?
+    @State private var showOnInvitation = false
     @State private var attireStyle: AttireStyle = .any
     @State private var attireRestrictions = ""
     @State private var venueSetting: VenueSetting = .indoor
@@ -1227,6 +1244,7 @@ private struct IdeaEditorView: View {
         _categoryPage = State(initialValue: Self.legacyAttendableCategories.contains(existingIdea.category) ? 1 : 0)
         _estimatedCost = State(initialValue: existingIdea.estimatedCost.map { String($0) } ?? "")
         _imageData = State(initialValue: existingIdea.imageData)
+        _showOnInvitation = State(initialValue: existingIdea.isShownOnInvitation)
 
         switch existingIdea.configuration {
         case .standard:
@@ -1445,7 +1463,10 @@ private struct IdeaEditorView: View {
             status: existingIdea?.status ?? .new,
             submittedAt: existingIdea?.submittedAt ?? .now,
             imageData: imageData,
-            configuration: ideaConfiguration
+            configuration: ideaConfiguration,
+            invitationVisibility: category.supportsInvitationVisibility
+                ? (showOnInvitation ? .shownToGuests : .planningOnly)
+                : .planningOnly
         )
     }
 
@@ -1613,8 +1634,37 @@ private struct IdeaEditorView: View {
                         .listRowBackground(Color.clear)
                 }
 
-                categoryConfiguration(for: category)
+                if category.supportsInvitationVisibility {
+                    Section {
+                        Toggle(isOn: $showOnInvitation) {
+                            Label("Show to Guests", systemImage: "person.crop.rectangle")
+                        }
+                    } header: {
+                        Text("Invitation")
+                    } footer: {
+                        if category == .attire {
+                            Text(
+                                showOnInvitation
+                                    ? "When approved, this becomes an acceptable dress option for this event."
+                                    : "This attire idea stays in planning, even after it is approved."
+                            )
+                        } else {
+                            Text(
+                                showOnInvitation
+                                    ? "When approved, this appears in the event details guests can see."
+                                    : "This idea stays with the planning team, even after it is approved."
+                            )
+                        }
+                    }
                     .id(Self.ideaFieldsAnchor)
+                }
+
+                categoryConfiguration(for: category)
+                    .id(
+                        category.supportsInvitationVisibility
+                            ? Self.categoryConfigurationAnchor
+                            : Self.ideaFieldsAnchor
+                    )
 
                 Section {
                     if category != .event {
@@ -1712,6 +1762,7 @@ private struct IdeaEditorView: View {
     }
 
     private static let ideaFieldsAnchor = "idea-fields"
+    private static let categoryConfigurationAnchor = "category-configuration"
     private static let categoryPages: [[IdeaCategory]] = [
         [.other, .event, .registry, .attire, .food, .flowers, .music, .decor, .invitations]
     ]
@@ -2198,6 +2249,9 @@ private struct IdeaEditorView: View {
 
     private func select(_ category: IdeaCategory) {
         withAnimation(.snappy) {
+            if self.category != category {
+                showOnInvitation = category.defaultInvitationVisibility == .shownToGuests
+            }
             self.category = category
             if isChoosingCategory {
                 beginEditing()

@@ -33,7 +33,7 @@ final class WeddingWorkspace {
     var notes: [EventNote]
     var mainEventStatus: MainEventStatus
     var mainEventResponse: EventResponse?
-    var mainEventMoments: [EventMoment]
+    private(set) var eventMoments: [EventMoment]
     var isMainEventDeleted: Bool
     var registry: [RegistryItem]
     var isRegistryShared: Bool
@@ -71,7 +71,7 @@ final class WeddingWorkspace {
         notes: [EventNote] = [],
         mainEventStatus: MainEventStatus = .draft,
         mainEventResponse: EventResponse? = nil,
-        mainEventMoments: [EventMoment] = [],
+        eventMoments: [EventMoment] = [],
         isMainEventDeleted: Bool = false,
         registry: [RegistryItem],
         isRegistryShared: Bool = false,
@@ -129,7 +129,7 @@ final class WeddingWorkspace {
         }
         self.mainEventStatus = mainEventStatus
         self.mainEventResponse = mainEventResponse
-        self.mainEventMoments = mainEventMoments
+        self.eventMoments = eventMoments
         self.isMainEventDeleted = isMainEventDeleted
         self.registry = registry
         self.isRegistryShared = isRegistryShared
@@ -207,6 +207,38 @@ final class WeddingWorkspace {
 
     var contextualIdeas: [WeddingIdea] {
         ideas.filter { ($0.eventID ?? mainEventID) == selectedEventID }
+    }
+
+    /// The single guest-presentation policy for ideas. Approval alone does not
+    /// publish a planning choice: it must also be marked for the invitation and
+    /// belong to the event being viewed.
+    func invitationIdeas(for reference: EventReference) -> [WeddingIdea] {
+        let eventID: UUID
+        switch reference {
+        case .main:
+            eventID = mainEventID
+        case .subevent(let id):
+            eventID = id
+        case .idea(let ideaID):
+            guard let linkedEventID = timeline.first(where: { $0.linkedIdeaID == ideaID })?.id else {
+                return []
+            }
+            eventID = linkedEventID
+        }
+
+        return ideas
+            .filter { idea in
+                (idea.eventID ?? mainEventID) == eventID
+                    && idea.status == .chosen
+                    && idea.isShownOnInvitation
+                    && idea.category.supportsInvitationVisibility
+            }
+            .sorted { lhs, rhs in
+                if lhs.category.title == rhs.category.title {
+                    return lhs.submittedAt < rhs.submittedAt
+                }
+                return lhs.category.title < rhs.category.title
+            }
     }
 
     var contextualNotes: [EventNote] {
@@ -626,8 +658,36 @@ final class WeddingWorkspace {
         members.first?.planningPermission == .manage && mainEventStatus == .draft
     }
 
-    var canAddEventMoments: Bool {
-        currentMainEventStatus == .ongoing
+    func moments(for reference: EventReference) -> [EventMoment] {
+        let eventID: UUID
+        switch reference {
+        case .main:
+            eventID = mainEventID
+        case .subevent(let id):
+            eventID = id
+        case .idea(let ideaID):
+            guard let linkedEventID = timeline.first(where: { $0.linkedIdeaID == ideaID })?.id else {
+                return []
+            }
+            eventID = linkedEventID
+        }
+
+        return eventMoments
+            .filter { ($0.eventID ?? mainEventID) == eventID }
+            .sorted { $0.addedAt > $1.addedAt }
+    }
+
+    func canAddEventMoments(to reference: EventReference) -> Bool {
+        switch reference {
+        case .main:
+            !isMainEventDeleted && !currentMainEventStatus.isReadOnly
+        case .subevent(let id):
+            timeline.contains { $0.id == id && $0.status != .archived }
+        case .idea(let ideaID):
+            timeline.contains {
+                $0.linkedIdeaID == ideaID && $0.status != .archived
+            }
+        }
     }
 
     var mainEventWindow: ClosedRange<Date> {
@@ -788,11 +848,24 @@ final class WeddingWorkspace {
         isMainEventDeleted = false
     }
 
-    func addMainEventMoment(_ imageData: Data) {
-        guard canAddEventMoments else { return }
+    func addEventMoment(_ imageData: Data, to reference: EventReference) {
+        guard canAddEventMoments(to: reference) else { return }
+        let eventID: UUID
+        switch reference {
+        case .main:
+            eventID = mainEventID
+        case .subevent(let id):
+            eventID = id
+        case .idea(let ideaID):
+            guard let linkedEventID = timeline.first(where: { $0.linkedIdeaID == ideaID })?.id else {
+                return
+            }
+            eventID = linkedEventID
+        }
+
         let contributor = members.first?.name ?? "Guest"
-        mainEventMoments.insert(
-            EventMoment(imageData: imageData, addedBy: contributor),
+        eventMoments.insert(
+            EventMoment(eventID: eventID, imageData: imageData, addedBy: contributor),
             at: 0
         )
     }
@@ -801,7 +874,7 @@ final class WeddingWorkspace {
         guard canDeleteMainEvent else { return }
         isMainEventDeleted = true
         mainEventResponse = nil
-        mainEventMoments.removeAll()
+        eventMoments.removeAll()
         eventExpenses.removeAll()
         timeline.removeAll { $0.parentEventID == mainEventID }
         mainEventBudgetCap = workspaceBudgetCap
@@ -820,6 +893,7 @@ final class WeddingWorkspace {
     func deleteTimelineItem(_ item: TimelineItem) {
         timeline.removeAll { $0.id == item.id }
         eventExpenses.removeAll { $0.eventID == item.id }
+        eventMoments.removeAll { $0.eventID == item.id }
         if selectedEventReference == .subevent(item.id) {
             selectedEventReference = .main
         }

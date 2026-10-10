@@ -95,7 +95,10 @@ struct ContentView: View {
 
             Tab("Decide", systemImage: "rectangle.on.rectangle.angled", value: .decide) {
                 NavigationStack {
-                    DecisionDeckView(onExitWorkspace: onExitWorkspace)
+                    DecisionDeckView(
+                        isActive: selectedTab == .decide,
+                        onExitWorkspace: onExitWorkspace
+                    )
                 }
             }
 

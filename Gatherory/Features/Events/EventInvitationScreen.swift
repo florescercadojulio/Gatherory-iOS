@@ -12,7 +12,7 @@ struct EventInvitationScreen: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var scrollOffset: CGFloat = 0
     @State private var selectedChild: TimelineItem?
-    @State private var selectedMomentPhoto: PhotosPickerItem?
+    @State private var selectedMomentPhotos: [PhotosPickerItem] = []
     @State private var weather = EventWeatherModel()
     @Namespace private var childTransition
 
@@ -48,8 +48,9 @@ struct EventInvitationScreen: View {
                 permitsResponse: !workspace.currentMainEventStatus.isReadOnly,
                 note: workspace.eventMessage,
                 dressCode: workspace.dressCode,
+                guestIdeas: workspace.invitationIdeas(for: reference),
                 children: workspace.approvedChildEvents.filter { $0.purpose == .eventExperience },
-                moments: workspace.mainEventMoments
+                moments: workspace.moments(for: .main)
             )
 
         case .subevent(let id):
@@ -89,8 +90,9 @@ struct EventInvitationScreen: View {
                 permitsResponse: item.status != .archived,
                 note: item.eventDescription,
                 dressCode: item.dressCode,
+                guestIdeas: workspace.invitationIdeas(for: reference),
                 children: [],
-                moments: []
+                moments: workspace.moments(for: .subevent(id))
             )
 
         case .idea(let id):
@@ -120,8 +122,9 @@ struct EventInvitationScreen: View {
                 permitsResponse: false,
                 note: idea.note,
                 dressCode: "",
+                guestIdeas: [],
                 children: [],
-                moments: []
+                moments: workspace.moments(for: .idea(id))
             )
         }
     }
@@ -181,13 +184,15 @@ struct EventInvitationScreen: View {
             guard let presentation, let startsAt = presentation.startsAt else { return }
             await weather.load(on: startsAt, location: presentation.location)
         }
-        .onChange(of: selectedMomentPhoto) { _, item in
-            guard reference == .main, let item else { return }
+        .onChange(of: selectedMomentPhotos) { _, items in
+            guard !items.isEmpty, workspace.canAddEventMoments(to: reference) else { return }
 
             Task {
-                guard let imageData = try? await item.loadTransferable(type: Data.self) else { return }
-                workspace.addMainEventMoment(imageData)
-                selectedMomentPhoto = nil
+                for item in items {
+                    guard let imageData = try? await item.loadTransferable(type: Data.self) else { continue }
+                    workspace.addEventMoment(imageData, to: reference)
+                }
+                selectedMomentPhotos = []
             }
         }
     }
@@ -274,19 +279,16 @@ struct EventInvitationScreen: View {
                 EventInvitationLocationView(location: location)
             }
 
-            if reference == .main || !event.moments.isEmpty {
-                momentsCard(event.moments)
-            }
+            momentsCard(event.moments)
 
             if reference.canHaveChildren, !event.children.isEmpty {
                 scheduleCard(event.children)
             }
 
-            if !event.dressCode.isEmpty {
-                EventInvitationSection(title: "Dress Code", symbol: "tshirt.fill") {
-                    Text(event.dressCode)
-                        .font(.headline)
-                }
+            attireCard(event)
+
+            ForEach(invitationIdeaGroups(for: event)) { group in
+                invitationIdeaCard(group)
             }
 
             if !event.note.isEmpty {
@@ -357,6 +359,195 @@ struct EventInvitationScreen: View {
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .combine)
         }
+    }
+
+    @ViewBuilder
+    private func attireCard(_ event: EventPresentation) -> some View {
+        let options = attireOptions(for: event)
+        if !options.isEmpty {
+            EventInvitationSection(title: "Dress Code", symbol: "tshirt.fill") {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                    if options.count > 1 {
+                        Text("Any of these styles are welcome.")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+
+                    ForEach(options) { option in
+                        HStack(alignment: .top, spacing: AppTheme.Spacing.compact) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .symbolRenderingMode(.hierarchical)
+                                .font(.title3)
+                                .foregroundStyle(.white.opacity(0.82))
+                                .accessibilityHidden(true)
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(option.title)
+                                    .font(.headline)
+
+                                if let detail = option.detail {
+                                    Text(detail)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white.opacity(0.72))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+
+                            Spacer(minLength: 0)
+                        }
+                        .padding(AppTheme.Spacing.compact)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.white.opacity(0.10), in: RoundedRectangle(
+                            cornerRadius: AppTheme.Radius.control,
+                            style: .continuous
+                        ))
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            }
+        }
+    }
+
+    private func invitationIdeaCard(_ group: InvitationIdeaGroup) -> some View {
+        EventInvitationSection(title: group.category.title, symbol: group.category.symbol) {
+            VStack(spacing: AppTheme.Spacing.compact) {
+                ForEach(group.ideas) { idea in
+                    HStack(alignment: .center, spacing: AppTheme.Spacing.compact) {
+                        if let imageData = idea.imageData, let image = UIImage(data: imageData) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 58, height: 58)
+                                .clipShape(RoundedRectangle(
+                                    cornerRadius: AppTheme.Radius.control,
+                                    style: .continuous
+                                ))
+                                .accessibilityHidden(true)
+                        } else {
+                            Image(systemName: group.category.symbol)
+                                .symbolRenderingMode(.hierarchical)
+                                .font(.title2)
+                                .foregroundStyle(.white.opacity(0.82))
+                                .frame(width: 58, height: 58)
+                                .background(.white.opacity(0.10), in: RoundedRectangle(
+                                    cornerRadius: AppTheme.Radius.control,
+                                    style: .continuous
+                                ))
+                                .accessibilityHidden(true)
+                        }
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(idea.title)
+                                .font(.headline)
+
+                            if let detail = invitationDetail(for: idea) {
+                                Text(detail)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white.opacity(0.72))
+                                    .lineLimit(3)
+                            }
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(AppTheme.Spacing.compact)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.white.opacity(0.10), in: RoundedRectangle(
+                        cornerRadius: AppTheme.Radius.control,
+                        style: .continuous
+                    ))
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+    }
+
+    private func attireOptions(for event: EventPresentation) -> [InvitationAttireOption] {
+        var options: [InvitationAttireOption] = []
+        var seen: Set<String> = []
+
+        func append(title: String, detail: String? = nil, id: String) {
+            let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedTitle.isEmpty else { return }
+            let trimmedDetail = detail?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedDetail = trimmedDetail.flatMap { $0.isEmpty ? nil : $0 }
+            let key = "\(trimmedTitle.lowercased())|\(normalizedDetail?.lowercased() ?? "")"
+            guard seen.insert(key).inserted else { return }
+            options.append(InvitationAttireOption(id: id, title: trimmedTitle, detail: normalizedDetail))
+        }
+
+        append(title: event.dressCode, id: "event-dress-code")
+
+        for idea in event.guestIdeas where idea.category == .attire {
+            guard let configuration = idea.attireConfiguration else { continue }
+            let title = configuration.style == .any
+                ? (idea.title == "Attire" ? "Any attire" : idea.title)
+                : configuration.style.title
+            let details = [configuration.restrictions, idea.note]
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty && $0.caseInsensitiveCompare(title) != .orderedSame }
+            append(
+                title: title,
+                detail: details.isEmpty ? nil : details.joined(separator: " · "),
+                id: idea.id.uuidString
+            )
+        }
+
+        return options
+    }
+
+    private func invitationIdeaGroups(for event: EventPresentation) -> [InvitationIdeaGroup] {
+        IdeaCategory.allCases.compactMap { category in
+            guard category != .attire else { return nil }
+            let ideas = event.guestIdeas.filter { $0.category == category }
+            return ideas.isEmpty ? nil : InvitationIdeaGroup(category: category, ideas: ideas)
+        }
+    }
+
+    private func invitationDetail(for idea: WeddingIdea) -> String? {
+        var details: [String] = []
+        switch idea.configuration {
+        case .standard:
+            break
+        case .attire:
+            break
+        case .venue(let configuration):
+            details.append(configuration.setting.title)
+            details.append(configuration.area)
+        case .food(let configuration):
+            details.append(configuration.type.title)
+            details.append(configuration.dietaryNotes)
+        case .flowers(let configuration):
+            details.append(configuration.focus.title)
+            details.append(configuration.palette)
+        case .photography(let configuration):
+            details.append(configuration.style.title)
+            details.append(configuration.priorities)
+        case .decor(let configuration):
+            details.append(configuration.focus.title)
+            details.append(configuration.paletteOrMaterials)
+        case .invitations(let configuration):
+            details.append(configuration.format.title)
+            details.append(configuration.productionNotes)
+        case .honeymoon(let configuration):
+            details.append(configuration.style.title)
+            details.append(configuration.destination)
+        case .music(let configuration):
+            details.append(contentsOf: configuration.tracks.prefix(3).map(\.title))
+        case .event, .registry:
+            break
+        }
+        details.append(idea.note)
+
+        var seen: Set<String> = []
+        let meaningfulDetails = details
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter {
+                !$0.isEmpty
+                    && $0.caseInsensitiveCompare(idea.title) != .orderedSame
+                    && seen.insert($0.lowercased()).inserted
+            }
+        return meaningfulDetails.isEmpty ? nil : meaningfulDetails.joined(separator: " · ")
     }
 
     private func eventMetadataPill(_ title: String, symbol: String) -> some View {
@@ -452,8 +643,12 @@ struct EventInvitationScreen: View {
                     .frame(height: 158)
                 }
 
-                if reference == .main, workspace.canAddEventMoments {
-                    PhotosPicker(selection: $selectedMomentPhoto, matching: .images) {
+                if workspace.canAddEventMoments(to: reference) {
+                    PhotosPicker(
+                        selection: $selectedMomentPhotos,
+                        maxSelectionCount: 20,
+                        matching: .images
+                    ) {
                         Label("Add Photos", systemImage: "photo.badge.plus")
                             .font(.headline)
                             .padding(.horizontal, AppTheme.Spacing.spacious)
@@ -513,8 +708,22 @@ private struct EventPresentation {
     let permitsResponse: Bool
     let note: String
     let dressCode: String
+    let guestIdeas: [WeddingIdea]
     let children: [TimelineItem]
     let moments: [EventMoment]
+}
+
+private struct InvitationAttireOption: Identifiable {
+    let id: String
+    let title: String
+    let detail: String?
+}
+
+private struct InvitationIdeaGroup: Identifiable {
+    let category: IdeaCategory
+    let ideas: [WeddingIdea]
+
+    var id: IdeaCategory { category }
 }
 
 private struct EventInvitationBackdrop: View {

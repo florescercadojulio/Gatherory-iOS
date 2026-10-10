@@ -11,6 +11,28 @@ import Testing
 
 struct GatheroryTests {
 
+    @Test("The Decide primer waits until the Decide tab is active")
+    func decidePrimerPresentationRequiresActiveTab() {
+        #expect(
+            !DecidePrimerPresentationPolicy.shouldPresent(
+                hasSeenPrimer: false,
+                isDecideTabActive: false
+            )
+        )
+        #expect(
+            DecidePrimerPresentationPolicy.shouldPresent(
+                hasSeenPrimer: false,
+                isDecideTabActive: true
+            )
+        )
+        #expect(
+            !DecidePrimerPresentationPolicy.shouldPresent(
+                hasSeenPrimer: true,
+                isDecideTabActive: true
+            )
+        )
+    }
+
     @Test("The app uses the Gatherory launch screen")
     func appDeclaresLaunchScreen() {
         let launchScreen = Bundle.main.object(
@@ -703,6 +725,45 @@ struct GatheroryTests {
         #expect(workspace.contextualNotes.contains { $0.id == note.id } == false)
     }
 
+    @Test("Shared album photos stay scoped to their event")
+    func sharedAlbumPhotosAreEventScoped() throws {
+        let workspace = WeddingWorkspace.sample
+        let child = try #require(
+            workspace.childEvents.first(where: { $0.status != .archived })
+        )
+
+        workspace.addEventMoment(Data([0x01]), to: .main)
+        workspace.addEventMoment(Data([0x02]), to: .subevent(child.id))
+
+        #expect(workspace.moments(for: .main).count == 1)
+        #expect(workspace.moments(for: .subevent(child.id)).count == 1)
+        #expect(workspace.moments(for: .main).first?.imageData == Data([0x01]))
+        #expect(workspace.moments(for: .subevent(child.id)).first?.imageData == Data([0x02]))
+
+        workspace.deleteTimelineItem(child)
+
+        #expect(workspace.moments(for: .main).count == 1)
+        #expect(workspace.moments(for: .subevent(child.id)).isEmpty)
+    }
+
+    @Test("Approved event ideas share their scheduled event album")
+    func approvedEventIdeaUsesScheduledAlbum() throws {
+        let workspace = WeddingWorkspace.sample
+        let idea = try #require(
+            workspace.ideas.first {
+                $0.category == .event && $0.status == .chosen
+            }
+        )
+        let linkedEvent = try #require(
+            workspace.timeline.first { $0.linkedIdeaID == idea.id }
+        )
+
+        workspace.addEventMoment(Data([0x03]), to: .idea(idea.id))
+
+        #expect(workspace.moments(for: .idea(idea.id)).count == 1)
+        #expect(workspace.moments(for: .subevent(linkedEvent.id)).count == 1)
+    }
+
     @Test("Timeline events can be deleted from their details")
     func deleteTimelineItem() throws {
         let workspace = WeddingWorkspace.sample
@@ -953,6 +1014,92 @@ struct GatheroryTests {
         )
 
         #expect(result == matchingForecast)
+    }
+
+    @Test("Attire defaults to guest-facing while planning details stay private")
+    func ideaInvitationVisibilityDefaultsByCategory() {
+        let attire = WeddingIdea(
+            title: "Black Tie",
+            note: "",
+            category: .attire,
+            submittedBy: "Alex"
+        )
+        let flowers = WeddingIdea(
+            title: "White lilies",
+            note: "",
+            category: .flowers,
+            submittedBy: "Alex"
+        )
+
+        #expect(attire.isShownOnInvitation)
+        #expect(!flowers.isShownOnInvitation)
+    }
+
+    @Test("Invitation ideas require approval, visibility, and the matching event")
+    func invitationIdeasFollowCentralGuestPresentationPolicy() {
+        let workspace = WeddingWorkspace.sample
+        let firstAttire = WeddingIdea(
+            eventID: workspace.mainEventID,
+            title: "Black Tie",
+            note: "",
+            category: .attire,
+            submittedBy: "Alex",
+            status: .chosen,
+            configuration: .attire(AttireIdeaConfiguration(style: .blackTie, restrictions: ""))
+        )
+        let secondAttire = WeddingIdea(
+            eventID: workspace.mainEventID,
+            title: "Formal",
+            note: "Jewel tones welcome",
+            category: .attire,
+            submittedBy: "Jordan",
+            status: .chosen,
+            configuration: .attire(AttireIdeaConfiguration(style: .formal, restrictions: ""))
+        )
+        let privateFlowers = WeddingIdea(
+            eventID: workspace.mainEventID,
+            title: "White lilies",
+            note: "",
+            category: .flowers,
+            submittedBy: "Alex",
+            status: .chosen
+        )
+        let sharedFlowers = WeddingIdea(
+            eventID: workspace.mainEventID,
+            title: "Flower-free ceremony",
+            note: "For allergy awareness",
+            category: .flowers,
+            submittedBy: "Jordan",
+            status: .chosen,
+            invitationVisibility: .shownToGuests
+        )
+        let pendingAttire = WeddingIdea(
+            eventID: workspace.mainEventID,
+            title: "Cocktail",
+            note: "",
+            category: .attire,
+            submittedBy: "Alex",
+            status: .new
+        )
+        let otherEventAttire = WeddingIdea(
+            eventID: UUID(),
+            title: "Garden",
+            note: "",
+            category: .attire,
+            submittedBy: "Alex",
+            status: .chosen
+        )
+
+        [firstAttire, secondAttire, privateFlowers, sharedFlowers, pendingAttire, otherEventAttire]
+            .forEach { workspace.addIdea($0) }
+
+        let visibleIDs = Set(workspace.invitationIdeas(for: .main).map(\.id))
+        #expect(visibleIDs.contains(firstAttire.id))
+        #expect(visibleIDs.contains(secondAttire.id))
+        #expect(visibleIDs.contains(sharedFlowers.id))
+        #expect(!visibleIDs.contains(privateFlowers.id))
+        #expect(!visibleIDs.contains(pendingAttire.id))
+        #expect(!visibleIDs.contains(otherEventAttire.id))
     }
 
 }

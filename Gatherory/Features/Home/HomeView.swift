@@ -84,6 +84,10 @@ struct HomeView: View {
                     )
                     .frame(maxWidth: .infinity)
                     .frame(height: pullToCreateItemHeight)
+                    .opacity(pullToCreateProgress)
+                    .scaleEffect(0.86 + (0.14 * pullToCreateProgress))
+                    .offset(y: 24 * (1 - pullToCreateProgress))
+                    .accessibilityHidden(pullToCreateProgress <= 0.01)
                     .accessibilityHint("Pull until the progress ring closes, then release")
                 }
             }

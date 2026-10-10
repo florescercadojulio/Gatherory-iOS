@@ -187,8 +187,6 @@ struct NewWorkspaceView: View {
     @State private var eventLocation: EventLocation?
     @State private var imageData: Data?
     @State private var budgetAmount = ""
-    @State private var invitedPeople: [WorkspaceParticipantDraft] = []
-    @State private var participantEditor: WorkspaceParticipantEditor?
     @State private var isEditingDateAndTime = false
     @State private var isEditingLocation = false
     @FocusState private var focusedField: FocusedField?
@@ -216,13 +214,14 @@ struct NewWorkspaceView: View {
 
     var body: some View {
         Form {
-            Section {
+            Section("Event Name") {
                 TextField("Event name", text: $title)
                     .textInputAutocapitalization(.words)
                     .submitLabel(.done)
                     .focused($focusedField, equals: .eventName)
                     .onSubmit { focusedField = nil }
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("Location (Optional)") {
                 Button {
@@ -256,6 +255,7 @@ struct NewWorkspaceView: View {
                 }
                 .buttonStyle(.plain)
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("Date & Time") {
                 Button {
@@ -270,6 +270,7 @@ struct NewWorkspaceView: View {
                 }
                 .buttonStyle(.plain)
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
             Section {
                 TextField("Budget cap", text: $budgetAmount)
@@ -280,32 +281,7 @@ struct NewWorkspaceView: View {
             } footer: {
                 Text("The main event starts with the full budget. You can allocate part of it to sub-events later.")
             }
-
-            Section {
-                ForEach(invitedPeople) { person in
-                    Button {
-                        participantEditor = WorkspaceParticipantEditor(person: person)
-                    } label: {
-                        WorkspaceParticipantDraftRow(person: person)
-                    }
-                    .buttonStyle(.plain)
-                    .swipeActions {
-                        Button("Remove", systemImage: "trash", role: .destructive) {
-                            invitedPeople.removeAll { $0.id == person.id }
-                        }
-                    }
-                }
-
-                Button {
-                    participantEditor = WorkspaceParticipantEditor(person: nil)
-                } label: {
-                    Label("Invite a Person", systemImage: "person.badge.plus")
-                }
-            } header: {
-                Text("People (Optional)")
-            } footer: {
-                Text("Add hosts, collaborators, or guests now. You can share the invitation link after creating the event.")
-            }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("Cover") {
                 PhotoAttachmentPicker(
@@ -315,7 +291,9 @@ struct NewWorkspaceView: View {
                     suggestedConcept: "Artwork for \(trimmedTitle.isEmpty ? "our event" : trimmedTitle)"
                 )
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
         }
+        .formStyle(.grouped)
         .scrollDismissesKeyboard(.interactively)
         .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
@@ -340,15 +318,6 @@ struct NewWorkspaceView: View {
                         imageData: imageData,
                         budgetCap: parsedBudget
                     )
-
-                    for person in invitedPeople {
-                        workspace.inviteParticipant(
-                            name: person.name,
-                            email: person.email,
-                            initials: workspaceInitials(for: person.name),
-                            role: person.role
-                        )
-                    }
 
                     if let onWorkspaceCreated {
                         onWorkspaceCreated(workspace)
@@ -390,176 +359,7 @@ struct NewWorkspaceView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(item: $participantEditor) { editor in
-            NavigationStack {
-                WorkspaceParticipantEditorView(person: editor.person) { updatedPerson in
-                    if let index = invitedPeople.firstIndex(where: { $0.id == updatedPerson.id }) {
-                        invitedPeople[index] = updatedPerson
-                    } else {
-                        invitedPeople.append(updatedPerson)
-                    }
-                }
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
     }
-}
-
-private struct WorkspaceParticipantDraft: Identifiable, Equatable {
-    let id: UUID
-    var name: String
-    var email: String?
-    var role: WeddingParticipantRole
-
-    init(
-        id: UUID = UUID(),
-        name: String,
-        email: String? = nil,
-        role: WeddingParticipantRole = .collaborator
-    ) {
-        self.id = id
-        self.name = name
-        self.email = email
-        self.role = role
-    }
-}
-
-private struct WorkspaceParticipantEditor: Identifiable {
-    let id = UUID()
-    let person: WorkspaceParticipantDraft?
-}
-
-private struct WorkspaceParticipantDraftRow: View {
-    let person: WorkspaceParticipantDraft
-
-    var body: some View {
-        HStack(spacing: AppTheme.Spacing.standard) {
-            Text(workspaceInitials(for: person.name))
-                .font(.subheadline.bold())
-                .foregroundStyle(.white)
-                .frame(width: 42, height: 42)
-                .background(AppTheme.ColorToken.accent, in: Circle())
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(person.name)
-                    .foregroundStyle(.primary)
-
-                Text(person.role.title)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 0)
-
-            Image(systemName: "chevron.forward")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
-        }
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Edits this person")
-    }
-}
-
-private struct WorkspaceParticipantEditorView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var name: String
-    @State private var email: String
-    @State private var role: WeddingParticipantRole
-
-    private let id: UUID
-    private let isEditing: Bool
-    let onSave: (WorkspaceParticipantDraft) -> Void
-
-    init(
-        person: WorkspaceParticipantDraft?,
-        onSave: @escaping (WorkspaceParticipantDraft) -> Void
-    ) {
-        id = person?.id ?? UUID()
-        isEditing = person != nil
-        _name = State(initialValue: person?.name ?? "")
-        _email = State(initialValue: person?.email ?? "")
-        _role = State(initialValue: person?.role ?? .collaborator)
-        self.onSave = onSave
-    }
-
-    private var trimmedName: String {
-        name.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var trimmedEmail: String? {
-        let value = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? nil : value
-    }
-
-    var body: some View {
-        Form {
-            Section("Person") {
-                TextField("Name", text: $name)
-                    .textContentType(.name)
-                    .textInputAutocapitalization(.words)
-
-                TextField("Email (optional)", text: $email)
-                    .textContentType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.emailAddress)
-                    .autocorrectionDisabled()
-            }
-
-            Section("Role") {
-                Picker("Role", selection: $role) {
-                    ForEach(WeddingParticipantRole.allCases) { option in
-                        Label(option.title, systemImage: option.symbol)
-                            .tag(option)
-                    }
-                }
-
-                Text(role.detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .background(AppTheme.ColorToken.background)
-        .navigationTitle(isEditing ? "Edit Person" : "Invite a Person")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") {
-                    dismiss()
-                }
-            }
-
-            ToolbarItem(placement: .confirmationAction) {
-                Button(isEditing ? "Save" : "Add") {
-                    onSave(
-                        WorkspaceParticipantDraft(
-                            id: id,
-                            name: trimmedName,
-                            email: trimmedEmail,
-                            role: role
-                        )
-                    )
-                    dismiss()
-                }
-                .disabled(trimmedName.isEmpty)
-            }
-        }
-    }
-}
-
-private func workspaceInitials(for name: String) -> String {
-    name
-        .split(separator: " ")
-        .prefix(2)
-        .compactMap(\.first)
-        .map(String.init)
-        .joined()
-        .uppercased()
 }
 
 struct WorkspaceLibraryToolbarButton: View {

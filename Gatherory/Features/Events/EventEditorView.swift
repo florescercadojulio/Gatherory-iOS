@@ -33,6 +33,37 @@ private func attireDescription(style: AttireStyle, guidance: String) -> String {
     }
 }
 
+private func decimalAmount(from input: String) -> Decimal? {
+    let decimalSeparator = Locale.current.decimalSeparator ?? "."
+    let normalized = input
+        .replacingOccurrences(of: decimalSeparator, with: ".")
+        .replacingOccurrences(of: ",", with: "")
+    return Decimal(string: normalized)
+}
+
+private extension TimelineCategory {
+    var expenseCategory: EventExpenseCategory {
+        switch self {
+        case .venue, .ceremony:
+            .venue
+        case .foodTasting, .rehearsal:
+            .foodAndDrink
+        case .photography:
+            .photography
+        case .honeymoon:
+            .travel
+        case .attireFitting:
+            .attire
+        case .weddingShower:
+            .gifts
+        case .bachelorBachelorette, .reception:
+            .entertainment
+        case .other:
+            .other
+        }
+    }
+}
+
 /// Shared by event creation and event ideas so choosing an event type feels
 /// identical regardless of where the flow starts.
 struct EventCategoryStrip: View {
@@ -473,7 +504,7 @@ struct EventEditorView: View {
                 } label: {
                     planningRow(
                         symbol: "list.bullet.rectangle.portrait",
-                        title: "Costs",
+                        title: "Cost",
                         value: costSummary
                     )
                 }
@@ -482,9 +513,9 @@ struct EventEditorView: View {
                 Text("Planning")
             } footer: {
                 if isMainEvent || workspace.workspaceBudgetCap != nil {
-                    Text("Budget is the spending limit. Costs are the individual estimates, commitments, and payments.")
+                    Text("Budget is the spending limit. Cost is what you expect to spend.")
                 } else {
-                    Text("Track individual estimates, commitments, and payments for this event.")
+                    Text("Add what you expect this event to cost. You can track more detail later.")
                 }
             }
 
@@ -559,7 +590,9 @@ struct EventEditorView: View {
             NavigationStack {
                 EventCostsEditorView(
                     expenses: $eventExpenses,
-                    eventID: expenseEventID
+                    eventID: expenseEventID,
+                    suggestedTitle: resolvedTitle,
+                    suggestedCategory: category.expenseCategory
                 )
             }
             .presentationDetents([.medium, .large])
@@ -624,7 +657,7 @@ struct EventEditorView: View {
     }
 
     private var costSummary: String {
-        guard !eventExpenses.isEmpty else { return "None Added" }
+        guard !eventExpenses.isEmpty else { return "Not Set" }
         let total = eventCostTotal.formatted(.currency(code: currencyCode))
         return "\(total) · \(eventExpenses.count) \(eventExpenses.count == 1 ? "item" : "items")"
     }
@@ -937,8 +970,11 @@ private struct EventCostsEditorView: View {
 
     @Binding var expenses: [EventExpense]
     let eventID: UUID
+    let suggestedTitle: String
+    let suggestedCategory: EventExpenseCategory
 
     @State private var editorTarget: EventExpenseEditorTarget?
+    @State private var quickAmount = ""
 
     private var currencyCode: String {
         Locale.current.currency?.identifier ?? "USD"
@@ -948,27 +984,61 @@ private struct EventCostsEditorView: View {
         expenses.reduce(Decimal.zero) { $0 + $1.amount }
     }
 
+    private var parsedQuickAmount: Decimal? {
+        decimalAmount(from: quickAmount)
+    }
+
+    private var canSetEstimate: Bool {
+        parsedQuickAmount.map { $0 > .zero } ?? false
+    }
+
     var body: some View {
         Form {
-            Section {
-                LabeledContent("Tracked Total") {
-                    Text(total, format: .currency(code: currencyCode))
-                        .fontWeight(.semibold)
-                        .monospacedDigit()
-                }
-            } footer: {
-                Text("This total includes estimated, committed, and paid items. Each item keeps its own status.")
-            }
+            if expenses.isEmpty {
+                Section {
+                    HStack(spacing: AppTheme.Spacing.standard) {
+                        Image(systemName: suggestedCategory.symbol)
+                            .font(.title3)
+                            .foregroundStyle(AppTheme.ColorToken.accent)
+                            .frame(width: 30)
 
-            Section {
-                if expenses.isEmpty {
-                    ContentUnavailableView(
-                        "No Costs Yet",
-                        systemImage: "list.bullet.rectangle.portrait",
-                        description: Text("Add an estimate now and update its status when it is committed or paid.")
-                    )
-                    .listRowBackground(Color.clear)
-                } else {
+                        Text(Locale.current.currencySymbol ?? currencyCode)
+                            .font(.title2.weight(.medium))
+                            .foregroundStyle(.secondary)
+
+                        TextField("0.00", text: $quickAmount)
+                            .font(.system(.title2, design: .rounded, weight: .semibold))
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .monospacedDigit()
+                            .accessibilityLabel("Estimated cost")
+                    }
+                    .frame(minHeight: 54)
+
+                    Button("Set Estimated Cost", systemImage: "checkmark.circle.fill") {
+                        setQuickEstimate()
+                    }
+                    .disabled(!canSetEstimate)
+                    .fontWeight(.semibold)
+                } header: {
+                    Text("Estimated Cost")
+                } footer: {
+                    Text("Saved as an estimate for \(suggestedTitle). Details can be changed later.")
+                }
+                .listRowBackground(AppTheme.ColorToken.surface)
+            } else {
+                Section {
+                    LabeledContent("Tracked Total") {
+                        Text(total, format: .currency(code: currencyCode))
+                            .fontWeight(.semibold)
+                            .monospacedDigit()
+                    }
+                } footer: {
+                    Text("Includes estimated, committed, and paid costs.")
+                }
+                .listRowBackground(AppTheme.ColorToken.surface)
+
+                Section("Cost Items") {
                     ForEach(expenses) { expense in
                         Button {
                             editorTarget = EventExpenseEditorTarget(expense: expense)
@@ -978,18 +1048,19 @@ private struct EventCostsEditorView: View {
                         .buttonStyle(.plain)
                     }
                     .onDelete(perform: deleteExpenses)
-                }
 
-                Button("Add Cost", systemImage: "plus.circle") {
-                    editorTarget = EventExpenseEditorTarget(expense: nil)
+                    Button("Add Another Cost", systemImage: "plus.circle") {
+                        editorTarget = EventExpenseEditorTarget(expense: nil)
+                    }
                 }
-            } header: {
-                Text("Cost Items")
+                .listRowBackground(AppTheme.ColorToken.surface)
             }
         }
+        .formStyle(.grouped)
+        .appKeyboardDismissal()
         .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
-        .navigationTitle("Costs")
+        .navigationTitle(expenses.isEmpty ? "Set Cost" : "Costs")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
@@ -1002,6 +1073,8 @@ private struct EventCostsEditorView: View {
                 EventExpenseEditorView(
                     expense: target.expense,
                     eventID: eventID,
+                    suggestedTitle: suggestedTitle,
+                    suggestedCategory: suggestedCategory,
                     onSave: upsertExpense
                 )
             }
@@ -1045,6 +1118,21 @@ private struct EventCostsEditorView: View {
         }
     }
 
+    private func setQuickEstimate() {
+        guard let parsedQuickAmount, parsedQuickAmount > .zero else { return }
+        expenses.append(
+            EventExpense(
+                eventID: eventID,
+                title: suggestedTitle,
+                amount: parsedQuickAmount,
+                category: suggestedCategory,
+                status: .estimated
+            )
+        )
+        quickAmount = ""
+        dismiss()
+    }
+
     private func deleteExpenses(at offsets: IndexSet) {
         expenses.remove(atOffsets: offsets)
     }
@@ -1074,16 +1162,18 @@ private struct EventExpenseEditorView: View {
     init(
         expense: EventExpense?,
         eventID: UUID,
+        suggestedTitle: String,
+        suggestedCategory: EventExpenseCategory,
         onSave: @escaping (EventExpense) -> Void
     ) {
         self.expense = expense
         self.eventID = eventID
         self.onSave = onSave
-        _title = State(initialValue: expense?.title ?? "")
+        _title = State(initialValue: expense?.title ?? suggestedTitle)
         _amount = State(
             initialValue: expense.map { NSDecimalNumber(decimal: $0.amount).stringValue } ?? ""
         )
-        _category = State(initialValue: expense?.category ?? .other)
+        _category = State(initialValue: expense?.category ?? suggestedCategory)
         _status = State(initialValue: expense?.status ?? .estimated)
     }
 
@@ -1092,11 +1182,7 @@ private struct EventExpenseEditorView: View {
     }
 
     private var parsedAmount: Decimal? {
-        let decimalSeparator = Locale.current.decimalSeparator ?? "."
-        let normalized = amount
-            .replacingOccurrences(of: decimalSeparator, with: ".")
-            .replacingOccurrences(of: ",", with: "")
-        return Decimal(string: normalized)
+        decimalAmount(from: amount)
     }
 
     private var canSave: Bool {
@@ -1113,6 +1199,7 @@ private struct EventExpenseEditorView: View {
                 TextField("Amount", text: $amount)
                     .keyboardType(.decimalPad)
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("Category") {
                 Picker("Category", selection: $category) {
@@ -1122,6 +1209,7 @@ private struct EventExpenseEditorView: View {
                     }
                 }
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("Status") {
                 Picker("Status", selection: $status) {
@@ -1132,7 +1220,9 @@ private struct EventExpenseEditorView: View {
                 }
                 .pickerStyle(.segmented)
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
         }
+        .formStyle(.grouped)
         .appKeyboardDismissal()
         .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)

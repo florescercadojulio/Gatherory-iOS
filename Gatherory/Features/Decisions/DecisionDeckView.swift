@@ -1,6 +1,13 @@
 import SwiftUI
 
+enum DecidePrimerPresentationPolicy {
+    static func shouldPresent(hasSeenPrimer: Bool, isDecideTabActive: Bool) -> Bool {
+        !hasSeenPrimer && isDecideTabActive
+    }
+}
+
 struct DecisionDeckView: View {
+    var isActive = true
     var onExitWorkspace: (() -> Void)?
 
     @Environment(WeddingWorkspace.self) private var workspace
@@ -98,14 +105,26 @@ struct DecisionDeckView: View {
             .presentationDragIndicator(.visible)
         }
         .task {
-            guard !hasSeenTimelinePrimer else { return }
-            isShowingTimelinePrimer = true
+            presentPrimerIfNeeded()
+        }
+        .onChange(of: isActive) { _, isActive in
+            guard isActive else { return }
+            presentPrimerIfNeeded()
         }
         .onChange(of: isShowingTimelinePrimer) { wasShowing, isShowing in
             if wasShowing && !isShowing {
                 hasSeenTimelinePrimer = true
             }
         }
+    }
+
+    private func presentPrimerIfNeeded() {
+        guard DecidePrimerPresentationPolicy.shouldPresent(
+            hasSeenPrimer: hasSeenTimelinePrimer,
+            isDecideTabActive: isActive
+        ) else { return }
+
+        isShowingTimelinePrimer = true
     }
 
     private func dragGesture(for idea: WeddingIdea) -> some Gesture {

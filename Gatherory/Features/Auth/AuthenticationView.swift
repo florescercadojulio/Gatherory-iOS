@@ -4,6 +4,7 @@ import SwiftUI
 struct AuthenticationView: View {
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var mode = AuthenticationMode.signIn
@@ -134,7 +135,11 @@ struct AuthenticationView: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
             if mode == .createAccount {
                 authenticationField(focused: .displayName) {
-                    TextField("Name", text: $displayName)
+                    TextField(
+                        "",
+                        text: $displayName,
+                        prompt: authenticationPrompt("Name")
+                    )
                         .textContentType(.name)
                         .textInputAutocapitalization(.words)
                         .focused($focusedField, equals: .displayName)
@@ -145,7 +150,11 @@ struct AuthenticationView: View {
             }
 
             authenticationField(focused: .email) {
-                TextField("Email", text: $email)
+                TextField(
+                    "",
+                    text: $email,
+                    prompt: authenticationPrompt("Email")
+                )
                     .textContentType(.username)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
@@ -157,7 +166,11 @@ struct AuthenticationView: View {
             }
 
             authenticationField(focused: .password) {
-                SecureField("Password", text: $password)
+                SecureField(
+                    "",
+                    text: $password,
+                    prompt: authenticationPrompt("Password")
+                )
                     .textContentType(mode == .signIn ? .password : .newPassword)
                     .focused($focusedField, equals: .password)
                     .submitLabel(.go)
@@ -204,30 +217,34 @@ struct AuthenticationView: View {
         focused field: Field,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        content()
+        let shape = RoundedRectangle(
+            cornerRadius: AppTheme.Radius.control,
+            style: .continuous
+        )
+
+        return content()
             .textFieldStyle(.plain)
+            .foregroundStyle(AppTheme.ColorToken.textPrimary)
             .padding(.horizontal, AppTheme.Spacing.standard)
-            .frame(minHeight: 54)
-            .background(
-                AppTheme.ColorToken.elevatedSurface,
-                in: RoundedRectangle(
-                    cornerRadius: AppTheme.Radius.control,
-                    style: .continuous
-                )
-            )
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: AppTheme.Radius.control,
-                    style: .continuous
-                )
-                .stroke(
-                    focusedField == field
-                        ? AppTheme.ColorToken.accent
-                        : AppTheme.ColorToken.cardBorder,
-                    lineWidth: focusedField == field ? 2 : 0.5
-                )
+            .frame(minHeight: 56)
+            .background(authenticationFieldSurface, in: shape)
+            .contentShape(shape)
+            .onTapGesture {
+                focusedField = field
             }
             .animation(.easeOut(duration: 0.16), value: focusedField)
+    }
+
+    private func authenticationPrompt(_ title: String) -> Text {
+        Text(title)
+            .foregroundStyle(Color(uiColor: .secondaryLabel))
+    }
+
+    private var authenticationFieldSurface: Color {
+        if colorScheme == .light {
+            return Color(uiColor: colorSchemeContrast == .increased ? .systemGray5 : .systemGray6)
+        }
+        return Color(uiColor: .secondarySystemBackground)
     }
 
     private var modeSwitcher: some View {
