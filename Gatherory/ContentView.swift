@@ -11,7 +11,6 @@ private enum AppTab: Hashable {
     case home
     case ideas
     case decide
-    case timeline
     case insights
 }
 
@@ -99,12 +98,6 @@ struct ContentView: View {
                         isActive: selectedTab == .decide,
                         onExitWorkspace: onExitWorkspace
                     )
-                }
-            }
-
-            Tab("Timeline", systemImage: "calendar", value: .timeline) {
-                NavigationStack {
-                    TimelineView(onExitWorkspace: onExitWorkspace)
                 }
             }
 

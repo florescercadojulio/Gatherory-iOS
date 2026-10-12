@@ -343,6 +343,11 @@ private struct IdeaCollectionCard: View {
         if let link = idea.linkConfiguration {
             return link.url.host ?? link.url.absoluteString
         }
+        if idea.category == .event,
+           idea.status == .chosen,
+           idea.eventConfiguration?.proposedDate == nil {
+            return "Ready to schedule"
+        }
         guard idea.category == .music else { return "From \(idea.submittedBy)" }
         let count = idea.musicTracks.count
         return "\(count) \(count == 1 ? "song" : "songs") · Shared playlist"
@@ -443,16 +448,16 @@ struct IdeaDetailView: View {
 
                         if idea.category == .event, idea.status == .chosen {
                             if workspace.timeline.contains(where: { $0.linkedIdeaID == idea.id }) {
-                                Button("Added to Timeline", systemImage: "calendar.badge.checkmark") {}
+                                Button("On Home", systemImage: "calendar.badge.checkmark") {}
                                     .disabled(true)
                             } else if idea.eventConfiguration?.proposedDate != nil {
-                                Button("Add to Timeline", systemImage: "calendar.badge.plus") {
+                                Button("Add to Home", systemImage: "calendar.badge.plus") {
                                     _ = withAnimation {
                                         workspace.scheduleEventIdea(idea)
                                     }
                                 }
                             } else {
-                                Button("Add Date to Schedule", systemImage: "calendar.badge.clock") {
+                                Button("Add a Date", systemImage: "calendar.badge.clock") {
                                     editorDetent = .large
                                     isEditingIdea = true
                                 }
@@ -1320,7 +1325,7 @@ private struct IdeaMetadataRow: View {
     }
 }
 
-private struct IdeaEditorView: View {
+struct IdeaEditorView: View {
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(MusicPreviewPlayer.self) private var previewPlayer
     @Environment(\.dismiss) private var dismiss
@@ -1382,12 +1387,19 @@ private struct IdeaEditorView: View {
 
     init(
         existingIdea: WeddingIdea? = nil,
+        initialCategory: IdeaCategory? = nil,
         setDetent: @escaping (PresentationDetent) -> Void
     ) {
         self.existingIdea = existingIdea
         self.setDetent = setDetent
 
-        guard let existingIdea else { return }
+        guard let existingIdea else {
+            if let initialCategory {
+                _category = State(initialValue: initialCategory)
+                _isChoosingCategory = State(initialValue: false)
+            }
+            return
+        }
 
         _title = State(initialValue: existingIdea.title)
         _note = State(initialValue: existingIdea.note)
@@ -2097,6 +2109,9 @@ private struct IdeaEditorView: View {
     private var editorTitle: String {
         if isChoosingCategory { return "Choose a Category" }
         if category == .music { return "Event Playlist" }
+        if category == .event {
+            return ideaBeingEdited == nil ? "New Event Idea" : "Edit Event Idea"
+        }
         return ideaBeingEdited == nil ? "New Idea" : "Edit Idea"
     }
 

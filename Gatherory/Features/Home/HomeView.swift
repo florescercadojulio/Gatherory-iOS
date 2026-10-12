@@ -10,6 +10,8 @@ struct HomeView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isComposingNote = false
     @State private var editorTarget: HomeEventEditorTarget?
+    @State private var isAddingEventIdea = false
+    @State private var addEventIdeaDetent: PresentationDetent = .large
     @State private var openedEventReference: EventReference?
     @State private var visibleScrollTarget: HomeScrollTarget?
     @State private var scrubbedEventIndex: Int?
@@ -136,7 +138,8 @@ struct HomeView: View {
 
                     if workspace.isMainEventContext {
                         Button("Add event", systemImage: "calendar.badge.plus") {
-                            editorTarget = .newSubevent
+                            addEventIdeaDetent = .large
+                            isAddingEventIdea = true
                         }
                         .labelStyle(.iconOnly)
                         .foregroundStyle(.primary)
@@ -186,6 +189,18 @@ struct HomeView: View {
             }
             .environment(workspace)
             .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isAddingEventIdea) {
+            NavigationStack {
+                IdeaEditorView(initialCategory: .event) { detent in
+                    withAnimation(.snappy) {
+                        addEventIdeaDetent = detent
+                    }
+                }
+            }
+            .environment(workspace)
+            .presentationDetents([.medium, .large], selection: $addEventIdeaDetent)
             .presentationDragIndicator(.visible)
         }
         .task {
@@ -529,7 +544,8 @@ struct HomeView: View {
 
         Task { @MainActor in
             await Task.yield()
-            editorTarget = .newSubevent
+            addEventIdeaDetent = .large
+            isAddingEventIdea = true
         }
     }
 
@@ -616,8 +632,6 @@ struct HomeView: View {
         switch target {
         case .main:
             .main
-        case .newSubevent:
-            .subevent(nil)
         case .subevent(let id):
             .subevent(workspace.timeline.first(where: { $0.id == id }))
         }
@@ -668,10 +682,10 @@ private struct PullToCreateEventIndicator: View {
             .frame(width: 54, height: 54)
 
             VStack(spacing: 2) {
-                Text(isArmed ? "Release to Add Event" : "Add an Event")
+                Text(isArmed ? "Release to Add Event Idea" : "Add an Event Idea")
                     .font(.headline)
 
-                Text("Keep pulling through the schedule to plan what comes next.")
+                Text("Keep pulling to propose what comes next.")
                     .font(.caption)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -680,7 +694,7 @@ private struct PullToCreateEventIndicator: View {
             .frame(maxWidth: 290)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(isArmed ? "Release to add an event" : "Pull to add an event")
+        .accessibilityLabel(isArmed ? "Release to add an event idea" : "Pull to add an event idea")
         .accessibilityValue("\(Int(progress * 100)) percent")
     }
 }
@@ -834,13 +848,11 @@ private struct EventDateScrubber: View {
 
 private enum HomeEventEditorTarget: Identifiable {
     case main
-    case newSubevent
     case subevent(UUID)
 
     var id: String {
         switch self {
         case .main: "main"
-        case .newSubevent: "new-subevent"
         case .subevent(let id): "subevent-\(id.uuidString)"
         }
     }

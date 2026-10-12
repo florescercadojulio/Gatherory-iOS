@@ -212,9 +212,23 @@ final class WeddingWorkspace {
         self.defaultCollaboratorPermission = defaultCollaboratorPermission
         self.collaboratorInviteURL = collaboratorInviteURL
 
-        // Reconcile workspaces created before undated event approvals were
-        // promoted to Timeline. The linked ID keeps this migration idempotent.
+        // Dated, approved event ideas are the only ideas that become Home
+        // events. Older local workspaces could contain linked undated items;
+        // remove those duplicates because the proposal remains in Ideas.
+        self.timeline.removeAll { item in
+            guard let linkedIdeaID = item.linkedIdeaID,
+                  let idea = self.ideas.first(where: { $0.id == linkedIdeaID }) else {
+                return false
+            }
+            return idea.category == .event
+                && idea.status == .chosen
+                && idea.eventConfiguration?.proposedDate == nil
+        }
+
+        // Reconcile dated approvals created before the current event-idea
+        // lifecycle. The linked ID keeps this migration idempotent.
         for idea in self.ideas where idea.category == .event && idea.status == .chosen {
+            guard idea.eventConfiguration?.proposedDate != nil else { continue }
             guard !self.timeline.contains(where: { $0.linkedIdeaID == idea.id }) else { continue }
             _ = scheduleEventIdea(idea)
         }
@@ -1154,13 +1168,13 @@ final class WeddingWorkspace {
         reconcileExpense(for: scopedIdea)
     }
 
-    /// Moves an approved event proposal into the timeline without duplicating
-    /// it. Undated approvals remain explicit timeline items that need a date;
-    /// they do not become selectable Home contexts until they are scheduled.
+    /// Promotes a dated, approved event proposal into a Home event without
+    /// duplicating it. Undated approvals remain in Ideas until a date is set.
     @discardableResult
     func scheduleEventIdea(_ idea: WeddingIdea) -> UUID? {
         guard idea.status == .chosen,
-              let configuration = idea.eventConfiguration else {
+              let configuration = idea.eventConfiguration,
+              let proposedDate = configuration.proposedDate else {
             return nil
         }
 
@@ -1172,21 +1186,13 @@ final class WeddingWorkspace {
             ? hostParticipants
             : inheritedParticipants
         let existing = timeline.first(where: { $0.linkedIdeaID == idea.id })
-        let schedulingState: EventSchedulingState = if configuration.proposedDate != nil {
-            .scheduled
-        } else if existing?.schedulingState == .scheduled {
-            .scheduled
-        } else {
-            .unscheduled
-        }
-        let startsAt = configuration.proposedDate ?? existing?.scheduledAt ?? .now
         let item = TimelineItem(
             id: existing?.id ?? UUID(),
             title: idea.title,
             category: configuration.category,
             purpose: configuration.purpose,
-            scheduledAt: startsAt,
-            schedulingState: schedulingState,
+            scheduledAt: proposedDate,
+            schedulingState: .scheduled,
             eventLocation: configuration.location,
             endsAt: configuration.proposedEndDate,
             isAllDay: configuration.isAllDay,
@@ -1318,13 +1324,13 @@ final class WeddingWorkspace {
         }
     }
 
-    /// Keeps approved event ideas and real child events as one lifecycle.
-    /// Approval creates a linked event even when its date still needs to be
-    /// configured; revoking approval removes only that generated event.
+    /// Keeps approved event ideas and dated Home events as one lifecycle.
+    /// A date promotes an approved idea; removing that date returns it to
+    /// Ideas. Revoking approval removes only that generated event.
     private func reconcileScheduledEvent(for idea: WeddingIdea) {
         guard idea.category == .event else { return }
 
-        if idea.status == .chosen {
+        if idea.status == .chosen, idea.eventConfiguration?.proposedDate != nil {
             _ = scheduleEventIdea(idea)
         } else if let linkedEvent = timeline.first(where: { $0.linkedIdeaID == idea.id }) {
             deleteTimelineItem(linkedEvent)

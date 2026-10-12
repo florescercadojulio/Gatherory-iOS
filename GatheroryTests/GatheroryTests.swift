@@ -488,7 +488,7 @@ struct GatheroryTests {
         #expect(workspace.timeline.contains { $0.linkedIdeaID == idea.id })
     }
 
-    @Test("Loving an undated event idea sends it to Timeline without adding it to Home")
+    @Test("Loving an undated event idea keeps the proposal in Ideas")
     func loveUndatedEventIdeaNeedsDate() throws {
         let workspace = WeddingWorkspace.sample
         let idea = WeddingIdea(
@@ -509,12 +509,44 @@ struct GatheroryTests {
 
         workspace.decide(.love, on: idea)
 
-        let linkedEvent = try #require(
-            workspace.timeline.first { $0.linkedIdeaID == idea.id }
+        let approvedIdea = try #require(workspace.ideas.first { $0.id == idea.id })
+        #expect(approvedIdea.status == .chosen)
+        #expect(workspace.timeline.contains { $0.linkedIdeaID == idea.id } == false)
+        #expect(workspace.contextualIdeas.contains { $0.id == idea.id })
+    }
+
+    @Test("Adding a date to an approved event idea promotes it to Home once")
+    func datingApprovedEventIdeaPromotesItToHome() throws {
+        let workspace = WeddingWorkspace.sample
+        let idea = WeddingIdea(
+            title: "Welcome dinner",
+            note: "A relaxed dinner before the celebration.",
+            category: .event,
+            submittedBy: "Alex",
+            status: .chosen,
+            configuration: .event(
+                EventIdeaConfiguration(
+                    category: .rehearsal,
+                    purpose: .eventExperience,
+                    proposedDate: nil,
+                    location: nil
+                )
+            )
         )
-        #expect(linkedEvent.hasScheduledDate == false)
-        #expect(TimelineFilter.needsDate.includes(linkedEvent))
-        #expect(workspace.availableEventContexts.contains(.subevent(linkedEvent.id)) == false)
+        workspace.addIdea(idea)
+
+        var datedIdea = try #require(workspace.ideas.first { $0.id == idea.id })
+        var configuration = try #require(datedIdea.eventConfiguration)
+        configuration.proposedDate = Date(timeIntervalSinceReferenceDate: 900_000_000)
+        datedIdea.configuration = .event(configuration)
+        workspace.updateIdea(datedIdea)
+
+        let linkedEvent = try #require(workspace.timeline.first { $0.linkedIdeaID == idea.id })
+        #expect(linkedEvent.hasScheduledDate)
+        #expect(workspace.availableEventContexts.contains(.subevent(linkedEvent.id)))
+
+        workspace.updateIdea(datedIdea)
+        #expect(workspace.timeline.filter { $0.linkedIdeaID == idea.id }.count == 1)
     }
 
     @Test("Maybe saves an idea for later")
@@ -889,6 +921,11 @@ struct GatheroryTests {
                 $0.category == .event && $0.status == .chosen
             }
         )
+        var scheduledIdea = idea
+        var configuration = try #require(scheduledIdea.eventConfiguration)
+        configuration.proposedDate = Date(timeIntervalSinceReferenceDate: 900_000_000)
+        scheduledIdea.configuration = .event(configuration)
+        workspace.updateIdea(scheduledIdea)
         let linkedEvent = try #require(
             workspace.timeline.first { $0.linkedIdeaID == idea.id }
         )
