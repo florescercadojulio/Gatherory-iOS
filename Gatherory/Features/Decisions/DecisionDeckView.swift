@@ -27,6 +27,7 @@ struct DecisionDeckView: View {
             if let idea = currentIdea {
                 DecisionCard(
                     idea: idea,
+                    currencyCode: workspace.currencyCode,
                     dragOffset: dragOffset,
                     transitionNamespace: decisionTransition
                 )
@@ -230,6 +231,7 @@ private struct DecisionCard: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     let idea: WeddingIdea
+    let currencyCode: String
     let dragOffset: CGSize
     let transitionNamespace: Namespace.ID
 
@@ -275,13 +277,22 @@ private struct DecisionCard: View {
 
     @ViewBuilder
     private var artwork: some View {
-        MediaArtwork(
-            imageData: idea.imageData,
-            remoteURL: idea.musicTrack?.artworkURL,
-            symbol: idea.category.symbol,
-            colors: idea.category.artworkColors,
-            accent: idea.category.artworkAccent
-        )
+        if idea.category == .music {
+            MusicPlaylistArtwork(
+                imageData: idea.imageData,
+                tracks: idea.musicTracks,
+                symbol: idea.category.symbol,
+                colors: idea.category.artworkColors,
+                accent: idea.category.artworkAccent
+            )
+        } else {
+            MediaArtwork(
+                imageData: idea.imageData,
+                symbol: idea.category.symbol,
+                colors: idea.category.artworkColors,
+                accent: idea.category.artworkAccent
+            )
+        }
     }
 
     private var ideaDetails: some View {
@@ -293,7 +304,7 @@ private struct DecisionCard: View {
                 Spacer(minLength: AppTheme.Spacing.compact)
 
                 if let cost = idea.estimatedCost {
-                    Text(cost, format: .currency(code: Locale.current.currency?.identifier ?? "USD").precision(.fractionLength(0)))
+                    Text(cost, format: .currency(code: currencyCode).precision(.fractionLength(0)))
                         .font(.subheadline.weight(.semibold))
                 }
             }

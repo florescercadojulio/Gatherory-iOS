@@ -15,12 +15,13 @@ nonisolated struct SyncRetryPolicy: Sendable {
 protocol SyncOutboxStore: Sendable {
     func claimReadyMutations(
         scopeID: UUID,
+        ownerUserID: String?,
         limit: Int,
         at date: Date,
         leaseDuration: TimeInterval
     ) async throws -> [PendingMutationSnapshot]
 
-    func acknowledge(_ mutationIDs: Set<UUID>) async throws
+    func acknowledge(_ results: [SyncPushResult]) async throws
     func retry(
         _ mutationIDs: Set<UUID>,
         failureCode: String,
@@ -34,19 +35,22 @@ protocol SyncOutboxStore: Sendable {
 actor SwiftDataSyncStore: SyncOutboxStore {
     func claimReadyMutations(
         scopeID: UUID,
+        ownerUserID: String?,
         limit: Int = 50,
         at date: Date = .now,
         leaseDuration: TimeInterval = 60
     ) throws -> [PendingMutationSnapshot] {
-        var descriptor = FetchDescriptor<PendingMutation>(
+        let descriptor = FetchDescriptor<PendingMutation>(
+            predicate: #Predicate { mutation in
+                mutation.scopeID == scopeID
+            },
             sortBy: [SortDescriptor(\.createdAt)]
         )
-        descriptor.fetchLimit = max(limit * 4, limit)
 
         let candidates = try modelContext.fetch(descriptor)
         let ready = candidates
             .filter { mutation in
-                guard mutation.scopeID == scopeID else { return false }
+                guard mutation.ownerUserID == ownerUserID else { return false }
 
                 switch mutation.state {
                 case .pending:
@@ -56,6 +60,16 @@ actor SwiftDataSyncStore: SyncOutboxStore {
                 case .requiresAttention:
                     return false
                 }
+            }
+            .sorted { left, right in
+                // A new scope must exist before its independently synchronized
+                // children can be accepted by the server.
+                let leftPriority = syncDependencyPriority(for: left.entityType.rawValue)
+                let rightPriority = syncDependencyPriority(for: right.entityType.rawValue)
+                if leftPriority != rightPriority {
+                    return leftPriority < rightPriority
+                }
+                return left.createdAt < right.createdAt
             }
             .prefix(limit)
 
@@ -69,10 +83,21 @@ actor SwiftDataSyncStore: SyncOutboxStore {
         return ready.map(PendingMutationSnapshot.init)
     }
 
-    func acknowledge(_ mutationIDs: Set<UUID>) throws {
-        guard !mutationIDs.isEmpty else { return }
+    func acknowledge(_ results: [SyncPushResult]) throws {
+        guard !results.isEmpty else { return }
+        let resultsByID = Dictionary(uniqueKeysWithValues: results.map { ($0.mutationID, $0) })
         for mutation in try modelContext.fetch(FetchDescriptor<PendingMutation>())
-        where mutationIDs.contains(mutation.id) {
+        where resultsByID[mutation.id] != nil {
+            let scopeID = mutation.scopeID
+            if mutation.entityType == .workspace,
+               let serverVersion = resultsByID[mutation.id]?.serverVersion,
+               let record = try modelContext.fetch(
+                   FetchDescriptor<WorkspaceRecord>(
+                       predicate: #Predicate { $0.id == scopeID }
+                   )
+               ).first(where: { $0.ownerUserID == mutation.ownerUserID }) {
+                record.serverVersion = serverVersion
+            }
             modelContext.delete(mutation)
         }
         try modelContext.save()
@@ -108,5 +133,30 @@ actor SwiftDataSyncStore: SyncOutboxStore {
             mutation.lastFailureCode = failureCode
         }
         try modelContext.save()
+    }
+}
+
+/// Canonical records have foreign-key dependencies. This ordering makes a
+/// freshly repaired/offline workspace deterministic even though its local
+/// entity map is a dictionary.
+///
+/// Keep this outside the model actor: it is pure value logic and must remain
+/// usable while the actor sorts a collection.
+private nonisolated func syncDependencyPriority(for rawValue: String) -> Int {
+    // SyncEntityType is deliberately open-ended, so future entity names sort
+    // after the records whose dependencies we know today.
+    switch rawValue {
+    case "workspace":
+        0
+    case "participant":
+        1
+    case "event":
+        2
+    case "event_participation":
+        3
+    case "idea", "registry_item", "expense", "note", "moment", "attendance":
+        4
+    default:
+        5
     }
 }

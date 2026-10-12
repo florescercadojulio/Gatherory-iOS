@@ -11,6 +11,117 @@ import Testing
 
 struct GatheroryTests {
 
+    @Test("Music previews survive persistence and older tracks remain decodable")
+    @MainActor
+    func musicPreviewPersistenceIsBackwardCompatible() throws {
+        let previewURL = try #require(URL(string: "https://example.com/song-preview.m4a"))
+        let track = MusicTrack(
+            providerID: .appleMusic,
+            catalogID: "song-1",
+            title: "First Dance",
+            artistName: "The Band",
+            albumTitle: "Together",
+            artworkURL: URL(string: "https://example.com/artwork.jpg"),
+            previewURL: previewURL,
+            externalURL: URL(string: "https://music.apple.com/song-1"),
+            isrc: "TEST123",
+            duration: 180
+        )
+
+        let encoded = try JSONEncoder().encode(track)
+        let decoded = try JSONDecoder().decode(MusicTrack.self, from: encoded)
+        #expect(decoded.previewURL == previewURL)
+
+        let legacyTrack = LegacyMusicTrack(
+            providerID: .appleMusic,
+            catalogID: "legacy-song",
+            title: "Legacy Song",
+            artistName: "The Band",
+            albumTitle: nil,
+            artworkURL: nil,
+            externalURL: nil,
+            isrc: nil,
+            duration: nil
+        )
+        let legacyData = try JSONEncoder().encode(legacyTrack)
+        let migratedTrack = try JSONDecoder().decode(MusicTrack.self, from: legacyData)
+        #expect(migratedTrack.previewURL == nil)
+    }
+
+    @Test("A shared playlist uses its first song as the automatic cover source")
+    func musicPlaylistUsesFirstSongArtwork() throws {
+        let firstArtworkURL = try #require(URL(string: "https://example.com/first-song.jpg"))
+        let firstTrack = MusicTrack(
+            providerID: .appleMusic,
+            catalogID: "first-song",
+            title: "First Song",
+            artistName: "Artist One",
+            albumTitle: "Album One",
+            artworkURL: firstArtworkURL,
+            externalURL: nil,
+            isrc: nil,
+            duration: nil
+        )
+        let secondTrack = MusicTrack(
+            providerID: .appleMusic,
+            catalogID: "second-song",
+            title: "Second Song",
+            artistName: "Artist Two",
+            albumTitle: "Album Two",
+            artworkURL: URL(string: "https://example.com/second-song.jpg"),
+            externalURL: nil,
+            isrc: nil,
+            duration: nil
+        )
+        let playlist = WeddingIdea(
+            title: "Reception Playlist",
+            note: "",
+            category: .music,
+            submittedBy: "You",
+            configuration: .music(MusicIdeaConfiguration(tracks: [firstTrack, secondTrack]))
+        )
+
+        #expect(playlist.musicTrack?.artworkURL == firstArtworkURL)
+    }
+
+    @Test("Money entry groups large values while preserving their numeric value")
+    func moneyEntryFormatting() {
+        let locale = Locale(identifier: "en_US")
+
+        #expect(
+            MoneyInputFormatter.editingText(
+                from: "1234567",
+                allowsFraction: false,
+                locale: locale
+            ) == "1,234,567"
+        )
+        #expect(
+            MoneyInputFormatter.editingText(
+                from: "1234567.89",
+                locale: locale
+            ) == "1,234,567.89"
+        )
+        #expect(
+            MoneyInputFormatter.decimal(from: "1,234,567.89", locale: locale)
+                == Decimal(string: "1234567.89")
+        )
+    }
+
+    @Test("The active color theme covers every visual category")
+    func activeColorThemeIsComplete() {
+        #expect(!AppTheme.active.name.isEmpty)
+
+        for category in IdeaCategory.allCases {
+            #expect(category.artworkColors.count >= 3)
+        }
+        for category in RegistryCategory.allCases {
+            #expect(category.artworkColors.count >= 3)
+        }
+        for category in TimelineCategory.allCases {
+            #expect(category.artworkColors.count >= 3)
+        }
+    }
+
     @Test("The Decide primer waits until the Decide tab is active")
     func decidePrimerPresentationRequiresActiveTab() {
         #expect(
@@ -71,7 +182,8 @@ struct GatheroryTests {
     }
 
     @Test("Development authentication always includes the planner account")
-    func developmentAuthenticationIncludesPlanner() throws {
+    @MainActor
+    func developmentAuthenticationIncludesPlanner() async throws {
         let authentication = AuthenticationSession(
             environment: .development,
             skipsAuthentication: false
@@ -80,7 +192,7 @@ struct GatheroryTests {
         #expect(authentication.currentUser == nil)
         #expect(authentication.developmentAccounts == [DevelopmentAccountFixtures.planner])
 
-        try authentication.signIn(
+        try await authentication.signIn(
             email: "planner@gatherory.test",
             password: "password"
         )
@@ -89,6 +201,7 @@ struct GatheroryTests {
     }
 
     @Test("Development authentication can bypass the login view")
+    @MainActor
     func developmentAuthenticationCanSkipLogin() {
         let authentication = AuthenticationSession(
             environment: .development,
@@ -99,6 +212,7 @@ struct GatheroryTests {
     }
 
     @Test("Editing a profile updates the active account")
+    @MainActor
     func editingProfileUpdatesCurrentAccount() throws {
         let authentication = AuthenticationSession(
             environment: .development,
@@ -113,6 +227,7 @@ struct GatheroryTests {
     }
 
     @Test("Production never installs the simulated planner account")
+    @MainActor
     func productionDoesNotInstallDevelopmentAccount() {
         let authentication = AuthenticationSession(
             environment: .production,
@@ -1102,4 +1217,39 @@ struct GatheroryTests {
         #expect(!visibleIDs.contains(otherEventAttire.id))
     }
 
+    @Test("Link ideas normalize and persist website addresses")
+    func linkIdeasNormalizeAndPersistWebsiteAddresses() throws {
+        let normalizedURL = try #require(
+            LinkIdeaConfiguration.normalizedURL(from: "  gatherory.com/inspiration  ")
+        )
+        #expect(normalizedURL.absoluteString == "https://gatherory.com/inspiration")
+        #expect(LinkIdeaConfiguration.normalizedURL(from: "ftp://gatherory.com") == nil)
+
+        let idea = WeddingIdea(
+            title: "Venue inspiration",
+            note: "A useful reference for the ceremony look.",
+            category: .link,
+            submittedBy: "Julio",
+            configuration: .link(LinkIdeaConfiguration(url: normalizedURL))
+        )
+        let data = try JSONEncoder().encode(idea)
+        let restored = try JSONDecoder().decode(WeddingIdea.self, from: data)
+
+        #expect(restored.linkConfiguration?.url == normalizedURL)
+        #expect(restored.title == idea.title)
+        #expect(restored.note == idea.note)
+    }
+
+}
+
+private struct LegacyMusicTrack: Encodable {
+    let providerID: MusicProviderID
+    let catalogID: String
+    let title: String
+    let artistName: String
+    let albumTitle: String?
+    let artworkURL: URL?
+    let externalURL: URL?
+    let isrc: String?
+    let duration: TimeInterval?
 }

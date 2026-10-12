@@ -16,11 +16,22 @@ nonisolated struct SyncEntityType: RawRepresentable, Codable, Hashable, Sendable
     static let event = Self(rawValue: "event")
     static let idea = Self(rawValue: "idea")
     static let participant = Self(rawValue: "participant")
+    static let eventParticipation = Self(rawValue: "event_participation")
     static let attendance = Self(rawValue: "attendance")
     static let expense = Self(rawValue: "expense")
     static let registryItem = Self(rawValue: "registry_item")
     static let note = Self(rawValue: "note")
     static let moment = Self(rawValue: "moment")
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        rawValue = try container.decode(String.self)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 nonisolated enum SyncMutationOperation: String, Codable, Sendable {
@@ -37,8 +48,8 @@ nonisolated enum SyncMutationState: String, Codable, Sendable {
 
 /// One durable action that the server has not acknowledged yet.
 ///
-/// Domain repositories will eventually insert this model using the same
-/// `ModelContext` in which they change the corresponding domain record.
+/// The workspace persistence boundary inserts this model using the same
+/// `ModelContext` in which it changes the corresponding archive.
 @Model
 final class PendingMutation {
     @Attribute(.unique) var id: UUID
@@ -54,6 +65,7 @@ final class PendingMutation {
     var stateValue: String
     var leaseExpiresAt: Date?
     var lastFailureCode: String?
+    var ownerUserID: String?
 
     init(
         id: UUID = UUID(),
@@ -63,7 +75,8 @@ final class PendingMutation {
         operation: SyncMutationOperation,
         payload: Data,
         baseVersion: Int? = nil,
-        createdAt: Date = .now
+        createdAt: Date = .now,
+        ownerUserID: String? = nil
     ) {
         self.id = id
         self.scopeID = scopeID
@@ -75,6 +88,7 @@ final class PendingMutation {
         self.createdAt = createdAt
         self.attemptCount = 0
         self.stateValue = SyncMutationState.pending.rawValue
+        self.ownerUserID = ownerUserID
     }
 
     var entityType: SyncEntityType {
@@ -96,28 +110,40 @@ final class PendingMutation {
 /// The server cursor for one independently synchronized workspace.
 @Model
 final class SyncCheckpoint {
-    @Attribute(.unique) var scopeID: UUID
+    /// Scoped by both the account and workspace. Collaborators can share the
+    /// same remote scope while keeping independent local cursors.
+    var scopeID: UUID
     var cursor: String?
     var lastSuccessfulSyncAt: Date?
+    var ownerUserID: String?
 
-    init(scopeID: UUID, cursor: String? = nil, lastSuccessfulSyncAt: Date? = nil) {
+    init(
+        scopeID: UUID,
+        cursor: String? = nil,
+        lastSuccessfulSyncAt: Date? = nil,
+        ownerUserID: String? = nil
+    ) {
         self.scopeID = scopeID
         self.cursor = cursor
         self.lastSuccessfulSyncAt = lastSuccessfulSyncAt
+        self.ownerUserID = ownerUserID
     }
 }
 
 /// A bounded receipt used to make application of incoming envelopes idempotent.
 @Model
 final class AppliedSyncEnvelope {
-    @Attribute(.unique) var id: UUID
+    /// The same server change may be applied once for each local account.
+    var id: UUID
     var scopeID: UUID
     var appliedAt: Date
+    var ownerUserID: String?
 
-    init(id: UUID, scopeID: UUID, appliedAt: Date = .now) {
+    init(id: UUID, scopeID: UUID, appliedAt: Date = .now, ownerUserID: String? = nil) {
         self.id = id
         self.scopeID = scopeID
         self.appliedAt = appliedAt
+        self.ownerUserID = ownerUserID
     }
 }
 
@@ -141,6 +167,7 @@ final class PendingMediaTransfer {
     var nextAttemptAt: Date?
     var remoteAssetID: String?
     var createdAt: Date
+    var ownerUserID: String?
 
     init(
         id: UUID = UUID(),
@@ -148,7 +175,8 @@ final class PendingMediaTransfer {
         entityID: UUID,
         localFileURL: URL,
         contentType: String,
-        createdAt: Date = .now
+        createdAt: Date = .now,
+        ownerUserID: String? = nil
     ) {
         self.id = id
         self.scopeID = scopeID
@@ -158,12 +186,22 @@ final class PendingMediaTransfer {
         self.stateValue = MediaTransferState.pending.rawValue
         self.attemptCount = 0
         self.createdAt = createdAt
+        self.ownerUserID = ownerUserID
     }
 
     var state: MediaTransferState {
         get { MediaTransferState(rawValue: stateValue) ?? .pending }
         set { stateValue = newValue.rawValue }
     }
+}
+
+nonisolated struct PendingMediaTransferSnapshot: Sendable {
+    let id: UUID
+    let scopeID: UUID
+    let entityID: UUID
+    let localFileURL: URL
+    let contentType: String
+    let attemptCount: Int
 }
 
 nonisolated struct SyncMutationDraft: Sendable {
@@ -244,11 +282,20 @@ nonisolated struct PendingMutationSnapshot: Codable, Hashable, Sendable {
     }
 }
 
-/// Registers a mutation without saving the context. The future domain
-/// repository owns the save so its model update and outbox entry are atomic.
+/// Registers a mutation without saving the context. The persistence boundary
+/// owns the save so its model update and outbox entry are atomic.
 enum SyncOutbox {
     @discardableResult
     static func enqueue(_ draft: SyncMutationDraft, in context: ModelContext) -> PendingMutation {
+        enqueue(draft, ownerUserID: nil, in: context)
+    }
+
+    @discardableResult
+    static func enqueue(
+        _ draft: SyncMutationDraft,
+        ownerUserID: String?,
+        in context: ModelContext
+    ) -> PendingMutation {
         let mutation = PendingMutation(
             id: draft.id,
             scopeID: draft.scopeID,
@@ -257,7 +304,8 @@ enum SyncOutbox {
             operation: draft.operation,
             payload: draft.payload,
             baseVersion: draft.baseVersion,
-            createdAt: draft.createdAt
+            createdAt: draft.createdAt,
+            ownerUserID: ownerUserID
         )
         context.insert(mutation)
         return mutation
@@ -266,9 +314,10 @@ enum SyncOutbox {
 
 enum OfflineSyncSchema {
     static let schema = Schema([
+        WorkspaceRecord.self,
         PendingMutation.self,
         SyncCheckpoint.self,
         AppliedSyncEnvelope.self,
         PendingMediaTransfer.self
-    ])
+    ], version: .init(1, 0, 0))
 }

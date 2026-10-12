@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		FA0F24143077118000762213 /* Glur in Frameworks */ = {isa = PBXBuildFile; productRef = FA0F24133077118000762213 /* Glur */; };
 		FA0F24163077118000762213 /* GlurBackdrop in Frameworks */ = {isa = PBXBuildFile; productRef = FA0F24153077118000762213 /* GlurBackdrop */; };
+		FA0F24263077118000762213 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = FA0F24253077118000762213 /* GoogleSignIn */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +72,7 @@
 		FA0F23E53077114C00762213 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				FA0F24263077118000762213 /* GoogleSignIn in Frameworks */,
 				FA0F24163077118000762213 /* GlurBackdrop in Frameworks */,
 				FA0F24143077118000762213 /* Glur in Frameworks */,
 			);
@@ -138,6 +140,7 @@
 			packageProductDependencies = (
 				FA0F24133077118000762213 /* Glur */,
 				FA0F24153077118000762213 /* GlurBackdrop */,
+				FA0F24253077118000762213 /* GoogleSignIn */,
 			);
 			productName = Gatherory;
 			productReference = FA0F23E83077114C00762213 /* Gatherory.app */;
@@ -197,6 +200,14 @@
 				TargetAttributes = {
 					FA0F23E73077114C00762213 = {
 						CreatedOnToolsVersion = 27.0;
+						SystemCapabilities = {
+							com.apple.SignInWithApple = {
+								enabled = 1;
+							};
+							com.apple.WeatherKit = {
+								enabled = 1;
+							};
+						};
 					};
 					FA0F23F63077114D00762213 = {
 						CreatedOnToolsVersion = 27.0;
@@ -219,6 +230,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				FA0F24123077118000762213 /* XCRemoteSwiftPackageReference "Glur" */,
+				FA0F24243077118000762213 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FA0F23E93077114C00762213 /* Products */;
@@ -615,6 +627,14 @@
 				minimumVersion = 2.0.0;
 			};
 		};
+		FA0F24243077118000762213 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -627,6 +647,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FA0F24123077118000762213 /* XCRemoteSwiftPackageReference "Glur" */;
 			productName = GlurBackdrop;
+		};
+		FA0F24253077118000762213 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FA0F24243077118000762213 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

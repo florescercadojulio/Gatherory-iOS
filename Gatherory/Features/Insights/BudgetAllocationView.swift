@@ -14,7 +14,7 @@ struct BudgetAllocationView: View {
     @State private var didInitialize = false
 
     private var currencyCode: String {
-        Locale.current.currency?.identifier ?? "USD"
+        workspace.currencyCode
     }
 
     private var currentAllocation: Decimal {
@@ -26,11 +26,8 @@ struct BudgetAllocationView: View {
     }
 
     private var parsedAllocation: Decimal? {
-        let decimalSeparator = Locale.current.decimalSeparator ?? "."
-        let normalized = proposedAllocation
-            .replacingOccurrences(of: decimalSeparator, with: ".")
-            .replacingOccurrences(of: ",", with: "")
-        guard let amount = Decimal(string: normalized), amount >= .zero else { return nil }
+        guard let amount = MoneyInputFormatter.decimal(from: proposedAllocation),
+              amount >= .zero else { return nil }
         return amount
     }
 
@@ -69,6 +66,7 @@ struct BudgetAllocationView: View {
             Section("Event") {
                 targetRow
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
             Section {
                 LabeledContent("Current Allocation") {
@@ -80,15 +78,12 @@ struct BudgetAllocationView: View {
                     .monospacedDigit()
                 }
 
-                LabeledContent("New Allocation") {
-                    TextField("Amount", text: $proposedAllocation)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .fontWeight(.semibold)
-                        .monospacedDigit()
-                        .frame(minWidth: 110)
-                        .accessibilityLabel("New allocation")
-                }
+                MoneyAmountField(
+                    amount: $proposedAllocation,
+                    title: "New Allocation",
+                    placeholder: "Amount",
+                    currencyCode: workspace.currencyCode
+                )
 
                 changeSummary
             } header: {
@@ -96,6 +91,7 @@ struct BudgetAllocationView: View {
             } footer: {
                 Text("Enter the total budget this event should have. Gatherory handles the transfer.")
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
             if change.needsAccount {
                 Section {
@@ -107,13 +103,15 @@ struct BudgetAllocationView: View {
                 } footer: {
                     Text(accountSectionHelp)
                 }
+                .listRowBackground(AppTheme.ColorToken.surface)
             }
 
             if let feedbackMessage {
                 Section {
                     Label(feedbackMessage, systemImage: "exclamationmark.circle")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(AppTheme.ColorToken.destructive)
                 }
+                .listRowBackground(AppTheme.ColorToken.surface)
             }
         }
         .appKeyboardDismissal()
@@ -135,7 +133,7 @@ struct BudgetAllocationView: View {
         }
         .task {
             guard !didInitialize else { return }
-            proposedAllocation = NSDecimalNumber(decimal: currentAllocation).stringValue
+            proposedAllocation = MoneyInputFormatter.editingText(from: currentAllocation)
             didInitialize = true
         }
         .onChange(of: proposedAllocation) { _, _ in
@@ -191,7 +189,7 @@ struct BudgetAllocationView: View {
                         systemImage: "exclamationmark.triangle.fill"
                     )
                     .font(.footnote)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppTheme.ColorToken.warning)
                 }
             }
 
@@ -201,7 +199,7 @@ struct BudgetAllocationView: View {
 
         case .invalid:
             Label("Enter a valid amount", systemImage: "exclamationmark.circle")
-                .foregroundStyle(.red)
+                .foregroundStyle(AppTheme.ColorToken.destructive)
         }
     }
 

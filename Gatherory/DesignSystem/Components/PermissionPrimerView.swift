@@ -28,7 +28,7 @@ struct PermissionPrimerView: View {
                     PermissionPrimerArtwork(kind: artwork)
                         .frame(maxWidth: .infinity)
                         .frame(height: artworkHeight(for: proxy.size.height))
-                        .background(Color.black)
+                        .background(AppTheme.ColorToken.inverseCanvas)
 
                     VStack(spacing: AppTheme.Spacing.section) {
                         VStack(spacing: AppTheme.Spacing.standard) {
@@ -88,7 +88,7 @@ struct PermissionPrimerView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(AppTheme.ColorToken.inverseCanvas.ignoresSafeArea())
         .tint(AppTheme.ColorToken.accent)
     }
 
@@ -114,7 +114,7 @@ private struct PermissionPrimerArtwork: View {
         GeometryReader { proxy in
             ZStack {
                 RadialGradient(
-                    colors: [accent.opacity(0.32), Color.black.opacity(0.96)],
+                    colors: [accent.opacity(0.32), AppTheme.ColorToken.mediaScrim.opacity(0.96)],
                     center: .center,
                     startRadius: 12,
                     endRadius: max(proxy.size.width, proxy.size.height) * 0.7
@@ -133,8 +133,8 @@ private struct PermissionPrimerArtwork: View {
     private var accent: Color {
         switch kind {
         case .notifications: AppTheme.ColorToken.accent
-        case .location: .green
-        case .music: .purple
+        case .location: AppTheme.ColorToken.success
+        case .music: AppTheme.ColorToken.accentSecondary
         case .contacts: AppTheme.ColorToken.accent
         }
     }
@@ -143,10 +143,10 @@ private struct PermissionPrimerArtwork: View {
     private var devicePreview: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 40, style: .continuous)
-                .fill(Color.white.opacity(0.09))
+                .fill(AppTheme.ColorToken.onMedia.opacity(0.09))
                 .overlay {
                     RoundedRectangle(cornerRadius: 40, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(AppTheme.ColorToken.onMedia.opacity(0.12), lineWidth: 1)
                 }
 
             switch kind {
@@ -163,7 +163,7 @@ private struct PermissionPrimerArtwork: View {
             VStack {
                 Spacer()
                 Capsule()
-                    .fill(Color.white.opacity(0.62))
+                    .fill(AppTheme.ColorToken.onMedia.opacity(0.62))
                     .frame(width: 88, height: 5)
                     .padding(.bottom, 14)
             }
@@ -180,12 +180,12 @@ private struct PermissionPrimerArtwork: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 48, height: 48)
-                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(AppTheme.ColorToken.onMedia.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 7) {
-                    Capsule().fill(Color.white.opacity(0.46)).frame(width: 92, height: 9)
-                    Capsule().fill(Color.white.opacity(0.28)).frame(maxWidth: .infinity).frame(height: 8)
-                    Capsule().fill(Color.white.opacity(0.28)).frame(width: 136, height: 8)
+                    Capsule().fill(AppTheme.ColorToken.onMedia.opacity(0.46)).frame(width: 92, height: 9)
+                    Capsule().fill(AppTheme.ColorToken.onMedia.opacity(0.28)).frame(maxWidth: .infinity).frame(height: 8)
+                    Capsule().fill(AppTheme.ColorToken.onMedia.opacity(0.28)).frame(width: 136, height: 8)
                 }
             }
             .padding(16)
@@ -194,14 +194,14 @@ private struct PermissionPrimerArtwork: View {
 
             HStack {
                 Circle()
-                    .fill(Color.white.opacity(0.1))
+                    .fill(AppTheme.ColorToken.onMedia.opacity(0.1))
                     .frame(width: 52, height: 52)
-                    .overlay(Image(systemName: "flashlight.off.fill").foregroundStyle(.white.opacity(0.62)))
+                    .overlay(Image(systemName: "flashlight.off.fill").foregroundStyle(AppTheme.ColorToken.onMedia.opacity(0.62)))
                 Spacer()
                 Circle()
-                    .fill(Color.white.opacity(0.1))
+                    .fill(AppTheme.ColorToken.onMedia.opacity(0.1))
                     .frame(width: 52, height: 52)
-                    .overlay(Image(systemName: "camera.fill").foregroundStyle(.white.opacity(0.62)))
+                    .overlay(Image(systemName: "camera.fill").foregroundStyle(AppTheme.ColorToken.onMedia.opacity(0.62)))
             }
             .padding(.horizontal, 34)
 
@@ -212,7 +212,7 @@ private struct PermissionPrimerArtwork: View {
     private var locationArtwork: some View {
         ZStack {
             Canvas { context, size in
-                let lineColor = Color.white.opacity(0.13)
+                let lineColor = AppTheme.ColorToken.onMedia.opacity(0.13)
                 for index in 1..<5 {
                     let x = size.width * CGFloat(index) / 5
                     var vertical = Path()
@@ -231,20 +231,20 @@ private struct PermissionPrimerArtwork: View {
             .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
 
             Circle()
-                .fill(.green.opacity(0.18))
+                .fill(AppTheme.ColorToken.success.opacity(0.18))
                 .frame(width: 150, height: 150)
 
             Image(systemName: "mappin.circle.fill")
                 .font(.system(size: 78, weight: .semibold))
                 .symbolRenderingMode(.palette)
-                .foregroundStyle(.white, .green)
-                .shadow(color: .black.opacity(0.24), radius: 10, y: 8)
+                .foregroundStyle(AppTheme.ColorToken.onMedia, AppTheme.ColorToken.success)
+                .shadow(color: AppTheme.ColorToken.mediaScrim.opacity(0.24), radius: 10, y: 8)
 
             VStack {
                 Spacer()
                 Label("Event location", systemImage: "location.fill")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppTheme.ColorToken.onMedia)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
                     .background(.ultraThinMaterial, in: Capsule())
@@ -261,7 +261,7 @@ private struct PermissionPrimerArtwork: View {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [.purple, AppTheme.ColorToken.accent],
+                            colors: [AppTheme.ColorToken.accentSecondary, AppTheme.ColorToken.accent],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -270,14 +270,14 @@ private struct PermissionPrimerArtwork: View {
 
                 Image(systemName: "music.note")
                     .font(.system(size: 66, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppTheme.ColorToken.onMedia)
             }
-            .shadow(color: .purple.opacity(0.35), radius: 24, y: 12)
+            .shadow(color: AppTheme.ColorToken.accentSecondary.opacity(0.35), radius: 24, y: 12)
 
             HStack(alignment: .center, spacing: 5) {
                 ForEach([16, 30, 46, 26, 54, 38, 22, 42, 18], id: \.self) { height in
                     Capsule()
-                        .fill(Color.white.opacity(0.62))
+                        .fill(AppTheme.ColorToken.onMedia.opacity(0.62))
                         .frame(width: 5, height: CGFloat(height))
                 }
             }
@@ -294,25 +294,25 @@ private struct PermissionPrimerArtwork: View {
                 Image(systemName: "person.2.circle.fill")
                     .font(.system(size: 92, weight: .medium))
                     .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, AppTheme.ColorToken.accent)
+                    .foregroundStyle(AppTheme.ColorToken.onMedia, AppTheme.ColorToken.accent)
 
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 34, weight: .semibold))
                     .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, AppTheme.ColorToken.accent)
-                    .background(Color.black, in: Circle())
+                    .foregroundStyle(AppTheme.ColorToken.onMedia, AppTheme.ColorToken.accent)
+                    .background(AppTheme.ColorToken.inverseCanvas, in: Circle())
                     .offset(x: 4, y: 2)
             }
 
             VStack(spacing: 0) {
                 contactRow(initials: "AJ", width: 126)
-                Divider().overlay(Color.white.opacity(0.12))
+                Divider().overlay(AppTheme.ColorToken.onMedia.opacity(0.12))
                 contactRow(initials: "M", width: 154)
-                Divider().overlay(Color.white.opacity(0.12))
+                Divider().overlay(AppTheme.ColorToken.onMedia.opacity(0.12))
                 contactRow(initials: "SK", width: 108)
             }
             .padding(.horizontal, 18)
-            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(AppTheme.ColorToken.onMedia.opacity(0.07), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .padding(.horizontal, 22)
 
             Spacer(minLength: 26)
@@ -323,16 +323,16 @@ private struct PermissionPrimerArtwork: View {
         HStack(spacing: 12) {
             Text(initials)
                 .font(.caption.bold())
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.ColorToken.onMedia)
                 .frame(width: 38, height: 38)
                 .background(AppTheme.ColorToken.accent.opacity(0.82), in: Circle())
 
             VStack(alignment: .leading, spacing: 6) {
                 Capsule()
-                    .fill(Color.white.opacity(0.52))
+                    .fill(AppTheme.ColorToken.onMedia.opacity(0.52))
                     .frame(width: width, height: 8)
                 Capsule()
-                    .fill(Color.white.opacity(0.22))
+                    .fill(AppTheme.ColorToken.onMedia.opacity(0.22))
                     .frame(width: width * 0.68, height: 7)
             }
 

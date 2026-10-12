@@ -4,16 +4,35 @@
 <dict>
 	<key>APP_ENVIRONMENT</key>
 	<string>$(APP_ENVIRONMENT)</string>
+	<key>AUTH_BASE_URL</key>
+	<string>$(AUTH_BASE_URL)</string>
 	<key>FORCE_ONBOARDING</key>
 	<string>$(FORCE_ONBOARDING)</string>
+	<key>GIDClientID</key>
+	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
+	<key>GIDServerClientID</key>
+	<string>$(GOOGLE_SERVER_CLIENT_ID)</string>
 	<key>SEED_DEVELOPMENT_DATA</key>
 	<string>$(SEED_DEVELOPMENT_DATA)</string>
+	<key>SIMULATE_PRODUCTION_FLOW</key>
+	<string>$(SIMULATE_PRODUCTION_FLOW)</string>
 	<key>SKIP_AUTH_LOGIN</key>
 	<string>$(SKIP_AUTH_LOGIN)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>Gatherory</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(GOOGLE_IOS_REVERSED_CLIENT_ID)</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -40,6 +59,13 @@
 	<string>Take photos for ideas, gifts, and events you're planning.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Use your current location to set where an event takes place.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to your local Gatherory development server while testing the app.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

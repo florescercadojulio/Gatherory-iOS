@@ -1,4 +1,5 @@
 import MapKit
+import MusicKit
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -7,12 +8,16 @@ import UIKit
 /// Only the root event can expose a child schedule; subevents and ideas are leaves.
 struct EventInvitationScreen: View {
     @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(MusicPreviewPlayer.self) private var previewPlayer
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var scrollOffset: CGFloat = 0
     @State private var selectedChild: TimelineItem?
     @State private var selectedMomentPhotos: [PhotosPickerItem] = []
+    @State private var isPickingMusic = false
+    @State private var playlistReceivingSongsID: UUID?
+    @State private var pickedSongs: [Song] = []
     @State private var weather = EventWeatherModel()
     @Namespace private var childTransition
 
@@ -23,11 +28,11 @@ struct EventInvitationScreen: View {
         case .main:
             let hosts = workspace.members
                 .filter { $0.participantRole == .host }
-                .map(\.name)
+                .map { EventPersonPresentation($0) }
 
             return EventPresentation(
                 title: workspace.title,
-                eyebrow: "Together with their families",
+                eyebrow: nil,
                 categoryTitle: "Main Event",
                 categorySymbol: "heart.fill",
                 startsAt: workspace.weddingDate,
@@ -43,7 +48,9 @@ struct EventInvitationScreen: View {
                 statusTitle: workspace.currentMainEventStatus.title,
                 statusSymbol: workspace.currentMainEventStatus.symbol,
                 peopleLabel: "Hosted By",
-                people: hosts.isEmpty ? ["Your hosts"] : hosts,
+                people: hosts.isEmpty
+                    ? [EventPersonPresentation(name: "Your hosts", id: "main-hosts")]
+                    : hosts,
                 response: workspace.mainEventResponse,
                 permitsResponse: !workspace.currentMainEventStatus.isReadOnly,
                 note: workspace.eventMessage,
@@ -63,7 +70,7 @@ struct EventInvitationScreen: View {
                         ? $0.participantRole == .host
                         : $0.participantRole != .guest
                 }
-                .map(\.name)
+                .map { EventPersonPresentation($0) }
 
             return EventPresentation(
                 title: item.title,
@@ -84,7 +91,12 @@ struct EventInvitationScreen: View {
                 statusSymbol: item.status.symbol,
                 peopleLabel: item.purpose == .eventExperience ? "Hosted By" : "Planning Team",
                 people: participants.isEmpty
-                    ? [item.purpose == .eventExperience ? "Your hosts" : "Planning team"]
+                    ? [
+                        EventPersonPresentation(
+                            name: item.purpose == .eventExperience ? "Your hosts" : "Planning team",
+                            id: "\(item.id.uuidString)-participants"
+                        )
+                    ]
                     : participants,
                 response: item.response,
                 permitsResponse: item.status != .archived,
@@ -117,7 +129,12 @@ struct EventInvitationScreen: View {
                 statusTitle: idea.status.title,
                 statusSymbol: idea.status.symbol,
                 peopleLabel: "Proposed By",
-                people: [idea.submittedBy],
+                people: [
+                    EventPersonPresentation(
+                        name: idea.submittedBy,
+                        id: "\(idea.id.uuidString)-submitter"
+                    )
+                ],
                 response: nil,
                 permitsResponse: false,
                 note: idea.note,
@@ -195,6 +212,17 @@ struct EventInvitationScreen: View {
                 selectedMomentPhotos = []
             }
         }
+        .musicPicker(
+            isPresented: $isPickingMusic,
+            title: Text("Add to Event Playlist"),
+            selection: $pickedSongs
+        )
+        .onChange(of: pickedSongs) { _, songs in
+            appendPickedSongs(songs)
+        }
+        .onDisappear {
+            previewPlayer.stop()
+        }
     }
 
     private var blurProgress: CGFloat {
@@ -206,19 +234,15 @@ struct EventInvitationScreen: View {
             Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 150 : 260)
 
             VStack(spacing: AppTheme.Spacing.standard) {
-                Text(event.eyebrow)
-                    .font(.subheadline.weight(.medium))
+                if let eyebrow = event.eyebrow, !eyebrow.isEmpty {
+                    Text(eyebrow)
+                        .font(.subheadline.weight(.medium))
+                }
 
                 Text(event.title)
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-
-                if reference == .main {
-                    Text("invite you to celebrate with them")
-                        .font(.body)
-                        .multilineTextAlignment(.center)
-                }
 
                 VStack(spacing: 6) {
                     if let startsAt = event.startsAt {
@@ -316,9 +340,9 @@ struct EventInvitationScreen: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.68))
 
-                EventPeopleBubbles(names: event.people)
+                EventPeopleBubbles(people: event.people)
 
-                Text(event.people.formatted())
+                Text(event.people.map(\.name).formatted())
                     .font(.title3.weight(.semibold))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -412,43 +436,109 @@ struct EventInvitationScreen: View {
         EventInvitationSection(title: group.category.title, symbol: group.category.symbol) {
             VStack(spacing: AppTheme.Spacing.compact) {
                 ForEach(group.ideas) { idea in
-                    HStack(alignment: .center, spacing: AppTheme.Spacing.compact) {
-                        if let imageData = idea.imageData, let image = UIImage(data: imageData) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 58, height: 58)
-                                .clipShape(RoundedRectangle(
-                                    cornerRadius: AppTheme.Radius.control,
-                                    style: .continuous
-                                ))
-                                .accessibilityHidden(true)
-                        } else {
-                            Image(systemName: group.category.symbol)
-                                .symbolRenderingMode(.hierarchical)
-                                .font(.title2)
-                                .foregroundStyle(.white.opacity(0.82))
-                                .frame(width: 58, height: 58)
-                                .background(.white.opacity(0.10), in: RoundedRectangle(
-                                    cornerRadius: AppTheme.Radius.control,
-                                    style: .continuous
-                                ))
-                                .accessibilityHidden(true)
-                        }
-
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(idea.title)
-                                .font(.headline)
-
-                            if let detail = invitationDetail(for: idea) {
-                                Text(detail)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.white.opacity(0.72))
-                                    .lineLimit(3)
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                        HStack(alignment: .center, spacing: AppTheme.Spacing.compact) {
+                            if let imageData = idea.imageData, let image = UIImage(data: imageData) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 58, height: 58)
+                                    .clipShape(RoundedRectangle(
+                                        cornerRadius: AppTheme.Radius.control,
+                                        style: .continuous
+                                    ))
+                                    .accessibilityHidden(true)
+                            } else if let track = idea.musicTrack {
+                                MusicTrackArtwork(track: track)
+                                    .frame(width: 58, height: 58)
+                                    .clipShape(RoundedRectangle(
+                                        cornerRadius: AppTheme.Radius.control,
+                                        style: .continuous
+                                    ))
+                                    .accessibilityHidden(true)
+                            } else {
+                                Image(systemName: group.category.symbol)
+                                    .symbolRenderingMode(.hierarchical)
+                                    .font(.title2)
+                                    .foregroundStyle(.white.opacity(0.82))
+                                    .frame(width: 58, height: 58)
+                                    .background(.white.opacity(0.10), in: RoundedRectangle(
+                                        cornerRadius: AppTheme.Radius.control,
+                                        style: .continuous
+                                    ))
+                                    .accessibilityHidden(true)
                             }
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(idea.title)
+                                    .font(.headline)
+
+                                if let detail = invitationDetail(for: idea) {
+                                    Text(detail)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white.opacity(0.72))
+                                        .lineLimit(3)
+                                }
+                            }
+
+                            Spacer(minLength: 0)
                         }
 
-                        Spacer(minLength: 0)
+                        if case .music(let configuration) = idea.configuration {
+                            ForEach(Array(configuration.tracks.prefix(3))) { track in
+                                Divider()
+                                    .overlay(.white.opacity(0.12))
+
+                                HStack(spacing: AppTheme.Spacing.compact) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(track.title)
+                                            .font(.subheadline.weight(.semibold))
+                                            .lineLimit(1)
+
+                                        Text(track.artistName)
+                                            .font(.caption)
+                                            .foregroundStyle(.white.opacity(0.68))
+                                            .lineLimit(1)
+                                    }
+
+                                    Spacer(minLength: AppTheme.Spacing.compact)
+
+                                    if track.previewURL != nil {
+                                        MusicPreviewButton(track: track, tint: .white)
+                                    }
+
+                                    if let externalURL = track.externalURL {
+                                        Link(destination: externalURL) {
+                                            Image(systemName: "arrow.up.forward")
+                                                .font(.caption.weight(.semibold))
+                                                .frame(
+                                                    width: AppTheme.Layout.minimumTouchTarget,
+                                                    height: AppTheme.Layout.minimumTouchTarget
+                                                )
+                                                .contentShape(Rectangle())
+                                        }
+                                        .accessibilityLabel(
+                                            "Open \(track.title) in \(track.providerID.displayName)"
+                                        )
+                                    }
+                                }
+                            }
+
+                            Divider()
+                                .overlay(.white.opacity(0.12))
+
+                            Button {
+                                playlistReceivingSongsID = idea.id
+                                isPickingMusic = true
+                            } label: {
+                                Label("Add Songs", systemImage: "music.note.badge.plus")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.white.opacity(0.18))
+                        }
                     }
                     .padding(AppTheme.Spacing.compact)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -456,10 +546,29 @@ struct EventInvitationScreen: View {
                         cornerRadius: AppTheme.Radius.control,
                         style: .continuous
                     ))
-                    .accessibilityElement(children: .combine)
                 }
             }
         }
+    }
+
+    private func appendPickedSongs(_ songs: [Song]) {
+        guard !songs.isEmpty,
+              let playlistReceivingSongsID,
+              var playlist = workspace.ideas.first(where: { $0.id == playlistReceivingSongsID }) else {
+            pickedSongs.removeAll()
+            return
+        }
+
+        var tracks = playlist.musicTracks
+        for song in songs {
+            let track = MusicTrack(appleMusicSong: song)
+            guard !tracks.contains(where: { $0.id == track.id }) else { continue }
+            tracks.append(track)
+        }
+        playlist.configuration = .music(MusicIdeaConfiguration(tracks: tracks))
+        workspace.updateIdea(playlist)
+        pickedSongs.removeAll()
+        self.playlistReceivingSongsID = nil
     }
 
     private func attireOptions(for event: EventPresentation) -> [InvitationAttireOption] {
@@ -507,7 +616,7 @@ struct EventInvitationScreen: View {
     private func invitationDetail(for idea: WeddingIdea) -> String? {
         var details: [String] = []
         switch idea.configuration {
-        case .standard:
+        case .standard, .link:
             break
         case .attire:
             break
@@ -533,7 +642,9 @@ struct EventInvitationScreen: View {
             details.append(configuration.style.title)
             details.append(configuration.destination)
         case .music(let configuration):
-            details.append(contentsOf: configuration.tracks.prefix(3).map(\.title))
+            if configuration.tracks.count > 3 {
+                details.append("\(configuration.tracks.count) songs")
+            }
         case .event, .registry:
             break
         }
@@ -685,9 +796,27 @@ struct EventInvitationScreen: View {
     }
 }
 
+private struct EventPersonPresentation: Identifiable {
+    let id: String
+    let name: String
+    let member: WeddingMember?
+
+    init(_ member: WeddingMember) {
+        id = member.id.uuidString
+        name = member.name
+        self.member = member
+    }
+
+    init(name: String, id: String) {
+        self.id = id
+        self.name = name
+        member = nil
+    }
+}
+
 private struct EventPresentation {
     let title: String
-    let eyebrow: String
+    let eyebrow: String?
     let categoryTitle: String
     let categorySymbol: String
     let startsAt: Date?
@@ -703,7 +832,7 @@ private struct EventPresentation {
     let statusTitle: String
     let statusSymbol: String
     let peopleLabel: String
-    let people: [String]
+    let people: [EventPersonPresentation]
     let response: EventResponse?
     let permitsResponse: Bool
     let note: String
@@ -821,22 +950,26 @@ private struct EventInvitationFeatureCard<Content: View>: View {
 }
 
 private struct EventPeopleBubbles: View {
-    let names: [String]
+    let people: [EventPersonPresentation]
 
     var body: some View {
         HStack(spacing: -10) {
-            ForEach(Array(names.prefix(5).enumerated()), id: \.offset) { index, name in
-                Text(initials(for: name))
-                    .font(.caption.bold())
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(bubbleColor(at: index), in: Circle())
-                    .overlay(Circle().stroke(.white.opacity(0.72), lineWidth: 2))
-                    .accessibilityHidden(true)
+            ForEach(Array(people.prefix(5).enumerated()), id: \.element.id) { index, person in
+                if let member = person.member {
+                    ParticipantAvatarView(member: member, size: 42, style: .hero)
+                } else {
+                    Text(initials(for: person.name))
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(bubbleColor(at: index), in: Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.72), lineWidth: 2))
+                        .accessibilityHidden(true)
+                }
             }
 
-            if names.count > 5 {
-                Text("+\(names.count - 5)")
+            if people.count > 5 {
+                Text("+\(people.count - 5)")
                     .font(.caption.bold())
                     .foregroundStyle(.white)
                     .frame(width: 42, height: 42)
@@ -856,8 +989,7 @@ private struct EventPeopleBubbles: View {
     }
 
     private func bubbleColor(at index: Int) -> Color {
-        let palette: [Color] = [.blue, .indigo, .teal, .purple, .cyan]
-        return palette[index % palette.count].opacity(0.88)
+        AppTheme.ColorToken.avatar(index).opacity(0.88)
     }
 }
 

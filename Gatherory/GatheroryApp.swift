@@ -5,22 +5,95 @@
 //  Created by Julio C on 10/7/26.
 //
 
+import GoogleSignIn
 import SwiftUI
+import SwiftData
 
 @main
+@MainActor
 struct GatheroryApp: App {
-    @State private var authentication = AuthenticationSession.bootstrap()
-    @State private var workspaceLibrary = WorkspaceLibrary.bootstrap()
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var authentication: AuthenticationSession
+    @State private var workspaceLibrary: WorkspaceLibrary
+    @State private var cloudSync: WorkspaceCloudSyncController
     @State private var musicCatalog = MusicCatalog()
+    @State private var musicPreviewPlayer = MusicPreviewPlayer()
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
+    @AppStorage(AppColorThemeChoice.storageKey) private var colorTheme = AppColorThemeChoice.gatheroryBlue.rawValue
+
+    private let persistence: WorkspacePersistenceController
+
+    init() {
+        let authentication = AuthenticationSession.bootstrap()
+        let persistence = WorkspacePersistenceController.bootstrap()
+        let library = persistence.restoreLibrary(
+            seedData: AppRuntimeConfiguration.seedsDevelopmentData,
+            ownerUserID: authentication.currentUser?.id
+        )
+
+        _authentication = State(initialValue: authentication)
+        self.persistence = persistence
+        _workspaceLibrary = State(initialValue: library)
+        _cloudSync = State(
+            initialValue: WorkspaceCloudSyncController(
+                persistence: persistence,
+                library: library,
+                baseURL: AppRuntimeConfiguration.authenticationBaseURL
+            )
+        )
+    }
+
+    private var selectedColorTheme: AppColorThemeChoice {
+        AppColorThemeChoice(rawValue: colorTheme) ?? .gatheroryBlue
+    }
 
     var body: some Scene {
         WindowGroup {
-            GatheroryLaunchContainer()
-                .environment(authentication)
-                .environment(workspaceLibrary)
-                .environment(musicCatalog)
-                .appUserAppearance(AppAppearance(rawValue: appearance) ?? .system)
+            Group {
+                if persistence.lastError == nil {
+                    GatheroryLaunchContainer()
+                } else {
+                    LocalDataStoreFailureView()
+                }
+            }
+            .environment(authentication)
+            .environment(\.currentUserAccount, authentication.currentUser)
+            .environment(workspaceLibrary)
+            .environment(musicCatalog)
+            .environment(musicPreviewPlayer)
+            .environment(persistence)
+            .environment(cloudSync)
+            .appUserAppearance(AppAppearance(rawValue: appearance) ?? .system)
+            .appColorTheme(selectedColorTheme)
+            .modelContainer(persistence.container)
+            .task {
+                persistence.startObserving(workspaceLibrary)
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    cloudSync.schedule(trigger: .appBecameActive)
+                } else {
+                    musicPreviewPlayer.pause()
+                    persistence.flush(workspaceLibrary)
+                }
+            }
+            .onOpenURL { url in
+                GIDSignIn.sharedInstance.handle(url)
+            }
         }
+    }
+}
+
+private struct LocalDataStoreFailureView: View {
+    var body: some View {
+        ContentUnavailableView {
+            Label("Local Data Unavailable", systemImage: "externaldrive.badge.exclamationmark")
+        } description: {
+            Text(
+                "Gatherory couldn’t safely open its local data. Your existing data hasn’t been replaced. Close and reopen the app. If this continues, contact support."
+            )
+        }
+        .padding()
+        .accessibilityElement(children: .combine)
     }
 }

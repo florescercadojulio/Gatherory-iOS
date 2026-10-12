@@ -177,6 +177,7 @@ struct NewWorkspaceView: View {
     }
 
     @Environment(WorkspaceLibrary.self) private var library
+    @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.dismiss) private var dismiss
     var onWorkspaceCreated: ((WeddingWorkspace) -> Void)?
     @State private var title = ""
@@ -201,11 +202,7 @@ struct NewWorkspaceView: View {
 
     private var parsedBudget: Decimal? {
         guard !budgetAmount.isEmpty else { return nil }
-        let decimalSeparator = Locale.current.decimalSeparator ?? "."
-        let normalized = budgetAmount
-            .replacingOccurrences(of: decimalSeparator, with: ".")
-            .replacingOccurrences(of: ",", with: "")
-        return Decimal(string: normalized)
+        return MoneyInputFormatter.decimal(from: budgetAmount)
     }
 
     private var budgetIsValid: Bool {
@@ -273,8 +270,11 @@ struct NewWorkspaceView: View {
             .listRowBackground(AppTheme.ColorToken.surface)
 
             Section {
-                TextField("Budget cap", text: $budgetAmount)
-                    .keyboardType(.decimalPad)
+                MoneyAmountField(
+                    amount: $budgetAmount,
+                    title: "Budget Cap",
+                    placeholder: "Optional"
+                )
                     .focused($focusedField, equals: .budget)
             } header: {
                 Text("Budget (Optional)")
@@ -316,7 +316,8 @@ struct NewWorkspaceView: View {
                         timeZoneIdentifier: timeZoneIdentifier,
                         eventLocation: eventLocation,
                         imageData: imageData,
-                        budgetCap: parsedBudget
+                        budgetCap: parsedBudget,
+                        owner: authentication.currentUser
                     )
 
                     if let onWorkspaceCreated {

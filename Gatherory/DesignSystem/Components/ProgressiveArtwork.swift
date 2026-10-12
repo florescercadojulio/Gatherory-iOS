@@ -53,7 +53,11 @@ struct ProgressiveArtwork: View {
                 )
 
                 LinearGradient(
-                    colors: [.white.opacity(0.22), .clear, .black.opacity(0.18)],
+                    colors: [
+                        AppTheme.ColorToken.onMedia.opacity(0.22),
+                        .clear,
+                        AppTheme.ColorToken.mediaScrim.opacity(0.18)
+                    ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -67,7 +71,7 @@ struct ProgressiveArtwork: View {
                     )
 
                 Ellipse()
-                    .fill(.white.opacity(reduceTransparency ? 0 : 0.14))
+                    .fill(AppTheme.ColorToken.onMedia.opacity(reduceTransparency ? 0 : 0.14))
                     .frame(width: proxy.size.width * 0.72, height: proxy.size.height * 0.16)
                     .blur(radius: ambientBlurRadius * 0.34)
                     .rotationEffect(.degrees(-12 + Double(signature % 18)))
@@ -114,7 +118,7 @@ struct ProgressiveArtwork: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [.white.opacity(0.22), .clear],
+                        colors: [AppTheme.ColorToken.onMedia.opacity(0.22), .clear],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -123,15 +127,15 @@ struct ProgressiveArtwork: View {
             Image(systemName: symbol)
                 .font(.system(size: diameter * 0.43, weight: .semibold))
                 .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.16), radius: 10, y: 6)
+                .foregroundStyle(AppTheme.ColorToken.onMedia)
+                .shadow(color: AppTheme.ColorToken.mediaScrim.opacity(0.16), radius: 10, y: 6)
         }
         .frame(width: diameter, height: diameter)
         .overlay {
             Circle()
-                .stroke(.white.opacity(0.30), lineWidth: 1)
+                .stroke(AppTheme.ColorToken.onMedia.opacity(0.30), lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.20), radius: 24, y: 16)
+        .shadow(color: AppTheme.ColorToken.mediaScrim.opacity(0.20), radius: 24, y: 16)
     }
 
     @ViewBuilder
@@ -139,7 +143,7 @@ struct ProgressiveArtwork: View {
         let turn = Double(signature % 22) - 11
 
         RoundedRectangle(cornerRadius: min(size.width, size.height) * 0.09, style: .continuous)
-            .fill(.white.opacity(reduceTransparency ? 0.10 : 0.19))
+            .fill(AppTheme.ColorToken.onMedia.opacity(reduceTransparency ? 0.10 : 0.19))
             .frame(width: size.width * 0.70, height: size.height * 0.18)
             .rotationEffect(.degrees(-31 + turn))
             .offset(x: size.width * 0.34, y: -size.height * 0.28)
@@ -151,39 +155,26 @@ struct ProgressiveArtwork: View {
             .offset(x: -size.width * 0.38, y: size.height * 0.19)
 
         Circle()
-            .stroke(.white.opacity(0.30), lineWidth: max(2, size.width * 0.012))
+            .stroke(AppTheme.ColorToken.onMedia.opacity(0.30), lineWidth: max(2, size.width * 0.012))
             .frame(width: min(size.width, size.height) * 0.18)
             .offset(x: size.width * 0.34, y: size.height * 0.25)
 
         Image(systemName: "sparkle")
             .font(.system(size: min(size.width, size.height) * 0.11, weight: .bold))
-            .foregroundStyle(.white.opacity(0.74))
+            .foregroundStyle(AppTheme.ColorToken.onMedia.opacity(0.74))
             .rotationEffect(.degrees(turn))
             .offset(x: -size.width * 0.33, y: -size.height * 0.31)
 
         Image(systemName: "circle.fill")
             .font(.system(size: min(size.width, size.height) * 0.055))
-            .foregroundStyle(.white.opacity(0.70))
+            .foregroundStyle(AppTheme.ColorToken.onMedia.opacity(0.70))
             .offset(x: size.width * 0.38, y: -size.height * 0.17)
     }
 }
 
 extension IdeaCategory {
     var artworkColors: [Color] {
-        switch self {
-        case .event: [Color(red: 0.10, green: 0.31, blue: 0.49), Color(red: 0.24, green: 0.57, blue: 0.78), Color(red: 0.95, green: 0.70, blue: 0.43)]
-        case .registry: [Color(red: 0.24, green: 0.18, blue: 0.43), Color(red: 0.60, green: 0.39, blue: 0.72), Color(red: 0.93, green: 0.60, blue: 0.66)]
-        case .venue: [Color(red: 0.34, green: 0.23, blue: 0.62), Color(red: 0.78, green: 0.59, blue: 0.86), Color(red: 0.96, green: 0.72, blue: 0.62)]
-        case .attire: [Color(red: 0.32, green: 0.19, blue: 0.31), Color(red: 0.78, green: 0.45, blue: 0.58), Color(red: 0.96, green: 0.78, blue: 0.72)]
-        case .flowers: [Color(red: 0.16, green: 0.36, blue: 0.30), Color(red: 0.78, green: 0.40, blue: 0.42), Color(red: 0.98, green: 0.72, blue: 0.55)]
-        case .food: [Color(red: 0.42, green: 0.20, blue: 0.12), Color(red: 0.82, green: 0.48, blue: 0.24), Color(red: 0.98, green: 0.79, blue: 0.49)]
-        case .photography: [Color(red: 0.10, green: 0.22, blue: 0.29), Color(red: 0.19, green: 0.55, blue: 0.57), Color(red: 0.76, green: 0.78, blue: 0.62)]
-        case .music: [Color(red: 0.14, green: 0.15, blue: 0.32), Color(red: 0.45, green: 0.28, blue: 0.68), Color(red: 0.93, green: 0.43, blue: 0.55)]
-        case .decor: [Color(red: 0.24, green: 0.16, blue: 0.43), Color(red: 0.56, green: 0.38, blue: 0.78), Color(red: 0.96, green: 0.65, blue: 0.56)]
-        case .invitations: [Color(red: 0.22, green: 0.35, blue: 0.43), Color(red: 0.48, green: 0.67, blue: 0.64), Color(red: 0.94, green: 0.76, blue: 0.60)]
-        case .honeymoon: [Color(red: 0.08, green: 0.40, blue: 0.57), Color(red: 0.32, green: 0.70, blue: 0.75), Color(red: 0.98, green: 0.68, blue: 0.38)]
-        case .other: [Color(red: 0.25, green: 0.20, blue: 0.49), Color(red: 0.70, green: 0.40, blue: 0.72), Color(red: 0.97, green: 0.61, blue: 0.54)]
-        }
+        AppTheme.Artwork.colors(for: self)
     }
 
     var artworkAccent: Color {
@@ -193,13 +184,7 @@ extension IdeaCategory {
 
 extension RegistryCategory {
     var artworkColors: [Color] {
-        switch self {
-        case .home: [Color(red: 0.20, green: 0.24, blue: 0.40), Color(red: 0.46, green: 0.45, blue: 0.68), Color(red: 0.88, green: 0.67, blue: 0.60)]
-        case .kitchen: [Color(red: 0.16, green: 0.24, blue: 0.22), Color(red: 0.42, green: 0.60, blue: 0.43), Color(red: 0.91, green: 0.72, blue: 0.40)]
-        case .travel: [Color(red: 0.08, green: 0.35, blue: 0.56), Color(red: 0.32, green: 0.67, blue: 0.74), Color(red: 0.98, green: 0.65, blue: 0.40)]
-        case .experience: [Color(red: 0.28, green: 0.16, blue: 0.42), Color(red: 0.65, green: 0.37, blue: 0.65), Color(red: 0.94, green: 0.57, blue: 0.48)]
-        case .cashFund: [Color(red: 0.13, green: 0.28, blue: 0.38), Color(red: 0.25, green: 0.60, blue: 0.58), Color(red: 0.85, green: 0.73, blue: 0.43)]
-        }
+        AppTheme.Artwork.colors(for: self)
     }
 
     var artworkAccent: Color {
@@ -209,19 +194,7 @@ extension RegistryCategory {
 
 extension TimelineCategory {
     var artworkColors: [Color] {
-        switch self {
-        case .venue: [Color(red: 0.16, green: 0.31, blue: 0.42), Color(red: 0.40, green: 0.68, blue: 0.73), Color(red: 0.95, green: 0.67, blue: 0.43)]
-        case .foodTasting: [Color(red: 0.30, green: 0.18, blue: 0.12), Color(red: 0.72, green: 0.43, blue: 0.26), Color(red: 0.94, green: 0.75, blue: 0.48)]
-        case .photography: [Color(red: 0.10, green: 0.24, blue: 0.36), Color(red: 0.31, green: 0.57, blue: 0.68), Color(red: 0.83, green: 0.72, blue: 0.52)]
-        case .honeymoon: [Color(red: 0.08, green: 0.34, blue: 0.50), Color(red: 0.31, green: 0.69, blue: 0.72), Color(red: 0.96, green: 0.69, blue: 0.45)]
-        case .attireFitting: [Color(red: 0.22, green: 0.20, blue: 0.34), Color(red: 0.61, green: 0.50, blue: 0.72), Color(red: 0.90, green: 0.76, blue: 0.71)]
-        case .weddingShower: [Color(red: 0.24, green: 0.33, blue: 0.28), Color(red: 0.55, green: 0.72, blue: 0.58), Color(red: 0.94, green: 0.72, blue: 0.67)]
-        case .bachelorBachelorette: [Color(red: 0.17, green: 0.18, blue: 0.38), Color(red: 0.50, green: 0.35, blue: 0.69), Color(red: 0.94, green: 0.48, blue: 0.60)]
-        case .rehearsal: [Color(red: 0.17, green: 0.27, blue: 0.28), Color(red: 0.39, green: 0.62, blue: 0.57), Color(red: 0.86, green: 0.70, blue: 0.49)]
-        case .ceremony: [Color(red: 0.30, green: 0.18, blue: 0.29), Color(red: 0.68, green: 0.40, blue: 0.55), Color(red: 0.94, green: 0.69, blue: 0.68)]
-        case .reception: [Color(red: 0.13, green: 0.18, blue: 0.35), Color(red: 0.33, green: 0.45, blue: 0.70), Color(red: 0.84, green: 0.58, blue: 0.73)]
-        case .other: [Color(red: 0.20, green: 0.25, blue: 0.31), Color(red: 0.47, green: 0.55, blue: 0.61), Color(red: 0.81, green: 0.69, blue: 0.55)]
-        }
+        AppTheme.Artwork.colors(for: self)
     }
 
     var artworkAccent: Color {
@@ -249,8 +222,8 @@ private struct DefaultIdeaArtworkPreview: View {
 
                         Text(category.title)
                             .font(.headline)
-                            .foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.45), radius: 4, y: 2)
+                            .foregroundStyle(AppTheme.ColorToken.onMedia)
+                            .shadow(color: AppTheme.ColorToken.mediaScrim.opacity(0.45), radius: 4, y: 2)
                             .padding(AppTheme.Spacing.standard)
                     }
                     .aspectRatio(0.86, contentMode: .fit)
@@ -283,8 +256,8 @@ private struct DefaultEventArtworkPreview: View {
 
                         Text(category.title)
                             .font(.headline)
-                            .foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.45), radius: 4, y: 2)
+                            .foregroundStyle(AppTheme.ColorToken.onMedia)
+                            .shadow(color: AppTheme.ColorToken.mediaScrim.opacity(0.45), radius: 4, y: 2)
                             .padding(AppTheme.Spacing.standard)
                     }
                     .aspectRatio(0.86, contentMode: .fit)

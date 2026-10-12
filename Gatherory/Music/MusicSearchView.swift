@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MusicSearchView: View {
     @Environment(MusicCatalog.self) private var musicCatalog
+    @Environment(MusicPreviewPlayer.self) private var previewPlayer
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -43,6 +44,9 @@ struct MusicSearchView: View {
         }
         .task(id: query) {
             await search()
+        }
+        .onDisappear {
+            previewPlayer.stop()
         }
     }
 
@@ -112,14 +116,21 @@ struct MusicSearchView: View {
                     .listRowSeparator(.hidden)
             } else {
                 ForEach(results) { track in
-                    Button {
-                        onSelect(track)
-                        dismiss()
-                    } label: {
-                        MusicTrackRow(track: track)
+                    HStack(spacing: AppTheme.Spacing.compact) {
+                        Button {
+                            onSelect(track)
+                            dismiss()
+                        } label: {
+                            MusicTrackRow(track: track, showsPreviewButton: false)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Adds this song to the idea")
+
+                        if track.previewURL != nil {
+                            MusicPreviewButton(track: track)
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Adds this song to the idea")
                 }
             }
         }
@@ -170,6 +181,7 @@ struct MusicSearchView: View {
 
 struct MusicTrackRow: View {
     let track: MusicTrack
+    var showsPreviewButton = true
 
     var body: some View {
         HStack(spacing: AppTheme.Spacing.standard) {
@@ -197,17 +209,27 @@ struct MusicTrackRow: View {
             }
 
             Spacer(minLength: AppTheme.Spacing.compact)
+
+            if showsPreviewButton, track.previewURL != nil {
+                MusicPreviewButton(track: track)
+            }
         }
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
     }
 }
 
 struct MusicTrackArtwork: View {
+    @Environment(MusicCatalog.self) private var musicCatalog
+
     let track: MusicTrack
+    @State private var recoveredArtworkURL: URL?
+
+    private var artworkURL: URL? {
+        track.artworkURL ?? recoveredArtworkURL
+    }
 
     var body: some View {
-        AsyncImage(url: track.artworkURL) { phase in
+        AsyncImage(url: artworkURL) { phase in
             switch phase {
             case .success(let image):
                 image
@@ -222,6 +244,62 @@ struct MusicTrackArtwork: View {
                 }
             }
         }
+        .task(id: track.id) {
+            // Search results normally carry an artwork URL. A saved track may
+            // not, however, such as when MusicKit returns a lightweight picker
+            // result or an older device persisted the playlist before artwork
+            // was available. Recover it from the durable catalog ID.
+            guard track.artworkURL == nil else { return }
+            recoveredArtworkURL = await musicCatalog.artworkURL(for: track)
+        }
         .accessibilityHidden(true)
+    }
+}
+
+/// Artwork for Gatherory's one shared playlist per event. A custom image is
+/// always respected; otherwise the first song establishes the playlist cover.
+/// The catalog lookup lets old or synced tracks recover artwork that was not
+/// included in their original picker payload.
+struct MusicPlaylistArtwork: View {
+    @Environment(MusicCatalog.self) private var musicCatalog
+
+    let imageData: Data?
+    let tracks: [MusicTrack]
+    let symbol: String
+    let colors: [Color]
+    let accent: Color
+    var ambientBlurRadius: CGFloat = 36
+    var progressiveBlurRadius: CGFloat = 22
+    var blurStart: CGFloat = 0.38
+
+    @State private var recoveredArtworkURL: URL?
+
+    private var firstTrack: MusicTrack? {
+        tracks.first
+    }
+
+    private var artworkURL: URL? {
+        firstTrack?.artworkURL ?? recoveredArtworkURL
+    }
+
+    var body: some View {
+        MediaArtwork(
+            imageData: imageData,
+            remoteURL: artworkURL,
+            symbol: symbol,
+            colors: colors,
+            accent: accent,
+            ambientBlurRadius: ambientBlurRadius,
+            progressiveBlurRadius: progressiveBlurRadius,
+            blurStart: blurStart
+        )
+        .task(id: firstTrack?.id) {
+            guard imageData == nil,
+                  let firstTrack,
+                  firstTrack.artworkURL == nil else {
+                return
+            }
+            recoveredArtworkURL = await musicCatalog.artworkURL(for: firstTrack)
+        }
     }
 }

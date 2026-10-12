@@ -1,5 +1,9 @@
 import AuthenticationServices
+import CryptoKit
+import GoogleSignIn
+import Security
 import SwiftUI
+import UIKit
 
 struct AuthenticationView: View {
     @Environment(AuthenticationSession.self) private var authentication
@@ -12,6 +16,7 @@ struct AuthenticationView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var errorMessage: String?
+    @State private var currentAppleNonce: String?
     @FocusState private var focusedField: Field?
 
     var body: some View {
@@ -28,8 +33,8 @@ struct AuthenticationView: View {
             .padding(.top, AppTheme.Spacing.compact)
             .frame(maxWidth: .infinity)
 
-            if let errorMessage {
-                authenticationError(errorMessage)
+            if let message = errorMessage ?? authentication.registrationNotice {
+                authenticationMessage(message, isError: errorMessage != nil)
                     .frame(maxWidth: 520)
                     .padding(.horizontal, AppTheme.Spacing.standard)
                     .padding(.bottom, AppTheme.Spacing.spacious)
@@ -54,6 +59,11 @@ struct AuthenticationView: View {
             errorMessage = nil
             password = ""
             focusedField = nil
+        }
+        .onChange(of: focusedField) { _, field in
+            if field != nil, mode == .signIn {
+                authentication.clearRegistrationNotice()
+            }
         }
     }
 
@@ -90,6 +100,9 @@ struct AuthenticationView: View {
             SignInWithAppleButton(
                 mode.appleButtonLabel,
                 onRequest: { request in
+                    let nonce = Self.randomNonce()
+                    currentAppleNonce = nonce
+                    request.nonce = Self.sha256(nonce)
                     request.requestedScopes = mode == .createAccount ? [.fullName, .email] : [.email]
                 },
                 onCompletion: handleAppleAuthorization
@@ -97,9 +110,10 @@ struct AuthenticationView: View {
             .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
             .frame(height: 50)
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
+            .disabled(authentication.isProcessing)
 
             Button {
-                authenticate(using: .google)
+                authenticateWithGoogle()
             } label: {
                 HStack(spacing: 10) {
                     Text("G")
@@ -128,6 +142,7 @@ struct AuthenticationView: View {
                 }
             }
             .buttonStyle(.plain)
+            .disabled(authentication.isProcessing)
         }
     }
 
@@ -171,7 +186,8 @@ struct AuthenticationView: View {
                     text: $password,
                     prompt: authenticationPrompt("Password")
                 )
-                    .textContentType(mode == .signIn ? .password : .newPassword)
+                    .textContentType(mode.passwordContentType)
+                    .id(mode.passwordFieldID)
                     .focused($focusedField, equals: .password)
                     .submitLabel(.go)
                     .onSubmit(performPasswordAction)
@@ -179,20 +195,26 @@ struct AuthenticationView: View {
             }
 
             Button(action: performPasswordAction) {
-                Text(mode.primaryActionTitle)
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 28)
+                Group {
+                    if authentication.isProcessing {
+                        ProgressView()
+                    } else {
+                        Text(mode.primaryActionTitle)
+                            .font(.headline)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 28)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(!canSubmitCredentials)
+            .disabled(!canSubmitCredentials || authentication.isProcessing)
         }
     }
 
-    private func authenticationError(_ message: String) -> some View {
+    private func authenticationMessage(_ message: String, isError: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.compact) {
-            Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(.red)
+            Image(systemName: isError ? "exclamationmark.circle.fill" : "envelope.badge.fill")
+                .foregroundStyle(isError ? AppTheme.ColorToken.destructive : AppTheme.ColorToken.accent)
 
             Text(message)
                 .foregroundStyle(.primary)
@@ -207,7 +229,10 @@ struct AuthenticationView: View {
         )
         .overlay {
             RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                .stroke(Color.red.opacity(0.35), lineWidth: 1)
+                .stroke(
+                    (isError ? AppTheme.ColorToken.destructive : AppTheme.ColorToken.accent).opacity(0.35),
+                    lineWidth: 1
+                )
         }
         .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
         .accessibilityElement(children: .combine)
@@ -284,45 +309,147 @@ struct AuthenticationView: View {
     private func performPasswordAction() {
         errorMessage = nil
 
-        do {
-            switch mode {
-            case .signIn:
-                try authentication.signIn(email: email, password: password)
-            case .createAccount:
-                try authentication.register(
-                    displayName: displayName,
-                    email: email,
-                    password: password
-                )
+        Task {
+            do {
+                switch mode {
+                case .signIn:
+                    try await authentication.signIn(email: email, password: password)
+                case .createAccount:
+                    try await authentication.register(
+                        displayName: displayName,
+                        email: email,
+                        password: password
+                    )
+                    if authentication.registrationNotice != nil {
+                        mode = .signIn
+                    }
+                }
+            } catch {
+                errorMessage = error.localizedDescription
             }
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 
-    private func authenticate(using provider: AuthenticationProvider) {
+    private func authenticateWithGoogle() {
         errorMessage = nil
 
-        do {
-            try authentication.signIn(using: provider)
-        } catch {
-            errorMessage = error.localizedDescription
+        guard let presenter = Self.presentingViewController else {
+            errorMessage = AuthenticationFailure.providerUnavailable.localizedDescription
+            return
+        }
+
+        let nonce = Self.randomNonce()
+        GIDSignIn.sharedInstance.signIn(
+            withPresenting: presenter,
+            hint: nil,
+            additionalScopes: nil,
+            nonce: nonce
+        ) { result, error in
+            Task { @MainActor in
+                guard let result else {
+                    if let error, (error as NSError).code != -5 {
+                        errorMessage = error.localizedDescription
+                    }
+                    return
+                }
+
+                guard let identityToken = result.user.idToken?.tokenString else {
+                    errorMessage = AuthenticationFailure.invalidServerResponse.localizedDescription
+                    return
+                }
+
+                do {
+                    try await authentication.signInWithGoogle(
+                        identityToken: identityToken,
+                        nonce: nonce,
+                        requestingSignUp: mode == .createAccount
+                    )
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
+            }
         }
     }
 
     private func handleAppleAuthorization(_ result: Result<ASAuthorization, any Error>) {
         switch result {
-        case .success:
-            authenticate(using: .apple)
+        case .success(let authorization):
+            guard
+                let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                let tokenData = credential.identityToken,
+                let identityToken = String(data: tokenData, encoding: .utf8),
+                let nonce = currentAppleNonce
+            else {
+                errorMessage = AuthenticationFailure.invalidServerResponse.localizedDescription
+                return
+            }
+
+            let identity = AppleIdentity(
+                identityToken: identityToken,
+                nonce: nonce,
+                email: credential.email,
+                givenName: credential.fullName?.givenName,
+                familyName: credential.fullName?.familyName
+            )
+            currentAppleNonce = nil
+            errorMessage = nil
+
+            Task {
+                do {
+                    try await authentication.signInWithApple(
+                        identity,
+                        requestingSignUp: mode == .createAccount
+                    )
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
+            }
         case .failure(let error):
+            currentAppleNonce = nil
             if (error as? ASAuthorizationError)?.code != .canceled {
                 errorMessage = error.localizedDescription
             }
         }
     }
+
+    private static func randomNonce(length: Int = 32) -> String {
+        let characters = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var result = ""
+        result.reserveCapacity(length)
+
+        while result.count < length {
+            var random: UInt8 = 0
+            guard SecRandomCopyBytes(kSecRandomDefault, 1, &random) == errSecSuccess else {
+                return UUID().uuidString
+            }
+            if Int(random) < characters.count {
+                result.append(characters[Int(random)])
+            }
+        }
+        return result
+    }
+
+    private static func sha256(_ input: String) -> String {
+        SHA256.hash(data: Data(input.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    private static var presentingViewController: UIViewController? {
+        let window = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)
+
+        var presenter = window?.rootViewController
+        while let presented = presenter?.presentedViewController {
+            presenter = presented
+        }
+        return presenter
+    }
 }
 
-private enum AuthenticationMode {
+private enum AuthenticationMode: Hashable {
     case signIn
     case createAccount
 
@@ -358,6 +485,20 @@ private enum AuthenticationMode {
         switch self {
         case .signIn: .signIn
         case .createAccount: .signUp
+        }
+    }
+
+    var passwordContentType: UITextContentType {
+        switch self {
+        case .signIn: .password
+        case .createAccount: .newPassword
+        }
+    }
+
+    var passwordFieldID: String {
+        switch self {
+        case .signIn: "existing-password"
+        case .createAccount: "new-password"
         }
     }
 }

@@ -10,13 +10,15 @@ enum LaunchExperienceTiming {
 struct GatheroryLaunchContainer: View {
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(WorkspaceLibrary.self) private var workspaceLibrary
+    @Environment(WorkspaceCloudSyncController.self) private var cloudSync
+    @Environment(WorkspacePersistenceController.self) private var persistence
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("hasSeenDecideTimelinePrimer") private var hasSeenDecideTimelinePrimer = false
     @State private var isShowingSplash = true
     @State private var completedOnboardingThisSession = false
 
-    private var shouldShowOnboarding: Bool {
+    private var shouldShowLocalOnboarding: Bool {
         guard !completedOnboardingThisSession else { return false }
         return AppRuntimeConfiguration.alwaysShowsOnboarding || !hasCompletedOnboarding
     }
@@ -26,7 +28,11 @@ struct GatheroryLaunchContainer: View {
             Group {
                 if !authentication.isAuthenticated {
                     AuthenticationView()
-                } else if shouldShowOnboarding {
+                } else if AppRuntimeConfiguration.alwaysShowsOnboarding && !completedOnboardingThisSession {
+                    OnboardingView(onCreateWorkspace: finishOnboarding)
+                } else if AppRuntimeConfiguration.usesRemoteAccountState {
+                    remoteAccountExperience
+                } else if shouldShowLocalOnboarding {
                     OnboardingView(onCreateWorkspace: finishOnboarding)
                 } else {
                     AppRootView()
@@ -46,22 +52,76 @@ struct GatheroryLaunchContainer: View {
             let milliseconds = reduceMotion
                 ? LaunchExperienceTiming.reducedMotionMilliseconds
                 : LaunchExperienceTiming.standardMilliseconds
-            try? await Task.sleep(for: .milliseconds(milliseconds))
+            let minimumSplash = Task {
+                try? await Task.sleep(for: .milliseconds(milliseconds))
+            }
+
+            await authentication.restoreSession()
+            await cloudSync.activate(
+                userID: authentication.currentUser?.id,
+                seedData: AppRuntimeConfiguration.seedsDevelopmentData
+            )
+            if !AppRuntimeConfiguration.usesRemoteAccountState,
+               !workspaceLibrary.workspaces.isEmpty,
+               !AppRuntimeConfiguration.alwaysShowsOnboarding {
+                hasCompletedOnboarding = true
+            }
+            await minimumSplash.value
             guard !Task.isCancelled else { return }
 
             withAnimation(.easeOut(duration: LaunchExperienceTiming.exitAnimationSeconds)) {
                 isShowingSplash = false
             }
         }
+        .task(id: authentication.currentUser?.id) {
+            await cloudSync.activate(
+                userID: authentication.currentUser?.id,
+                seedData: AppRuntimeConfiguration.seedsDevelopmentData
+            )
+            if !AppRuntimeConfiguration.usesRemoteAccountState,
+               !workspaceLibrary.workspaces.isEmpty,
+               !AppRuntimeConfiguration.alwaysShowsOnboarding {
+                hasCompletedOnboarding = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var remoteAccountExperience: some View {
+        switch cloudSync.accountOnboardingState {
+        case .signedOut, .resolving:
+            AccountOnboardingLoadingView()
+        case .needsOnboarding:
+            OnboardingView(onCreateWorkspace: finishOnboarding)
+        case .complete:
+            AppRootView()
+        case .unavailable:
+            ContentUnavailableView {
+                Label("Couldn’t Load Your Account", systemImage: "icloud.slash")
+            } description: {
+                Text("Gatherory needs to check your account before deciding where to continue.")
+            } actions: {
+                Button("Try Again") {
+                    Task { await cloudSync.retryInitialBootstrap() }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding()
+        }
     }
 
     private func finishOnboarding(with workspace: WeddingWorkspace) {
         workspaceLibrary.add(workspace)
+        // Workspace creation is a transaction boundary, not a debounced edit.
+        // Persisting here guarantees the local archive and durable outbox entry
+        // exist before onboarding transitions to the workspace experience.
+        persistence.flush(workspaceLibrary)
         // Decide education belongs to the onboarding journey. Development
         // builds force onboarding, so completing that flow should make the
         // contextual primer eligible again. In production onboarding only
         // completes once, preserving the primer's one-time behavior.
         hasSeenDecideTimelinePrimer = false
+        cloudSync.markOnboardingCompletedLocally()
 
         if reduceMotion {
             hasCompletedOnboarding = true
@@ -72,6 +132,18 @@ struct GatheroryLaunchContainer: View {
                 completedOnboardingThisSession = true
             }
         }
+    }
+}
+
+private struct AccountOnboardingLoadingView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text("Loading your Gatherory account…")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

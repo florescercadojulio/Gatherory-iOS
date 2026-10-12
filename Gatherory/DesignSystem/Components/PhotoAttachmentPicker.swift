@@ -211,7 +211,7 @@ private struct AddImageView: View {
                 } footer: {
                     if let errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.circle.fill")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(AppTheme.ColorToken.destructive)
                     } else {
                         Text("You’ll review a photo or generated image before it becomes part of the event.")
                     }

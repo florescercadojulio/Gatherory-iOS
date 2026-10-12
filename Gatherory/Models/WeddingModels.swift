@@ -46,6 +46,7 @@ enum IdeaInvitationVisibility: String, CaseIterable, Identifiable, Codable {
 enum IdeaCategory: String, CaseIterable, Identifiable, Codable {
     case event
     case registry
+    case link
     case venue
     case attire
     case flowers
@@ -63,6 +64,7 @@ enum IdeaCategory: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .event: "Event"
         case .registry: "Registry"
+        case .link: "Link"
         case .venue: "Venue"
         case .attire: "Attire"
         case .flowers: "Flowers"
@@ -80,6 +82,7 @@ enum IdeaCategory: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .event: "calendar.badge.plus"
         case .registry: "gift.fill"
+        case .link: "link"
         case .venue: "building.2.fill"
         case .attire: "hanger"
         case .flowers: "camera.macro"
@@ -97,13 +100,19 @@ enum IdeaCategory: String, CaseIterable, Identifiable, Codable {
     /// experiences. The remaining categories can optionally contribute a
     /// concise detail to the invitation for the event they belong to.
     var supportsInvitationVisibility: Bool {
-        self != .event && self != .registry
+        self != .event && self != .registry && self != .link
     }
 
-    /// Attire is normally actionable information for guests. Other ideas stay
-    /// inside planning unless a collaborator deliberately shares them.
+    /// Attire and the event playlist are actionable information for guests.
+    /// Other ideas stay inside planning unless a collaborator deliberately
+    /// shares them.
     var defaultInvitationVisibility: IdeaInvitationVisibility {
-        self == .attire ? .shownToGuests : .planningOnly
+        switch self {
+        case .attire, .music:
+            .shownToGuests
+        default:
+            .planningOnly
+        }
     }
 }
 
@@ -436,6 +445,31 @@ struct MusicIdeaConfiguration: Codable, Hashable {
     var tracks: [MusicTrack]
 }
 
+struct LinkIdeaConfiguration: Codable, Hashable {
+    var url: URL
+
+    /// Converts casual website input such as `example.com` into a web URL.
+    /// Keeping this at the model boundary gives every future editor and sync
+    /// path the same validation behavior.
+    static func normalizedURL(from address: String) -> URL? {
+        let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedAddress.isEmpty else { return nil }
+
+        let addressWithScheme = trimmedAddress.contains("://")
+            ? trimmedAddress
+            : "https://\(trimmedAddress)"
+        guard let components = URLComponents(string: addressWithScheme),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              components.host?.isEmpty == false,
+              let url = components.url else {
+            return nil
+        }
+
+        return url
+    }
+}
+
 enum EventAudience: String, Codable, Hashable {
     case inherited
     case hostsOnly
@@ -549,6 +583,7 @@ struct RegistryIdeaConfiguration: Codable, Hashable {
 
 enum IdeaConfiguration: Codable, Hashable {
     case standard
+    case link(LinkIdeaConfiguration)
     case attire(AttireIdeaConfiguration)
     case venue(VenueIdeaConfiguration)
     case food(FoodIdeaConfiguration)
@@ -571,10 +606,16 @@ struct WeddingIdea: Identifiable, Hashable, Codable {
     var note: String
     var category: IdeaCategory
     var submittedBy: String
-    var estimatedCost: Int?
+    /// Stable account identity when the author has signed in. The display name
+    /// remains a snapshot so ideas still render after an account is removed.
+    var submittedByUserID: String?
+    var estimatedCost: Decimal?
     var status: IdeaStatus
     var submittedAt: Date
     var imageData: Data?
+    /// R2-backed image identity. Image bytes remain local-only and are never
+    /// embedded in replication envelopes.
+    var mediaAssetID: UUID?
     var configuration: IdeaConfiguration
     /// Optional so workspaces saved before this setting existed still decode.
     /// `effectiveInvitationVisibility` supplies the category-aware default.
@@ -587,10 +628,12 @@ struct WeddingIdea: Identifiable, Hashable, Codable {
         note: String,
         category: IdeaCategory,
         submittedBy: String,
-        estimatedCost: Int? = nil,
+        submittedByUserID: String? = nil,
+        estimatedCost: Decimal? = nil,
         status: IdeaStatus = .new,
         submittedAt: Date = .now,
         imageData: Data? = nil,
+        mediaAssetID: UUID? = nil,
         musicTrack: MusicTrack? = nil,
         configuration: IdeaConfiguration? = nil,
         invitationVisibility: IdeaInvitationVisibility? = nil
@@ -601,10 +644,12 @@ struct WeddingIdea: Identifiable, Hashable, Codable {
         self.note = note
         self.category = category
         self.submittedBy = submittedBy
+        self.submittedByUserID = submittedByUserID
         self.estimatedCost = estimatedCost
         self.status = status
         self.submittedAt = submittedAt
         self.imageData = imageData
+        self.mediaAssetID = mediaAssetID
         self.invitationVisibility = invitationVisibility
         if let configuration {
             self.configuration = configuration
@@ -654,6 +699,11 @@ struct WeddingIdea: Identifiable, Hashable, Codable {
     var musicTracks: [MusicTrack] {
         guard case .music(let configuration) = configuration else { return [] }
         return configuration.tracks
+    }
+
+    var linkConfiguration: LinkIdeaConfiguration? {
+        guard case .link(let configuration) = configuration else { return nil }
+        return configuration
     }
 
     var musicTrack: MusicTrack? {
@@ -839,32 +889,99 @@ enum WeddingParticipantRole: String, CaseIterable, Identifiable, Codable {
 
 struct WeddingMember: Identifiable, Hashable, Codable {
     let id: UUID
+    /// Better Auth user ID once this person has accepted and linked an account.
+    /// Invited people intentionally remain valid without one.
+    var userID: String?
     var name: String
     var participantRole: WeddingParticipantRole
     var initials: String
     var attendance: AttendanceStatus
     var email: String?
+    /// Profile media copied from the linked account so collaborators can show
+    /// this person's avatar without requiring that account to be signed in.
+    var profileImageAssetName: String?
+    var profileImageURL: URL?
     var planningPermission: PlanningPermission
     var invitationStatus: CollaborationInvitationStatus
 
     init(
         id: UUID = UUID(),
+        userID: String? = nil,
         name: String,
         participantRole: WeddingParticipantRole,
         initials: String,
         attendance: AttendanceStatus = .going,
         email: String? = nil,
+        profileImageAssetName: String? = nil,
+        profileImageURL: URL? = nil,
         planningPermission: PlanningPermission = .contribute,
         invitationStatus: CollaborationInvitationStatus = .active
     ) {
         self.id = id
+        self.userID = userID
         self.name = name
         self.participantRole = participantRole
         self.initials = initials
         self.attendance = attendance
         self.email = email
+        self.profileImageAssetName = profileImageAssetName
+        self.profileImageURL = profileImageURL
         self.planningPermission = planningPermission
         self.invitationStatus = invitationStatus
+    }
+}
+
+/// Event-specific state for a person. Identity lives in `WeddingMember`, while
+/// role, permissions, invitation state, and RSVP belong to this relationship.
+/// This mirrors PostgreSQL's `event_participant` table and lets one person host
+/// the main event while attending a child event as a guest.
+struct EventParticipation: Identifiable, Hashable, Codable {
+    let id: UUID
+    let eventID: UUID
+    let memberID: UUID
+    var role: WeddingParticipantRole
+    var planningPermission: PlanningPermission
+    var attendance: AttendanceStatus
+    var invitationStatus: CollaborationInvitationStatus
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID? = nil,
+        eventID: UUID,
+        memberID: UUID,
+        role: WeddingParticipantRole,
+        planningPermission: PlanningPermission,
+        attendance: AttendanceStatus,
+        invitationStatus: CollaborationInvitationStatus,
+        createdAt: Date = .now,
+        updatedAt: Date = .now
+    ) {
+        self.id = id ?? Self.stableID(eventID: eventID, memberID: memberID)
+        self.eventID = eventID
+        self.memberID = memberID
+        self.role = role
+        self.planningPermission = planningPermission
+        self.attendance = attendance
+        self.invitationStatus = invitationStatus
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    /// Old archives only stored participant IDs on each event. A deterministic
+    /// ID prevents those migrated relationships from changing on every launch.
+    private static func stableID(eventID: UUID, memberID: UUID) -> UUID {
+        let event = withUnsafeBytes(of: eventID.uuid) { Array($0) }
+        let member = withUnsafeBytes(of: memberID.uuid) { Array($0) }
+        var bytes = (0..<16).map { event[$0] ^ member[(($0 * 5) + 3) % 16] }
+        bytes[6] = (bytes[6] & 0x0F) | 0x50
+        bytes[8] = (bytes[8] & 0x3F) | 0x80
+        return UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
     }
 }
 
@@ -969,12 +1086,20 @@ enum EventResponse: String, CaseIterable, Identifiable, Codable {
 struct EventNote: Identifiable, Hashable, Codable {
     let id: UUID
     let eventID: UUID?
+    let authorUserID: String?
     let body: String
     let sentAt: Date
 
-    init(id: UUID = UUID(), eventID: UUID? = nil, body: String, sentAt: Date = .now) {
+    init(
+        id: UUID = UUID(),
+        eventID: UUID? = nil,
+        authorUserID: String? = nil,
+        body: String,
+        sentAt: Date = .now
+    ) {
         self.id = id
         self.eventID = eventID
+        self.authorUserID = authorUserID
         self.body = body
         self.sentAt = sentAt
     }
@@ -985,21 +1110,28 @@ struct EventMoment: Identifiable, Hashable, Codable {
     /// The event this photo belongs to. `nil` is retained for decoding older
     /// main-event photos and is treated as the workspace's main event.
     var eventID: UUID?
+    /// Server media identity after the local image has uploaded.
+    var mediaAssetID: UUID?
     var imageData: Data
     var addedBy: String
+    var addedByUserID: String?
     var addedAt: Date
 
     init(
         id: UUID = UUID(),
         eventID: UUID? = nil,
+        mediaAssetID: UUID? = nil,
         imageData: Data,
         addedBy: String,
+        addedByUserID: String? = nil,
         addedAt: Date = .now
     ) {
         self.id = id
         self.eventID = eventID
+        self.mediaAssetID = mediaAssetID
         self.imageData = imageData
         self.addedBy = addedBy
+        self.addedByUserID = addedByUserID
         self.addedAt = addedAt
     }
 }
@@ -1085,7 +1217,9 @@ struct EventExpense: Identifiable, Hashable, Codable {
     var amount: Decimal
     var category: EventExpenseCategory
     var status: EventExpenseStatus
+    var createdByUserID: String?
     var createdAt: Date
+    var updatedAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -1095,7 +1229,9 @@ struct EventExpense: Identifiable, Hashable, Codable {
         amount: Decimal,
         category: EventExpenseCategory = .other,
         status: EventExpenseStatus = .estimated,
-        createdAt: Date = .now
+        createdByUserID: String? = nil,
+        createdAt: Date = .now,
+        updatedAt: Date? = nil
     ) {
         self.id = id
         self.eventID = eventID
@@ -1104,7 +1240,9 @@ struct EventExpense: Identifiable, Hashable, Codable {
         self.amount = amount
         self.category = category
         self.status = status
+        self.createdByUserID = createdByUserID
         self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 }
 
@@ -1273,6 +1411,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
     var response: EventResponse?
     var linkedIdeaID: UUID?
     var imageData: Data?
+    var mediaAssetID: UUID?
     var eventDescription: String
     var dressCode: String
     /// `nil` means this event doesn't participate in budget allocation.
@@ -1297,6 +1436,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         response: EventResponse? = nil,
         linkedIdeaID: UUID? = nil,
         imageData: Data? = nil,
+        mediaAssetID: UUID? = nil,
         eventDescription: String = "",
         dressCode: String = "",
         budgetCap: Decimal? = nil
@@ -1320,6 +1460,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         self.response = response
         self.linkedIdeaID = linkedIdeaID
         self.imageData = imageData
+        self.mediaAssetID = mediaAssetID
         self.eventDescription = eventDescription
         self.dressCode = dressCode
         self.budgetCap = budgetCap
@@ -1343,6 +1484,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         response: EventResponse? = nil,
         linkedIdeaID: UUID? = nil,
         imageData: Data? = nil,
+        mediaAssetID: UUID? = nil,
         eventDescription: String = "",
         dressCode: String = "",
         budgetCap: Decimal? = nil
@@ -1364,6 +1506,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         self.response = response
         self.linkedIdeaID = linkedIdeaID
         self.imageData = imageData
+        self.mediaAssetID = mediaAssetID
         self.eventDescription = eventDescription
         self.dressCode = dressCode
         self.budgetCap = budgetCap
@@ -1449,6 +1592,9 @@ enum RegistryCategory: String, CaseIterable, Identifiable, Codable {
 
 struct RegistryItem: Identifiable, Hashable, Codable {
     let id: UUID
+    /// Registry entries are event-scoped just like ideas and expenses.
+    var eventID: UUID?
+    var sourceIdeaID: UUID?
     var title: String
     var note: String
     var category: RegistryCategory
@@ -1456,18 +1602,24 @@ struct RegistryItem: Identifiable, Hashable, Codable {
     var quantity: Int
     var committedCount: Int
     var imageData: Data?
+    var mediaAssetID: UUID?
 
     init(
         id: UUID = UUID(),
+        eventID: UUID? = nil,
+        sourceIdeaID: UUID? = nil,
         title: String,
         note: String,
         category: RegistryCategory,
         price: Decimal,
         quantity: Int = 1,
         committedCount: Int = 0,
-        imageData: Data? = nil
+        imageData: Data? = nil,
+        mediaAssetID: UUID? = nil
     ) {
         self.id = id
+        self.eventID = eventID
+        self.sourceIdeaID = sourceIdeaID
         self.title = title
         self.note = note
         self.category = category
@@ -1475,6 +1627,7 @@ struct RegistryItem: Identifiable, Hashable, Codable {
         self.quantity = quantity
         self.committedCount = committedCount
         self.imageData = imageData
+        self.mediaAssetID = mediaAssetID
     }
 
     var remainingCount: Int {

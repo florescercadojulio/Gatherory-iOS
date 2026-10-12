@@ -7,7 +7,7 @@ struct InsightsView: View {
     @State private var allocationTarget: BudgetAllocationTarget?
 
     private var currencyCode: String {
-        Locale.current.currency?.identifier ?? "USD"
+        workspace.currencyCode
     }
 
     private var costSummaries: [EventCostSummary] {
@@ -199,11 +199,19 @@ struct InsightsView: View {
                         : "checkmark.circle.fill"
                 )
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isOverBudget ? Color.red : Color.green)
+                .foregroundStyle(
+                    isOverBudget
+                        ? AppTheme.ColorToken.destructive
+                        : AppTheme.ColorToken.success
+                )
             }
 
             ProgressView(value: min(progress, 1))
-                .tint(isOverBudget ? .red : AppTheme.ColorToken.accent)
+                .tint(
+                    isOverBudget
+                        ? AppTheme.ColorToken.destructive
+                        : AppTheme.ColorToken.accent
+                )
                 .accessibilityLabel("Budget used")
                 .accessibilityValue("\(Int(progress * 100)) percent")
 
@@ -216,7 +224,9 @@ struct InsightsView: View {
                 budgetMetric(
                     title: isOverBudget ? "Over" : "Remaining",
                     amount: abs(remaining),
-                    valueColor: isOverBudget ? .red : .primary
+                    valueColor: isOverBudget
+                        ? AppTheme.ColorToken.destructive
+                        : AppTheme.ColorToken.textPrimary
                 )
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -319,11 +329,7 @@ struct InsightsView: View {
 
         return HStack(spacing: AppTheme.Spacing.standard) {
             Image(systemName: summary.symbol)
-                .foregroundStyle(
-                    summary.isMainEvent
-                        ? AppTheme.ColorToken.accent
-                        : AppTheme.ColorToken.textSecondary
-                )
+                .foregroundStyle(AppTheme.ColorToken.accent)
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -339,7 +345,11 @@ struct InsightsView: View {
                     systemImage: isOverBudget ? "exclamationmark.circle.fill" : "banknote"
                 )
                 .font(.caption)
-                .foregroundStyle(isOverBudget ? Color.red : AppTheme.ColorToken.textSecondary)
+                .foregroundStyle(
+                    isOverBudget
+                        ? AppTheme.ColorToken.destructive
+                        : AppTheme.ColorToken.textSecondary
+                )
             }
 
             Spacer(minLength: AppTheme.Spacing.compact)
@@ -376,11 +386,7 @@ struct InsightsView: View {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
                         HStack(spacing: AppTheme.Spacing.standard) {
                             Image(systemName: summary.symbol)
-                                .foregroundStyle(
-                                    summary.isMainEvent
-                                        ? AppTheme.ColorToken.accent
-                                        : AppTheme.ColorToken.textSecondary
-                                )
+                                .foregroundStyle(AppTheme.ColorToken.accent)
                                 .frame(width: 28)
 
                             Text(summary.title)

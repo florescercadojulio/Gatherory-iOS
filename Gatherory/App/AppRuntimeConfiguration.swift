@@ -7,22 +7,56 @@ enum AppRuntimeConfiguration {
         case production
     }
 
-    static let environment = Environment(
-        rawValue: infoString(forKey: "APP_ENVIRONMENT")
-    ) ?? .production
+    static var simulatesProductionFlow: Bool {
+#if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+
+        if arguments.contains("-SimulateProductionFlow") {
+            return true
+        }
+
+        if arguments.contains("-DisableProductionFlowSimulation") {
+            return false
+        }
+
+        return infoBoolean(forKey: "SIMULATE_PRODUCTION_FLOW") ?? false
+#else
+        return false
+#endif
+    }
+
+    static var environment: Environment {
+        if simulatesProductionFlow {
+            return .production
+        }
+
+        return Environment(
+            rawValue: infoString(forKey: "APP_ENVIRONMENT")
+        ) ?? .production
+    }
 
     static var alwaysShowsOnboarding: Bool {
         let arguments = ProcessInfo.processInfo.arguments
-
-        if arguments.contains("-UseProductionOnboarding") {
-            return false
-        }
 
         if arguments.contains("-AlwaysShowOnboarding") {
             return true
         }
 
+        if arguments.contains("-UseProductionOnboarding") {
+            return false
+        }
+
+        if simulatesProductionFlow {
+            return false
+        }
+
         return infoBoolean(forKey: "FORCE_ONBOARDING") ?? false
+    }
+
+    /// Production-like flows resolve first-run state from the authenticated
+    /// account. Development fixtures can continue to use the local UI switch.
+    static var usesRemoteAccountState: Bool {
+        environment != .development
     }
 
     static var seedsDevelopmentData: Bool {
@@ -55,6 +89,33 @@ enum AppRuntimeConfiguration {
         }
 
         return infoBoolean(forKey: "SKIP_AUTH_LOGIN") ?? false
+    }
+
+    static var authenticationBaseURL: URL? {
+        let arguments = ProcessInfo.processInfo.arguments
+
+        if let flagIndex = arguments.firstIndex(of: "-AuthenticationBaseURL"),
+           arguments.indices.contains(flagIndex + 1),
+           let overrideURL = normalizedURL(from: arguments[flagIndex + 1]) {
+            return overrideURL
+        }
+
+        return normalizedURL(from: infoString(forKey: "AUTH_BASE_URL"))
+    }
+
+    private static func normalizedURL(from rawValue: String) -> URL? {
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+            !value.isEmpty,
+            let url = URL(string: value),
+            let scheme = url.scheme?.lowercased(),
+            scheme == "http" || scheme == "https",
+            url.host != nil
+        else {
+            return nil
+        }
+
+        return url
     }
 
     private static func infoString(forKey key: String) -> String {

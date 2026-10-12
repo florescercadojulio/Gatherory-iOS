@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import MusicKit
 
 struct IdeasView: View {
     var onExitWorkspace: (() -> Void)?
@@ -263,16 +264,7 @@ private struct IdeaCollectionCard: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            MediaArtwork(
-                imageData: idea.imageData,
-                remoteURL: idea.musicTrack?.artworkURL,
-                symbol: idea.category.symbol,
-                colors: idea.category.artworkColors,
-                accent: idea.category.artworkAccent,
-                ambientBlurRadius: 12,
-                progressiveBlurRadius: 22,
-                blurStart: 0.30
-            )
+            artwork
 
             LinearGradient(
                 stops: [
@@ -295,12 +287,12 @@ private struct IdeaCollectionCard: View {
                     .lineLimit(3)
 
                 HStack(spacing: 4) {
-                    Text("From \(idea.submittedBy)")
+                    Text(cardSupportingText)
                         .lineLimit(1)
 
                     Spacer(minLength: 4)
 
-                    Image(systemName: idea.status.symbol)
+                    Image(systemName: idea.category == .music ? "person.3.fill" : idea.status.symbol)
                         .accessibilityHidden(true)
                 }
                 .font(.caption)
@@ -320,6 +312,41 @@ private struct IdeaCollectionCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityValue(idea.status.title)
     }
+
+    @ViewBuilder
+    private var artwork: some View {
+        if idea.category == .music {
+            MusicPlaylistArtwork(
+                imageData: idea.imageData,
+                tracks: idea.musicTracks,
+                symbol: idea.category.symbol,
+                colors: idea.category.artworkColors,
+                accent: idea.category.artworkAccent,
+                ambientBlurRadius: 12,
+                progressiveBlurRadius: 22,
+                blurStart: 0.30
+            )
+        } else {
+            MediaArtwork(
+                imageData: idea.imageData,
+                symbol: idea.category.symbol,
+                colors: idea.category.artworkColors,
+                accent: idea.category.artworkAccent,
+                ambientBlurRadius: 12,
+                progressiveBlurRadius: 22,
+                blurStart: 0.30
+            )
+        }
+    }
+
+    private var cardSupportingText: String {
+        if let link = idea.linkConfiguration {
+            return link.url.host ?? link.url.absoluteString
+        }
+        guard idea.category == .music else { return "From \(idea.submittedBy)" }
+        let count = idea.musicTracks.count
+        return "\(count) \(count == 1 ? "song" : "songs") · Shared playlist"
+    }
 }
 
 private extension IdeaCategory {
@@ -327,6 +354,7 @@ private extension IdeaCategory {
         switch self {
         case .event: 0.84
         case .registry: 0.92
+        case .link: 1.06
         case .venue: 0.82
         case .attire: 0.74
         case .flowers: 1.12
@@ -378,8 +406,9 @@ struct IdeaDetailView: View {
                     .labelStyle(.iconOnly)
                 }
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu("Idea actions", systemImage: "ellipsis") {
+                if idea.category != .music {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu("Idea actions", systemImage: "ellipsis") {
                         if idea.status != .new {
                             Button("Move to Inbox", systemImage: "tray") {
                                 withAnimation {
@@ -445,6 +474,7 @@ struct IdeaDetailView: View {
                                 }
                             }
                         }
+                        }
                     }
                 }
             }
@@ -467,6 +497,8 @@ struct IdeaDetailView: View {
 }
 
 private struct IdeaDetailScreen: View {
+    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(MusicPreviewPlayer.self) private var previewPlayer
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     let idea: WeddingIdea
@@ -493,19 +525,37 @@ private struct IdeaDetailScreen: View {
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .background(.black)
+        .onDisappear {
+            previewPlayer.stop()
+        }
     }
 
+    @ViewBuilder
     private var backgroundArtwork: some View {
-        MediaArtwork(
-            imageData: idea.imageData,
-            remoteURL: idea.musicTrack?.artworkURL,
-            symbol: idea.category.symbol,
-            colors: idea.category.artworkColors,
-            accent: idea.category.artworkAccent,
-            ambientBlurRadius: 10,
-            progressiveBlurRadius: reduceTransparency ? 0 : 22,
-            blurStart: 0.44
-        )
+        Group {
+            if idea.category == .music {
+                MusicPlaylistArtwork(
+                    imageData: idea.imageData,
+                    tracks: idea.musicTracks,
+                    symbol: idea.category.symbol,
+                    colors: idea.category.artworkColors,
+                    accent: idea.category.artworkAccent,
+                    ambientBlurRadius: 10,
+                    progressiveBlurRadius: reduceTransparency ? 0 : 22,
+                    blurStart: 0.44
+                )
+            } else {
+                MediaArtwork(
+                    imageData: idea.imageData,
+                    symbol: idea.category.symbol,
+                    colors: idea.category.artworkColors,
+                    accent: idea.category.artworkAccent,
+                    ambientBlurRadius: 10,
+                    progressiveBlurRadius: reduceTransparency ? 0 : 22,
+                    blurStart: 0.44
+                )
+            }
+        }
         .ignoresSafeArea()
     }
 
@@ -574,7 +624,7 @@ private struct IdeaDetailScreen: View {
 
                 IdeaMetadataRow(
                     title: estimatedCostLabel,
-                    value: estimatedCost.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")),
+                    value: estimatedCost.formatted(.currency(code: workspace.currencyCode)),
                     symbol: "tag.fill"
                 )
             }
@@ -596,6 +646,7 @@ private struct IdeaDetailScreen: View {
         switch idea.category {
         case .event: "Estimated event cost"
         case .registry: "Estimated gift price"
+        case .link: "Estimated cost"
         case .attire: "Estimated attire cost"
         case .food: "Estimated food budget"
         case .music: "Estimated music cost"
@@ -611,19 +662,29 @@ private struct IdeaDetailScreen: View {
 }
 
 private struct IdeaCategoryDetailContent: View {
+    @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @State private var isPickingMusic = false
+    @State private var pickedSongs: [Song] = []
 
     let idea: WeddingIdea
 
-    @ViewBuilder
     var body: some View {
-        switch idea.category {
-        case .event:
-            if let configuration = idea.eventConfiguration {
-                EventIdeaDetailCard(idea: idea, configuration: configuration)
-            } else {
-                genericContent
-            }
+        Group {
+            switch idea.category {
+            case .link:
+                if let configuration = idea.linkConfiguration {
+                    linkContent(configuration)
+                } else {
+                    genericContent
+                }
+
+            case .event:
+                if let configuration = idea.eventConfiguration {
+                    EventIdeaDetailCard(idea: idea, configuration: configuration)
+                } else {
+                    genericContent
+                }
 
         case .registry:
             if let configuration = idea.registryConfiguration {
@@ -635,7 +696,7 @@ private struct IdeaCategoryDetailContent: View {
                         configuration.price.map {
                             IdeaDetailFact(
                                 title: "Price",
-                                value: $0.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")),
+                                value: $0.formatted(.currency(code: workspace.currencyCode)),
                                 symbol: "tag.fill"
                             )
                         },
@@ -755,8 +816,17 @@ private struct IdeaCategoryDetailContent: View {
                 genericContent
             }
 
-        case .other:
-            genericContent
+            case .other:
+                genericContent
+            }
+        }
+        .musicPicker(
+            isPresented: $isPickingMusic,
+            title: Text("Add to Playlist"),
+            selection: $pickedSongs
+        )
+        .onChange(of: pickedSongs) { _, songs in
+            appendPickedSongs(songs)
         }
     }
 
@@ -795,6 +865,43 @@ private struct IdeaCategoryDetailContent: View {
                 Divider()
                 detailText(title: fact.title, text: fact.value, symbol: fact.symbol)
             }
+        }
+        .ideaDetailCard(reduceTransparency: reduceTransparency)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func linkContent(_ configuration: LinkIdeaConfiguration) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+            HStack(spacing: AppTheme.Spacing.standard) {
+                Image(systemName: "link")
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.title2)
+                    .foregroundStyle(AppTheme.ColorToken.accent)
+                    .frame(width: 48, height: 48)
+                    .background(.white.opacity(0.10), in: Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Website")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text(configuration.url.host ?? configuration.url.absoluteString)
+                        .font(.headline)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                }
+            }
+
+            if !idea.note.isEmpty {
+                Divider()
+                detailText(title: "Description", text: idea.note, symbol: "text.alignleft")
+            }
+
+            Link(destination: configuration.url) {
+                Label("Open Website", systemImage: "arrow.up.right.square")
+                    .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
+            }
+            .buttonStyle(.borderedProminent)
         }
         .ideaDetailCard(reduceTransparency: reduceTransparency)
         .accessibilityElement(children: .contain)
@@ -864,8 +971,33 @@ private struct IdeaCategoryDetailContent: View {
     }
 
     private var musicContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+            HStack(spacing: AppTheme.Spacing.compact) {
+                Image(systemName: "person.3.sequence.fill")
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.title2)
+                    .foregroundStyle(AppTheme.ColorToken.accent)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Shared Event Playlist")
+                        .font(.headline)
+                    Text("\(idea.musicTracks.count) \(idea.musicTracks.count == 1 ? "song" : "songs")")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: AppTheme.Spacing.compact)
+
+                Button {
+                    isPickingMusic = true
+                } label: {
+                    Label("Add Songs", systemImage: "music.note.badge.plus")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
             if !idea.note.isEmpty {
+                Divider()
                 detailText(title: "Playlist Direction", text: idea.note, symbol: "music.note.list")
                     .padding(.bottom, idea.musicTracks.isEmpty ? 0 : AppTheme.Spacing.compact)
             }
@@ -875,23 +1007,29 @@ private struct IdeaCategoryDetailContent: View {
                     Divider()
                 }
 
-                if let externalURL = track.externalURL {
-                    Link(destination: externalURL) {
-                        trackRow(track)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Opens this song in \(track.providerID.displayName)")
-                } else {
-                    trackRow(track)
-                }
+                trackRow(track)
             }
 
-            if idea.note.isEmpty && idea.musicTracks.isEmpty {
-                Text("No songs have been added yet.")
+            if idea.musicTracks.isEmpty {
+                Text("No songs yet. Add the first one for everyone attending this event.")
                     .foregroundStyle(.secondary)
             }
         }
         .ideaDetailCard(reduceTransparency: reduceTransparency)
+    }
+
+    private func appendPickedSongs(_ songs: [Song]) {
+        guard !songs.isEmpty else { return }
+        var updatedIdea = idea
+        var tracks = idea.musicTracks
+        for song in songs {
+            let track = MusicTrack(appleMusicSong: song)
+            guard !tracks.contains(where: { $0.id == track.id }) else { continue }
+            tracks.append(track)
+        }
+        updatedIdea.configuration = .music(MusicIdeaConfiguration(tracks: tracks))
+        workspace.updateIdea(updatedIdea)
+        pickedSongs.removeAll()
     }
 
     private var genericContent: some View {
@@ -917,9 +1055,9 @@ private struct IdeaCategoryDetailContent: View {
 
     private func trackRow(_ track: MusicTrack) -> some View {
         HStack(spacing: AppTheme.Spacing.compact) {
-            Image(systemName: "music.note")
-                .foregroundStyle(AppTheme.ColorToken.accent)
-                .frame(width: 28, height: 44)
+            MusicTrackArtwork(track: track)
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.title)
@@ -933,18 +1071,27 @@ private struct IdeaCategoryDetailContent: View {
 
             Spacer(minLength: AppTheme.Spacing.compact)
 
-            if track.externalURL != nil {
-                Image(systemName: "arrow.up.forward")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            if track.previewURL != nil {
+                MusicPreviewButton(track: track)
+            }
+
+            if let externalURL = track.externalURL {
+                Link(destination: externalURL) {
+                    Image(systemName: "arrow.up.forward")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: AppTheme.Layout.minimumTouchTarget, height: AppTheme.Layout.minimumTouchTarget)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Open \(track.title) in \(track.providerID.displayName)")
             }
         }
         .frame(minHeight: 56)
-        .contentShape(Rectangle())
     }
 }
 
 private struct EventIdeaDetailCard: View {
+    @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var weather = EventWeatherModel()
 
@@ -993,7 +1140,7 @@ private struct EventIdeaDetailCard: View {
                 EventIdeaMetadataRow(
                     title: "Budget Limit",
                     value: proposedBudget.formatted(
-                        .currency(code: Locale.current.currency?.identifier ?? "USD")
+                        .currency(code: workspace.currencyCode)
                     ),
                     symbol: "chart.pie.fill"
                 )
@@ -1175,11 +1322,13 @@ private struct IdeaMetadataRow: View {
 
 private struct IdeaEditorView: View {
     @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(MusicPreviewPlayer.self) private var previewPlayer
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var title = ""
     @State private var note = ""
+    @State private var linkAddress = ""
     @State private var category: IdeaCategory = .other
     @State private var isChoosingCategory = true
     @State private var categoryPage = 0
@@ -1208,6 +1357,9 @@ private struct IdeaEditorView: View {
     @State private var tripDestination = ""
     @State private var tripNights = ""
     @State private var musicTracks: [MusicTrack] = []
+    @State private var editingMusicPlaylistID: UUID?
+    @State private var isPickingMusic = false
+    @State private var pickedSongs: [Song] = []
     @State private var eventCategory: TimelineCategory = .other
     @State private var eventPurpose: EventPurpose = .planning
     @State private var eventAudience: EventAudience = .inherited
@@ -1242,13 +1394,22 @@ private struct IdeaEditorView: View {
         _category = State(initialValue: existingIdea.category)
         _isChoosingCategory = State(initialValue: false)
         _categoryPage = State(initialValue: Self.legacyAttendableCategories.contains(existingIdea.category) ? 1 : 0)
-        _estimatedCost = State(initialValue: existingIdea.estimatedCost.map { String($0) } ?? "")
+        _estimatedCost = State(
+            initialValue: existingIdea.estimatedCost.map {
+                MoneyInputFormatter.editingText(
+                    from: NSDecimalNumber(decimal: $0).stringValue,
+                    allowsFraction: true
+                )
+            } ?? ""
+        )
         _imageData = State(initialValue: existingIdea.imageData)
         _showOnInvitation = State(initialValue: existingIdea.isShownOnInvitation)
 
         switch existingIdea.configuration {
         case .standard:
             break
+        case .link(let configuration):
+            _linkAddress = State(initialValue: configuration.url.absoluteString)
         case .attire(let configuration):
             _attireStyle = State(initialValue: configuration.style)
             _attireRestrictions = State(initialValue: configuration.restrictions)
@@ -1294,7 +1455,10 @@ private struct IdeaEditorView: View {
             )
             _eventBudgetAmount = State(
                 initialValue: configuration.proposedBudget.map {
-                    NSDecimalNumber(decimal: $0).stringValue
+                    MoneyInputFormatter.editingText(
+                        from: NSDecimalNumber(decimal: $0).stringValue,
+                        allowsFraction: false
+                    )
                 } ?? ""
             )
             _includesProposedDate = State(initialValue: configuration.proposedDate != nil)
@@ -1307,7 +1471,13 @@ private struct IdeaEditorView: View {
             _attireRestrictions = State(initialValue: configuration.attireGuidance)
         case .registry(let configuration):
             _registryCategory = State(initialValue: configuration.category)
-            _registryPrice = State(initialValue: configuration.price.map { NSDecimalNumber(decimal: $0).stringValue } ?? "")
+            _registryPrice = State(
+                initialValue: configuration.price.map {
+                    MoneyInputFormatter.editingText(
+                        from: NSDecimalNumber(decimal: $0).stringValue
+                    )
+                } ?? ""
+            )
             _registryQuantity = State(initialValue: configuration.quantity)
         }
     }
@@ -1320,6 +1490,12 @@ private struct IdeaEditorView: View {
         note.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var ideaBeingEdited: WeddingIdea? {
+        if let existingIdea { return existingIdea }
+        guard category == .music, let editingMusicPlaylistID else { return nil }
+        return workspace.ideas.first { $0.id == editingMusicPlaylistID }
+    }
+
     private var suggestedTitle: String {
         switch category {
         case .event:
@@ -1328,6 +1504,8 @@ private struct IdeaEditorView: View {
                 : eventCategory.title
         case .registry:
             return registryCategory == .cashFund ? "Cash Fund" : "Registry Gift"
+        case .link:
+            return "Website"
         case .attire:
             return attireStyle == .any ? "Attire" : "\(attireStyle.title) Attire"
         case .venue:
@@ -1339,13 +1517,7 @@ private struct IdeaEditorView: View {
             default: foodType.title
             }
         case .music:
-            if musicTracks.count == 1, let track = musicTracks.first {
-                return track.title
-            } else if musicTracks.count > 1 {
-                return "Music Playlist"
-            } else {
-                return "Music"
-            }
+            return "\(workspace.selectedEventTitle) Playlist"
         case .flowers:
             return flowerFocus == .other ? "Flowers" : "\(flowerFocus.title) Flowers"
         case .photography:
@@ -1370,6 +1542,7 @@ private struct IdeaEditorView: View {
 
     private var resolvedTitle: String {
         if category == .event { return suggestedTitle }
+        if category == .music { return suggestedTitle }
         return trimmedTitle.isEmpty ? suggestedTitle : trimmedTitle
     }
 
@@ -1377,6 +1550,7 @@ private struct IdeaEditorView: View {
         switch category {
         case .event: "Why should this event happen? (optional)"
         case .registry: "Why would this be useful? (optional)"
+        case .link: "Description (optional)"
         case .attire: "Extra guidance (optional)"
         case .venue: "What stands out about this place? (optional)"
         case .food: "What should collaborators know? (optional)"
@@ -1404,21 +1578,22 @@ private struct IdeaEditorView: View {
         case .honeymoon: "Estimated trip cost"
         case .other: "Estimated cost"
         case .registry: "Estimated cost"
+        case .link: "Estimated cost"
         }
     }
 
-    private var parsedEstimate: Int? {
+    private var normalizedLinkURL: URL? {
+        LinkIdeaConfiguration.normalizedURL(from: linkAddress)
+    }
+
+    private var parsedEstimate: Decimal? {
         guard !estimatedCost.isEmpty else { return nil }
-        return Int(estimatedCost)
+        return MoneyInputFormatter.decimal(from: estimatedCost)
     }
 
     private var parsedEventBudget: Decimal? {
         guard !eventBudgetAmount.isEmpty else { return nil }
-        let decimalSeparator = Locale.current.decimalSeparator ?? "."
-        let normalized = eventBudgetAmount
-            .replacingOccurrences(of: decimalSeparator, with: ".")
-            .replacingOccurrences(of: ",", with: "")
-        return Decimal(string: normalized)
+        return MoneyInputFormatter.decimal(from: eventBudgetAmount)
     }
 
     private var hasValidEventBudget: Bool {
@@ -1443,25 +1618,31 @@ private struct IdeaEditorView: View {
     private var hasValidCategoryNumbers: Bool {
         let standardNumbersAreValid = [foodServings, venueCapacity, photographyHours, invitationQuantity, tripNights]
             .allSatisfy(isValidOptionalInt)
-        let registryPriceIsValid = registryPrice.isEmpty || Decimal(string: registryPrice) != nil
+        let registryPriceIsValid = registryPrice.isEmpty
+            || MoneyInputFormatter.decimal(from: registryPrice) != nil
         return standardNumbersAreValid && registryPriceIsValid
     }
 
     private var isValid: Bool {
-        hasValidEstimate && hasValidCategoryNumbers && hasValidEventBudget
+        hasValidEstimate
+            && hasValidCategoryNumbers
+            && hasValidEventBudget
+            && (category != .link || (!trimmedTitle.isEmpty && normalizedLinkURL != nil))
     }
 
     private var editedIdea: WeddingIdea {
-        WeddingIdea(
-            id: existingIdea?.id ?? UUID(),
-            eventID: existingIdea?.eventID,
+        let baseIdea = ideaBeingEdited
+        return WeddingIdea(
+            id: baseIdea?.id ?? UUID(),
+            eventID: baseIdea?.eventID ?? workspace.selectedEventID,
             title: resolvedTitle,
             note: trimmedNote,
             category: category,
-            submittedBy: existingIdea?.submittedBy ?? workspace.members.first?.name ?? "You",
-            estimatedCost: parsedEstimate,
-            status: existingIdea?.status ?? .new,
-            submittedAt: existingIdea?.submittedAt ?? .now,
+            submittedBy: baseIdea?.submittedBy ?? workspace.members.first?.name ?? "You",
+            submittedByUserID: baseIdea?.submittedByUserID,
+            estimatedCost: category == .music || category == .link ? nil : parsedEstimate,
+            status: category == .music ? .chosen : baseIdea?.status ?? .new,
+            submittedAt: baseIdea?.submittedAt ?? .now,
             imageData: imageData,
             configuration: ideaConfiguration,
             invitationVisibility: category.supportsInvitationVisibility
@@ -1471,12 +1652,18 @@ private struct IdeaEditorView: View {
     }
 
     private var hasChanges: Bool {
-        guard let existingIdea else { return true }
-        return editedIdea != existingIdea
+        guard let ideaBeingEdited else { return true }
+        return editedIdea != ideaBeingEdited
     }
 
     private var ideaConfiguration: IdeaConfiguration {
         switch category {
+        case .link:
+            return .link(
+                LinkIdeaConfiguration(
+                    url: normalizedLinkURL ?? URL(string: "https://example.invalid")!
+                )
+            )
         case .event:
             return .event(
                 EventIdeaConfiguration(
@@ -1498,7 +1685,9 @@ private struct IdeaEditorView: View {
             return .registry(
                 RegistryIdeaConfiguration(
                     category: registryCategory,
-                    price: registryPrice.isEmpty ? nil : Decimal(string: registryPrice),
+                    price: registryPrice.isEmpty
+                        ? nil
+                        : MoneyInputFormatter.decimal(from: registryPrice),
                     quantity: registryQuantity
                 )
             )
@@ -1580,7 +1769,7 @@ private struct IdeaEditorView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        .navigationTitle(isChoosingCategory ? "Choose a Category" : existingIdea == nil ? "New Idea" : "Edit Idea")
+        .navigationTitle(editorTitle)
         .navigationBarTitleDisplayMode(.inline)
         .appKeyboardDismissal()
         .toolbar {
@@ -1598,7 +1787,7 @@ private struct IdeaEditorView: View {
                 }
             } else {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(existingIdea == nil ? "Add" : "Save") {
+                    Button(ideaBeingEdited == nil ? "Add" : "Save") {
                         saveIdea()
                     }
                     .disabled(!isValid || !hasChanges)
@@ -1613,158 +1802,306 @@ private struct IdeaEditorView: View {
         } message: {
             Text("Event ideas are only available in the main event context.")
         }
+        .onDisappear {
+            previewPlayer.stop()
+        }
     }
 
     private var categoryChooser: some View {
-        Form {
-            Section {
-                categoryGrid(selectedCategory: category)
-                    .listRowInsets(categoryGridInsets)
-                    .listRowBackground(Color.clear)
-            }
+        ScrollView {
+            categoryGrid(selectedCategory: category)
+                .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+                .padding(.top, AppTheme.Spacing.compact)
+                .padding(.bottom, AppTheme.Layout.screenBottom)
         }
+        .scrollIndicators(.hidden)
+        .background(AppTheme.ColorToken.background)
     }
 
     private func ideaEditor(for category: IdeaCategory) -> some View {
-        ScrollViewReader { proxy in
-            Form {
-                Section {
-                    categoryGrid(selectedCategory: category)
-                        .listRowInsets(categoryGridInsets)
-                        .listRowBackground(Color.clear)
-                }
+        Form {
+            selectedCategorySection(for: category)
+
+            switch category {
+            case .link:
+                categoryConfiguration(for: category)
+                    .listRowBackground(AppTheme.ColorToken.surface)
+
+            case .music:
+                categoryConfiguration(for: category)
+                    .listRowBackground(AppTheme.ColorToken.surface)
+                playlistNotesSection
+
+            case .event:
+                categoryConfiguration(for: category)
+                    .listRowBackground(AppTheme.ColorToken.surface)
+                ideaIdentitySection(for: category)
+                eventPlanningSection
+
+            case .registry:
+                ideaIdentitySection(for: category)
+                categoryConfiguration(for: category)
+                    .listRowBackground(AppTheme.ColorToken.surface)
+
+            default:
+                ideaIdentitySection(for: category)
+                categoryConfiguration(for: category)
+                    .listRowBackground(AppTheme.ColorToken.surface)
 
                 if category.supportsInvitationVisibility {
-                    Section {
-                        Toggle(isOn: $showOnInvitation) {
-                            Label("Show to Guests", systemImage: "person.crop.rectangle")
-                        }
-                    } header: {
-                        Text("Invitation")
-                    } footer: {
-                        if category == .attire {
-                            Text(
-                                showOnInvitation
-                                    ? "When approved, this becomes an acceptable dress option for this event."
-                                    : "This attire idea stays in planning, even after it is approved."
-                            )
-                        } else {
-                            Text(
-                                showOnInvitation
-                                    ? "When approved, this appears in the event details guests can see."
-                                    : "This idea stays with the planning team, even after it is approved."
-                            )
-                        }
-                    }
-                    .id(Self.ideaFieldsAnchor)
+                    invitationVisibilitySection(for: category)
                 }
 
-                categoryConfiguration(for: category)
-                    .id(
-                        category.supportsInvitationVisibility
-                            ? Self.categoryConfigurationAnchor
-                            : Self.ideaFieldsAnchor
-                    )
-
-                Section {
-                    if category != .event {
-                        TextField("Custom title (optional)", text: $title)
-                    }
-
-                    TextField(notePrompt, text: $note, axis: .vertical)
-                        .lineLimit(3...6)
-                } header: {
-                    Text("Context")
-                } footer: {
-                    if category != .event {
-                        Text("Leave the title blank to use “\(suggestedTitle)”.")
-                    }
-                }
-                Section(category == .event ? "Cover" : "Photo") {
-                    PhotoAttachmentPicker(
-                        imageData: $imageData,
-                        emptySymbol: category.symbol,
-                        suggestedConcept: "Wedding \(category.title.lowercased()) inspiration for \(resolvedTitle)"
-                    )
-                }
-
-                if category == .event {
-                    Section {
-                        EventBudgetAmountField(amount: $eventBudgetAmount)
-
-                        LabeledContent {
-                            TextField("Optional", text: $estimatedCost)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                                .monospacedDigit()
-                        } label: {
-                            Text("Estimated Cost")
-                        }
-                    } header: {
-                        Text("Planning")
-                    } footer: {
-                        if !hasValidEventBudget {
-                            Text("Enter a budget greater than zero, or leave it blank.")
-                                .foregroundStyle(.red)
-                        } else {
-                            Text("The budget is the event’s spending limit. Estimated cost becomes a tracked cost when this idea is approved.")
-                        }
-                    }
-                } else if category != .registry {
-                    Section {
-                        TextField(estimatePrompt, text: $estimatedCost)
-                            .keyboardType(.numberPad)
-                    } header: {
-                        Text("Cost Estimate")
-                    } footer: {
-                        Text("Optional. The estimate contributes to planning totals and can become a tracked cost when the idea is approved.")
-                    }
-                }
+                costEstimateSection(for: category)
             }
-            .task(id: category) {
-                try? await Task.sleep(for: .milliseconds(260))
-                withAnimation(.snappy) {
-                    proxy.scrollTo(Self.ideaFieldsAnchor, anchor: .top)
-                }
+        }
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.ColorToken.background)
+        .onChange(of: eventCategory) { _, updatedCategory in
+            if updatedCategory == .honeymoon {
+                eventPurpose = .eventExperience
+                eventAudience = .hostsOnly
+            } else if eventAudience == .hostsOnly {
+                eventAudience = .inherited
             }
-            .onChange(of: eventCategory) { _, updatedCategory in
-                if updatedCategory == .honeymoon {
-                    eventPurpose = .eventExperience
-                    eventAudience = .hostsOnly
-                } else if eventAudience == .hostsOnly {
-                    eventAudience = .inherited
-                }
+        }
+        .sheet(isPresented: $isEditingEventLocation) {
+            EventLocationEditorView(location: eventLocation) { updatedLocation in
+                eventLocation = updatedLocation
             }
-            .sheet(isPresented: $isEditingEventLocation) {
-                EventLocationEditorView(location: eventLocation) { updatedLocation in
-                    eventLocation = updatedLocation
-                }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isEditingEventDateAndTime) {
+            EventDateTimeEditorView(
+                startsAt: eventProposedDate,
+                endsAt: eventProposedEndDate,
+                isAllDay: eventIsAllDay,
+                timeZoneIdentifier: eventTimeZoneIdentifier
+            ) { updatedStart, updatedEnd, updatedAllDay, updatedTimeZone in
+                eventProposedDate = updatedStart
+                eventProposedEndDate = updatedEnd
+                eventIsAllDay = updatedAllDay
+                eventTimeZoneIdentifier = updatedTimeZone
+                includesProposedDate = true
             }
-            .sheet(isPresented: $isEditingEventDateAndTime) {
-                EventDateTimeEditorView(
-                    startsAt: eventProposedDate,
-                    endsAt: eventProposedEndDate,
-                    isAllDay: eventIsAllDay,
-                    timeZoneIdentifier: eventTimeZoneIdentifier
-                ) { updatedStart, updatedEnd, updatedAllDay, updatedTimeZone in
-                    eventProposedDate = updatedStart
-                    eventProposedEndDate = updatedEnd
-                    eventIsAllDay = updatedAllDay
-                    eventTimeZoneIdentifier = updatedTimeZone
-                    includesProposedDate = true
-                }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .musicPicker(
+            isPresented: $isPickingMusic,
+            title: Text("Add to \(workspace.selectedEventTitle)"),
+            selection: $pickedSongs
+        )
+        .onChange(of: pickedSongs) { _, songs in
+            appendPickedSongs(songs)
         }
     }
 
-    private static let ideaFieldsAnchor = "idea-fields"
-    private static let categoryConfigurationAnchor = "category-configuration"
+    private func selectedCategorySection(for category: IdeaCategory) -> some View {
+        Section {
+            Button {
+                withAnimation(.snappy) {
+                    isChoosingCategory = true
+                }
+            } label: {
+                HStack(spacing: AppTheme.Spacing.standard) {
+                    Image(systemName: category.symbol)
+                        .symbolRenderingMode(.hierarchical)
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(category.artworkAccent)
+                        .frame(width: 48, height: 48)
+                        .background(
+                            category.artworkAccent.opacity(0.12),
+                            in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                        )
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(category.title)
+                            .font(.headline)
+                            .foregroundStyle(AppTheme.ColorToken.textPrimary)
+
+                        Text("For \(workspace.selectedEventTitle)")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.ColorToken.textSecondary)
+                            .lineLimit(2)
+                    }
+
+                    Spacer(minLength: AppTheme.Spacing.compact)
+
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.ColorToken.accent)
+                        .accessibilityHidden(true)
+                }
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: AppTheme.Layout.minimumTouchTarget,
+                    alignment: .leading
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                "Idea type, \(category.title), for \(workspace.selectedEventTitle)"
+            )
+            .accessibilityHint("Choose a different idea type")
+        } header: {
+            Text("Idea Type")
+        }
+        .listRowBackground(AppTheme.ColorToken.surface)
+    }
+
+    private func ideaIdentitySection(for category: IdeaCategory) -> some View {
+        Section {
+            if category != .event {
+                TextField(titlePrompt(for: category), text: $title)
+                    .textInputAutocapitalization(.sentences)
+            }
+
+            TextField(notePrompt, text: $note, axis: .vertical)
+                .lineLimit(3...6)
+
+            PhotoAttachmentPicker(
+                imageData: $imageData,
+                emptySymbol: category.symbol,
+                fallbackColors: category.artworkColors,
+                fallbackAccent: category.artworkAccent,
+                suggestedConcept: "Wedding \(category.title.lowercased()) inspiration for \(resolvedTitle)"
+            )
+        } header: {
+            Text(identitySectionTitle(for: category))
+        } footer: {
+            if category == .event {
+                Text("Explain what makes this event worth adding. The cover helps everyone recognize it at a glance.")
+            } else {
+                Text("Leave the title blank to use “\(suggestedTitle)”.")
+            }
+        }
+        .listRowBackground(AppTheme.ColorToken.surface)
+    }
+
+    private var playlistNotesSection: some View {
+        Section {
+            TextField(notePrompt, text: $note, axis: .vertical)
+                .lineLimit(2...5)
+        } header: {
+            Text("Playlist Direction")
+        } footer: {
+            Text("Add a mood, moment, or request that helps everyone choose songs for this event.")
+        }
+        .listRowBackground(AppTheme.ColorToken.surface)
+    }
+
+    private func invitationVisibilitySection(for category: IdeaCategory) -> some View {
+        Section {
+            Toggle(isOn: $showOnInvitation) {
+                Label("Show to Guests", systemImage: "person.crop.rectangle")
+            }
+        } header: {
+            Text("Guest Visibility")
+        } footer: {
+            if category == .attire {
+                Text(
+                    showOnInvitation
+                        ? "When approved, this becomes an acceptable dress option for this event."
+                        : "This attire idea stays in planning, even after it is approved."
+                )
+            } else {
+                Text(
+                    showOnInvitation
+                        ? "When approved, this appears in the event details guests can see."
+                        : "This idea stays with the planning team, even after it is approved."
+                )
+            }
+        }
+        .listRowBackground(AppTheme.ColorToken.surface)
+    }
+
+    private var eventPlanningSection: some View {
+        Section {
+            EventBudgetAmountField(
+                amount: $eventBudgetAmount,
+                currencyCode: workspace.currencyCode
+            )
+
+            MoneyAmountField(
+                amount: $estimatedCost,
+                title: "Estimated Cost",
+                currencyCode: workspace.currencyCode
+            )
+        } header: {
+            Text("Budget & Cost")
+        } footer: {
+            if !hasValidEventBudget {
+                Text("Enter a budget greater than zero, or leave it blank.")
+                    .foregroundStyle(AppTheme.ColorToken.destructive)
+            } else {
+                Text("Set a spending limit only when this event needs one. The estimate becomes a tracked cost after approval.")
+            }
+        }
+        .listRowBackground(AppTheme.ColorToken.surface)
+    }
+
+    private func costEstimateSection(for category: IdeaCategory) -> some View {
+        Section {
+            MoneyAmountField(
+                amount: $estimatedCost,
+                title: estimatePrompt,
+                placeholder: "Optional",
+                symbol: category.symbol,
+                style: .prominent,
+                currencyCode: workspace.currencyCode
+            )
+        } header: {
+            Text("Cost Estimate")
+        } footer: {
+            Text("Optional. Add this only when the idea affects the event budget.")
+        }
+        .listRowBackground(AppTheme.ColorToken.surface)
+    }
+
+    private func identitySectionTitle(for category: IdeaCategory) -> String {
+        switch category {
+        case .event: "Event Story & Cover"
+        case .registry: "Gift or Fund"
+        case .venue: "Venue Idea"
+        case .attire: "Attire Idea"
+        case .flowers: "Floral Idea"
+        case .food: "Food or Cake Idea"
+        case .photography: "Photography Idea"
+        case .decor: "Decor Idea"
+        case .invitations: "Invitation Idea"
+        case .honeymoon: "Trip Idea"
+        case .other: "Idea"
+        case .link, .music: category.title
+        }
+    }
+
+    private func titlePrompt(for category: IdeaCategory) -> String {
+        switch category {
+        case .registry: "Gift or fund name (optional)"
+        case .venue: "Venue name (optional)"
+        case .attire: "Look name (optional)"
+        case .flowers: "Arrangement name (optional)"
+        case .food: "Dish, cake, or vendor (optional)"
+        case .photography: "Photographer or concept (optional)"
+        case .decor: "Decor idea name (optional)"
+        case .invitations: "Invitation concept (optional)"
+        case .honeymoon: "Trip name (optional)"
+        case .other: "Idea title (optional)"
+        case .event, .link, .music: "Title"
+        }
+    }
+
+    private var editorTitle: String {
+        if isChoosingCategory { return "Choose a Category" }
+        if category == .music { return "Event Playlist" }
+        return ideaBeingEdited == nil ? "New Idea" : "Edit Idea"
+    }
+
     private static let categoryPages: [[IdeaCategory]] = [
-        [.other, .event, .registry, .attire, .food, .flowers, .music, .decor, .invitations]
+        [.link, .event, .registry, .attire, .food, .flowers, .music, .decor, .invitations, .other]
     ]
     private static let legacyAttendableCategories: Set<IdeaCategory> = [.venue, .photography, .honeymoon]
 
@@ -1778,35 +2115,30 @@ private struct IdeaEditorView: View {
         return pages
     }
 
-    private var categoryGridInsets: EdgeInsets {
-        EdgeInsets(
-            top: AppTheme.Spacing.compact,
-            leading: 0,
-            bottom: AppTheme.Spacing.compact,
-            trailing: 0
-        )
-    }
-
     private func categoryGrid(selectedCategory: IdeaCategory?) -> some View {
         TabView(selection: $categoryPage) {
             ForEach(visibleCategoryPages.indices, id: \.self) { pageIndex in
-                LazyVGrid(
-                    columns: Array(
-                        repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.compact),
-                        count: 3
-                    ),
-                    spacing: AppTheme.Spacing.compact
-                ) {
-                    ForEach(visibleCategoryPages[pageIndex]) { option in
-                        categoryTile(option, isSelected: selectedCategory == option)
+                VStack(spacing: 0) {
+                    LazyVGrid(
+                        columns: Array(
+                            repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.compact),
+                            count: 3
+                        ),
+                        spacing: AppTheme.Spacing.compact
+                    ) {
+                        ForEach(visibleCategoryPages[pageIndex]) { option in
+                            categoryTile(option, isSelected: selectedCategory == option)
+                        }
                     }
+
+                    Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 2)
                 .tag(pageIndex)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
-        .frame(height: dynamicTypeSize.isAccessibilitySize ? 390 : 300)
+        .frame(height: dynamicTypeSize.isAccessibilitySize ? 500 : 390)
         .accessibilityLabel("Idea categories")
     }
 
@@ -1828,7 +2160,7 @@ private struct IdeaEditorView: View {
                         .foregroundStyle(
                             isContextRestricted
                                 ? AppTheme.ColorToken.textSecondary
-                                : isSelected ? Color.white : option.artworkAccent
+                                : isSelected ? AppTheme.ColorToken.onAccent : option.artworkAccent
                         )
                         .frame(width: 38, height: 38)
                         .background(
@@ -1845,7 +2177,7 @@ private struct IdeaEditorView: View {
                     } else if isSelected {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption2.weight(.bold))
-                            .foregroundStyle(.white, AppTheme.ColorToken.accent)
+                            .foregroundStyle(AppTheme.ColorToken.onAccent, AppTheme.ColorToken.accent)
                             .offset(x: 4, y: -4)
                     }
                 }
@@ -1919,7 +2251,7 @@ private struct IdeaEditorView: View {
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                         }
-                        .foregroundStyle(isSelected ? .white : .primary)
+                        .foregroundStyle(isSelected ? AppTheme.ColorToken.onAccent : .primary)
                         .frame(width: 98, height: 76)
                         .background(
                             isSelected ? AppTheme.ColorToken.accent : Color.clear,
@@ -1974,6 +2306,29 @@ private struct IdeaEditorView: View {
     @ViewBuilder
     private func categoryConfiguration(for category: IdeaCategory) -> some View {
         switch category {
+        case .link:
+            Section {
+                TextField("Website address", text: $linkAddress)
+                    .keyboardType(.URL)
+                    .textContentType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                TextField("Title", text: $title)
+
+                TextField("Description (optional)", text: $note, axis: .vertical)
+                    .lineLimit(3...6)
+            } header: {
+                Text("Website")
+            } footer: {
+                if !linkAddress.isEmpty && normalizedLinkURL == nil {
+                    Text("Enter a valid website address.")
+                        .foregroundStyle(AppTheme.ColorToken.destructive)
+                } else {
+                    Text("Paste a website address. Gatherory adds https:// when it’s omitted.")
+                }
+            }
+
         case .event:
             Section("Event Category") {
                 EventCategoryStrip(selection: $eventCategory)
@@ -2051,8 +2406,14 @@ private struct IdeaEditorView: View {
                     symbol: \.symbol
                 )
 
-                TextField("Price (optional)", text: $registryPrice)
-                    .keyboardType(.decimalPad)
+                MoneyAmountField(
+                    amount: $registryPrice,
+                    title: "Price",
+                    placeholder: "Optional",
+                    symbol: registryCategory.symbol,
+                    style: .prominent,
+                    currencyCode: workspace.currencyCode
+                )
 
                 Stepper("Quantity: \(registryQuantity)", value: $registryQuantity, in: 1...20)
             } header: {
@@ -2215,6 +2576,32 @@ private struct IdeaEditorView: View {
 
         case .music:
             Section {
+                HStack(spacing: AppTheme.Spacing.standard) {
+                    Image(systemName: "person.3.sequence.fill")
+                        .symbolRenderingMode(.hierarchical)
+                        .font(.title2)
+                        .foregroundStyle(AppTheme.ColorToken.accent)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            AppTheme.ColorToken.accent.opacity(0.12),
+                            in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                        )
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(workspace.selectedEventTitle) Playlist")
+                            .font(.headline)
+
+                        Text(
+                            musicTracks.isEmpty
+                                ? "Ready for its first song"
+                                : "\(musicTracks.count) \(musicTracks.count == 1 ? "song" : "songs")"
+                        )
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+
                 ForEach(musicTracks) { track in
                     MusicTrackRow(track: track)
                         .swipeActions {
@@ -2224,22 +2611,19 @@ private struct IdeaEditorView: View {
                         }
                 }
 
-                NavigationLink {
-                    MusicSearchView { track in
-                        guard !musicTracks.contains(where: { $0.id == track.id }) else { return }
-                        musicTracks.append(track)
-                    }
+                Button {
+                    isPickingMusic = true
                 } label: {
                     Label(
-                        musicTracks.isEmpty ? "Start Playlist" : "Add Another Song",
-                        systemImage: "music.note.list"
+                        musicTracks.isEmpty ? "Add Songs" : "Add More Songs",
+                        systemImage: "music.note.badge.plus"
                     )
                     .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
                 }
             } header: {
-                Text("Playlist")
+                Text("Shared Event Playlist")
             } footer: {
-                Text("Search Apple Music now. The provider-based music architecture leaves room for Spotify and other catalogs later.")
+                Text("Gatherory keeps one playlist for this event. Everyone participating in the event can contribute songs.")
             }
 
         case .other:
@@ -2253,6 +2637,11 @@ private struct IdeaEditorView: View {
                 showOnInvitation = category.defaultInvitationVisibility == .shownToGuests
             }
             self.category = category
+            if category == .music {
+                loadEventPlaylistIfNeeded()
+            } else {
+                editingMusicPlaylistID = nil
+            }
             if isChoosingCategory {
                 beginEditing()
             }
@@ -2272,12 +2661,36 @@ private struct IdeaEditorView: View {
     }
 
     private func saveIdea() {
-        if existingIdea == nil {
+        if ideaBeingEdited == nil {
             workspace.addIdea(editedIdea)
         } else {
             workspace.updateIdea(editedIdea)
         }
         dismiss()
+    }
+
+    private func loadEventPlaylistIfNeeded() {
+        showOnInvitation = true
+        guard existingIdea == nil,
+              let playlist = workspace.musicPlaylist(for: workspace.selectedEventID) else {
+            return
+        }
+
+        editingMusicPlaylistID = playlist.id
+        title = playlist.title
+        note = playlist.note
+        imageData = playlist.imageData
+        musicTracks = playlist.musicTracks
+    }
+
+    private func appendPickedSongs(_ songs: [Song]) {
+        guard !songs.isEmpty else { return }
+        for song in songs {
+            let track = MusicTrack(appleMusicSong: song)
+            guard !musicTracks.contains(where: { $0.id == track.id }) else { continue }
+            musicTracks.append(track)
+        }
+        pickedSongs.removeAll()
     }
 }
 
@@ -2423,5 +2836,6 @@ private struct AttireStyleSilhouette: View {
         IdeasView()
             .environment(WeddingWorkspace.sample)
             .environment(MusicCatalog())
+            .environment(MusicPreviewPlayer())
     }
 }

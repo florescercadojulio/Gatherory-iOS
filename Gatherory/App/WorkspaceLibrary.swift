@@ -33,6 +33,43 @@ final class WorkspaceLibrary {
             selectedWorkspaceID = workspace.mainEventID
         }
     }
+
+    func remove(_ workspace: WeddingWorkspace) {
+        workspaces.removeAll { $0.mainEventID == workspace.mainEventID }
+        if selectedWorkspaceID == workspace.mainEventID {
+            selectedWorkspaceID = nil
+        }
+    }
+
+    func removeAll() {
+        selectedWorkspaceID = nil
+        workspaces.removeAll()
+    }
+
+    func replaceAll(with replacements: [WeddingWorkspace]) {
+        workspaces = replacements
+        if let selectedWorkspaceID,
+           !replacements.contains(where: { $0.mainEventID == selectedWorkspaceID }) {
+            self.selectedWorkspaceID = nil
+        }
+    }
+
+    func upsert(_ workspace: WeddingWorkspace) {
+        if let index = workspaces.firstIndex(where: {
+            $0.mainEventID == workspace.mainEventID
+        }) {
+            workspaces[index] = workspace
+        } else {
+            workspaces.append(workspace)
+        }
+    }
+
+    func remove(workspaceID: UUID) {
+        workspaces.removeAll { $0.mainEventID == workspaceID }
+        if selectedWorkspaceID == workspaceID {
+            selectedWorkspaceID = nil
+        }
+    }
 }
 
 extension WorkspaceLibrary {
@@ -54,12 +91,26 @@ extension WeddingWorkspace {
         timeZoneIdentifier: String = TimeZone.autoupdatingCurrent.identifier,
         eventLocation: EventLocation?,
         imageData: Data?,
-        budgetCap: Decimal? = nil
+        budgetCap: Decimal? = nil,
+        owner: UserAccount? = nil
     ) -> WeddingWorkspace {
+        let ownerName = owner?.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayName = ownerName.flatMap { $0.isEmpty ? nil : $0 } ?? "You"
+        let initials = displayName
+            .split(separator: " ")
+            .prefix(2)
+            .compactMap(\.first)
+            .map(String.init)
+            .joined()
+            .uppercased()
         let host = WeddingMember(
-            name: "You",
+            userID: owner?.id,
+            name: displayName,
             participantRole: .host,
-            initials: "Y",
+            initials: initials.isEmpty ? "Y" : initials,
+            email: owner?.email,
+            profileImageAssetName: owner?.profileImageAssetName,
+            profileImageURL: owner?.profileImageURL,
             planningPermission: .manage
         )
 
@@ -117,7 +168,7 @@ extension WeddingWorkspace {
         )
 
         return WeddingWorkspace(
-            title: "Maya & Theo",
+            title: "Maya & Theo’s Wedding",
             weddingDate: startsAt,
             mainEventLocation: venue,
             venueName: venue.title,

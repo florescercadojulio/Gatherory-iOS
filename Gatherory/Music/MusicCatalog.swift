@@ -30,9 +30,51 @@ struct MusicTrack: Identifiable, Codable, Hashable, Sendable {
     let artistName: String
     let albumTitle: String?
     let artworkURL: URL?
+    let previewURL: URL?
     let externalURL: URL?
     let isrc: String?
     let duration: TimeInterval?
+
+    init(
+        providerID: MusicProviderID,
+        catalogID: String,
+        title: String,
+        artistName: String,
+        albumTitle: String?,
+        artworkURL: URL?,
+        previewURL: URL? = nil,
+        externalURL: URL?,
+        isrc: String?,
+        duration: TimeInterval?
+    ) {
+        self.providerID = providerID
+        self.catalogID = catalogID
+        self.title = title
+        self.artistName = artistName
+        self.albumTitle = albumTitle
+        self.artworkURL = artworkURL
+        self.previewURL = previewURL
+        self.externalURL = externalURL
+        self.isrc = isrc
+        self.duration = duration
+    }
+}
+
+extension MusicTrack {
+    init(appleMusicSong song: Song) {
+        self.init(
+            providerID: .appleMusic,
+            catalogID: song.id.rawValue,
+            title: song.title,
+            artistName: song.artistName,
+            albumTitle: song.albumTitle,
+            artworkURL: song.artwork?.url(width: 600, height: 600),
+            previewURL: song.previewAssets?.compactMap(\.url).first,
+            externalURL: song.url,
+            isrc: song.isrc,
+            duration: song.duration
+        )
+    }
 }
 
 enum MusicAuthorizationState: Equatable, Sendable {
@@ -49,6 +91,16 @@ protocol MusicCatalogProviding: Sendable {
     func authorizationState() -> MusicAuthorizationState
     func requestAuthorization() async -> MusicAuthorizationState
     func searchSongs(matching term: String, limit: Int) async throws -> [MusicTrack]
+    /// Looks up fresh artwork from the provider using the durable catalog ID
+    /// we store with a shared song. Artwork URLs are deliberately treated as
+    /// cacheable display data, not the source of truth for a track.
+    func artworkURL(for track: MusicTrack) async -> URL?
+}
+
+extension MusicCatalogProviding {
+    func artworkURL(for track: MusicTrack) async -> URL? {
+        nil
+    }
 }
 
 struct AppleMusicCatalogProvider: MusicCatalogProviding {
@@ -68,19 +120,42 @@ struct AppleMusicCatalogProvider: MusicCatalogProviding {
         request.limit = limit
 
         let response = try await request.response()
-        return response.songs.map { song in
-            MusicTrack(
-                providerID: id,
-                catalogID: song.id.rawValue,
-                title: song.title,
-                artistName: song.artistName,
-                albumTitle: song.albumTitle,
-                artworkURL: song.artwork?.url(width: 600, height: 600),
-                externalURL: song.url,
-                isrc: song.isrc,
-                duration: song.duration
-            )
+        return response.songs.map(MusicTrack.init(appleMusicSong:))
+    }
+
+    func artworkURL(for track: MusicTrack) async -> URL? {
+        guard track.providerID == id else { return nil }
+        return await AppleMusicArtworkLookup.shared.artworkURL(for: track.catalogID)
+    }
+}
+
+/// A failed or omitted artwork URL must not make a shared playlist look
+/// incomplete. Apple Music catalog IDs survive local persistence and cloud
+/// sync, so use them to recover artwork on the device that is rendering it.
+private actor AppleMusicArtworkLookup {
+    static let shared = AppleMusicArtworkLookup()
+
+    private var cachedURLs: [String: URL?] = [:]
+
+    func artworkURL(for catalogID: String) async -> URL? {
+        if let cachedURL = cachedURLs[catalogID] {
+            return cachedURL
         }
+
+        let artworkURL: URL?
+        do {
+            let request = MusicCatalogResourceRequest<Song>(
+                matching: \.id,
+                equalTo: MusicItemID(catalogID)
+            )
+            let response = try await request.response()
+            artworkURL = response.items.first?.artwork?.url(width: 900, height: 900)
+        } catch {
+            artworkURL = nil
+        }
+
+        cachedURLs[catalogID] = artworkURL
+        return artworkURL
     }
 }
 
@@ -115,6 +190,11 @@ final class MusicCatalog {
             throw MusicCatalogError.providerUnavailable(id)
         }
         return try await provider.searchSongs(matching: term, limit: limit)
+    }
+
+    func artworkURL(for track: MusicTrack) async -> URL? {
+        guard let provider = provider(for: track.providerID) else { return nil }
+        return await provider.artworkURL(for: track)
     }
 
     private func provider(for id: MusicProviderID) -> (any MusicCatalogProviding)? {

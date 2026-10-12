@@ -27,22 +27,28 @@ enum AuthenticationProvider: String, Codable, CaseIterable, Sendable {
 }
 
 struct UserAccount: Identifiable, Codable, Hashable, Sendable {
-    let id: UUID
+    /// Better Auth's `user.id` is the canonical identity across every client.
+    let id: String
     var email: String
     var displayName: String
     var role: AccountRole
     var authenticationProvider: AuthenticationProvider
     var createdAt: Date
     var profileImageAssetName: String?
+    /// Provider-hosted avatar returned by Better Auth. Sign in with Apple does
+    /// not provide one, so Apple accounts use the initials fallback until a
+    /// Gatherory profile photo is added.
+    var profileImageURL: URL?
 
     init(
-        id: UUID,
+        id: String,
         email: String,
         displayName: String,
         role: AccountRole,
         authenticationProvider: AuthenticationProvider,
         createdAt: Date,
-        profileImageAssetName: String? = nil
+        profileImageAssetName: String? = nil,
+        profileImageURL: URL? = nil
     ) {
         self.id = id
         self.email = email
@@ -51,12 +57,13 @@ struct UserAccount: Identifiable, Codable, Hashable, Sendable {
         self.authenticationProvider = authenticationProvider
         self.createdAt = createdAt
         self.profileImageAssetName = profileImageAssetName
+        self.profileImageURL = profileImageURL
     }
 }
 
 enum DevelopmentAccountFixtures {
     static let planner = UserAccount(
-        id: UUID(uuidString: "47415448-4552-4F52-9950-4C414E4E4552")!,
+        id: "47415448-4552-4F52-9950-4C414E4E4552",
         email: "planner@gatherory.test",
         displayName: "Gatherory Planner",
         role: .planner,

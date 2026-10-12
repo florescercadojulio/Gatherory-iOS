@@ -475,12 +475,7 @@ private struct TimelineItemEditorView: View {
                         toggle(member)
                     } label: {
                         HStack(spacing: AppTheme.Spacing.standard) {
-                            Text(member.initials)
-                                .font(.caption.bold())
-                                .foregroundStyle(.white)
-                                .frame(width: 34, height: 34)
-                                .background(AppTheme.ColorToken.accent, in: Circle())
-                                .accessibilityHidden(true)
+                            ParticipantAvatarView(member: member, size: 34)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(member.name)
@@ -656,7 +651,7 @@ private struct TimelineItemEditorView: View {
                     Image(systemName: option.symbol)
                         .symbolRenderingMode(.hierarchical)
                         .font(.title3.weight(.semibold))
-                        .foregroundStyle(isSelected ? Color.white : option.artworkAccent)
+                        .foregroundStyle(isSelected ? AppTheme.ColorToken.onAccent : option.artworkAccent)
                         .frame(width: 38, height: 38)
                         .background(
                             isSelected ? option.artworkAccent : Color.clear,
@@ -667,7 +662,7 @@ private struct TimelineItemEditorView: View {
                     if isSelected {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption2.weight(.bold))
-                            .foregroundStyle(.white, AppTheme.ColorToken.accent)
+                            .foregroundStyle(AppTheme.ColorToken.onAccent, AppTheme.ColorToken.accent)
                             .offset(x: 4, y: -4)
                     }
                 }
@@ -1137,9 +1132,9 @@ struct TimelineCollectionCard: View {
                         Spacer(minLength: 0)
                         Image(systemName: "checkmark")
                             .font(.caption.bold())
-                            .foregroundStyle(.white)
+                            .foregroundStyle(AppTheme.ColorToken.onAccent)
                             .frame(width: 30, height: 30)
-                            .background(.green, in: Circle())
+                            .background(AppTheme.ColorToken.success, in: Circle())
                     }
                     Spacer(minLength: 0)
                 }

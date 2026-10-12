@@ -111,7 +111,7 @@ struct EventLocationEditorView: View {
         } footer: {
             if let errorMessage = currentLocationModel.errorMessage {
                 Text(errorMessage)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppTheme.ColorToken.destructive)
             } else {
                 Text("Gatherory uses your location once to find the event address.")
             }
@@ -184,7 +184,7 @@ struct EventLocationEditorView: View {
                 HStack(spacing: AppTheme.Spacing.standard) {
                     Image(systemName: "mappin")
                         .font(.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppTheme.ColorToken.onAccent)
                         .frame(width: 44, height: 44)
                         .background(AppTheme.ColorToken.accent, in: Circle())
                         .accessibilityHidden(true)

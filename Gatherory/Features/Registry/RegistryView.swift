@@ -72,6 +72,7 @@ struct RegistryView: View {
                         } label: {
                             RegistryItemRow(
                                 item: item,
+                                currencyCode: workspace.currencyCode,
                                 transitionNamespace: registryTransition
                             )
                         }
@@ -161,6 +162,7 @@ enum RegistryCollection: String, CaseIterable, Identifiable {
 
 private struct RegistryItemRow: View {
     let item: RegistryItem
+    let currencyCode: String
     var transitionNamespace: Namespace.ID?
 
     var body: some View {
@@ -170,7 +172,7 @@ private struct RegistryItemRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)
                     .font(.headline)
-                Text(item.price, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))
+                Text(item.price, format: .currency(code: currencyCode))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -239,6 +241,7 @@ private struct RegistryItemDetailView: View {
             if let item {
                 RegistryItemDetailScreen(
                     item: item,
+                    currencyCode: workspace.currencyCode,
                     isRegistryShared: workspace.isRegistryShared
                 )
             } else {
@@ -284,6 +287,7 @@ private struct RegistryItemDetailScreen: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     let item: RegistryItem
+    let currencyCode: String
     let isRegistryShared: Bool
 
     var body: some View {
@@ -380,7 +384,7 @@ private struct RegistryItemDetailScreen: View {
         VStack(spacing: 0) {
             RegistryMetadataRow(
                 title: "Price",
-                value: item.price.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")),
+                value: item.price.formatted(.currency(code: currencyCode)),
                 symbol: "tag.fill"
             )
 
@@ -442,13 +446,17 @@ private struct RegistryItemEditorView: View {
         _title = State(initialValue: item?.title ?? "")
         _note = State(initialValue: item?.note ?? "")
         _category = State(initialValue: item?.category ?? .home)
-        _price = State(initialValue: item.map { NSDecimalNumber(decimal: $0.price).stringValue } ?? "")
+        _price = State(
+            initialValue: item.map {
+                MoneyInputFormatter.editingText(from: NSDecimalNumber(decimal: $0.price).stringValue)
+            } ?? ""
+        )
         _quantity = State(initialValue: item?.quantity ?? 1)
         _imageData = State(initialValue: item?.imageData)
     }
 
     private var parsedPrice: Decimal? {
-        Decimal(string: price)
+        MoneyInputFormatter.decimal(from: price)
     }
 
     private var trimmedTitle: String {
@@ -472,6 +480,7 @@ private struct RegistryItemEditorView: View {
                     suggestedConcept: "Wedding registry artwork for \(trimmedTitle.isEmpty ? category.title.lowercased() : trimmedTitle)"
                 )
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("Gift") {
                 TextField("Name", text: $title)
@@ -484,10 +493,15 @@ private struct RegistryItemEditorView: View {
                     }
                 }
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("Details") {
-                TextField("Price", text: $price)
-                    .keyboardType(.decimalPad)
+                MoneyAmountField(
+                    amount: $price,
+                    title: "Price",
+                    placeholder: "Required",
+                    currencyCode: workspace.currencyCode
+                )
                 Stepper("Quantity: \(quantity)", value: $quantity, in: minimumQuantity...20)
 
                 if minimumQuantity > 1 {
@@ -496,8 +510,11 @@ private struct RegistryItemEditorView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
         }
         .appKeyboardDismissal()
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.ColorToken.background)
         .navigationTitle(item == nil ? "Add to registry" : "Edit gift")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -513,6 +530,8 @@ private struct RegistryItemEditorView: View {
 
                     let updatedItem = RegistryItem(
                         id: item?.id ?? UUID(),
+                        eventID: item?.eventID ?? workspace.selectedEventID,
+                        sourceIdeaID: item?.sourceIdeaID,
                         title: trimmedTitle,
                         note: trimmedNote,
                         category: category,

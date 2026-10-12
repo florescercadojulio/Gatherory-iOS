@@ -5,6 +5,7 @@ struct HomeView: View {
     var onExitWorkspace: (() -> Void)?
 
     @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isInvitingCollaborators = false
@@ -96,6 +97,9 @@ struct HomeView: View {
             .padding(.bottom, AppTheme.Layout.screenBottom)
         }
         .scrollIndicators(.hidden)
+        .refreshable {
+            await cloudSync.synchronize(trigger: .manual)
+        }
         .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
         .scrollPosition(id: $visibleScrollTarget, anchor: .center)
         .appSoftScrollEdges()
@@ -388,13 +392,7 @@ struct HomeView: View {
         return VStack(spacing: 8) {
             HStack(spacing: -10) {
                 ForEach(displayedPeople.prefix(5)) { member in
-                    Text(member.initials)
-                        .font(.caption.bold())
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                        .background(.regularMaterial, in: Circle())
-                        .overlay(Circle().stroke(.white.opacity(0.72), lineWidth: 2))
-                        .accessibilityHidden(true)
+                    ParticipantAvatarView(member: member, size: 40, style: .hero)
                 }
             }
 
@@ -424,12 +422,7 @@ struct HomeView: View {
         } label: {
             HStack(spacing: -7) {
                 ForEach(coordinators.prefix(3)) { member in
-                    Text(member.initials)
-                        .font(.caption2.bold())
-                        .foregroundStyle(.primary)
-                        .frame(width: 28, height: 28)
-                        .background(.thinMaterial, in: Circle())
-                        .overlay(Circle().stroke(.primary.opacity(0.24), lineWidth: 0.5))
+                    ParticipantAvatarView(member: member, size: 28, style: .toolbar)
                 }
 
                 if coordinators.count > 3 {
@@ -709,7 +702,9 @@ private struct PullToCreateEventIndicator: View {
 
                 Image(systemName: "calendar.badge.plus")
                     .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(isArmed ? .white : AppTheme.ColorToken.accent)
+                    .foregroundStyle(
+                        isArmed ? AppTheme.ColorToken.onAccent : AppTheme.ColorToken.accent
+                    )
                     .symbolEffect(.bounce, value: isArmed)
             }
             .frame(width: 54, height: 54)
@@ -767,7 +762,7 @@ private struct EventDateScrubber: View {
                             Circle()
                                 .fill(
                                     isMainEvent
-                                        ? Color.orange
+                                        ? AppTheme.ColorToken.mainEventMarker
                                         : isCurrent ? AppTheme.ColorToken.accent : Color.white.opacity(0.68)
                                 )
                                 .frame(
@@ -791,7 +786,11 @@ private struct EventDateScrubber: View {
                 } else {
                     let currentReference = references[currentIndex]
                     Capsule()
-                        .fill(currentReference == .main ? Color.orange : AppTheme.ColorToken.accent)
+                        .fill(
+                            currentReference == .main
+                                ? AppTheme.ColorToken.mainEventMarker
+                                : AppTheme.ColorToken.accent
+                        )
                         .frame(width: 6, height: 20)
                         .overlay {
                             Capsule()

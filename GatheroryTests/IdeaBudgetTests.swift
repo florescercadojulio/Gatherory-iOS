@@ -126,7 +126,7 @@ struct IdeaBudgetTests {
         )
     }
 
-    private func makeIdea(cost: Int) -> WeddingIdea {
+    private func makeIdea(cost: Decimal) -> WeddingIdea {
         WeddingIdea(
             title: "Dinner",
             note: "",

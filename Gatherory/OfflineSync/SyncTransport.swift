@@ -35,9 +35,46 @@ nonisolated struct SyncPullPage: Codable, Sendable {
     let hasMore: Bool
 }
 
+nonisolated struct RemoteWorkspaceSnapshot: Codable, Sendable {
+    let scopeID: UUID
+    let payload: Data
+    let serverVersion: Int
+    let updatedAt: Date
+}
+
+nonisolated struct RemoteEntitySnapshot: Codable, Sendable {
+    let scopeID: UUID
+    let entityType: SyncEntityType
+    let entityID: UUID
+    let payload: Data
+    let serverVersion: Int
+    let updatedAt: Date
+}
+
+nonisolated struct SyncAccountState: Codable, Sendable {
+    let hasCompletedOnboarding: Bool
+}
+
+nonisolated struct SyncBootstrapResponse: Codable, Sendable {
+    /// Optional while older development deployments roll forward. A response
+    /// without this field can still infer completion from existing snapshots.
+    let account: SyncAccountState?
+    let snapshots: [RemoteWorkspaceSnapshot]
+    /// Optional while older deployments roll forward.
+    var entities: [RemoteEntitySnapshot]? = nil
+
+    var entitySnapshots: [RemoteEntitySnapshot] {
+        entities ?? []
+    }
+}
+
 protocol SyncTransport: Sendable {
     func push(_ mutations: [PendingMutationSnapshot]) async throws -> SyncPushResponse
     func pull(scopeID: UUID, after cursor: String?) async throws -> SyncPullPage
+}
+
+protocol WorkspaceSnapshotTransport: SyncTransport {
+    func bootstrap() async throws -> SyncBootstrapResponse
 }
 
 /// Applying the page and advancing its cursor must be one local transaction.
@@ -60,6 +97,10 @@ nonisolated struct SyncRunSummary: Sendable {
     var pushed = 0
     var acknowledged = 0
     var requiresAttention = 0
+    /// The first durable server rejection from this run. Keeping this on the
+    /// summary lets the presentation layer distinguish a rejected mutation
+    /// from a transient transport failure without exposing mutation payloads.
+    var attentionFailureCode: String?
     var pulled = 0
     var completedAt: Date?
 }

@@ -34,11 +34,7 @@ private func attireDescription(style: AttireStyle, guidance: String) -> String {
 }
 
 private func decimalAmount(from input: String) -> Decimal? {
-    let decimalSeparator = Locale.current.decimalSeparator ?? "."
-    let normalized = input
-        .replacingOccurrences(of: decimalSeparator, with: ".")
-        .replacingOccurrences(of: ",", with: "")
-    return Decimal(string: normalized)
+    MoneyInputFormatter.decimal(from: input)
 }
 
 private extension TimelineCategory {
@@ -94,7 +90,7 @@ struct EventCategoryStrip: View {
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                         }
-                        .foregroundStyle(isSelected ? .white : .primary)
+                        .foregroundStyle(isSelected ? AppTheme.ColorToken.onAccent : .primary)
                         .frame(width: 98, height: 76)
                         .background(
                             isSelected ? option.artworkAccent : AppTheme.ColorToken.elevatedSurface,
@@ -209,6 +205,7 @@ struct EventEditorView: View {
     @State private var didLoadExpenses = false
     @State private var isEditingBudget = false
     @State private var isEditingCosts = false
+    @State private var isChoosingEventType = false
 
     private let draftEventID: UUID
 
@@ -235,7 +232,12 @@ struct EventEditorView: View {
         _eventExpenses = State(initialValue: [])
         _usesBudget = State(initialValue: item?.budgetCap != nil)
         _mainBudgetAmount = State(
-            initialValue: item?.budgetCap.map { NSDecimalNumber(decimal: $0).stringValue } ?? ""
+            initialValue: item?.budgetCap.map {
+                MoneyInputFormatter.editingText(
+                    from: NSDecimalNumber(decimal: $0).stringValue,
+                    allowsFraction: false
+                )
+            } ?? ""
         )
         _selectedParticipantIDs = State(initialValue: Set(item?.participantIDs ?? []))
     }
@@ -278,11 +280,7 @@ struct EventEditorView: View {
 
     private var parsedMainBudget: Decimal? {
         guard !mainBudgetAmount.isEmpty else { return nil }
-        let decimalSeparator = Locale.current.decimalSeparator ?? "."
-        let normalized = mainBudgetAmount
-            .replacingOccurrences(of: decimalSeparator, with: ".")
-            .replacingOccurrences(of: ",", with: "")
-        return Decimal(string: normalized)
+        return MoneyInputFormatter.decimal(from: mainBudgetAmount)
     }
 
     private var currentAllocatedBudget: Decimal {
@@ -320,169 +318,250 @@ struct EventEditorView: View {
                 }
             }
         } header: {
-            Text(isMainEvent ? "Main Event" : "Event")
+            Text("Event Details")
         } footer: {
             if !isMainEvent && trimmedTitle.isEmpty {
                 Text("The event will be named “\(resolvedTitle)”.")
             }
         }
+        .listRowBackground(AppTheme.ColorToken.surface)
+    }
+
+    private var eventTypeSection: some View {
+        Section {
+            Button {
+                withAnimation(.snappy) {
+                    isChoosingEventType.toggle()
+                }
+            } label: {
+                HStack(spacing: AppTheme.Spacing.standard) {
+                    Image(systemName: category == .other ? "circle.slash" : category.symbol)
+                        .symbolRenderingMode(.hierarchical)
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(category.artworkAccent)
+                        .frame(width: 48, height: 48)
+                        .background(
+                            category.artworkAccent.opacity(0.12),
+                            in: RoundedRectangle(
+                                cornerRadius: AppTheme.Radius.control,
+                                style: .continuous
+                            )
+                        )
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(category == .other ? "Choose a Type" : category.title)
+                            .font(.headline)
+                            .foregroundStyle(AppTheme.ColorToken.textPrimary)
+
+                        Text(isChoosingEventType ? "Choose below" : "Tap to change")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.ColorToken.textSecondary)
+                    }
+
+                    Spacer(minLength: AppTheme.Spacing.compact)
+
+                    Image(systemName: isChoosingEventType ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.ColorToken.accent)
+                        .accessibilityHidden(true)
+                }
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: AppTheme.Layout.minimumTouchTarget,
+                    alignment: .leading
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                category == .other ? "Choose an event type" : "Event type, \(category.title)"
+            )
+            .accessibilityHint(
+                isChoosingEventType ? "Hides event types" : "Shows available event types"
+            )
+
+            if isChoosingEventType {
+                EventCategoryStrip(selection: $category)
+                    .listRowInsets(
+                        EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0)
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            Picker("Purpose", selection: $purpose) {
+                ForEach(EventPurpose.allCases) { option in
+                    Text(option.shortTitle).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+        } header: {
+            Text("Event Type")
+        } footer: {
+            Text(purpose.description)
+        }
+        .listRowBackground(AppTheme.ColorToken.surface)
+    }
+
+    private var attireSection: some View {
+        Section {
+            AttireStylePicker(selection: $attireStyle)
+
+            TextField("Colors, fabrics, or guidance (optional)", text: $dressCode, axis: .vertical)
+                .textInputAutocapitalization(.sentences)
+                .lineLimit(2...5)
+        } header: {
+            Text("Attire")
+        } footer: {
+            Text("Choose Any when this event doesn’t need attire guidance.")
+        }
+        .listRowBackground(AppTheme.ColorToken.surface)
+    }
+
+    private var whenAndWhereSection: some View {
+        Section("When & Where") {
+            Button {
+                isEditingDateAndTime = true
+            } label: {
+                if !isMainEvent && !hasScheduledDate {
+                    HStack(spacing: AppTheme.Spacing.standard) {
+                        Image(systemName: "calendar.badge.exclamationmark")
+                            .foregroundStyle(AppTheme.ColorToken.accent)
+                            .frame(width: 28)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Set Date & Time")
+                                .foregroundStyle(AppTheme.ColorToken.accent)
+                            Text("Required before this event appears on Home")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                    .contentShape(Rectangle())
+                } else {
+                    EventScheduleRow(
+                        startsAt: startsAt,
+                        endsAt: endsAt,
+                        isAllDay: isAllDay,
+                        timeZoneIdentifier: timeZoneIdentifier
+                    )
+                }
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                isEditingLocation = true
+            } label: {
+                editorRow(
+                    symbol: "mappin.and.ellipse",
+                    title: "Location",
+                    value: eventLocation?.formatted ?? "Add Location"
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .listRowBackground(AppTheme.ColorToken.surface)
+    }
+
+    private var participantsSection: some View {
+        Section {
+            ForEach(eventParticipantOptions) { member in
+                Button {
+                    toggle(member)
+                } label: {
+                    HStack(spacing: AppTheme.Spacing.standard) {
+                        ParticipantAvatarView(member: member, size: 34)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(member.name)
+                                .foregroundStyle(.primary)
+                            Text(member.participantRole.title)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 0)
+
+                        if selectedParticipantIDs.contains(member.id) {
+                            Image(systemName: "checkmark")
+                                .fontWeight(.semibold)
+                                .foregroundStyle(AppTheme.ColorToken.accent)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(
+                    selectedParticipantIDs.contains(member.id) ? "Selected" : "Not selected"
+                )
+            }
+        } header: {
+            Text("People")
+        } footer: {
+            if category == .honeymoon {
+                Text("Honeymoons start with the hosts only.")
+            } else {
+                Text("Everyone starts selected from the main event. Changes here only affect this event.")
+            }
+        }
+        .listRowBackground(AppTheme.ColorToken.surface)
+    }
+
+    private var eventCardSection: some View {
+        Section {
+            TextField("Description (optional)", text: $eventDescription, axis: .vertical)
+                .textInputAutocapitalization(.sentences)
+                .lineLimit(3...8)
+                .onChange(of: eventDescription) { _, value in
+                    if value.count > 750 { eventDescription = String(value.prefix(750)) }
+                }
+
+            Text("\(eventDescription.count)/750")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .frame(maxWidth: .infinity, alignment: .trailing)
+
+            PhotoAttachmentPicker(
+                imageData: $imageData,
+                emptySymbol: isMainEvent ? "heart.fill" : category.symbol,
+                fallbackAssetName: isMainEvent || category == .venue ? "WeddingVenueHero" : nil,
+                fallbackColors: isMainEvent ? nil : category.artworkColors,
+                fallbackAccent: isMainEvent ? AppTheme.ColorToken.accent : category.artworkAccent,
+                suggestedConcept: "Event artwork for \(resolvedTitle)"
+            )
+        } header: {
+            Text("Event Card")
+        } footer: {
+            if isMainEvent || purpose == .eventExperience {
+                Text("The description and cover appear in the event details guests can see.")
+            } else {
+                Text("The description and cover help collaborators recognize this planning event.")
+            }
+        }
+        .listRowBackground(AppTheme.ColorToken.surface)
     }
 
     var body: some View {
         Form {
             if !isMainEvent {
-                Section("Event Category") {
-                    EventCategoryStrip(selection: $category)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-                        .listRowBackground(Color.clear)
-                }
-
-                Section("Purpose") {
-                    EventPurposeSelector(selection: $purpose)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-                        .listRowBackground(Color.clear)
-                }
+                eventTypeSection
             }
 
-            if isMainEvent {
-                eventIdentitySection
-            }
+            eventIdentitySection
 
-            Section {
-                AttireStylePicker(selection: $attireStyle)
-
-                TextField("Colors, fabrics, or guidance (optional)", text: $dressCode, axis: .vertical)
-                    .textInputAutocapitalization(.sentences)
-                    .lineLimit(2...5)
-            } header: {
-                Text("Attire")
-            } footer: {
-                Text("Choose Any when this event doesn’t need attire guidance.")
-            }
-
-            Section("When & Where") {
-                Button {
-                    isEditingDateAndTime = true
-                } label: {
-                    if !isMainEvent && !hasScheduledDate {
-                        HStack(spacing: AppTheme.Spacing.standard) {
-                            Image(systemName: "calendar.badge.exclamationmark")
-                                .foregroundStyle(AppTheme.ColorToken.accent)
-                                .frame(width: 28)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Set Date & Time")
-                                    .foregroundStyle(AppTheme.ColorToken.accent)
-                                Text("Required before this event appears on Home")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer(minLength: 0)
-                        }
-                        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-                        .contentShape(Rectangle())
-                    } else {
-                        EventScheduleRow(
-                            startsAt: startsAt,
-                            endsAt: endsAt,
-                            isAllDay: isAllDay,
-                            timeZoneIdentifier: timeZoneIdentifier
-                        )
-                    }
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    isEditingLocation = true
-                } label: {
-                    editorRow(
-                        symbol: "mappin.and.ellipse",
-                        title: "Location",
-                        value: eventLocation?.formatted ?? "Add Location"
-                    )
-                }
-                .buttonStyle(.plain)
-            }
+            whenAndWhereSection
 
             if !isMainEvent {
-                eventIdentitySection
+                participantsSection
             }
 
-            if !isMainEvent {
-                Section {
-                    ForEach(eventParticipantOptions) { member in
-                        Button {
-                            toggle(member)
-                        } label: {
-                            HStack(spacing: AppTheme.Spacing.standard) {
-                                Text(member.initials)
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.white)
-                                    .frame(width: 34, height: 34)
-                                    .background(AppTheme.ColorToken.accent, in: Circle())
-                                    .accessibilityHidden(true)
+            eventCardSection
 
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(member.name)
-                                        .foregroundStyle(.primary)
-                                    Text(member.participantRole.title)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer(minLength: 0)
-
-                                if selectedParticipantIDs.contains(member.id) {
-                                    Image(systemName: "checkmark")
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(AppTheme.ColorToken.accent)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityValue(selectedParticipantIDs.contains(member.id) ? "Selected" : "Not selected")
-                    }
-                } header: {
-                    Text("Participants")
-                } footer: {
-                    if category == .honeymoon {
-                        Text("Honeymoons start with the hosts only.")
-                    } else {
-                        Text("New events start with everyone from the main event. Changes here only affect this event.")
-                    }
-                }
-            }
-
-            Section {
-                TextEditor(text: $eventDescription)
-                    .frame(minHeight: 110, alignment: .topLeading)
-                    .accessibilityLabel("Event description")
-                    .onChange(of: eventDescription) { _, value in
-                        if value.count > 750 { eventDescription = String(value.prefix(750)) }
-                    }
-
-                Text("\(eventDescription.count)/750")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            } header: {
-                Text("Description")
-            } footer: {
-                Text("This information appears in the invitation.")
-            }
-
-            Section("Cover") {
-                PhotoAttachmentPicker(
-                    imageData: $imageData,
-                    emptySymbol: isMainEvent ? "heart.fill" : category.symbol,
-                    fallbackAssetName: isMainEvent || category == .venue ? "WeddingVenueHero" : nil,
-                    fallbackColors: isMainEvent ? nil : category.artworkColors,
-                    fallbackAccent: isMainEvent ? AppTheme.ColorToken.accent : category.artworkAccent,
-                    suggestedConcept: "Event artwork for \(resolvedTitle)"
-                )
+            if isMainEvent || purpose == .eventExperience || attireStyle != .any || !dressCode.isEmpty {
+                attireSection
             }
 
             Section {
@@ -497,6 +576,13 @@ struct EventEditorView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                } else {
+                    planningRow(
+                        symbol: "chart.pie.fill",
+                        title: "Budget",
+                        value: "Set Workspace Budget First",
+                        isAvailable: false
+                    )
                 }
 
                 Button {
@@ -515,9 +601,10 @@ struct EventEditorView: View {
                 if isMainEvent || workspace.workspaceBudgetCap != nil {
                     Text("Budget is the spending limit. Cost is what you expect to spend.")
                 } else {
-                    Text("Add what you expect this event to cost. You can track more detail later.")
+                    Text("Set a workspace budget on the main event first, then allocate part of it here. You can still track this event’s expected cost now.")
                 }
             }
+            .listRowBackground(AppTheme.ColorToken.surface)
 
             if isMainEvent && workspace.canDeleteMainEvent && !workspace.isMainEventDeleted {
                 Section {
@@ -527,6 +614,7 @@ struct EventEditorView: View {
                 } footer: {
                     Text("The main event can only be deleted while it is a draft.")
                 }
+                .listRowBackground(AppTheme.ColorToken.surface)
             }
         }
         .appKeyboardDismissal()
@@ -617,6 +705,11 @@ struct EventEditorView: View {
         }
         .onChange(of: category) { previousCategory, updatedCategory in
             guard !isMainEvent else { return }
+            if isChoosingEventType {
+                withAnimation(.snappy) {
+                    isChoosingEventType = false
+                }
+            }
             if updatedCategory == .honeymoon {
                 purpose = .eventExperience
                 selectedParticipantIDs = Set(hostParticipantIDs)
@@ -639,7 +732,7 @@ struct EventEditorView: View {
     }
 
     private var currencyCode: String {
-        Locale.current.currency?.identifier ?? "USD"
+        workspace.currencyCode
     }
 
     private var budgetSummary: String {
@@ -662,10 +755,19 @@ struct EventEditorView: View {
         return "\(total) · \(eventExpenses.count) \(eventExpenses.count == 1 ? "item" : "items")"
     }
 
-    private func planningRow(symbol: String, title: String, value: String) -> some View {
+    private func planningRow(
+        symbol: String,
+        title: String,
+        value: String,
+        isAvailable: Bool = true
+    ) -> some View {
         HStack(spacing: AppTheme.Spacing.standard) {
             Image(systemName: symbol)
-                .foregroundStyle(AppTheme.ColorToken.accent)
+                .foregroundStyle(
+                    isAvailable
+                        ? AppTheme.ColorToken.accent
+                        : AppTheme.ColorToken.textSecondary
+                )
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -679,14 +781,25 @@ struct EventEditorView: View {
 
             Spacer(minLength: 0)
 
-            Image(systemName: "chevron.forward")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
+            if isAvailable {
+                Image(systemName: "chevron.forward")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            } else {
+                Image(systemName: "lock.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
         }
         .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Opens \(title.lowercased()) settings")
+        .accessibilityHint(
+            isAvailable
+                ? "Opens \(title.lowercased()) settings"
+                : "Set a workspace budget on the main event before allocating a budget to this event"
+        )
     }
 
     private func editorRow(symbol: String, title: String, value: String) -> some View {
@@ -718,7 +831,10 @@ struct EventEditorView: View {
         dressCode = attire.guidance
         eventDescription = workspace.eventMessage
         mainBudgetAmount = workspace.workspaceBudgetCap.map {
-            NSDecimalNumber(decimal: $0).stringValue
+            MoneyInputFormatter.editingText(
+                from: NSDecimalNumber(decimal: $0).stringValue,
+                allowsFraction: false
+            )
         } ?? ""
         didLoadMain = true
     }
@@ -825,16 +941,12 @@ private struct EventBudgetSettingsView: View {
     }
 
     private var currencyCode: String {
-        Locale.current.currency?.identifier ?? "USD"
+        workspace.currencyCode
     }
 
     private var parsedMainBudget: Decimal? {
         guard !mainBudgetAmount.isEmpty else { return nil }
-        let decimalSeparator = Locale.current.decimalSeparator ?? "."
-        let normalized = mainBudgetAmount
-            .replacingOccurrences(of: decimalSeparator, with: ".")
-            .replacingOccurrences(of: ",", with: "")
-        return Decimal(string: normalized)
+        return MoneyInputFormatter.decimal(from: mainBudgetAmount)
     }
 
     private var mainBudgetIsValid: Bool {
@@ -861,7 +973,10 @@ private struct EventBudgetSettingsView: View {
         Form {
             if isMainEvent {
                 Section {
-                    EventBudgetAmountField(amount: $mainBudgetAmount)
+                    EventBudgetAmountField(
+                        amount: $mainBudgetAmount,
+                        currencyCode: workspace.currencyCode
+                    )
 
                     if allocatedWorkspaceBudget > .zero {
                         LabeledContent("Already Allocated") {
@@ -877,20 +992,23 @@ private struct EventBudgetSettingsView: View {
                 } footer: {
                     if !mainBudgetIsValid {
                         Text("The limit cannot be lower than the amount already allocated to events.")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(AppTheme.ColorToken.destructive)
                     } else {
                         Text("This optional limit powers remaining-budget and over-budget signals across the workspace.")
                     }
                 }
             } else if originalItem == nil {
                 Section {
-                    EventBudgetAmountField(amount: $mainBudgetAmount)
+                    EventBudgetAmountField(
+                        amount: $mainBudgetAmount,
+                        currencyCode: workspace.currencyCode
+                    )
                 } header: {
                     Text("Event Budget")
                 } footer: {
                     if !childBudgetIsValid {
                         Text("Enter an amount up to \(availableForNewEvent.formatted(.currency(code: currencyCode))), or leave it blank.")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(AppTheme.ColorToken.destructive)
                     } else {
                         Text("This amount is allocated from the workspace when the event is scheduled.")
                     }
@@ -913,7 +1031,10 @@ private struct EventBudgetSettingsView: View {
                             mainBudgetAmount = ""
                         }
                     } else {
-                        EventBudgetAmountField(amount: $mainBudgetAmount)
+                        EventBudgetAmountField(
+                            amount: $mainBudgetAmount,
+                            currencyCode: workspace.currencyCode
+                        )
                     }
                 } header: {
                     Text("Event Budget")
@@ -922,7 +1043,7 @@ private struct EventBudgetSettingsView: View {
                         Text("Use budget allocation to move funds between this event, the main event, and the unallocated pool.")
                     } else if !childBudgetIsValid {
                         Text("Enter an amount up to \(availableForNewEvent.formatted(.currency(code: currencyCode))), or leave it blank.")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(AppTheme.ColorToken.destructive)
                     } else {
                         Text("Set an amount to add this event to the workspace budget.")
                     }
@@ -966,6 +1087,7 @@ private struct EventBudgetSettingsView: View {
 
 /// A small ledger kept out of the main event form so setup remains about the event itself.
 private struct EventCostsEditorView: View {
+    @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
 
     @Binding var expenses: [EventExpense]
@@ -977,7 +1099,7 @@ private struct EventCostsEditorView: View {
     @State private var quickAmount = ""
 
     private var currencyCode: String {
-        Locale.current.currency?.identifier ?? "USD"
+        workspace.currencyCode
     }
 
     private var total: Decimal {
@@ -996,24 +1118,14 @@ private struct EventCostsEditorView: View {
         Form {
             if expenses.isEmpty {
                 Section {
-                    HStack(spacing: AppTheme.Spacing.standard) {
-                        Image(systemName: suggestedCategory.symbol)
-                            .font(.title3)
-                            .foregroundStyle(AppTheme.ColorToken.accent)
-                            .frame(width: 30)
-
-                        Text(Locale.current.currencySymbol ?? currencyCode)
-                            .font(.title2.weight(.medium))
-                            .foregroundStyle(.secondary)
-
-                        TextField("0.00", text: $quickAmount)
-                            .font(.system(.title2, design: .rounded, weight: .semibold))
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .monospacedDigit()
-                            .accessibilityLabel("Estimated cost")
-                    }
-                    .frame(minHeight: 54)
+                    MoneyAmountField(
+                        amount: $quickAmount,
+                        title: "Estimated Cost",
+                        placeholder: "0.00",
+                        symbol: suggestedCategory.symbol,
+                        style: .prominent,
+                        currencyCode: workspace.currencyCode
+                    )
 
                     Button("Set Estimated Cost", systemImage: "checkmark.circle.fill") {
                         setQuickEstimate()
@@ -1149,6 +1261,7 @@ private struct EventExpenseEditorTarget: Identifiable {
 }
 
 private struct EventExpenseEditorView: View {
+    @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var amount: String
@@ -1171,7 +1284,9 @@ private struct EventExpenseEditorView: View {
         self.onSave = onSave
         _title = State(initialValue: expense?.title ?? suggestedTitle)
         _amount = State(
-            initialValue: expense.map { NSDecimalNumber(decimal: $0.amount).stringValue } ?? ""
+            initialValue: expense.map {
+                MoneyInputFormatter.editingText(from: NSDecimalNumber(decimal: $0.amount).stringValue)
+            } ?? ""
         )
         _category = State(initialValue: expense?.category ?? suggestedCategory)
         _status = State(initialValue: expense?.status ?? .estimated)
@@ -1196,8 +1311,12 @@ private struct EventExpenseEditorView: View {
                 TextField("Name", text: $title)
                     .textInputAutocapitalization(.sentences)
 
-                TextField("Amount", text: $amount)
-                    .keyboardType(.decimalPad)
+                MoneyAmountField(
+                    amount: $amount,
+                    title: "Amount",
+                    placeholder: "Amount",
+                    currencyCode: workspace.currencyCode
+                )
             }
             .listRowBackground(AppTheme.ColorToken.surface)
 

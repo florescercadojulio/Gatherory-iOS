@@ -1,5 +1,13 @@
-// Development builds intentionally exercise onboarding on every fresh launch.
+// Debug uses the real account and sync lifecycle through the stable development origin.
 APP_ENVIRONMENT = development
-FORCE_ONBOARDING = YES
+// Set to YES to exercise the production lifecycle against the Debug AUTH_BASE_URL.
+// This overrides the fixture, seed, authentication-bypass, and forced-onboarding switches.
+SIMULATE_PRODUCTION_FLOW = YES
+FORCE_ONBOARDING = NO
 SEED_DEVELOPMENT_DATA = NO
 SKIP_AUTH_LOGIN = NO
+// Keep launch arguments as a temporary override only; normal Debug builds use this URL.
+AUTH_BASE_URL = https:/$()/dev.gatherory.com
+GOOGLE_IOS_CLIENT_ID = 230060732276-qulnhq4cac5mrjrc9hk9l3qbo5jhe8pd.apps.googleusercontent.com
+GOOGLE_IOS_REVERSED_CLIENT_ID = com.googleusercontent.apps.230060732276-qulnhq4cac5mrjrc9hk9l3qbo5jhe8pd
+GOOGLE_SERVER_CLIENT_ID = 230060732276-2solr5ifutcsfnavjhd8t8nnc3jffha3.apps.googleusercontent.com

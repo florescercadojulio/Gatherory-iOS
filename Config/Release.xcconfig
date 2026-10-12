@@ -1,5 +1,10 @@
 // App Store and other release builds use the normal first-run onboarding state.
 APP_ENVIRONMENT = production
+SIMULATE_PRODUCTION_FLOW = NO
 FORCE_ONBOARDING = NO
 SEED_DEVELOPMENT_DATA = NO
 SKIP_AUTH_LOGIN = NO
+AUTH_BASE_URL = https:/$()/app.gatherory.com
+GOOGLE_IOS_CLIENT_ID = 230060732276-qulnhq4cac5mrjrc9hk9l3qbo5jhe8pd.apps.googleusercontent.com
+GOOGLE_IOS_REVERSED_CLIENT_ID = com.googleusercontent.apps.230060732276-qulnhq4cac5mrjrc9hk9l3qbo5jhe8pd
+GOOGLE_SERVER_CLIENT_ID = 230060732276-2solr5ifutcsfnavjhd8t8nnc3jffha3.apps.googleusercontent.com

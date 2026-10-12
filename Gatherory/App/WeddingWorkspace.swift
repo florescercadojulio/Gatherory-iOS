@@ -6,6 +6,12 @@ enum BudgetAccount: Hashable {
     case event(EventReference)
 }
 
+nonisolated struct WorkspaceMediaAttachment: Sendable {
+    let entityID: UUID
+    let mediaAssetID: UUID?
+    let imageData: Data?
+}
+
 @Observable
 final class WeddingWorkspace {
     let mainEventID: UUID
@@ -16,18 +22,24 @@ final class WeddingWorkspace {
     var mainEventTimeZoneIdentifier: String
     var mainEventLocation: EventLocation?
     var mainEventImageData: Data?
+    var mainEventMediaAssetID: UUID?
     var venueName: String
     var location: String
     var dressCode: String
     var eventMessage: String
     var planningMode: PlanningMode
     var members: [WeddingMember]
+    /// Normalized event-to-person relationships. The legacy participant-ID
+    /// arrays remain as a UI compatibility projection during the migration.
+    private(set) var eventParticipations: [EventParticipation]
     var mainEventParticipantIDs: [UUID]
     private(set) var ideas: [WeddingIdea]
     var timeline: [TimelineItem]
     private(set) var eventExpenses: [EventExpense]
     /// The top-level spending limit. Event allocations always add up to this cap.
     var workspaceBudgetCap: Decimal?
+    /// ISO 4217 code shared by every monetary amount in this workspace.
+    var currencyCode: String
     /// The main event owns the portion that hasn't been allocated to child events.
     var mainEventBudgetCap: Decimal?
     var notes: [EventNote]
@@ -56,17 +68,20 @@ final class WeddingWorkspace {
         mainEventTimeZoneIdentifier: String = TimeZone.autoupdatingCurrent.identifier,
         mainEventLocation: EventLocation? = nil,
         mainEventImageData: Data? = nil,
+        mainEventMediaAssetID: UUID? = nil,
         venueName: String,
         location: String,
         dressCode: String = "Garden formal",
         eventMessage: String = "Your presence means the world to us. The ceremony and reception will be outdoors, so please plan for the evening weather.",
         planningMode: PlanningMode,
         members: [WeddingMember],
+        eventParticipations: [EventParticipation]? = nil,
         mainEventParticipantIDs: [UUID]? = nil,
         ideas: [WeddingIdea],
         timeline: [TimelineItem],
         eventExpenses: [EventExpense] = [],
         workspaceBudgetCap: Decimal? = nil,
+        currencyCode: String = Locale.current.currency?.identifier ?? "USD",
         mainEventBudgetCap: Decimal? = nil,
         notes: [EventNote] = [],
         mainEventStatus: MainEventStatus = .draft,
@@ -93,28 +108,75 @@ final class WeddingWorkspace {
             locationName: venueName
         )
         self.mainEventImageData = mainEventImageData
+        self.mainEventMediaAssetID = mainEventMediaAssetID
         self.venueName = venueName
         self.location = location
         self.dressCode = dressCode
         self.eventMessage = eventMessage
         self.planningMode = planningMode
         self.members = members
-        self.mainEventParticipantIDs = mainEventParticipantIDs ?? members.map(\.id)
-        self.ideas = ideas.map { idea in
+        let validMemberIDs = Set(members.map(\.id))
+        let normalizedMainParticipantIDs = (mainEventParticipantIDs ?? members.map(\.id))
+            .reduce(into: [UUID]()) { result, id in
+                guard validMemberIDs.contains(id), !result.contains(id) else { return }
+                result.append(id)
+            }
+        self.mainEventParticipantIDs = normalizedMainParticipantIDs
+        let scopedIdeas = ideas.map { idea in
             var scopedIdea = idea
             if scopedIdea.eventID == nil {
                 scopedIdea.eventID = mainEventID
             }
             return scopedIdea
         }
+        self.ideas = Self.normalizedIdeas(scopedIdeas, mainEventID: mainEventID)
         let scopedTimeline = timeline.map { event in
             var childEvent = event
             childEvent.parentEventID = mainEventID
+            childEvent.participantIDs = childEvent.participantIDs
+                .reduce(into: [UUID]()) { result, id in
+                    guard validMemberIDs.contains(id), !result.contains(id) else { return }
+                    result.append(id)
+                }
             return childEvent
         }
         self.timeline = scopedTimeline
+        let validEventIDs = Set([mainEventID] + scopedTimeline.map(\.id))
+        var normalizedParticipations: [EventParticipation] = []
+        for participation in eventParticipations ?? []
+        where validEventIDs.contains(participation.eventID)
+            && validMemberIDs.contains(participation.memberID)
+            && !normalizedParticipations.contains(where: {
+                $0.eventID == participation.eventID
+                    && $0.memberID == participation.memberID
+            }) {
+            normalizedParticipations.append(participation)
+        }
+
+        let participantIDsByEvent = [(mainEventID, normalizedMainParticipantIDs)]
+            + scopedTimeline.map { ($0.id, $0.participantIDs) }
+        for (eventID, participantIDs) in participantIDsByEvent {
+            for memberID in participantIDs where !normalizedParticipations.contains(where: {
+                $0.eventID == eventID && $0.memberID == memberID
+            }) {
+                guard let member = members.first(where: { $0.id == memberID }) else { continue }
+                normalizedParticipations.append(
+                    EventParticipation(
+                        eventID: eventID,
+                        memberID: memberID,
+                        role: member.participantRole,
+                        planningPermission: member.planningPermission,
+                        attendance: member.attendance,
+                        invitationStatus: member.invitationStatus
+                    )
+                )
+            }
+        }
+        self.eventParticipations = normalizedParticipations
         self.eventExpenses = eventExpenses
         self.workspaceBudgetCap = workspaceBudgetCap
+        let normalizedCurrencyCode = currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        self.currencyCode = normalizedCurrencyCode.count == 3 ? normalizedCurrencyCode : "USD"
         let delegatedBudget = scopedTimeline.compactMap(\.budgetCap).reduce(Decimal.zero, +)
         if let mainEventBudgetCap {
             self.mainEventBudgetCap = mainEventBudgetCap
@@ -125,13 +187,25 @@ final class WeddingWorkspace {
         }
         self.notes = notes.map { note in
             guard note.eventID == nil else { return note }
-            return EventNote(id: note.id, eventID: mainEventID, body: note.body, sentAt: note.sentAt)
+            return EventNote(
+                id: note.id,
+                eventID: mainEventID,
+                authorUserID: note.authorUserID,
+                body: note.body,
+                sentAt: note.sentAt
+            )
         }
         self.mainEventStatus = mainEventStatus
         self.mainEventResponse = mainEventResponse
         self.eventMoments = eventMoments
         self.isMainEventDeleted = isMainEventDeleted
-        self.registry = registry
+        self.registry = registry.map { item in
+            var scopedItem = item
+            if scopedItem.eventID == nil {
+                scopedItem.eventID = mainEventID
+            }
+            return scopedItem
+        }
         self.isRegistryShared = isRegistryShared
         self.isCollaboratorLinkEnabled = isCollaboratorLinkEnabled
         self.requiresCollaboratorApproval = requiresCollaboratorApproval
@@ -207,6 +281,14 @@ final class WeddingWorkspace {
 
     var contextualIdeas: [WeddingIdea] {
         ideas.filter { ($0.eventID ?? mainEventID) == selectedEventID }
+    }
+
+    /// Music is an event resource, not a set of competing proposals. There is
+    /// exactly one shared playlist aggregate for each event context.
+    func musicPlaylist(for eventID: UUID) -> WeddingIdea? {
+        ideas.first {
+            $0.category == .music && ($0.eventID ?? mainEventID) == eventID
+        }
     }
 
     /// The single guest-presentation policy for ideas. Approval alone does not
@@ -465,14 +547,20 @@ final class WeddingWorkspace {
     }
 
     func participants(for reference: EventReference) -> [WeddingMember] {
-        switch reference {
-        case .main, .idea:
-            let participantIDs = Set(mainEventParticipantIDs)
-            return members.filter { participantIDs.contains($0.id) }
-        case .subevent(let id):
-            guard let event = timeline.first(where: { $0.id == id }) else { return [] }
-            let participantIDs = Set(event.participantIDs)
-            return members.filter { participantIDs.contains($0.id) }
+        let eventID = participantEventID(for: reference)
+        let relationships = eventParticipations.filter { $0.eventID == eventID }
+        let relationshipsByMemberID = Dictionary(
+            uniqueKeysWithValues: relationships.map { ($0.memberID, $0) }
+        )
+
+        return members.compactMap { member in
+            guard let participation = relationshipsByMemberID[member.id] else { return nil }
+            var contextualMember = member
+            contextualMember.participantRole = participation.role
+            contextualMember.planningPermission = participation.planningPermission
+            contextualMember.attendance = participation.attendance
+            contextualMember.invitationStatus = participation.invitationStatus
+            return contextualMember
         }
     }
 
@@ -486,49 +574,77 @@ final class WeddingWorkspace {
     }
 
     func addParticipant(_ participantID: UUID, to reference: EventReference? = nil) {
-        guard members.contains(where: { $0.id == participantID }) else { return }
+        guard let member = members.first(where: { $0.id == participantID }) else { return }
 
-        switch reference ?? selectedEventReference {
-        case .main, .idea:
-            guard !mainEventParticipantIDs.contains(participantID) else { return }
-            mainEventParticipantIDs.append(participantID)
-        case .subevent(let eventID):
-            guard let index = timeline.firstIndex(where: { $0.id == eventID }),
-                  !timeline[index].participantIDs.contains(participantID) else { return }
-            timeline[index].participantIDs.append(participantID)
+        let target = reference ?? selectedEventReference
+        let eventID = participantEventID(for: target)
+        guard eventID == mainEventID || timeline.contains(where: { $0.id == eventID }) else {
+            return
         }
+        guard !eventParticipations.contains(where: {
+            $0.eventID == eventID && $0.memberID == participantID
+        }) else { return }
+
+        eventParticipations.append(
+            EventParticipation(
+                eventID: eventID,
+                memberID: participantID,
+                role: member.participantRole,
+                planningPermission: member.planningPermission,
+                attendance: member.attendance,
+                invitationStatus: member.invitationStatus
+            )
+        )
+        setParticipantProjection(participantID, eventID: eventID, isIncluded: true)
     }
 
     @discardableResult
     func updateParticipant(
         _ participantID: UUID,
         role: WeddingParticipantRole,
-        planningPermission: PlanningPermission
+        planningPermission: PlanningPermission,
+        in reference: EventReference? = nil
     ) -> Bool {
-        guard let index = members.firstIndex(where: { $0.id == participantID }) else {
+        guard members.contains(where: { $0.id == participantID }) else {
             return false
         }
 
-        guard canAssignParticipantRole(role, to: participantID) else { return false }
+        let target = reference ?? selectedEventReference
+        guard canAssignParticipantRole(role, to: participantID, in: target) else { return false }
+        let eventID = participantEventID(for: target)
+        guard let participationIndex = eventParticipations.firstIndex(where: {
+            $0.eventID == eventID && $0.memberID == participantID
+        }) else { return false }
 
-        members[index].participantRole = role
-        members[index].planningPermission = role == .collaborator
+        eventParticipations[participationIndex].role = role
+        eventParticipations[participationIndex].planningPermission = role == .collaborator
             ? planningPermission
             : role.defaultPlanningPermission
+        eventParticipations[participationIndex].updatedAt = .now
+
+        // Preserve the original fields as main-event defaults for code that has
+        // not yet moved to the relationship projection.
+        if eventID == mainEventID,
+           let memberIndex = members.firstIndex(where: { $0.id == participantID }) {
+            members[memberIndex].participantRole = role
+            members[memberIndex].planningPermission = eventParticipations[participationIndex].planningPermission
+        }
         return true
     }
 
     func canAssignParticipantRole(
         _ role: WeddingParticipantRole,
-        to participantID: UUID
+        to participantID: UUID,
+        in reference: EventReference? = nil
     ) -> Bool {
-        guard let member = members.first(where: { $0.id == participantID }) else {
+        let target = reference ?? selectedEventReference
+        guard let member = participants(for: target).first(where: { $0.id == participantID }) else {
             return false
         }
 
         if member.participantRole == .host,
            role != .host,
-           members.filter({ $0.participantRole == .host }).count == 1 {
+           participants(for: target).filter({ $0.participantRole == .host }).count == 1 {
             return false
         }
 
@@ -540,20 +656,18 @@ final class WeddingWorkspace {
         from reference: EventReference? = nil
     ) -> Bool {
         let target = reference ?? selectedEventReference
-        guard let member = members.first(where: { $0.id == participantID }),
-              participants(for: target).contains(where: { $0.id == participantID }) else {
+        guard let member = participants(for: target).first(where: { $0.id == participantID }) else {
             return false
         }
 
-        switch target {
-        case .subevent:
+        if participantEventID(for: target) != mainEventID {
             return true
-        case .main, .idea:
-            guard member.participantRole == .host else { return true }
-            return participants(for: target)
-                .filter { $0.participantRole == .host }
-                .count > 1
         }
+
+        guard member.participantRole == .host else { return true }
+        return participants(for: target)
+            .filter { $0.participantRole == .host }
+            .count > 1
     }
 
     @discardableResult
@@ -564,17 +678,42 @@ final class WeddingWorkspace {
         let target = reference ?? selectedEventReference
         guard canRemoveParticipant(participantID, from: target) else { return false }
 
-        switch target {
-        case .main, .idea:
-            mainEventParticipantIDs.removeAll { $0 == participantID }
-        case .subevent(let eventID):
-            guard let index = timeline.firstIndex(where: { $0.id == eventID }) else {
-                return false
-            }
-            timeline[index].participantIDs.removeAll { $0 == participantID }
+        let eventID = participantEventID(for: target)
+        setParticipantProjection(participantID, eventID: eventID, isIncluded: false)
+        eventParticipations.removeAll {
+            $0.eventID == eventID && $0.memberID == participantID
         }
 
         return true
+    }
+
+    private func participantEventID(for reference: EventReference) -> UUID {
+        switch reference {
+        case .main:
+            mainEventID
+        case .subevent(let id):
+            id
+        case .idea(let ideaID):
+            ideas.first(where: { $0.id == ideaID })?.eventID ?? mainEventID
+        }
+    }
+
+    /// Keeps the temporary participant-ID arrays in lockstep while older views
+    /// migrate to the normalized relationship collection.
+    private func setParticipantProjection(
+        _ participantID: UUID,
+        eventID: UUID,
+        isIncluded: Bool
+    ) {
+        if eventID == mainEventID {
+            mainEventParticipantIDs.removeAll { $0 == participantID }
+            if isIncluded { mainEventParticipantIDs.append(participantID) }
+            return
+        }
+
+        guard let index = timeline.firstIndex(where: { $0.id == eventID }) else { return }
+        timeline[index].participantIDs.removeAll { $0 == participantID }
+        if isIncluded { timeline[index].participantIDs.append(participantID) }
     }
 
     func selectEventContext(_ reference: EventReference) {
@@ -769,6 +908,7 @@ final class WeddingWorkspace {
             childEvent.participantIDs = mainEventParticipantIDs
         }
         timeline.append(childEvent)
+        reconcileParticipations(for: childEvent.id, participantIDs: childEvent.participantIDs)
     }
 
     func updateTimelineItem(_ item: TimelineItem) {
@@ -776,6 +916,9 @@ final class WeddingWorkspace {
         guard canAddChildEvent(to: item.parentEventID ?? mainEventID) else { return }
         var childEvent = item
         childEvent.parentEventID = mainEventID
+        if timeline[index].imageData != childEvent.imageData {
+            childEvent.mediaAssetID = nil
+        }
         let previousAllocation = timeline[index].budgetCap
         if !childEvent.hasScheduledDate,
            selectedEventReference == .subevent(childEvent.id) {
@@ -784,6 +927,7 @@ final class WeddingWorkspace {
         guard workspaceBudgetCap != nil else {
             childEvent.budgetCap = nil
             timeline[index] = childEvent
+            reconcileParticipations(for: childEvent.id, participantIDs: childEvent.participantIDs)
             return
         }
         switch (previousAllocation, childEvent.budgetCap) {
@@ -799,6 +943,7 @@ final class WeddingWorkspace {
             break
         }
         timeline[index] = childEvent
+        reconcileParticipations(for: childEvent.id, participantIDs: childEvent.participantIDs)
     }
 
     func setResponse(_ response: EventResponse?, for item: TimelineItem) {
@@ -840,6 +985,9 @@ final class WeddingWorkspace {
         mainEventIsAllDay = isAllDay
         mainEventTimeZoneIdentifier = timeZoneIdentifier
         mainEventLocation = eventLocation
+        if mainEventImageData != imageData {
+            mainEventMediaAssetID = nil
+        }
         mainEventImageData = imageData
         venueName = eventLocation?.title ?? ""
         location = eventLocation?.detail ?? ""
@@ -870,6 +1018,79 @@ final class WeddingWorkspace {
         )
     }
 
+    var mediaAttachments: [WorkspaceMediaAttachment] {
+        var attachments = [
+            WorkspaceMediaAttachment(
+                entityID: mainEventID,
+                mediaAssetID: mainEventMediaAssetID,
+                imageData: mainEventImageData
+            )
+        ]
+        attachments += timeline.map {
+            WorkspaceMediaAttachment(entityID: $0.id, mediaAssetID: $0.mediaAssetID, imageData: $0.imageData)
+        }
+        attachments += ideas.map {
+            WorkspaceMediaAttachment(entityID: $0.id, mediaAssetID: $0.mediaAssetID, imageData: $0.imageData)
+        }
+        attachments += registry.map {
+            WorkspaceMediaAttachment(entityID: $0.id, mediaAssetID: $0.mediaAssetID, imageData: $0.imageData)
+        }
+        attachments += eventMoments.map {
+            WorkspaceMediaAttachment(entityID: $0.id, mediaAssetID: $0.mediaAssetID, imageData: $0.imageData)
+        }
+        return attachments
+    }
+
+    @discardableResult
+    func applyMediaAssetID(_ mediaAssetID: UUID, to entityID: UUID) -> Bool {
+        if entityID == mainEventID {
+            mainEventMediaAssetID = mediaAssetID
+            return true
+        }
+        if let index = timeline.firstIndex(where: { $0.id == entityID }) {
+            timeline[index].mediaAssetID = mediaAssetID
+            return true
+        }
+        if let index = ideas.firstIndex(where: { $0.id == entityID }) {
+            ideas[index].mediaAssetID = mediaAssetID
+            return true
+        }
+        if let index = registry.firstIndex(where: { $0.id == entityID }) {
+            registry[index].mediaAssetID = mediaAssetID
+            return true
+        }
+        if let index = eventMoments.firstIndex(where: { $0.id == entityID }) {
+            eventMoments[index].mediaAssetID = mediaAssetID
+            return true
+        }
+        return false
+    }
+
+    @discardableResult
+    func applyDownloadedMedia(_ imageData: Data, to entityID: UUID) -> Bool {
+        if entityID == mainEventID {
+            mainEventImageData = imageData
+            return true
+        }
+        if let index = timeline.firstIndex(where: { $0.id == entityID }) {
+            timeline[index].imageData = imageData
+            return true
+        }
+        if let index = ideas.firstIndex(where: { $0.id == entityID }) {
+            ideas[index].imageData = imageData
+            return true
+        }
+        if let index = registry.firstIndex(where: { $0.id == entityID }) {
+            registry[index].imageData = imageData
+            return true
+        }
+        if let index = eventMoments.firstIndex(where: { $0.id == entityID }) {
+            eventMoments[index].imageData = imageData
+            return true
+        }
+        return false
+    }
+
     func deleteMainEvent() {
         guard canDeleteMainEvent else { return }
         isMainEventDeleted = true
@@ -892,8 +1113,12 @@ final class WeddingWorkspace {
 
     func deleteTimelineItem(_ item: TimelineItem) {
         timeline.removeAll { $0.id == item.id }
+        eventParticipations.removeAll { $0.eventID == item.id }
+        ideas.removeAll { $0.eventID == item.id }
         eventExpenses.removeAll { $0.eventID == item.id }
+        notes.removeAll { $0.eventID == item.id }
         eventMoments.removeAll { $0.eventID == item.id }
+        registry.removeAll { $0.eventID == item.id }
         if selectedEventReference == .subevent(item.id) {
             selectedEventReference = .main
         }
@@ -902,11 +1127,15 @@ final class WeddingWorkspace {
     func updateIdea(_ idea: WeddingIdea, status: IdeaStatus) {
         guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
         var updatedIdea = ideas[index]
-        updatedIdea.status = status
+        updatedIdea.status = updatedIdea.category == .music ? .chosen : status
         replaceIdea(at: index, with: updatedIdea)
     }
 
     func updateIdea(_ idea: WeddingIdea) {
+        if idea.category == .music {
+            upsertMusicPlaylist(idea)
+            return
+        }
         guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
         replaceIdea(at: index, with: idea)
     }
@@ -915,6 +1144,10 @@ final class WeddingWorkspace {
         var scopedIdea = idea
         if scopedIdea.eventID == nil {
             scopedIdea.eventID = selectedEventID
+        }
+        if scopedIdea.category == .music {
+            upsertMusicPlaylist(scopedIdea)
+            return
         }
         ideas.insert(scopedIdea, at: 0)
         reconcileScheduledEvent(for: scopedIdea)
@@ -984,9 +1217,105 @@ final class WeddingWorkspace {
     /// reconciliation here prevents individual screens from implementing
     /// their own budget behavior.
     private func replaceIdea(at index: Int, with idea: WeddingIdea) {
-        ideas[index] = idea
-        reconcileScheduledEvent(for: idea)
-        reconcileExpense(for: idea)
+        var updated = idea
+        if ideas[index].imageData != updated.imageData {
+            updated.mediaAssetID = nil
+        }
+        ideas[index] = updated
+        reconcileScheduledEvent(for: updated)
+        reconcileExpense(for: updated)
+    }
+
+    private func upsertMusicPlaylist(_ playlist: WeddingIdea) {
+        let eventID = playlist.eventID ?? selectedEventID
+        let matchingIndices = ideas.indices.filter {
+            ideas[$0].category == .music
+                && (ideas[$0].eventID ?? mainEventID) == eventID
+        }
+
+        var updated = playlist
+        updated.eventID = eventID
+        updated.status = .chosen
+        updated.estimatedCost = nil
+        updated.invitationVisibility = .shownToGuests
+
+        guard let canonicalIndex = matchingIndices.first else {
+            ideas.insert(updated, at: 0)
+            reconcileExpense(for: updated)
+            return
+        }
+
+        var canonical = ideas[canonicalIndex]
+        canonical.title = updated.title
+        canonical.note = updated.note
+        canonical.submittedBy = updated.submittedBy
+        canonical.submittedByUserID = updated.submittedByUserID
+        canonical.status = .chosen
+        canonical.imageData = updated.imageData
+        canonical.estimatedCost = nil
+        canonical.invitationVisibility = .shownToGuests
+        canonical.configuration = .music(
+            MusicIdeaConfiguration(
+                tracks: canonical.id == updated.id
+                    ? updated.musicTracks
+                    : Self.mergedMusicTracks(canonical.musicTracks, updated.musicTracks)
+            )
+        )
+
+        for index in matchingIndices.dropFirst().reversed() {
+            ideas.remove(at: index)
+        }
+        if let submittedIndex = ideas.firstIndex(where: { $0.id == playlist.id }),
+           submittedIndex != canonicalIndex {
+            ideas.remove(at: submittedIndex)
+        }
+        guard let resolvedIndex = ideas.firstIndex(where: { $0.id == canonical.id }) else { return }
+        replaceIdea(at: resolvedIndex, with: canonical)
+    }
+
+    private static func normalizedIdeas(
+        _ ideas: [WeddingIdea],
+        mainEventID: UUID
+    ) -> [WeddingIdea] {
+        var normalized: [WeddingIdea] = []
+        var playlistIndexByEventID: [UUID: Int] = [:]
+
+        for var idea in ideas {
+            let eventID = idea.eventID ?? mainEventID
+            idea.eventID = eventID
+            guard idea.category == .music else {
+                normalized.append(idea)
+                continue
+            }
+
+            idea.status = .chosen
+            idea.estimatedCost = nil
+            idea.invitationVisibility = .shownToGuests
+            if let existingIndex = playlistIndexByEventID[eventID] {
+                var playlist = normalized[existingIndex]
+                playlist.configuration = .music(
+                    MusicIdeaConfiguration(
+                        tracks: mergedMusicTracks(playlist.musicTracks, idea.musicTracks)
+                    )
+                )
+                normalized[existingIndex] = playlist
+            } else {
+                playlistIndexByEventID[eventID] = normalized.count
+                normalized.append(idea)
+            }
+        }
+
+        return normalized
+    }
+
+    private static func mergedMusicTracks(
+        _ lhs: [MusicTrack],
+        _ rhs: [MusicTrack]
+    ) -> [MusicTrack] {
+        (lhs + rhs).reduce(into: [MusicTrack]()) { tracks, track in
+            guard !tracks.contains(where: { $0.id == track.id }) else { return }
+            tracks.append(track)
+        }
     }
 
     /// Keeps approved event ideas and real child events as one lifecycle.
@@ -1024,10 +1353,13 @@ final class WeddingWorkspace {
             eventID: linkedEventID ?? idea.eventID ?? mainEventID,
             sourceIdeaID: idea.id,
             title: idea.title,
-            amount: Decimal(estimate),
+            amount: estimate,
             category: idea.expenseCategory,
             status: idea.status == .chosen ? .committed : .estimated,
-            createdAt: existingIndex.map { eventExpenses[$0].createdAt } ?? idea.submittedAt
+            createdByUserID: existingIndex.flatMap { eventExpenses[$0].createdByUserID }
+                ?? idea.submittedByUserID,
+            createdAt: existingIndex.map { eventExpenses[$0].createdAt } ?? idea.submittedAt,
+            updatedAt: .now
         )
 
         if let existingIndex {
@@ -1038,12 +1370,18 @@ final class WeddingWorkspace {
     }
 
     func addRegistryItem(_ item: RegistryItem) {
-        registry.append(item)
+        var scopedItem = item
+        scopedItem.eventID = scopedItem.eventID ?? selectedEventID
+        registry.append(scopedItem)
     }
 
     func updateRegistryItem(_ item: RegistryItem) {
         guard let index = registry.firstIndex(where: { $0.id == item.id }) else { return }
-        registry[index] = item
+        var updated = item
+        if registry[index].imageData != updated.imageData {
+            updated.mediaAssetID = nil
+        }
+        registry[index] = updated
     }
 
     func commitToRegistryItem(_ item: RegistryItem) {
@@ -1081,6 +1419,32 @@ final class WeddingWorkspace {
         members.append(member)
         addParticipant(member.id)
     }
+
+    private func reconcileParticipations(for eventID: UUID, participantIDs: [UUID]) {
+        let validIDs = Set(participantIDs).intersection(members.map(\.id))
+        eventParticipations.removeAll {
+            $0.eventID == eventID && !validIDs.contains($0.memberID)
+        }
+
+        for memberID in validIDs where !eventParticipations.contains(where: {
+            $0.eventID == eventID && $0.memberID == memberID
+        }) {
+            guard let member = members.first(where: { $0.id == memberID }) else { continue }
+            let inherited = eventParticipations.first {
+                $0.eventID == mainEventID && $0.memberID == memberID
+            }
+            eventParticipations.append(
+                EventParticipation(
+                    eventID: eventID,
+                    memberID: memberID,
+                    role: inherited?.role ?? member.participantRole,
+                    planningPermission: inherited?.planningPermission ?? member.planningPermission,
+                    attendance: inherited?.attendance ?? member.attendance,
+                    invitationStatus: inherited?.invitationStatus ?? member.invitationStatus
+                )
+            )
+        }
+    }
 }
 
 private extension WeddingIdea {
@@ -1114,7 +1478,7 @@ private extension WeddingIdea {
             case .reception: .entertainment
             case .weddingShower, .bachelorBachelorette, .rehearsal, .ceremony, .other, .none: .other
             }
-        case .other:
+        case .link, .other:
             .other
         }
     }
@@ -1169,7 +1533,7 @@ extension WeddingWorkspace {
         )
 
         let workspace = WeddingWorkspace(
-            title: "Alex & Jordan",
+            title: "Alex & Jordan’s Wedding",
             weddingDate: weddingDate,
             venueName: "Willow & Stone Estate",
             location: "Ann Arbor, Michigan",
@@ -1231,12 +1595,13 @@ extension WeddingWorkspace {
                     status: .chosen
                 ),
                 WeddingIdea(
-                    title: "Acoustic cocktail-hour duo",
-                    note: "Guitar and vocals before the reception band begins.",
+                    title: "Alex & Jordan’s Wedding Playlist",
+                    note: "Add songs that will keep the dance floor moving all night.",
                     category: .music,
                     submittedBy: "Jordan",
-                    estimatedCost: 900,
-                    status: .maybe
+                    status: .chosen,
+                    configuration: .music(MusicIdeaConfiguration(tracks: [])),
+                    invitationVisibility: .shownToGuests
                 ),
                 WeddingIdea(
                     title: "Reception",

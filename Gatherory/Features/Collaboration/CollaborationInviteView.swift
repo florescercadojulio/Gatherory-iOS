@@ -328,12 +328,7 @@ private struct CollaborationInviteScreen: View {
 
     private func participantRow(_ member: WeddingMember, isCurrentUser: Bool) -> some View {
         HStack(spacing: AppTheme.Spacing.standard) {
-            Text(member.initials)
-                .font(.subheadline.bold())
-                .foregroundStyle(.white)
-                .frame(width: 42, height: 42)
-                .background(AppTheme.ColorToken.accent, in: Circle())
-                .accessibilityHidden(true)
+            ParticipantAvatarView(member: member, size: 42)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(isCurrentUser ? "\(member.name) (You)" : member.name)
@@ -476,12 +471,7 @@ private struct ParticipantEditorView: View {
         Form {
             Section {
                 HStack(spacing: AppTheme.Spacing.standard) {
-                    Text(target.member.initials)
-                        .font(.title3.bold())
-                        .foregroundStyle(.white)
-                        .frame(width: 52, height: 52)
-                        .background(AppTheme.ColorToken.accent, in: Circle())
-                        .accessibilityHidden(true)
+                    ParticipantAvatarView(member: target.member, size: 52)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(target.isCurrentUser ? "\(target.member.name) (You)" : target.member.name)
@@ -802,12 +792,7 @@ private struct ExistingParticipantRow: View {
 
     var body: some View {
         HStack(spacing: AppTheme.Spacing.standard) {
-            Text(member.initials)
-                .font(.subheadline.bold())
-                .foregroundStyle(.white)
-                .frame(width: 42, height: 42)
-                .background(AppTheme.ColorToken.accent, in: Circle())
-                .accessibilityHidden(true)
+            ParticipantAvatarView(member: member, size: 42)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(member.name)
@@ -922,11 +907,11 @@ private struct SuggestedCollaborator: Identifiable {
     let tint: Color
 
     static let samples = [
-        SuggestedCollaborator(name: "Avery Morgan", email: "avery@example.com", tint: .indigo),
-        SuggestedCollaborator(name: "Casey Lee", email: "casey@example.com", tint: .orange),
-        SuggestedCollaborator(name: "Elena Brooks", email: "elena@example.com", tint: .teal),
-        SuggestedCollaborator(name: "Maya Patel", email: "maya@example.com", tint: .purple),
-        SuggestedCollaborator(name: "Noah Kim", email: "noah@example.com", tint: .blue)
+        SuggestedCollaborator(name: "Avery Morgan", email: "avery@example.com", tint: AppTheme.ColorToken.avatar(1)),
+        SuggestedCollaborator(name: "Casey Lee", email: "casey@example.com", tint: AppTheme.ColorToken.avatar(5)),
+        SuggestedCollaborator(name: "Elena Brooks", email: "elena@example.com", tint: AppTheme.ColorToken.avatar(2)),
+        SuggestedCollaborator(name: "Maya Patel", email: "maya@example.com", tint: AppTheme.ColorToken.avatar(3)),
+        SuggestedCollaborator(name: "Noah Kim", email: "noah@example.com", tint: AppTheme.ColorToken.avatar(0))
     ]
 }
 

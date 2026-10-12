@@ -20,7 +20,7 @@ struct AttireStylePicker: View {
                         VStack(spacing: 6) {
                             AttireStyleSilhouette(
                                 style: style,
-                                color: isSelected ? .white : .primary
+                                color: isSelected ? AppTheme.ColorToken.onAccent : .primary
                             )
                             .frame(width: 44, height: 54)
 
@@ -28,7 +28,7 @@ struct AttireStylePicker: View {
                                 .font(.caption.weight(.semibold))
                                 .lineLimit(1)
                         }
-                        .foregroundStyle(isSelected ? .white : .primary)
+                        .foregroundStyle(isSelected ? AppTheme.ColorToken.onAccent : .primary)
                         .frame(width: 92, height: 88)
                         .background(
                             isSelected ? AppTheme.ColorToken.accent : AppTheme.ColorToken.elevatedSurface,
