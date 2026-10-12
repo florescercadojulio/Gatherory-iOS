@@ -563,7 +563,7 @@ private struct EditProfileView: View {
 
     return NavigationStack {
         AccountView()
-            .environment(WeddingWorkspace.sample)
+            .environment(PlanningWorkspace.sample)
             .environment(library)
             .environment(persistence)
             .environment(

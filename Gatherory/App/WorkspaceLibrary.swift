@@ -5,19 +5,19 @@ import Observation
 /// A workspace remains the source of truth for everything inside one event.
 @Observable
 final class WorkspaceLibrary {
-    private(set) var workspaces: [WeddingWorkspace]
+    private(set) var workspaces: [PlanningWorkspace]
     private(set) var selectedWorkspaceID: UUID?
 
-    init(workspaces: [WeddingWorkspace] = []) {
+    init(workspaces: [PlanningWorkspace] = []) {
         self.workspaces = workspaces
     }
 
-    var selectedWorkspace: WeddingWorkspace? {
+    var selectedWorkspace: PlanningWorkspace? {
         guard let selectedWorkspaceID else { return nil }
         return workspaces.first { $0.mainEventID == selectedWorkspaceID }
     }
 
-    func open(_ workspace: WeddingWorkspace) {
+    func open(_ workspace: PlanningWorkspace) {
         guard workspaces.contains(where: { $0.mainEventID == workspace.mainEventID }) else { return }
         selectedWorkspaceID = workspace.mainEventID
     }
@@ -26,7 +26,7 @@ final class WorkspaceLibrary {
         selectedWorkspaceID = nil
     }
 
-    func add(_ workspace: WeddingWorkspace, openAfterAdding: Bool = true) {
+    func add(_ workspace: PlanningWorkspace, openAfterAdding: Bool = true) {
         guard !workspaces.contains(where: { $0.mainEventID == workspace.mainEventID }) else { return }
         workspaces.insert(workspace, at: 0)
         if openAfterAdding {
@@ -34,7 +34,7 @@ final class WorkspaceLibrary {
         }
     }
 
-    func remove(_ workspace: WeddingWorkspace) {
+    func remove(_ workspace: PlanningWorkspace) {
         workspaces.removeAll { $0.mainEventID == workspace.mainEventID }
         if selectedWorkspaceID == workspace.mainEventID {
             selectedWorkspaceID = nil
@@ -46,7 +46,7 @@ final class WorkspaceLibrary {
         workspaces.removeAll()
     }
 
-    func replaceAll(with replacements: [WeddingWorkspace]) {
+    func replaceAll(with replacements: [PlanningWorkspace]) {
         workspaces = replacements
         if let selectedWorkspaceID,
            !replacements.contains(where: { $0.mainEventID == selectedWorkspaceID }) {
@@ -54,7 +54,7 @@ final class WorkspaceLibrary {
         }
     }
 
-    func upsert(_ workspace: WeddingWorkspace) {
+    func upsert(_ workspace: PlanningWorkspace) {
         if let index = workspaces.firstIndex(where: {
             $0.mainEventID == workspace.mainEventID
         }) {
@@ -82,7 +82,7 @@ extension WorkspaceLibrary {
     }
 }
 
-extension WeddingWorkspace {
+extension PlanningWorkspace {
     static func newWorkspace(
         title: String,
         startsAt: Date,
@@ -93,7 +93,7 @@ extension WeddingWorkspace {
         imageData: Data?,
         budgetCap: Decimal? = nil,
         owner: UserAccount? = nil
-    ) -> WeddingWorkspace {
+    ) -> PlanningWorkspace {
         let ownerName = owner?.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let displayName = ownerName.flatMap { $0.isEmpty ? nil : $0 } ?? "You"
         let initials = displayName
@@ -103,7 +103,7 @@ extension WeddingWorkspace {
             .map(String.init)
             .joined()
             .uppercased()
-        let host = WeddingMember(
+        let host = WorkspaceMember(
             userID: owner?.id,
             name: displayName,
             participantRole: .host,
@@ -122,9 +122,9 @@ extension WeddingWorkspace {
             return max(candidate, normalizedStart)
         }
 
-        return WeddingWorkspace(
+        return PlanningWorkspace(
             title: title,
-            weddingDate: normalizedStart,
+            mainEventStartsAt: normalizedStart,
             mainEventEndsAt: normalizedEnd,
             mainEventIsAllDay: isAllDay,
             mainEventTimeZoneIdentifier: timeZoneIdentifier,
@@ -143,7 +143,7 @@ extension WeddingWorkspace {
         )
     }
 
-    static var secondarySample: WeddingWorkspace {
+    static var secondarySample: PlanningWorkspace {
         let calendar = Calendar.current
         let startsAt = calendar.date(byAdding: .day, value: 96, to: .now) ?? .now
         let venue = EventLocation(
@@ -154,22 +154,22 @@ extension WeddingWorkspace {
             latitude: 42.3314,
             longitude: -83.0458
         )
-        let maya = WeddingMember(
+        let maya = WorkspaceMember(
             name: "Maya",
             participantRole: .host,
             initials: "M",
             planningPermission: .manage
         )
-        let theo = WeddingMember(
+        let theo = WorkspaceMember(
             name: "Theo",
             participantRole: .host,
             initials: "T",
             planningPermission: .manage
         )
 
-        return WeddingWorkspace(
+        return PlanningWorkspace(
             title: "Maya & Theo’s Wedding",
-            weddingDate: startsAt,
+            mainEventStartsAt: startsAt,
             mainEventLocation: venue,
             venueName: venue.title,
             location: venue.detail,
@@ -177,7 +177,7 @@ extension WeddingWorkspace {
             planningMode: .openToIdeas,
             members: [maya, theo],
             ideas: [
-                WeddingIdea(
+                PlanningIdea(
                     title: "Conservatory ceremony",
                     note: "An indoor garden setting with room for dinner and dancing.",
                     category: .venue,

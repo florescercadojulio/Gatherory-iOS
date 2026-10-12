@@ -51,7 +51,8 @@ final class GatheroryUITests: XCTestCase {
         app.launchArguments += [
             "-DisableProductionFlowSimulation",
             "-SkipAuthentication",
-            "-SeedDevelopmentData"
+            "-SeedDevelopmentData",
+            "-UseEphemeralDataStore"
         ]
         return app
     }

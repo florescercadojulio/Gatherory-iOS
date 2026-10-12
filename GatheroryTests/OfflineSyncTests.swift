@@ -86,7 +86,7 @@ struct OfflineSyncTests {
         let library = persistence.restoreLibrary(seedData: false)
         persistence.startObserving(library)
 
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Lake weekend",
             startsAt: Date(timeIntervalSinceReferenceDate: 900_000_000),
             eventLocation: EventLocation(
@@ -127,6 +127,11 @@ struct OfflineSyncTests {
             from: mutation.payload
         )
         #expect(remoteArchive.mainEventImageData == nil)
+        let payloadObject = try #require(
+            JSONSerialization.jsonObject(with: mutation.payload) as? [String: Any]
+        )
+        #expect(payloadObject["mainEventStartsAt"] != nil)
+        #expect(payloadObject["weddingDate"] == nil)
 
         try persistence.prepareMediaTransfers(from: library)
         let mediaTransfer = try #require(persistence.pendingMediaTransfers().first)
@@ -142,7 +147,7 @@ struct OfflineSyncTests {
         let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
         let library = persistence.restoreLibrary(seedData: false)
         persistence.startObserving(library)
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Dinner",
             startsAt: .now,
             eventLocation: nil,
@@ -170,7 +175,7 @@ struct OfflineSyncTests {
         let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
         let library = persistence.restoreLibrary(seedData: false)
         persistence.startObserving(library)
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Collaborative dinner",
             startsAt: .now,
             eventLocation: nil,
@@ -185,7 +190,7 @@ struct OfflineSyncTests {
         }
         try context.save()
 
-        let idea = WeddingIdea(
+        let idea = PlanningIdea(
             title: "Garden menu",
             note: "Seasonal dishes",
             category: .food,
@@ -201,7 +206,7 @@ struct OfflineSyncTests {
         #expect(mutations.contains { $0.entityType == .workspace })
         #expect(ideaMutation.operation == .create)
         #expect(
-            try JSONDecoder().decode(WeddingIdea.self, from: ideaMutation.payload).title
+            try JSONDecoder().decode(PlanningIdea.self, from: ideaMutation.payload).title
                 == "Garden menu"
         )
     }
@@ -212,7 +217,7 @@ struct OfflineSyncTests {
         let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
         let library = persistence.restoreLibrary(seedData: false, ownerUserID: "user-a")
         persistence.startObserving(library)
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Private to A",
             startsAt: .now,
             eventLocation: nil,
@@ -244,7 +249,7 @@ struct OfflineSyncTests {
     func remoteBootstrapRestoresWorkspace() throws {
         let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
         let library = persistence.restoreLibrary(seedData: false, ownerUserID: "server-user")
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "From PostgreSQL",
             startsAt: Date(timeIntervalSinceReferenceDate: 920_000_000),
             eventLocation: nil,
@@ -278,7 +283,7 @@ struct OfflineSyncTests {
     func sharedWorkspaceCacheIsAccountScoped() throws {
         let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
         let library = persistence.restoreLibrary(seedData: false, ownerUserID: "user-a")
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Shared wedding",
             startsAt: .now,
             eventLocation: nil,
@@ -415,7 +420,7 @@ struct OfflineSyncTests {
         let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
         let library = persistence.restoreLibrary(seedData: false, ownerUserID: "sync-user")
         persistence.startObserving(library)
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Repair me",
             startsAt: .now,
             eventLocation: nil,
@@ -455,14 +460,14 @@ struct OfflineSyncTests {
         let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
         let library = persistence.restoreLibrary(seedData: false, ownerUserID: "sync-user")
         persistence.startObserving(library)
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Repair and send",
             startsAt: .now,
             eventLocation: nil,
             imageData: nil
         )
         workspace.addIdea(
-            WeddingIdea(
+            PlanningIdea(
                 title: "Garden menu",
                 note: "Seasonal dishes",
                 category: .food,
@@ -518,7 +523,7 @@ struct OfflineSyncTests {
         let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
         let library = persistence.restoreLibrary(seedData: false, ownerUserID: "sync-user")
         persistence.startObserving(library)
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Recreate scope",
             startsAt: .now,
             eventLocation: nil,
@@ -559,7 +564,7 @@ struct OfflineSyncTests {
         let library = persistence.restoreLibrary(seedData: false)
         persistence.startObserving(library)
         library.add(
-            WeddingWorkspace.newWorkspace(
+            PlanningWorkspace.newWorkspace(
                 title: "Delete me",
                 startsAt: .now,
                 eventLocation: nil,
@@ -597,7 +602,7 @@ struct OfflineSyncTests {
         do {
             let persistence = try WorkspacePersistenceController(storeURL: storeURL)
             let library = persistence.restoreLibrary(seedData: false)
-            let workspace = WeddingWorkspace.newWorkspace(
+            let workspace = PlanningWorkspace.newWorkspace(
                 title: "Persisted wedding",
                 startsAt: Date(timeIntervalSinceReferenceDate: 910_000_000),
                 eventLocation: EventLocation(
@@ -650,7 +655,7 @@ struct OfflineSyncTests {
         do {
             let persistence = try WorkspacePersistenceController(storeURL: storeURL)
             let library = persistence.restoreLibrary(seedData: false)
-            let workspace = WeddingWorkspace.newWorkspace(
+            let workspace = PlanningWorkspace.newWorkspace(
                 title: "Temporary event",
                 startsAt: .now,
                 eventLocation: nil,

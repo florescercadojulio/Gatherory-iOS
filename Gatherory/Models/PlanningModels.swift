@@ -597,10 +597,10 @@ enum IdeaConfiguration: Codable, Hashable {
     case registry(RegistryIdeaConfiguration)
 }
 
-struct WeddingIdea: Identifiable, Hashable, Codable {
+struct PlanningIdea: Identifiable, Hashable, Codable {
     let id: UUID
     /// The root event or direct child event this idea helps plan.
-    /// Older mock data is attached to the root event by `WeddingWorkspace`.
+    /// Older mock data is attached to the root event by `PlanningWorkspace`.
     var eventID: UUID?
     var title: String
     var note: String
@@ -839,7 +839,7 @@ enum CollaborationInvitationStatus: String, Codable {
     }
 }
 
-enum WeddingParticipantRole: String, CaseIterable, Identifiable, Codable {
+enum WorkspaceRole: String, CaseIterable, Identifiable, Codable {
     case host
     case collaborator
     case guest
@@ -864,9 +864,9 @@ enum WeddingParticipantRole: String, CaseIterable, Identifiable, Codable {
 
     var detail: String {
         switch self {
-        case .host: "Part of the couple getting married, with full planning access."
-        case .collaborator: "Helps with ideas, decisions, and the timeline."
-        case .guest: "Will receive the wedding invitation when it is ready."
+        case .host: "Organizes the experience with full planning access."
+        case .collaborator: "Helps with ideas, decisions, and the schedule."
+        case .guest: "Receives invitations and event updates."
         }
     }
 
@@ -887,13 +887,13 @@ enum WeddingParticipantRole: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-struct WeddingMember: Identifiable, Hashable, Codable {
+struct WorkspaceMember: Identifiable, Hashable, Codable {
     let id: UUID
     /// Better Auth user ID once this person has accepted and linked an account.
     /// Invited people intentionally remain valid without one.
     var userID: String?
     var name: String
-    var participantRole: WeddingParticipantRole
+    var participantRole: WorkspaceRole
     var initials: String
     var attendance: AttendanceStatus
     var email: String?
@@ -908,7 +908,7 @@ struct WeddingMember: Identifiable, Hashable, Codable {
         id: UUID = UUID(),
         userID: String? = nil,
         name: String,
-        participantRole: WeddingParticipantRole,
+        participantRole: WorkspaceRole,
         initials: String,
         attendance: AttendanceStatus = .going,
         email: String? = nil,
@@ -931,7 +931,7 @@ struct WeddingMember: Identifiable, Hashable, Codable {
     }
 }
 
-/// Event-specific state for a person. Identity lives in `WeddingMember`, while
+/// Event-specific state for a person. Identity lives in `WorkspaceMember`, while
 /// role, permissions, invitation state, and RSVP belong to this relationship.
 /// This mirrors PostgreSQL's `event_participant` table and lets one person host
 /// the main event while attending a child event as a guest.
@@ -939,7 +939,7 @@ struct EventParticipation: Identifiable, Hashable, Codable {
     let id: UUID
     let eventID: UUID
     let memberID: UUID
-    var role: WeddingParticipantRole
+    var role: WorkspaceRole
     var planningPermission: PlanningPermission
     var attendance: AttendanceStatus
     var invitationStatus: CollaborationInvitationStatus
@@ -950,7 +950,7 @@ struct EventParticipation: Identifiable, Hashable, Codable {
         id: UUID? = nil,
         eventID: UUID,
         memberID: UUID,
-        role: WeddingParticipantRole,
+        role: WorkspaceRole,
         planningPermission: PlanningPermission,
         attendance: AttendanceStatus,
         invitationStatus: CollaborationInvitationStatus,

@@ -26,7 +26,9 @@ struct GatheroryApp: App {
 
     init() {
         let authentication = AuthenticationSession.bootstrap()
-        let persistence = WorkspacePersistenceController.bootstrap()
+        let persistence = WorkspacePersistenceController.bootstrap(
+            isStoredInMemoryOnly: AppRuntimeConfiguration.usesEphemeralDataStore
+        )
         let library = persistence.restoreLibrary(
             seedData: AppRuntimeConfiguration.seedsDevelopmentData,
             ownerUserID: authentication.currentUser?.id

@@ -10,7 +10,7 @@ struct DecisionDeckView: View {
     var isActive = true
     var onExitWorkspace: (() -> Void)?
 
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("hasSeenDecideTimelinePrimer") private var hasSeenDecidePrimer = false
     @State private var dragOffset: CGSize = .zero
@@ -19,7 +19,7 @@ struct DecisionDeckView: View {
     @State private var decisionScope: DecisionScope = .queue
     @Namespace private var decisionTransition
 
-    private var currentIdea: WeddingIdea? {
+    private var currentIdea: PlanningIdea? {
         workspace.decisionQueue(for: decisionScope.eventID).first
     }
 
@@ -191,7 +191,7 @@ struct DecisionDeckView: View {
         isShowingDecidePrimer = true
     }
 
-    private func dragGesture(for idea: WeddingIdea) -> some Gesture {
+    private func dragGesture(for idea: PlanningIdea) -> some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
                 dragOffset = value.translation
@@ -209,7 +209,7 @@ struct DecisionDeckView: View {
             }
     }
 
-    private func decide(_ choice: DecisionChoice, idea: WeddingIdea) {
+    private func decide(_ choice: DecisionChoice, idea: PlanningIdea) {
         withAnimation(reduceMotion ? nil : .snappy) {
             workspace.decide(choice, on: idea)
             dragOffset = .zero
@@ -236,7 +236,7 @@ struct DecisionDeckView: View {
         }
     }
 
-    private func openDetails(for idea: WeddingIdea) {
+    private func openDetails(for idea: PlanningIdea) {
         guard abs(dragOffset.width) < 10, abs(dragOffset.height) < 10 else { return }
         dragOffset = .zero
         selectedIdeaID = idea.id
@@ -313,7 +313,7 @@ private struct DecideEventPrimer: View {
 private struct DecisionCard: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    let idea: WeddingIdea
+    let idea: PlanningIdea
     let eventTitle: String?
     let currencyCode: String
     let dragOffset: CGSize
@@ -507,7 +507,7 @@ private struct SwipeGuideLabel: View {
 #Preview {
     NavigationStack {
         DecisionDeckView()
-            .environment(WeddingWorkspace.sample)
+            .environment(PlanningWorkspace.sample)
             .environment(MusicCatalog())
     }
 }

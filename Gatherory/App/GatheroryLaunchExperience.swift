@@ -110,7 +110,7 @@ struct GatheroryLaunchContainer: View {
         }
     }
 
-    private func finishOnboarding(with workspace: WeddingWorkspace) {
+    private func finishOnboarding(with workspace: PlanningWorkspace) {
         workspaceLibrary.add(workspace)
         // Workspace creation is a transaction boundary, not a debounced edit.
         // Persisting here guarantees the local archive and durable outbox entry

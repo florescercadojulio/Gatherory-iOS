@@ -89,7 +89,7 @@ struct IdeaBudgetTests {
     @Test("Approving an event idea preserves its budget and attire")
     func approvedEventIdeaCarriesPlanningDetails() throws {
         let workspace = makeWorkspace()
-        let idea = WeddingIdea(
+        let idea = PlanningIdea(
             title: "Reception",
             note: "Dinner and dancing",
             category: .event,
@@ -116,8 +116,8 @@ struct IdeaBudgetTests {
         #expect(workspace.budgetCap(for: .main) == 70)
     }
 
-    private func makeWorkspace() -> WeddingWorkspace {
-        WeddingWorkspace.newWorkspace(
+    private func makeWorkspace() -> PlanningWorkspace {
+        PlanningWorkspace.newWorkspace(
             title: "Budget test",
             startsAt: .now,
             eventLocation: nil,
@@ -126,8 +126,8 @@ struct IdeaBudgetTests {
         )
     }
 
-    private func makeIdea(cost: Decimal) -> WeddingIdea {
-        WeddingIdea(
+    private func makeIdea(cost: Decimal) -> PlanningIdea {
+        PlanningIdea(
             title: "Dinner",
             note: "",
             category: .food,

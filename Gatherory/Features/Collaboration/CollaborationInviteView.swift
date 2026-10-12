@@ -12,7 +12,7 @@ struct CollaborationInviteView: View {
 }
 
 private struct CollaborationInviteScreen: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -52,7 +52,7 @@ private struct CollaborationInviteScreen: View {
         if let selectedEventImageData, let image = UIImage(data: selectedEventImageData) {
             Image(uiImage: image)
         } else {
-            Image("WeddingVenueHero")
+            Image("DefaultVenueHero")
         }
     }
 
@@ -62,7 +62,7 @@ private struct CollaborationInviteScreen: View {
         ZStack {
             CollaborationBackdrop(
                 imageData: selectedEventImageData,
-                assetName: workspace.isMainEventContext ? "WeddingVenueHero" : nil,
+                assetName: workspace.isMainEventContext ? "DefaultVenueHero" : nil,
                 category: selectedEventCategory
             )
 
@@ -76,7 +76,7 @@ private struct CollaborationInviteScreen: View {
                         requiresApproval: $workspace.requiresCollaboratorApproval
                     )
 
-                    weddingPeople
+                    workspacePeople
                 }
                 .padding(.horizontal, AppTheme.Layout.screenHorizontal)
                 .padding(.top, AppTheme.Spacing.standard)
@@ -136,7 +136,7 @@ private struct CollaborationInviteScreen: View {
         ZStack(alignment: .bottom) {
             MediaArtwork(
                 imageData: selectedEventImageData,
-                assetName: workspace.isMainEventContext ? "WeddingVenueHero" : nil,
+                assetName: workspace.isMainEventContext ? "DefaultVenueHero" : nil,
                 symbol: selectedEventCategory.symbol,
                 colors: selectedEventCategory.artworkColors,
                 accent: selectedEventCategory.artworkAccent,
@@ -260,7 +260,7 @@ private struct CollaborationInviteScreen: View {
         .collaborationCard(reduceTransparency: reduceTransparency)
     }
 
-    private var weddingPeople: some View {
+    private var workspacePeople: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("People")
@@ -276,7 +276,7 @@ private struct CollaborationInviteScreen: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            ForEach(WeddingParticipantRole.allCases) { role in
+            ForEach(WorkspaceRole.allCases) { role in
                 let people = workspace.selectedEventParticipants.filter { $0.participantRole == role }
 
                 if !people.isEmpty {
@@ -326,7 +326,7 @@ private struct CollaborationInviteScreen: View {
         }
     }
 
-    private func participantRow(_ member: WeddingMember, isCurrentUser: Bool) -> some View {
+    private func participantRow(_ member: WorkspaceMember, isCurrentUser: Bool) -> some View {
         HStack(spacing: AppTheme.Spacing.standard) {
             ParticipantAvatarView(member: member, size: 42)
 
@@ -354,7 +354,7 @@ private struct CollaborationInviteScreen: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func participantDetail(for member: WeddingMember) -> String {
+    private func participantDetail(for member: WorkspaceMember) -> String {
         switch member.participantRole {
         case .host:
             member.planningPermission.title
@@ -429,7 +429,7 @@ private struct CollaborationInviteScreen: View {
 }
 
 private struct ParticipantEditorTarget: Identifiable {
-    let member: WeddingMember
+    let member: WorkspaceMember
     let eventReference: EventReference
     let eventTitle: String
     let isCurrentUser: Bool
@@ -438,9 +438,9 @@ private struct ParticipantEditorTarget: Identifiable {
 }
 
 private struct ParticipantEditorView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
-    @State private var role: WeddingParticipantRole
+    @State private var role: WorkspaceRole
     @State private var planningPermission: PlanningPermission
     @State private var isConfirmingRemoval = false
 
@@ -489,7 +489,7 @@ private struct ParticipantEditorView: View {
 
             Section {
                 Picker("Role", selection: $role) {
-                    ForEach(WeddingParticipantRole.allCases) { option in
+                    ForEach(WorkspaceRole.allCases) { option in
                         Label(option.title, systemImage: option.symbol)
                             .tag(option)
                             .disabled(!workspace.canAssignParticipantRole(option, to: target.member.id))
@@ -643,7 +643,7 @@ private struct CollaborationBackdrop: View {
 }
 
 private struct CollaborationSharingSettingsView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
 
     var body: some View {
         @Bindable var workspace = workspace
@@ -685,10 +685,10 @@ private struct CollaborationSharingSettingsView: View {
 }
 
 private struct CollaboratorPickerView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
-    @State private var role: WeddingParticipantRole = .collaborator
+    @State private var role: WorkspaceRole = .collaborator
 
     private let suggestions = SuggestedCollaborator.samples
 
@@ -702,7 +702,7 @@ private struct CollaboratorPickerView: View {
             || email?.localizedCaseInsensitiveContains(normalizedSearchText) == true
     }
 
-    private var availableMainEventParticipants: [WeddingMember] {
+    private var availableMainEventParticipants: [WorkspaceMember] {
         guard !workspace.isMainEventContext else { return [] }
         let includedIDs = Set(workspace.selectedEventParticipants.map(\.id))
         return workspace.participants(for: .main).filter { member in
@@ -726,7 +726,7 @@ private struct CollaboratorPickerView: View {
         List {
             Section("Role") {
                 Picker("Role", selection: $role) {
-                    ForEach(WeddingParticipantRole.allCases) { option in
+                    ForEach(WorkspaceRole.allCases) { option in
                         Label(option.title, systemImage: option.symbol)
                             .tag(option)
                     }
@@ -788,7 +788,7 @@ private struct CollaboratorPickerView: View {
 }
 
 private struct ExistingParticipantRow: View {
-    let member: WeddingMember
+    let member: WorkspaceMember
 
     var body: some View {
         HStack(spacing: AppTheme.Spacing.standard) {
@@ -810,13 +810,13 @@ private struct ExistingParticipantRow: View {
 }
 
 private struct NewParticipantView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var email = ""
-    @State private var role: WeddingParticipantRole
+    @State private var role: WorkspaceRole
 
-    init(initialRole: WeddingParticipantRole) {
+    init(initialRole: WorkspaceRole) {
         _role = State(initialValue: initialRole)
     }
 
@@ -834,7 +834,7 @@ private struct NewParticipantView: View {
 
             Section("Role") {
                 Picker("Role", selection: $role) {
-                    ForEach(WeddingParticipantRole.allCases) { option in
+                    ForEach(WorkspaceRole.allCases) { option in
                         Label(option.title, systemImage: option.symbol)
                             .tag(option)
                     }
@@ -949,5 +949,5 @@ private extension View {
 
 #Preview {
     CollaborationInviteView()
-        .environment(WeddingWorkspace.sample)
+        .environment(PlanningWorkspace.sample)
 }

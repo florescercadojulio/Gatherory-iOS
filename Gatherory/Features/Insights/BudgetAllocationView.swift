@@ -3,7 +3,7 @@ import SwiftUI
 /// Edits the selected event's final allocation. The direction of the transfer
 /// is derived from the proposed value so people only decide the result they want.
 struct BudgetAllocationView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
 
     let target: EventReference

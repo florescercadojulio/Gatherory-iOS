@@ -73,7 +73,7 @@ struct GatheroryTests {
             isrc: nil,
             duration: nil
         )
-        let playlist = WeddingIdea(
+        let playlist = PlanningIdea(
             title: "Reception Playlist",
             note: "",
             category: .music,
@@ -228,7 +228,7 @@ struct GatheroryTests {
             authenticationProvider: .password,
             createdAt: now
         )
-        let host = WeddingMember(
+        let host = WorkspaceMember(
             userID: account.id,
             name: account.displayName,
             participantRole: .host,
@@ -236,7 +236,7 @@ struct GatheroryTests {
             email: account.email,
             planningPermission: .manage
         )
-        let attendee = WeddingMember(
+        let attendee = WorkspaceMember(
             userID: account.id,
             name: account.displayName,
             participantRole: .guest,
@@ -303,11 +303,11 @@ struct GatheroryTests {
         title: String,
         date: Date,
         status: MainEventStatus,
-        member: WeddingMember
-    ) -> WeddingWorkspace {
-        WeddingWorkspace(
+        member: WorkspaceMember
+    ) -> PlanningWorkspace {
+        PlanningWorkspace(
             title: title,
-            weddingDate: date,
+            mainEventStartsAt: date,
             venueName: "",
             location: "",
             planningMode: .openToIdeas,
@@ -394,7 +394,7 @@ struct GatheroryTests {
     @Test("Creating a workspace adds it and opens it")
     func creatingWorkspaceSelectsIt() {
         let library = WorkspaceLibrary()
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Neighborhood dinner",
             startsAt: .now,
             eventLocation: nil,
@@ -414,7 +414,7 @@ struct GatheroryTests {
     func creatingAllDayWorkspace() {
         let startsAt = Date(timeIntervalSinceReferenceDate: 900_000_000)
         let endsAt = Date(timeIntervalSinceReferenceDate: 900_086_400)
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Neighborhood festival",
             startsAt: startsAt,
             endsAt: endsAt,
@@ -427,7 +427,7 @@ struct GatheroryTests {
         calendar.timeZone = TimeZone(identifier: "America/Detroit") ?? .autoupdatingCurrent
 
         #expect(workspace.mainEventIsAllDay)
-        #expect(workspace.weddingDate == calendar.startOfDay(for: startsAt))
+        #expect(workspace.mainEventStartsAt == calendar.startOfDay(for: startsAt))
         #expect(workspace.mainEventEndsAt == calendar.startOfDay(for: endsAt))
         #expect(workspace.mainEventTimeZoneIdentifier == "America/Detroit")
     }
@@ -523,7 +523,7 @@ struct GatheroryTests {
     @Test("Attendable sample ideas use the event model")
     func attendableIdeasUseEventModel() {
         let attendableTypes: Set<TimelineCategory> = [.venue, .photography, .honeymoon]
-        let attendableIdeas = WeddingWorkspace.sample.ideas.filter {
+        let attendableIdeas = PlanningWorkspace.sample.ideas.filter {
             guard let eventType = $0.eventConfiguration?.category else { return false }
             return attendableTypes.contains(eventType)
         }
@@ -535,9 +535,9 @@ struct GatheroryTests {
 
     @Test("A dated approved event idea can enter the timeline once")
     func approvedEventIdeaCanBeScheduled() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let hosts = Set(workspace.members.filter { $0.participantRole == .host }.map(\.id))
-        let idea = WeddingIdea(
+        let idea = PlanningIdea(
             title: "Honeymoon",
             note: "A quiet trip after the celebration.",
             category: .event,
@@ -570,7 +570,7 @@ struct GatheroryTests {
 
     @Test("Loving an idea approves it")
     func loveIdea() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let idea = try #require(workspace.decisionQueue.first)
 
         workspace.decide(.love, on: idea)
@@ -582,8 +582,8 @@ struct GatheroryTests {
 
     @Test("Loving a dated event idea creates its linked event")
     func loveEventIdeaCreatesEvent() throws {
-        let workspace = WeddingWorkspace.sample
-        let idea = WeddingIdea(
+        let workspace = PlanningWorkspace.sample
+        let idea = PlanningIdea(
             title: "Venue",
             note: "Tour the venue together.",
             category: .event,
@@ -608,8 +608,8 @@ struct GatheroryTests {
 
     @Test("Loving an undated event idea keeps the proposal in Ideas")
     func loveUndatedEventIdeaNeedsDate() throws {
-        let workspace = WeddingWorkspace.sample
-        let idea = WeddingIdea(
+        let workspace = PlanningWorkspace.sample
+        let idea = PlanningIdea(
             title: "Choose a rehearsal venue",
             note: "We like the space but have not picked a date.",
             category: .event,
@@ -635,8 +635,8 @@ struct GatheroryTests {
 
     @Test("Adding a date to an approved event idea promotes it to Home once")
     func datingApprovedEventIdeaPromotesItToHome() throws {
-        let workspace = WeddingWorkspace.sample
-        let idea = WeddingIdea(
+        let workspace = PlanningWorkspace.sample
+        let idea = PlanningIdea(
             title: "Welcome dinner",
             note: "A relaxed dinner before the celebration.",
             category: .event,
@@ -669,7 +669,7 @@ struct GatheroryTests {
 
     @Test("Maybe saves an idea for later")
     func saveIdeaForLater() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let idea = try #require(workspace.decisionQueue.first)
 
         workspace.decide(.maybe, on: idea)
@@ -680,7 +680,7 @@ struct GatheroryTests {
 
     @Test("Passing an idea archives it")
     func passIdea() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let idea = try #require(workspace.decisionQueue.first)
 
         workspace.decide(.pass, on: idea)
@@ -691,7 +691,7 @@ struct GatheroryTests {
 
     @Test("The latest decision can be undone")
     func undoDecision() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let idea = try #require(workspace.decisionQueue.first)
 
         workspace.decide(.love, on: idea)
@@ -704,7 +704,7 @@ struct GatheroryTests {
 
     @Test("Timeline items toggle between upcoming and complete")
     func toggleTimelineItem() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let item = try #require(workspace.timeline.first { $0.completionStatus == .upcoming })
 
         workspace.toggleTimelineItem(item)
@@ -715,7 +715,7 @@ struct GatheroryTests {
 
     @Test("Event costs roll up across the workspace")
     func eventCostsRollUp() {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let expectedTotal = workspace.eventExpenses.reduce(Decimal.zero) { $0 + $1.amount }
 
         #expect(workspace.workspaceCostTotal == expectedTotal)
@@ -728,7 +728,7 @@ struct GatheroryTests {
 
     @Test("Budget transfers preserve the workspace cap")
     func budgetTransfersPreserveWorkspaceCap() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let child = try #require(workspace.childEvents.first)
         let totalBefore = workspace.allocatedBudgetTotal
 
@@ -745,7 +745,7 @@ struct GatheroryTests {
 
     @Test("An event cannot take more budget than its source owns")
     func budgetTransferCannotOverdrawSource() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let child = try #require(workspace.childEvents.first)
         let mainBudget = try #require(workspace.mainEventBudgetCap)
 
@@ -763,7 +763,7 @@ struct GatheroryTests {
 
     @Test("Removing an event budget returns its allocation to the free pool")
     func removingEventBudgetReturnsAllocationToPool() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let child = try #require(workspace.childEvents.first)
         let mainBudget = try #require(workspace.mainEventBudgetCap)
         let freePool = workspace.freeBudgetPool
@@ -779,7 +779,7 @@ struct GatheroryTests {
 
     @Test("Budget can move through the free pool")
     func budgetCanMoveThroughFreePool() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let child = try #require(workspace.childEvents.first)
         let initialPool = workspace.freeBudgetPool
 
@@ -806,7 +806,7 @@ struct GatheroryTests {
 
     @Test("Replacing costs only changes the selected event")
     func replacingEventCostsIsScoped() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let child = try #require(workspace.childEvents.first)
         let mainCosts = workspace.expenses(for: .main)
         let replacement = EventExpense(
@@ -825,7 +825,7 @@ struct GatheroryTests {
 
     @Test("The event tree is limited to a root and direct subevents")
     func eventTreeHasOnlyTwoLevels() {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let tree = workspace.eventTree
 
         #expect(tree.id == workspace.mainEventID)
@@ -841,7 +841,7 @@ struct GatheroryTests {
 
     @Test("A subevent cannot become the parent of another event")
     func subeventsCannotHaveChildren() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let proposedParent = try #require(workspace.timeline.first)
         let originalCount = workspace.timeline.count
         let nestedEvent = TimelineItem(
@@ -860,7 +860,7 @@ struct GatheroryTests {
 
     @Test("A new subevent starts with a snapshot of the main event participants")
     func newSubeventCopiesMainEventParticipants() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let newEvent = TimelineItem(
             title: "Welcome drinks",
             category: .reception,
@@ -878,7 +878,7 @@ struct GatheroryTests {
 
     @Test("Changing a participant role applies its appropriate access")
     func participantRoleUpdatesAccess() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let collaborator = try #require(
             workspace.members.first { $0.participantRole == .collaborator }
         )
@@ -897,7 +897,7 @@ struct GatheroryTests {
 
     @Test("Removing a participant only changes the selected event")
     func participantRemovalIsEventScoped() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let event = try #require(workspace.childEvents.first { !$0.participantIDs.isEmpty })
         let participantID = try #require(
             event.participantIDs.first { workspace.mainEventParticipantIDs.contains($0) }
@@ -917,7 +917,7 @@ struct GatheroryTests {
 
     @Test("Ideas follow context while decisions stay workspace-wide")
     func ideasFollowSelectedEventContextWhileDecisionsStayWorkspaceWide() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let child = try #require(workspace.childEvents.first)
         let initialDecisionIDs = Set(workspace.decisionQueue.map(\.id))
 
@@ -926,7 +926,7 @@ struct GatheroryTests {
         #expect(Set(workspace.decisionQueue.map(\.id)) == initialDecisionIDs)
 
         workspace.addIdea(
-            WeddingIdea(
+            PlanningIdea(
                 title: "Welcome table for this event",
                 note: "Keep it specific to the selected subevent.",
                 category: .decor,
@@ -945,11 +945,11 @@ struct GatheroryTests {
 
     @Test("Event ideas from a child context remain first-level subevents")
     func eventIdeasCreatedFromChildContextUseMainEvent() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let child = try #require(workspace.childEvents.first)
         workspace.selectEventContext(.subevent(child.id))
 
-        let proposal = WeddingIdea(
+        let proposal = PlanningIdea(
             title: "After party",
             note: "Keep it as a first-level event.",
             category: .event,
@@ -963,7 +963,7 @@ struct GatheroryTests {
 
     @Test("Removing the active subevent returns planning to the main event")
     func deletingActiveSubeventRestoresMainContext() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let child = try #require(workspace.childEvents.first)
 
         workspace.selectEventContext(.subevent(child.id))
@@ -974,7 +974,7 @@ struct GatheroryTests {
 
     @Test("Event contexts are ordered chronologically")
     func eventContextsAreChronological() {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let dates = workspace.availableEventContexts.map(workspace.eventDate(for:))
 
         #expect(dates == dates.sorted())
@@ -982,7 +982,7 @@ struct GatheroryTests {
 
     @Test("Home shortcut prefers the current event, then the next event")
     func homeShortcutFindsCurrentOrNextEvent() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
         let currentID = UUID()
         let nextID = UUID()
@@ -1017,7 +1017,7 @@ struct GatheroryTests {
 
     @Test("Notes are scoped to the selected event")
     func notesFollowSelectedEventContext() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let child = try #require(workspace.childEvents.first)
 
         workspace.selectEventContext(.subevent(child.id))
@@ -1032,7 +1032,7 @@ struct GatheroryTests {
 
     @Test("Shared album photos stay scoped to their event")
     func sharedAlbumPhotosAreEventScoped() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let child = try #require(
             workspace.childEvents.first(where: { $0.status != .archived })
         )
@@ -1053,7 +1053,7 @@ struct GatheroryTests {
 
     @Test("Approved event ideas share their scheduled event album")
     func approvedEventIdeaUsesScheduledAlbum() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let idea = try #require(
             workspace.ideas.first {
                 $0.category == .event && $0.status == .chosen
@@ -1076,7 +1076,7 @@ struct GatheroryTests {
 
     @Test("Timeline events can be deleted from their details")
     func deleteTimelineItem() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let item = try #require(workspace.timeline.first)
 
         workspace.deleteTimelineItem(item)
@@ -1086,7 +1086,7 @@ struct GatheroryTests {
 
     @Test("Ideas can be archived from the list")
     func archiveIdea() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let idea = try #require(workspace.ideas.first)
 
         workspace.updateIdea(idea, status: .archived)
@@ -1097,7 +1097,7 @@ struct GatheroryTests {
 
     @Test("Idea edits replace content without changing identity or status")
     func editIdea() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let original = try #require(workspace.ideas.first)
         var edited = original
         edited.title = "Updated idea"
@@ -1116,7 +1116,7 @@ struct GatheroryTests {
 
     @Test("Guests can reserve an available registry item")
     func reserveRegistryItem() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let item = try #require(workspace.registry.first { !$0.isFulfilled })
 
         workspace.commitToRegistryItem(item)
@@ -1127,7 +1127,7 @@ struct GatheroryTests {
 
     @Test("A private registry does not accept reservations")
     func privateRegistryCannotBeReserved() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         workspace.isRegistryShared = false
         let item = try #require(workspace.registry.first { !$0.isFulfilled })
 
@@ -1139,7 +1139,7 @@ struct GatheroryTests {
 
     @Test("A guest invitation preserves role and contact details")
     func inviteCollaborator() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
 
         workspace.inviteParticipant(
             name: "Taylor Reed",
@@ -1157,7 +1157,7 @@ struct GatheroryTests {
 
     @Test("The same collaborator is not invited twice")
     func collaboratorInvitationsAreUnique() {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let originalCount = workspace.members.count
 
         workspace.inviteParticipant(
@@ -1171,7 +1171,7 @@ struct GatheroryTests {
 
     @Test("Adding a participant follows the selected event context")
     func participantInvitationsFollowSelectedEvent() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let child = try #require(workspace.childEvents.first)
         let originalDirectoryCount = workspace.members.count
         let originalMainEventParticipantIDs = workspace.mainEventParticipantIDs
@@ -1194,7 +1194,7 @@ struct GatheroryTests {
 
     @Test("An existing main-event participant can join a selected subevent")
     func existingParticipantCanJoinSelectedSubevent() throws {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
         let child = try #require(workspace.childEvents.first)
         let originalIDs = Set(child.participantIDs)
         let participant = try #require(workspace.members.first { !originalIDs.contains($0.id) })
@@ -1215,7 +1215,7 @@ struct GatheroryTests {
 
     @Test("Guests are excluded from timeline assignments")
     func timelineAssignmentsOnlyIncludePlanners() {
-        let workspace = WeddingWorkspace.sample
+        let workspace = PlanningWorkspace.sample
 
         #expect(workspace.planningMembers.allSatisfy { $0.participantRole != .guest })
         #expect(workspace.members.contains { $0.participantRole == .guest })
@@ -1328,13 +1328,13 @@ struct GatheroryTests {
 
     @Test("Attire defaults to guest-facing while planning details stay private")
     func ideaInvitationVisibilityDefaultsByCategory() {
-        let attire = WeddingIdea(
+        let attire = PlanningIdea(
             title: "Black Tie",
             note: "",
             category: .attire,
             submittedBy: "Alex"
         )
-        let flowers = WeddingIdea(
+        let flowers = PlanningIdea(
             title: "White lilies",
             note: "",
             category: .flowers,
@@ -1347,8 +1347,8 @@ struct GatheroryTests {
 
     @Test("Invitation ideas require approval, visibility, and the matching event")
     func invitationIdeasFollowCentralGuestPresentationPolicy() {
-        let workspace = WeddingWorkspace.sample
-        let firstAttire = WeddingIdea(
+        let workspace = PlanningWorkspace.sample
+        let firstAttire = PlanningIdea(
             eventID: workspace.mainEventID,
             title: "Black Tie",
             note: "",
@@ -1357,7 +1357,7 @@ struct GatheroryTests {
             status: .chosen,
             configuration: .attire(AttireIdeaConfiguration(style: .blackTie, restrictions: ""))
         )
-        let secondAttire = WeddingIdea(
+        let secondAttire = PlanningIdea(
             eventID: workspace.mainEventID,
             title: "Formal",
             note: "Jewel tones welcome",
@@ -1366,7 +1366,7 @@ struct GatheroryTests {
             status: .chosen,
             configuration: .attire(AttireIdeaConfiguration(style: .formal, restrictions: ""))
         )
-        let privateFlowers = WeddingIdea(
+        let privateFlowers = PlanningIdea(
             eventID: workspace.mainEventID,
             title: "White lilies",
             note: "",
@@ -1374,7 +1374,7 @@ struct GatheroryTests {
             submittedBy: "Alex",
             status: .chosen
         )
-        let sharedFlowers = WeddingIdea(
+        let sharedFlowers = PlanningIdea(
             eventID: workspace.mainEventID,
             title: "Flower-free ceremony",
             note: "For allergy awareness",
@@ -1383,7 +1383,7 @@ struct GatheroryTests {
             status: .chosen,
             invitationVisibility: .shownToGuests
         )
-        let pendingAttire = WeddingIdea(
+        let pendingAttire = PlanningIdea(
             eventID: workspace.mainEventID,
             title: "Cocktail",
             note: "",
@@ -1391,7 +1391,7 @@ struct GatheroryTests {
             submittedBy: "Alex",
             status: .new
         )
-        let otherEventAttire = WeddingIdea(
+        let otherEventAttire = PlanningIdea(
             eventID: UUID(),
             title: "Garden",
             note: "",
@@ -1420,7 +1420,7 @@ struct GatheroryTests {
         #expect(normalizedURL.absoluteString == "https://gatherory.com/inspiration")
         #expect(LinkIdeaConfiguration.normalizedURL(from: "ftp://gatherory.com") == nil)
 
-        let idea = WeddingIdea(
+        let idea = PlanningIdea(
             title: "Venue inspiration",
             note: "A useful reference for the ceremony look.",
             category: .link,
@@ -1428,7 +1428,7 @@ struct GatheroryTests {
             configuration: .link(LinkIdeaConfiguration(url: normalizedURL))
         )
         let data = try JSONEncoder().encode(idea)
-        let restored = try JSONDecoder().decode(WeddingIdea.self, from: data)
+        let restored = try JSONDecoder().decode(PlanningIdea.self, from: data)
 
         #expect(restored.linkConfiguration?.url == normalizedURL)
         #expect(restored.title == idea.title)

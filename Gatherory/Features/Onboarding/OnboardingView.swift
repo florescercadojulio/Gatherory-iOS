@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
-    var onCreateWorkspace: (WeddingWorkspace) -> Void = { _ in }
+    var onCreateWorkspace: (PlanningWorkspace) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -173,7 +173,7 @@ struct OnboardingView: View {
                 title: "Avery & Morgan",
                 date: "June 13",
                 location: "Ann Arbor, MI",
-                assetName: "WeddingVenueHero",
+                assetName: "DefaultVenueHero",
                 colors: [AppTheme.ColorToken.navy, AppTheme.ColorToken.lilac],
                 width: cardWidth,
                 height: cardHeight

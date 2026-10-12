@@ -4,7 +4,7 @@ import UIKit
 struct TimelineView: View {
     var onExitWorkspace: (() -> Void)?
 
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.layoutDirection) private var layoutDirection
     @State private var filter: TimelineFilter = .all
@@ -259,7 +259,7 @@ enum TimelineFilter: String, CaseIterable, Identifiable {
 }
 
 private struct TimelineItemEditorView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -462,7 +462,7 @@ private struct TimelineItemEditorView: View {
                 PhotoAttachmentPicker(
                     imageData: $imageData,
                     emptySymbol: category.symbol,
-                    fallbackAssetName: category == .venue ? "WeddingVenueHero" : nil,
+                    fallbackAssetName: category == .venue ? "DefaultVenueHero" : nil,
                     fallbackColors: category.artworkColors,
                     fallbackAccent: category.artworkAccent,
                     suggestedConcept: "Wedding \(category.title.lowercased()) event artwork for \(resolvedTitle)"
@@ -593,7 +593,7 @@ private struct TimelineItemEditorView: View {
             .map(\.id)
     }
 
-    private var eventParticipantOptions: [WeddingMember] {
+    private var eventParticipantOptions: [WorkspaceMember] {
         category == .honeymoon
             ? workspace.members.filter { $0.participantRole == .host }
             : workspace.members
@@ -747,7 +747,7 @@ private struct TimelineItemEditorView: View {
         }
     }
 
-    private func toggle(_ member: WeddingMember) {
+    private func toggle(_ member: WorkspaceMember) {
         if selectedParticipantIDs.contains(member.id) {
             selectedParticipantIDs.remove(member.id)
         } else {
@@ -1089,7 +1089,7 @@ struct TimelineCollectionCard: View {
         }
 
         if item.category == .venue,
-           let image = UIImage(named: "WeddingVenueHero"),
+           let image = UIImage(named: "DefaultVenueHero"),
            image.size.height > 0 {
             return min(max(image.size.width / image.size.height, 0.72), 1.35)
         }
@@ -1254,7 +1254,7 @@ private struct TimelineArtwork: View {
     var body: some View {
         MediaArtwork(
             imageData: item.imageData,
-            assetName: item.imageData == nil && item.category == .venue ? "WeddingVenueHero" : nil,
+            assetName: item.imageData == nil && item.category == .venue ? "DefaultVenueHero" : nil,
             symbol: item.category.symbol,
             colors: item.category.artworkColors,
             accent: item.category.artworkAccent,
@@ -1266,7 +1266,7 @@ private struct TimelineArtwork: View {
 }
 
 private struct TimelineEventDetailView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @State private var isConfirmingDeletion = false
     @State private var isEditingEvent = false
@@ -1363,7 +1363,7 @@ enum TimelineEventAudience {
 }
 
 struct TimelineEventReadOnlyView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
 
     let item: TimelineItem
     let transitionNamespace: Namespace.ID
@@ -1383,7 +1383,7 @@ struct TimelineEventReadOnlyView: View {
 }
 
 struct TimelineEventDetailScreen: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var weather = EventWeatherModel()
 
@@ -1831,6 +1831,6 @@ private extension TimelineCategory {
 #Preview {
     NavigationStack {
         TimelineView()
-            .environment(WeddingWorkspace.sample)
+            .environment(PlanningWorkspace.sample)
     }
 }

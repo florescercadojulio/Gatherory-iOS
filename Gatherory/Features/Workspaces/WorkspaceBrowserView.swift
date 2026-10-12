@@ -15,7 +15,7 @@ struct WorkspaceBrowserView: View {
         return [GridItem(.adaptive(minimum: 300, maximum: 520), spacing: AppTheme.Spacing.standard)]
     }
 
-    private var filteredWorkspaces: [WeddingWorkspace] {
+    private var filteredWorkspaces: [PlanningWorkspace] {
         workspaceFilter.workspaces(
             from: library.workspaces,
             for: currentUserAccount
@@ -206,18 +206,18 @@ enum WorkspaceFilter: String, CaseIterable, Identifiable {
     }
 
     func workspaces(
-        from workspaces: [WeddingWorkspace],
+        from workspaces: [PlanningWorkspace],
         for account: UserAccount?,
         now: Date = .now,
         calendar: Calendar = .autoupdatingCurrent
-    ) -> [WeddingWorkspace] {
+    ) -> [PlanningWorkspace] {
         workspaces.filter { workspace in
             includes(workspace, account: account, now: now, calendar: calendar)
         }
     }
 
     func includes(
-        _ workspace: WeddingWorkspace,
+        _ workspace: PlanningWorkspace,
         account: UserAccount?,
         now: Date = .now,
         calendar: Calendar = .autoupdatingCurrent
@@ -230,13 +230,13 @@ enum WorkspaceFilter: String, CaseIterable, Identifiable {
         case .upcoming:
             return workspace.currentMainEventStatus != .draft
                 && workspace.currentMainEventStatus != .finished
-                && calendar.startOfDay(for: workspace.weddingDate)
+                && calendar.startOfDay(for: workspace.mainEventStartsAt)
                     >= calendar.startOfDay(for: now)
         case .past:
             return workspace.currentMainEventStatus == .finished
                 || (
                     workspace.currentMainEventStatus != .draft
-                        && calendar.startOfDay(for: workspace.weddingDate)
+                        && calendar.startOfDay(for: workspace.mainEventStartsAt)
                             < calendar.startOfDay(for: now)
                 )
         case .hosting:
@@ -249,9 +249,9 @@ enum WorkspaceFilter: String, CaseIterable, Identifiable {
     }
 
     private func member(
-        in workspace: WeddingWorkspace,
+        in workspace: PlanningWorkspace,
         matching account: UserAccount?
-    ) -> WeddingMember? {
+    ) -> WorkspaceMember? {
         guard let account else { return nil }
 
         return workspace.participants(for: .main).first { member in
@@ -267,7 +267,7 @@ enum WorkspaceFilter: String, CaseIterable, Identifiable {
 private struct WorkspacePreviewCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    let workspace: WeddingWorkspace
+    let workspace: PlanningWorkspace
 
     private var locationText: String? {
         let value = workspace.mainEventLocation?.formatted
@@ -281,7 +281,7 @@ private struct WorkspacePreviewCard: View {
         ZStack(alignment: .bottomLeading) {
             MediaArtwork(
                 imageData: workspace.mainEventImageData,
-                assetName: workspace.mainEventImageData == nil ? "WeddingVenueHero" : nil,
+                assetName: workspace.mainEventImageData == nil ? "DefaultVenueHero" : nil,
                 symbol: "sparkles",
                 colors: [AppTheme.ColorToken.accent, AppTheme.ColorToken.lilac, AppTheme.ColorToken.mint],
                 accent: .white,
@@ -314,7 +314,7 @@ private struct WorkspacePreviewCard: View {
                     .font(AppTheme.Typography.sectionTitle)
                     .lineLimit(2)
 
-                Text(workspace.weddingDate.formatted(date: .long, time: .omitted))
+                Text(workspace.mainEventStartsAt.formatted(date: .long, time: .omitted))
                     .font(.headline)
 
                 if let locationText {
@@ -352,7 +352,7 @@ private struct WorkspacePreviewCard: View {
     }
 
     private var accessibilitySummary: String {
-        let date = workspace.weddingDate.formatted(date: .long, time: .omitted)
+        let date = workspace.mainEventStartsAt.formatted(date: .long, time: .omitted)
         let location = locationText.map { ", \($0)" } ?? ""
         return "\(workspace.title), \(date)\(location), \(workspace.currentMainEventStatus.title)"
     }
@@ -367,7 +367,7 @@ struct NewWorkspaceView: View {
     @Environment(WorkspaceLibrary.self) private var library
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.dismiss) private var dismiss
-    var onWorkspaceCreated: ((WeddingWorkspace) -> Void)?
+    var onWorkspaceCreated: ((PlanningWorkspace) -> Void)?
     @State private var title = ""
     @State private var startsAt = Calendar.current.date(byAdding: .month, value: 6, to: .now) ?? .now
     @State private var endsAt: Date?
@@ -380,7 +380,7 @@ struct NewWorkspaceView: View {
     @State private var isEditingLocation = false
     @FocusState private var focusedField: FocusedField?
 
-    init(onWorkspaceCreated: ((WeddingWorkspace) -> Void)? = nil) {
+    init(onWorkspaceCreated: ((PlanningWorkspace) -> Void)? = nil) {
         self.onWorkspaceCreated = onWorkspaceCreated
     }
 
@@ -475,7 +475,7 @@ struct NewWorkspaceView: View {
                 PhotoAttachmentPicker(
                     imageData: $imageData,
                     emptySymbol: "rectangle.stack.badge.plus",
-                    fallbackAssetName: "WeddingVenueHero",
+                    fallbackAssetName: "DefaultVenueHero",
                     suggestedConcept: "Artwork for \(trimmedTitle.isEmpty ? "our event" : trimmedTitle)"
                 )
             }
@@ -496,7 +496,7 @@ struct NewWorkspaceView: View {
 
             ToolbarItem(placement: .confirmationAction) {
                 Button("Create") {
-                    let workspace = WeddingWorkspace.newWorkspace(
+                    let workspace = PlanningWorkspace.newWorkspace(
                         title: trimmedTitle,
                         startsAt: startsAt,
                         endsAt: endsAt,

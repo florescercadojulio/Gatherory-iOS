@@ -6,7 +6,7 @@ struct FilterBehaviorTests {
     @Test("Idea filters expose every status")
     func ideaFiltersCoverEveryStatus() {
         let ideas = IdeaStatus.allCases.map { status in
-            WeddingIdea(
+            PlanningIdea(
                 title: status.title,
                 note: "",
                 category: .other,

@@ -5,7 +5,7 @@ import MusicKit
 struct IdeasView: View {
     var onExitWorkspace: (() -> Void)?
 
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.layoutDirection) private var layoutDirection
     @State private var filter: IdeaFilter = .all
@@ -15,7 +15,7 @@ struct IdeasView: View {
     @State private var selectedIdeaID: UUID?
     @Namespace private var ideaTransition
 
-    private var filteredIdeas: [WeddingIdea] {
+    private var filteredIdeas: [PlanningIdea] {
         let ideas = switch scope {
         case .all:
             workspace.ideas
@@ -207,7 +207,7 @@ struct IdeasView: View {
         }
     }
 
-    private func ideaButton(_ idea: WeddingIdea) -> some View {
+    private func ideaButton(_ idea: PlanningIdea) -> some View {
         Button {
             selectedIdeaID = idea.id
         } label: {
@@ -233,7 +233,7 @@ struct IdeasView: View {
     }
 
     @ViewBuilder
-    private func ideaActions(for idea: WeddingIdea) -> some View {
+    private func ideaActions(for idea: PlanningIdea) -> some View {
         if idea.status != .shortlisted {
             Button("Shortlist", systemImage: "heart.fill") {
                 update(idea, to: .shortlisted)
@@ -259,7 +259,7 @@ struct IdeasView: View {
         }
     }
 
-    private func update(_ idea: WeddingIdea, to status: IdeaStatus) {
+    private func update(_ idea: PlanningIdea, to status: IdeaStatus) {
         withAnimation {
             workspace.updateIdea(idea, status: status)
         }
@@ -325,7 +325,7 @@ enum IdeaFilter: String, CaseIterable, Identifiable {
         }
     }
 
-    func includes(_ idea: WeddingIdea) -> Bool {
+    func includes(_ idea: PlanningIdea) -> Bool {
         switch self {
         case .all:
             idea.status != .archived
@@ -344,7 +344,7 @@ enum IdeaFilter: String, CaseIterable, Identifiable {
 }
 
 private struct IdeaCollectionCard: View {
-    let idea: WeddingIdea
+    let idea: PlanningIdea
     let transitionNamespace: Namespace.ID
 
     private var artworkAspectRatio: CGFloat {
@@ -474,13 +474,13 @@ private extension IdeaCategory {
 }
 
 struct IdeaDetailView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @State private var isEditingIdea = false
     @State private var editorDetent: PresentationDetent = .large
     let ideaID: UUID
     let transitionNamespace: Namespace.ID
 
-    private var idea: WeddingIdea? {
+    private var idea: PlanningIdea? {
         workspace.ideas.first { $0.id == ideaID }
     }
 
@@ -603,11 +603,11 @@ struct IdeaDetailView: View {
 }
 
 private struct IdeaDetailScreen: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(MusicPreviewPlayer.self) private var previewPlayer
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    let idea: WeddingIdea
+    let idea: PlanningIdea
 
     var body: some View {
         GeometryReader { proxy in
@@ -768,12 +768,12 @@ private struct IdeaDetailScreen: View {
 }
 
 private struct IdeaCategoryDetailContent: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var isPickingMusic = false
     @State private var pickedSongs: [Song] = []
 
-    let idea: WeddingIdea
+    let idea: PlanningIdea
 
     private var canEditMusicPlaylist: Bool {
         workspace.canEditMusicPlaylist(for: idea)
@@ -1216,11 +1216,11 @@ private struct IdeaCategoryDetailContent: View {
 }
 
 private struct EventIdeaDetailCard: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var weather = EventWeatherModel()
 
-    let idea: WeddingIdea
+    let idea: PlanningIdea
     let configuration: EventIdeaConfiguration
 
     private var requestID: String {
@@ -1446,7 +1446,7 @@ private struct IdeaMetadataRow: View {
 }
 
 struct IdeaEditorView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(MusicPreviewPlayer.self) private var previewPlayer
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -1501,11 +1501,11 @@ struct IdeaEditorView: View {
     @State private var registryPrice = ""
     @State private var registryQuantity = 1
 
-    let existingIdea: WeddingIdea?
+    let existingIdea: PlanningIdea?
     let setDetent: (PresentationDetent) -> Void
 
     init(
-        existingIdea: WeddingIdea? = nil,
+        existingIdea: PlanningIdea? = nil,
         initialCategory: IdeaCategory? = nil,
         setDetent: @escaping (PresentationDetent) -> Void
     ) {
@@ -1621,7 +1621,7 @@ struct IdeaEditorView: View {
         note.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var ideaBeingEdited: WeddingIdea? {
+    private var ideaBeingEdited: PlanningIdea? {
         if let existingIdea { return existingIdea }
         guard category == .music, let editingMusicPlaylistID else { return nil }
         return workspace.ideas.first { $0.id == editingMusicPlaylistID }
@@ -1769,9 +1769,9 @@ struct IdeaEditorView: View {
             && (category != .link || (!trimmedTitle.isEmpty && normalizedLinkURL != nil))
     }
 
-    private var editedIdea: WeddingIdea {
+    private var editedIdea: PlanningIdea {
         let baseIdea = ideaBeingEdited
-        return WeddingIdea(
+        return PlanningIdea(
             id: baseIdea?.id ?? UUID(),
             eventID: baseIdea?.eventID ?? destinationEventID,
             title: resolvedTitle,
@@ -2975,7 +2975,7 @@ private struct AttireStyleSilhouette: View {
 #Preview {
     NavigationStack {
         IdeasView()
-            .environment(WeddingWorkspace.sample)
+            .environment(PlanningWorkspace.sample)
             .environment(MusicCatalog())
             .environment(MusicPreviewPlayer())
     }

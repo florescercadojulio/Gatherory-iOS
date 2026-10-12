@@ -6,7 +6,7 @@ struct ModelNormalizationTests {
     @Test("Participant role and permission are scoped to one event")
     @MainActor
     func eventParticipationIsScoped() throws {
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Wedding",
             startsAt: .now,
             eventLocation: nil,
@@ -53,7 +53,7 @@ struct ModelNormalizationTests {
     @Test("Idea context updates the participant relationship for its event")
     @MainActor
     func ideaContextUsesOwningEvent() throws {
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Wedding",
             startsAt: .now,
             eventLocation: nil,
@@ -71,7 +71,7 @@ struct ModelNormalizationTests {
             parentEventID: workspace.mainEventID
         )
         workspace.addTimelineItem(child)
-        let idea = WeddingIdea(
+        let idea = PlanningIdea(
             eventID: child.id,
             title: "Live band",
             note: "",
@@ -91,7 +91,7 @@ struct ModelNormalizationTests {
     @Test("Deleting an event cascades through its local aggregate")
     @MainActor
     func eventDeletionCascades() throws {
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Wedding",
             startsAt: .now,
             eventLocation: nil,
@@ -108,7 +108,7 @@ struct ModelNormalizationTests {
         )
         workspace.addTimelineItem(child)
         workspace.addIdea(
-            WeddingIdea(
+            PlanningIdea(
                 eventID: child.id,
                 title: "Menu",
                 note: "",
@@ -137,7 +137,7 @@ struct ModelNormalizationTests {
     @Test("An event keeps one shared playlist and merges unique songs")
     @MainActor
     func eventMusicPlaylistIsUnique() throws {
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Wedding",
             startsAt: .now,
             eventLocation: nil,
@@ -178,7 +178,7 @@ struct ModelNormalizationTests {
     @Test("Playlists remain editable until their event is complete")
     @MainActor
     func playlistEditingClosesWithItsEvent() throws {
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Wedding",
             startsAt: .now,
             eventLocation: nil,
@@ -205,7 +205,7 @@ struct ModelNormalizationTests {
         workspace.updateIdea(editedMainPlaylist)
         #expect(workspace.musicPlaylist(for: workspace.mainEventID)?.musicTracks == [firstTrack])
 
-        let childWorkspace = WeddingWorkspace.newWorkspace(
+        let childWorkspace = PlanningWorkspace.newWorkspace(
             title: "Wedding",
             startsAt: .now,
             eventLocation: nil,
@@ -244,7 +244,7 @@ struct ModelNormalizationTests {
     @Test("The main event and a child event keep separate playlists")
     @MainActor
     func playlistsAreScopedByEvent() throws {
-        let workspace = WeddingWorkspace.newWorkspace(
+        let workspace = PlanningWorkspace.newWorkspace(
             title: "Wedding",
             startsAt: .now,
             eventLocation: nil,
@@ -285,8 +285,8 @@ struct ModelNormalizationTests {
         eventID: UUID,
         title: String,
         tracks: [MusicTrack]
-    ) -> WeddingIdea {
-        WeddingIdea(
+    ) -> PlanningIdea {
+        PlanningIdea(
             eventID: eventID,
             title: title,
             note: "",

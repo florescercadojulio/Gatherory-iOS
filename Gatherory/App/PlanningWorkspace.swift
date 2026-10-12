@@ -13,10 +13,10 @@ nonisolated struct WorkspaceMediaAttachment: Sendable {
 }
 
 @Observable
-final class WeddingWorkspace {
+final class PlanningWorkspace {
     let mainEventID: UUID
     var title: String
-    var weddingDate: Date
+    var mainEventStartsAt: Date
     var mainEventEndsAt: Date?
     var mainEventIsAllDay: Bool
     var mainEventTimeZoneIdentifier: String
@@ -28,12 +28,12 @@ final class WeddingWorkspace {
     var dressCode: String
     var eventMessage: String
     var planningMode: PlanningMode
-    var members: [WeddingMember]
+    var members: [WorkspaceMember]
     /// Normalized event-to-person relationships. The legacy participant-ID
     /// arrays remain as a UI compatibility projection during the migration.
     private(set) var eventParticipations: [EventParticipation]
     var mainEventParticipantIDs: [UUID]
-    private(set) var ideas: [WeddingIdea]
+    private(set) var ideas: [PlanningIdea]
     var timeline: [TimelineItem]
     private(set) var eventExpenses: [EventExpense]
     /// The top-level spending limit. Event allocations always add up to this cap.
@@ -62,7 +62,7 @@ final class WeddingWorkspace {
     init(
         mainEventID: UUID = UUID(),
         title: String,
-        weddingDate: Date,
+        mainEventStartsAt: Date,
         mainEventEndsAt: Date? = nil,
         mainEventIsAllDay: Bool = false,
         mainEventTimeZoneIdentifier: String = TimeZone.autoupdatingCurrent.identifier,
@@ -72,12 +72,12 @@ final class WeddingWorkspace {
         venueName: String,
         location: String,
         dressCode: String = "Garden formal",
-        eventMessage: String = "Your presence means the world to us. The ceremony and reception will be outdoors, so please plan for the evening weather.",
+        eventMessage: String = "We’re looking forward to sharing this experience with you.",
         planningMode: PlanningMode,
-        members: [WeddingMember],
+        members: [WorkspaceMember],
         eventParticipations: [EventParticipation]? = nil,
         mainEventParticipantIDs: [UUID]? = nil,
-        ideas: [WeddingIdea],
+        ideas: [PlanningIdea],
         timeline: [TimelineItem],
         eventExpenses: [EventExpense] = [],
         workspaceBudgetCap: Decimal? = nil,
@@ -97,7 +97,7 @@ final class WeddingWorkspace {
     ) {
         self.mainEventID = mainEventID
         self.title = title
-        self.weddingDate = weddingDate
+        self.mainEventStartsAt = mainEventStartsAt
         self.mainEventEndsAt = mainEventEndsAt
         self.mainEventIsAllDay = mainEventIsAllDay
         self.mainEventTimeZoneIdentifier = mainEventTimeZoneIdentifier
@@ -234,14 +234,14 @@ final class WeddingWorkspace {
         }
     }
 
-    var decisionQueue: [WeddingIdea] {
+    var decisionQueue: [PlanningIdea] {
         decisionQueue(for: nil)
     }
 
     /// The decision deck is workspace-wide. Event context controls where new
     /// ideas are created and viewed, but it must not hide another event's
     /// pending decision.
-    func decisionQueue(for eventID: UUID?) -> [WeddingIdea] {
+    func decisionQueue(for eventID: UUID?) -> [PlanningIdea] {
         ideas
             .filter { idea in
                 guard idea.status == .new else { return false }
@@ -316,17 +316,17 @@ final class WeddingWorkspace {
         return timeline.first(where: { $0.id == eventID })?.title ?? title
     }
 
-    func eventTitle(for idea: WeddingIdea) -> String {
+    func eventTitle(for idea: PlanningIdea) -> String {
         eventTitle(for: idea.eventID ?? mainEventID)
     }
 
-    var contextualIdeas: [WeddingIdea] {
+    var contextualIdeas: [PlanningIdea] {
         ideas.filter { ($0.eventID ?? mainEventID) == selectedEventID }
     }
 
     /// Music is an event resource, not a set of competing proposals. There is
     /// exactly one shared playlist aggregate for each event context.
-    func musicPlaylist(for eventID: UUID) -> WeddingIdea? {
+    func musicPlaylist(for eventID: UUID) -> PlanningIdea? {
         ideas.first {
             $0.category == .music && ($0.eventID ?? mainEventID) == eventID
         }
@@ -335,7 +335,7 @@ final class WeddingWorkspace {
     /// A playlist is a living event resource. It stays open while its event is
     /// being planned or underway, then becomes read-only with the completed
     /// event so the published soundtrack remains an accurate record.
-    func canEditMusicPlaylist(for playlist: WeddingIdea) -> Bool {
+    func canEditMusicPlaylist(for playlist: PlanningIdea) -> Bool {
         canEditMusicPlaylist(forEventID: playlist.eventID ?? mainEventID)
     }
 
@@ -354,7 +354,7 @@ final class WeddingWorkspace {
     /// The single guest-presentation policy for ideas. Approval alone does not
     /// publish a planning choice: it must also be marked for the invitation and
     /// belong to the event being viewed.
-    func invitationIdeas(for reference: EventReference) -> [WeddingIdea] {
+    func invitationIdeas(for reference: EventReference) -> [PlanningIdea] {
         let eventID: UUID
         switch reference {
         case .main:
@@ -606,7 +606,7 @@ final class WeddingWorkspace {
         })
     }
 
-    func participants(for reference: EventReference) -> [WeddingMember] {
+    func participants(for reference: EventReference) -> [WorkspaceMember] {
         let eventID = participantEventID(for: reference)
         let relationships = eventParticipations.filter { $0.eventID == eventID }
         let relationshipsByMemberID = Dictionary(
@@ -624,12 +624,12 @@ final class WeddingWorkspace {
         }
     }
 
-    var selectedEventCoordinators: [WeddingMember] {
+    var selectedEventCoordinators: [WorkspaceMember] {
         participants(for: selectedEventReference)
             .filter { $0.participantRole != .guest }
     }
 
-    var selectedEventParticipants: [WeddingMember] {
+    var selectedEventParticipants: [WorkspaceMember] {
         participants(for: selectedEventReference)
     }
 
@@ -661,7 +661,7 @@ final class WeddingWorkspace {
     @discardableResult
     func updateParticipant(
         _ participantID: UUID,
-        role: WeddingParticipantRole,
+        role: WorkspaceRole,
         planningPermission: PlanningPermission,
         in reference: EventReference? = nil
     ) -> Bool {
@@ -693,7 +693,7 @@ final class WeddingWorkspace {
     }
 
     func canAssignParticipantRole(
-        _ role: WeddingParticipantRole,
+        _ role: WorkspaceRole,
         to participantID: UUID,
         in reference: EventReference? = nil
     ) -> Bool {
@@ -791,7 +791,7 @@ final class WeddingWorkspace {
     func eventDate(for reference: EventReference) -> Date {
         switch reference {
         case .main:
-            weddingDate
+            mainEventStartsAt
         case .subevent(let id):
             timeline.first(where: { $0.id == id })?.scheduledAt ?? .distantFuture
         case .idea:
@@ -845,7 +845,7 @@ final class WeddingWorkspace {
         parentID == mainEventID
     }
 
-    var planningMembers: [WeddingMember] {
+    var planningMembers: [WorkspaceMember] {
         members.filter { $0.participantRole != .guest }
     }
 
@@ -896,11 +896,11 @@ final class WeddingWorkspace {
                 && $0.status == .approved
                 && $0.hasScheduledDate
         }
-        let starts = [weddingDate] + eventExperiences.map(\.scheduledAt)
-        let ends = [mainEventEndsAt ?? weddingDate] + eventExperiences.map {
+        let starts = [mainEventStartsAt] + eventExperiences.map(\.scheduledAt)
+        let ends = [mainEventEndsAt ?? mainEventStartsAt] + eventExperiences.map {
             $0.endsAt ?? $0.scheduledAt
         }
-        return (starts.min() ?? weddingDate)...(ends.max() ?? weddingDate)
+        return (starts.min() ?? mainEventStartsAt)...(ends.max() ?? mainEventStartsAt)
     }
 
     var currentMainEventStatus: MainEventStatus {
@@ -923,7 +923,7 @@ final class WeddingWorkspace {
         !decisionHistory.isEmpty
     }
 
-    func decide(_ choice: DecisionChoice, on idea: WeddingIdea) {
+    func decide(_ choice: DecisionChoice, on idea: PlanningIdea) {
         guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
 
         decisionHistory.append(
@@ -1040,7 +1040,7 @@ final class WeddingWorkspace {
 
         self.title = title
         mainEventStatus = status
-        weddingDate = startsAt
+        mainEventStartsAt = startsAt
         mainEventEndsAt = endsAt
         mainEventIsAllDay = isAllDay
         mainEventTimeZoneIdentifier = timeZoneIdentifier
@@ -1184,14 +1184,14 @@ final class WeddingWorkspace {
         }
     }
 
-    func updateIdea(_ idea: WeddingIdea, status: IdeaStatus) {
+    func updateIdea(_ idea: PlanningIdea, status: IdeaStatus) {
         guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
         var updatedIdea = ideas[index]
         updatedIdea.status = updatedIdea.category == .music ? .chosen : status
         replaceIdea(at: index, with: updatedIdea)
     }
 
-    func updateIdea(_ idea: WeddingIdea) {
+    func updateIdea(_ idea: PlanningIdea) {
         if idea.category == .music {
             upsertMusicPlaylist(idea)
             return
@@ -1200,7 +1200,7 @@ final class WeddingWorkspace {
         replaceIdea(at: index, with: idea)
     }
 
-    func addIdea(_ idea: WeddingIdea) {
+    func addIdea(_ idea: PlanningIdea) {
         var scopedIdea = idea
         if scopedIdea.category == .event {
             // Event ideas become first-level sub-events when approved. Never
@@ -1222,7 +1222,7 @@ final class WeddingWorkspace {
     /// Promotes a dated, approved event proposal into a Home event without
     /// duplicating it. Undated approvals remain in Ideas until a date is set.
     @discardableResult
-    func scheduleEventIdea(_ idea: WeddingIdea) -> UUID? {
+    func scheduleEventIdea(_ idea: PlanningIdea) -> UUID? {
         guard idea.status == .chosen,
               let configuration = idea.eventConfiguration,
               let proposedDate = configuration.proposedDate else {
@@ -1273,7 +1273,7 @@ final class WeddingWorkspace {
     /// This is the single write path for existing ideas. Keeping financial
     /// reconciliation here prevents individual screens from implementing
     /// their own budget behavior.
-    private func replaceIdea(at index: Int, with idea: WeddingIdea) {
+    private func replaceIdea(at index: Int, with idea: PlanningIdea) {
         var updated = idea
         if ideas[index].imageData != updated.imageData {
             updated.mediaAssetID = nil
@@ -1283,7 +1283,7 @@ final class WeddingWorkspace {
         reconcileExpense(for: updated)
     }
 
-    private func upsertMusicPlaylist(_ playlist: WeddingIdea) {
+    private func upsertMusicPlaylist(_ playlist: PlanningIdea) {
         let eventID = playlist.eventID ?? selectedEventID
         guard canEditMusicPlaylist(forEventID: eventID) else { return }
         let matchingIndices = ideas.indices.filter {
@@ -1332,10 +1332,10 @@ final class WeddingWorkspace {
     }
 
     private static func normalizedIdeas(
-        _ ideas: [WeddingIdea],
+        _ ideas: [PlanningIdea],
         mainEventID: UUID
-    ) -> [WeddingIdea] {
-        var normalized: [WeddingIdea] = []
+    ) -> [PlanningIdea] {
+        var normalized: [PlanningIdea] = []
         var playlistIndexByEventID: [UUID: Int] = [:]
 
         for var idea in ideas {
@@ -1379,7 +1379,7 @@ final class WeddingWorkspace {
     /// Keeps approved event ideas and dated Home events as one lifecycle.
     /// A date promotes an approved idea; removing that date returns it to
     /// Ideas. Revoking approval removes only that generated event.
-    private func reconcileScheduledEvent(for idea: WeddingIdea) {
+    private func reconcileScheduledEvent(for idea: PlanningIdea) {
         guard idea.category == .event else { return }
 
         if idea.status == .chosen, idea.eventConfiguration?.proposedDate != nil {
@@ -1393,7 +1393,7 @@ final class WeddingWorkspace {
     /// Proposed ideas are estimated costs, while approved ideas are committed.
     /// Ideas that are passed, archived, or have no positive estimate do not
     /// consume the workspace budget.
-    private func reconcileExpense(for idea: WeddingIdea) {
+    private func reconcileExpense(for idea: PlanningIdea) {
         let existingIndex = eventExpenses.firstIndex { $0.sourceIdeaID == idea.id }
         guard let estimate = idea.estimatedCost,
               estimate > 0,
@@ -1454,7 +1454,7 @@ final class WeddingWorkspace {
         name: String,
         email: String? = nil,
         initials: String,
-        role: WeddingParticipantRole
+        role: WorkspaceRole
     ) {
         if let existingMember = members.first(where: {
             $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame
@@ -1463,7 +1463,7 @@ final class WeddingWorkspace {
             return
         }
 
-        let member = WeddingMember(
+        let member = WorkspaceMember(
             name: name,
             participantRole: role,
             initials: initials,
@@ -1505,7 +1505,7 @@ final class WeddingWorkspace {
     }
 }
 
-private extension WeddingIdea {
+private extension PlanningIdea {
     var expenseCategory: EventExpenseCategory {
         switch category {
         case .venue:
@@ -1547,11 +1547,11 @@ private struct DecisionRecord {
     let previousStatus: IdeaStatus
 }
 
-extension WeddingWorkspace {
-    static var sample: WeddingWorkspace {
+extension PlanningWorkspace {
+    static var sample: PlanningWorkspace {
         let calendar = Calendar.current
         let now = Date.now
-        let weddingDate = calendar.date(byAdding: .day, value: 248, to: now) ?? now
+        let mainEventStartsAt = calendar.date(byAdding: .day, value: 248, to: now) ?? now
         let venueLocation = EventLocation(
             address: "Ann Arbor, Michigan",
             shortAddress: "Ann Arbor, MI",
@@ -1568,21 +1568,21 @@ extension WeddingWorkspace {
             latitude: 42.2778,
             longitude: -83.6967
         )
-        let alex = WeddingMember(
+        let alex = WorkspaceMember(
             name: "Alex",
             participantRole: .host,
             initials: "A",
             planningPermission: .manage
         )
-        let jordan = WeddingMember(
+        let jordan = WorkspaceMember(
             name: "Jordan",
             participantRole: .host,
             initials: "J",
             planningPermission: .manage
         )
-        let sarah = WeddingMember(name: "Sarah", participantRole: .collaborator, initials: "S")
-        let mia = WeddingMember(name: "Mia", participantRole: .collaborator, initials: "M")
-        let chris = WeddingMember(
+        let sarah = WorkspaceMember(name: "Sarah", participantRole: .collaborator, initials: "S")
+        let mia = WorkspaceMember(name: "Mia", participantRole: .collaborator, initials: "M")
+        let chris = WorkspaceMember(
             name: "Chris",
             participantRole: .guest,
             initials: "C",
@@ -1590,15 +1590,15 @@ extension WeddingWorkspace {
             planningPermission: .viewOnly
         )
 
-        let workspace = WeddingWorkspace(
+        let workspace = PlanningWorkspace(
             title: "Alex & Jordan’s Wedding",
-            weddingDate: weddingDate,
+            mainEventStartsAt: mainEventStartsAt,
             venueName: "Willow & Stone Estate",
             location: "Ann Arbor, Michigan",
             planningMode: .openToIdeas,
             members: [alex, jordan, sarah, mia, chris],
             ideas: [
-                WeddingIdea(
+                PlanningIdea(
                     title: "Venue",
                     note: "Garden ceremony, dinner under the trees, and space for everyone we love.",
                     category: .event,
@@ -1614,21 +1614,21 @@ extension WeddingWorkspace {
                         )
                     )
                 ),
-                WeddingIdea(
+                PlanningIdea(
                     title: "Garden ceremony lighting",
                     note: "Warm string lights through the trees for the ceremony and dinner.",
                     category: .decor,
                     submittedBy: "Sarah",
                     estimatedCost: 400
                 ),
-                WeddingIdea(
+                PlanningIdea(
                     title: "Wildflower table arrangements",
                     note: "Loose seasonal flowers in small mismatched glass vases.",
                     category: .flowers,
                     submittedBy: "Mia",
                     estimatedCost: 650
                 ),
-                WeddingIdea(
+                PlanningIdea(
                     title: "Photography",
                     note: "Golden-hour portraits by the river, with room for candid photographs along the trails.",
                     category: .event,
@@ -1644,7 +1644,7 @@ extension WeddingWorkspace {
                         )
                     )
                 ),
-                WeddingIdea(
+                PlanningIdea(
                     title: "Letterpress invitation suite",
                     note: "Warm ivory paper with a simple botanical detail.",
                     category: .invitations,
@@ -1652,7 +1652,7 @@ extension WeddingWorkspace {
                     estimatedCost: 520,
                     status: .chosen
                 ),
-                WeddingIdea(
+                PlanningIdea(
                     title: "Alex & Jordan’s Wedding Playlist",
                     note: "Add songs that will keep the dance floor moving all night.",
                     category: .music,
@@ -1661,7 +1661,7 @@ extension WeddingWorkspace {
                     configuration: .music(MusicIdeaConfiguration(tracks: [])),
                     invitationVisibility: .shownToGuests
                 ),
-                WeddingIdea(
+                PlanningIdea(
                     title: "Reception",
                     note: "A relaxed dinner for the planning circle and out-of-town family before the wedding weekend begins.",
                     category: .event,
@@ -1676,7 +1676,7 @@ extension WeddingWorkspace {
                         )
                     )
                 ),
-                WeddingIdea(
+                PlanningIdea(
                     title: "Weekend Getaway Fund",
                     note: "A flexible fund for a quiet first trip after the celebration.",
                     category: .registry,
@@ -1728,9 +1728,9 @@ extension WeddingWorkspace {
                     title: "Ceremony",
                     category: .ceremony,
                     purpose: .eventExperience,
-                    scheduledAt: calendar.date(bySettingHour: 16, minute: 0, second: 0, of: weddingDate) ?? weddingDate,
+                    scheduledAt: calendar.date(bySettingHour: 16, minute: 0, second: 0, of: mainEventStartsAt) ?? mainEventStartsAt,
                     eventLocation: venueLocation,
-                    endsAt: calendar.date(bySettingHour: 16, minute: 30, second: 0, of: weddingDate),
+                    endsAt: calendar.date(bySettingHour: 16, minute: 30, second: 0, of: mainEventStartsAt),
                     participantIDs: [alex.id, jordan.id],
                     status: .approved
                 ),
@@ -1738,9 +1738,9 @@ extension WeddingWorkspace {
                     title: "Cocktail Hour",
                     category: .reception,
                     purpose: .eventExperience,
-                    scheduledAt: calendar.date(bySettingHour: 17, minute: 0, second: 0, of: weddingDate) ?? weddingDate,
+                    scheduledAt: calendar.date(bySettingHour: 17, minute: 0, second: 0, of: mainEventStartsAt) ?? mainEventStartsAt,
                     eventLocation: venueLocation,
-                    endsAt: calendar.date(bySettingHour: 18, minute: 0, second: 0, of: weddingDate),
+                    endsAt: calendar.date(bySettingHour: 18, minute: 0, second: 0, of: mainEventStartsAt),
                     participantIDs: [alex.id, jordan.id],
                     status: .approved
                 ),
@@ -1748,7 +1748,7 @@ extension WeddingWorkspace {
                     title: "Dinner & Dancing",
                     category: .reception,
                     purpose: .eventExperience,
-                    scheduledAt: calendar.date(bySettingHour: 18, minute: 0, second: 0, of: weddingDate) ?? weddingDate,
+                    scheduledAt: calendar.date(bySettingHour: 18, minute: 0, second: 0, of: mainEventStartsAt) ?? mainEventStartsAt,
                     eventLocation: venueLocation,
                     participantIDs: [alex.id, jordan.id],
                     status: .approved

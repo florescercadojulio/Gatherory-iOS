@@ -43,7 +43,7 @@ struct AppRootView: View {
 
 private struct WorkspaceSessionView: View {
     @Environment(\.dismiss) private var dismiss
-    let workspace: WeddingWorkspace
+    let workspace: PlanningWorkspace
 
     var body: some View {
         ContentView {
@@ -54,7 +54,7 @@ private struct WorkspaceSessionView: View {
 }
 
 struct ContentView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     var onExitWorkspace: (() -> Void)?
     @State private var selectedTab = AppTab.home
     @State private var homeReselectionTrigger = 0
@@ -119,5 +119,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .environment(WeddingWorkspace.sample)
+        .environment(PlanningWorkspace.sample)
 }

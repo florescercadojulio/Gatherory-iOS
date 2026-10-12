@@ -91,6 +91,11 @@ enum AppRuntimeConfiguration {
         return infoBoolean(forKey: "SKIP_AUTH_LOGIN") ?? false
     }
 
+    /// Keeps automated UI fixtures isolated from developer and simulator data.
+    static var usesEphemeralDataStore: Bool {
+        ProcessInfo.processInfo.arguments.contains("-UseEphemeralDataStore")
+    }
+
     static var authenticationBaseURL: URL? {
         let arguments = ProcessInfo.processInfo.arguments
 

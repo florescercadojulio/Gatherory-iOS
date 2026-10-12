@@ -114,7 +114,7 @@ enum ParticipantAvatarStyle: Equatable {
 /// so every representation of that person uses the same profile image. People
 /// without a linked account intentionally continue to use their initials.
 struct ParticipantAvatarView: View {
-    let member: WeddingMember
+    let member: WorkspaceMember
     var size: CGFloat
     var style: ParticipantAvatarStyle = .accent
 

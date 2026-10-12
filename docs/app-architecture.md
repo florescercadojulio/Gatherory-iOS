@@ -71,7 +71,7 @@ Gatherory/
 │   │   ├── Views/
 │   │   └── HomeModel.swift
 │   │
-│   ├── WeddingSpace/
+│   ├── PlanningWorkspace/
 │   ├── Ideas/
 │   ├── Boards/
 │   ├── Collaboration/
@@ -254,7 +254,7 @@ Apple Music          Spotify / future providers
 MusicKit             provider SDK or REST API
 ```
 
-Each provider maps its native response into `MusicTrack`. A saved `WeddingIdea` can optionally carry that track reference, so it continues through the existing collaboration, decision, and detail flows. Provider-specific authorization and search stay behind `MusicCatalogProviding`; views request a provider by `MusicProviderID` and never import a provider SDK directly.
+Each provider maps its native response into `MusicTrack`. A saved `PlanningIdea` can optionally carry that track reference, so it continues through the existing collaboration, decision, and detail flows. Provider-specific authorization and search stay behind `MusicCatalogProviding`; views request a provider by `MusicProviderID` and never import a provider SDK directly.
 
 Apple Music is the initial live provider. Spotify is represented only as a provider ID until its authorization and catalog implementation are added. Treat ISRC as useful cross-catalog matching metadata, not as a guaranteed unique primary key; the stable identity remains the provider ID plus the provider's catalog ID.
 

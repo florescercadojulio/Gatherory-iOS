@@ -4,7 +4,7 @@ struct HomeView: View {
     var homeReselectionTrigger = 0
     var onExitWorkspace: (() -> Void)?
 
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -35,7 +35,7 @@ struct HomeView: View {
     private let pullToCreateRevealInset: CGFloat = 56
 
     private var daysRemaining: Int {
-        max(Calendar.current.dateComponents([.day], from: .now, to: workspace.weddingDate).day ?? 0, 0)
+        max(Calendar.current.dateComponents([.day], from: .now, to: workspace.mainEventStartsAt).day ?? 0, 0)
     }
 
     private var eventHeroHeight: CGFloat {
@@ -381,7 +381,7 @@ struct HomeView: View {
 
         MediaArtwork(
             imageData: reference == .main ? workspace.mainEventImageData : item?.imageData,
-            assetName: reference == .main || category == .venue ? "WeddingVenueHero" : nil,
+            assetName: reference == .main || category == .venue ? "DefaultVenueHero" : nil,
             remoteURL: nil,
             symbol: category.symbol,
             colors: category.artworkColors,
@@ -410,7 +410,7 @@ struct HomeView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func eventPeople(for reference: EventReference) -> [WeddingMember] {
+    private func eventPeople(for reference: EventReference) -> [WorkspaceMember] {
         workspace.participants(for: reference)
     }
 
@@ -588,7 +588,7 @@ struct HomeView: View {
     }
 
     private func date(for reference: EventReference) -> Date {
-        reference == .main ? workspace.weddingDate : timelineItem(for: reference)?.scheduledAt ?? workspace.weddingDate
+        reference == .main ? workspace.mainEventStartsAt : timelineItem(for: reference)?.scheduledAt ?? workspace.mainEventStartsAt
     }
 
     private func location(for reference: EventReference) -> EventLocation? {
@@ -875,7 +875,7 @@ private struct EventContextStatusBadge: View {
 }
 
 private struct MainEventEditorView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
 
     @State private var title = ""
@@ -919,7 +919,7 @@ private struct MainEventEditorView: View {
                 PhotoAttachmentPicker(
                     imageData: $imageData,
                     emptySymbol: "calendar.badge.plus",
-                    fallbackAssetName: "WeddingVenueHero",
+                    fallbackAssetName: "DefaultVenueHero",
                     suggestedConcept: "Artwork for \(trimmedTitle.isEmpty ? "our gathering" : trimmedTitle)"
                 )
             }
@@ -1078,7 +1078,7 @@ private struct MainEventEditorView: View {
             guard !didLoad else { return }
             title = workspace.title
             status = workspace.mainEventStatus
-            startsAt = workspace.weddingDate
+            startsAt = workspace.mainEventStartsAt
             endsAt = workspace.mainEventEndsAt
             isAllDay = workspace.mainEventIsAllDay
             timeZoneIdentifier = workspace.mainEventTimeZoneIdentifier
@@ -1092,7 +1092,7 @@ private struct MainEventEditorView: View {
 }
 
 private struct NoteComposerView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @State private var note = ""
     @FocusState private var isFocused: Bool
@@ -1157,6 +1157,6 @@ private struct NoteComposerView: View {
 #Preview {
     NavigationStack {
         HomeView()
-            .environment(WeddingWorkspace.sample)
+            .environment(PlanningWorkspace.sample)
     }
 }

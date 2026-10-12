@@ -8,13 +8,13 @@ import SwiftData
 /// versioned archive at the persistence boundary lets us adopt SwiftData now
 /// without forcing views to understand storage concerns. A later schema can
 /// promote frequently queried children into their own models without changing
-/// the feature-facing `WeddingWorkspace` API.
+/// the feature-facing `PlanningWorkspace` API.
 struct WorkspaceArchiveV1: Codable {
     static let schemaVersion = 1
 
     let mainEventID: UUID
     let title: String
-    let weddingDate: Date
+    let mainEventStartsAt: Date
     let mainEventEndsAt: Date?
     let mainEventIsAllDay: Bool
     let mainEventTimeZoneIdentifier: String
@@ -26,11 +26,11 @@ struct WorkspaceArchiveV1: Codable {
     let dressCode: String
     let eventMessage: String
     let planningMode: PlanningMode
-    var members: [WeddingMember]
+    var members: [WorkspaceMember]
     /// Optional so archives written before relationship normalization migrate.
     var eventParticipations: [EventParticipation]?
     let mainEventParticipantIDs: [UUID]
-    var ideas: [WeddingIdea]
+    var ideas: [PlanningIdea]
     var timeline: [TimelineItem]
     var eventExpenses: [EventExpense]
     let workspaceBudgetCap: Decimal?
@@ -49,10 +49,10 @@ struct WorkspaceArchiveV1: Codable {
     let defaultCollaboratorPermission: PlanningPermission
     let collaboratorInviteURL: URL
 
-    init(workspace: WeddingWorkspace) {
+    init(workspace: PlanningWorkspace) {
         mainEventID = workspace.mainEventID
         title = workspace.title
-        weddingDate = workspace.weddingDate
+        mainEventStartsAt = workspace.mainEventStartsAt
         mainEventEndsAt = workspace.mainEventEndsAt
         mainEventIsAllDay = workspace.mainEventIsAllDay
         mainEventTimeZoneIdentifier = workspace.mainEventTimeZoneIdentifier
@@ -86,11 +86,11 @@ struct WorkspaceArchiveV1: Codable {
         collaboratorInviteURL = workspace.collaboratorInviteURL
     }
 
-    func makeWorkspace() -> WeddingWorkspace {
-        WeddingWorkspace(
+    func makeWorkspace() -> PlanningWorkspace {
+        PlanningWorkspace(
             mainEventID: mainEventID,
             title: title,
-            weddingDate: weddingDate,
+            mainEventStartsAt: mainEventStartsAt,
             mainEventEndsAt: mainEventEndsAt,
             mainEventIsAllDay: mainEventIsAllDay,
             mainEventTimeZoneIdentifier: mainEventTimeZoneIdentifier,
@@ -221,13 +221,13 @@ private extension WorkspaceArchiveV1 {
     ) throws {
         switch type {
         case .participant:
-            try applyRecord(WeddingMember.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &members)
+            try applyRecord(WorkspaceMember.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &members)
         case .eventParticipation:
             var records = eventParticipations ?? []
             try applyRecord(EventParticipation.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &records)
             eventParticipations = records
         case .idea:
-            try applyMediaRecord(WeddingIdea.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &ideas) { remote, local in
+            try applyMediaRecord(PlanningIdea.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &ideas) { remote, local in
                 var remote = remote
                 if remote.imageData == nil, remote.mediaAssetID == local.mediaAssetID {
                     remote.imageData = local.imageData
@@ -397,10 +397,18 @@ final class WorkspacePersistenceController {
         decoder = JSONDecoder()
     }
 
-    static func bootstrap() -> WorkspacePersistenceController {
+    static func bootstrap(
+        isStoredInMemoryOnly: Bool = false
+    ) -> WorkspacePersistenceController {
         do {
-            return try WorkspacePersistenceController()
+            return try WorkspacePersistenceController(
+                isStoredInMemoryOnly: isStoredInMemoryOnly
+            )
         } catch {
+            guard !isStoredInMemoryOnly else {
+                fatalError("Gatherory could not create an ephemeral data store: \(error)")
+            }
+
             do {
                 let fallback = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
                 fallback.lastError = error
@@ -425,7 +433,7 @@ final class WorkspacePersistenceController {
             activeUserID = ownerUserID
 
             if !records.isEmpty {
-                let workspaces = try records.map { record -> WeddingWorkspace in
+                let workspaces = try records.map { record -> PlanningWorkspace in
                     guard record.payloadSchemaVersion == WorkspaceArchiveV1.schemaVersion else {
                         throw WorkspacePersistenceError.unsupportedArchiveVersion(
                             record.payloadSchemaVersion
@@ -835,7 +843,7 @@ final class WorkspacePersistenceController {
         )
         var repairedScopes = Set<UUID>()
 
-        var repairs: [(corruptScopeID: UUID, workspace: WeddingWorkspace)] = []
+        var repairs: [(corruptScopeID: UUID, workspace: PlanningWorkspace)] = []
 
         for mutation in mutations
         where mutation.entityType == .workspace && mutation.operation != .delete {
@@ -981,7 +989,7 @@ final class WorkspacePersistenceController {
                 sanitized = try decoder.decode(WorkspaceArchiveV1.self, from: mutation.payload)
                     .syncPayload(using: encoder)
             case .idea:
-                var record = try decoder.decode(WeddingIdea.self, from: mutation.payload)
+                var record = try decoder.decode(PlanningIdea.self, from: mutation.payload)
                 record.imageData = nil
                 sanitized = try encoder.encode(record)
             case .event:
@@ -1115,7 +1123,7 @@ final class WorkspacePersistenceController {
         to library: WorkspaceLibrary
     ) throws {
         let pendingScopes = try pendingScopeIDs()
-        var remoteWorkspaces: [WeddingWorkspace] = []
+        var remoteWorkspaces: [PlanningWorkspace] = []
         let entitiesByScope = Dictionary(grouping: entities, by: \.scopeID)
 
         for snapshot in snapshots where !pendingScopes.contains(snapshot.scopeID) {

@@ -2,9 +2,8 @@ import Foundation
 
 /// Cross-platform wire representation of a reusable Gatherory experience.
 ///
-/// This is deliberately separate from `WeddingWorkspace`, which remains the
-/// first-release, offline domain aggregate. API documents decode here and are
-/// then adapted into the native model and SwiftUI presentation.
+/// Blueprint documents configure a `PlanningWorkspace` without coupling the
+/// portable format to native persistence or SwiftUI presentation.
 nonisolated struct ExperienceBlueprintDocument: Codable, Hashable, Sendable {
     let schema: URL
     let kind: String

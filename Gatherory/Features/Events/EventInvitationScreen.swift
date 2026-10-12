@@ -7,7 +7,7 @@ import UIKit
 /// The shared event experience used by the main event, timeline events, and event ideas.
 /// Only the root event can expose a child schedule; subevents and ideas are leaves.
 struct EventInvitationScreen: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(MusicPreviewPlayer.self) private var previewPlayer
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -35,13 +35,13 @@ struct EventInvitationScreen: View {
                 eyebrow: nil,
                 categoryTitle: "Main Event",
                 categorySymbol: "heart.fill",
-                startsAt: workspace.weddingDate,
+                startsAt: workspace.mainEventStartsAt,
                 endsAt: workspace.mainEventEndsAt,
                 isAllDay: workspace.mainEventIsAllDay,
                 timeZoneIdentifier: workspace.mainEventTimeZoneIdentifier,
                 location: workspace.mainEventLocation,
                 imageData: workspace.mainEventImageData,
-                fallbackAssetName: "WeddingVenueHero",
+                fallbackAssetName: "DefaultVenueHero",
                 colors: TimelineCategory.ceremony.artworkColors,
                 accent: TimelineCategory.ceremony.artworkAccent,
                 purpose: nil,
@@ -75,7 +75,7 @@ struct EventInvitationScreen: View {
                 timeZoneIdentifier: item.timeZoneIdentifier,
                 location: item.eventLocation,
                 imageData: item.imageData,
-                fallbackAssetName: item.category == .venue ? "WeddingVenueHero" : nil,
+                fallbackAssetName: item.category == .venue ? "DefaultVenueHero" : nil,
                 colors: item.category.artworkColors,
                 accent: item.category.artworkAccent,
                 purpose: item.purpose,
@@ -108,7 +108,7 @@ struct EventInvitationScreen: View {
                 timeZoneIdentifier: configuration.timeZoneIdentifier,
                 location: configuration.location,
                 imageData: idea.imageData,
-                fallbackAssetName: configuration.category == .venue ? "WeddingVenueHero" : nil,
+                fallbackAssetName: configuration.category == .venue ? "DefaultVenueHero" : nil,
                 colors: configuration.category.artworkColors,
                 accent: configuration.category.artworkAccent,
                 purpose: configuration.purpose,
@@ -616,7 +616,7 @@ struct EventInvitationScreen: View {
         }
     }
 
-    private func invitationDetail(for idea: WeddingIdea) -> String? {
+    private func invitationDetail(for idea: PlanningIdea) -> String? {
         var details: [String] = []
         switch idea.configuration {
         case .standard, .link:
@@ -802,9 +802,9 @@ struct EventInvitationScreen: View {
 private struct EventPersonPresentation: Identifiable {
     let id: String
     let name: String
-    let member: WeddingMember?
+    let member: WorkspaceMember?
 
-    init(_ member: WeddingMember) {
+    init(_ member: WorkspaceMember) {
         id = member.id.uuidString
         name = member.name
         self.member = member
@@ -841,7 +841,7 @@ private struct EventPresentation {
     let permitsResponse: Bool
     let note: String
     let dressCode: String
-    let guestIdeas: [WeddingIdea]
+    let guestIdeas: [PlanningIdea]
     let children: [TimelineItem]
     let moments: [EventMoment]
 }
@@ -854,7 +854,7 @@ private struct InvitationAttireOption: Identifiable {
 
 private struct InvitationIdeaGroup: Identifiable {
     let category: IdeaCategory
-    let ideas: [WeddingIdea]
+    let ideas: [PlanningIdea]
 
     var id: IdeaCategory { category }
 }

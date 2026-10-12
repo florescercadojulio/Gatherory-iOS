@@ -174,7 +174,7 @@ struct EventPurposeSelector: View {
 
 /// One editor for creating and editing every event in the two-level hierarchy.
 struct EventEditorView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
 
     let mode: EventEditorMode
@@ -547,7 +547,7 @@ struct EventEditorView: View {
             PhotoAttachmentPicker(
                 imageData: $imageData,
                 emptySymbol: isMainEvent ? "heart.fill" : category.symbol,
-                fallbackAssetName: isMainEvent || category == .venue ? "WeddingVenueHero" : nil,
+                fallbackAssetName: isMainEvent || category == .venue ? "DefaultVenueHero" : nil,
                 fallbackColors: isMainEvent ? nil : category.artworkColors,
                 fallbackAccent: isMainEvent ? AppTheme.ColorToken.accent : category.artworkAccent,
                 suggestedConcept: "Event artwork for \(resolvedTitle)"
@@ -749,7 +749,7 @@ struct EventEditorView: View {
             .map(\.id)
     }
 
-    private var eventParticipantOptions: [WeddingMember] {
+    private var eventParticipantOptions: [WorkspaceMember] {
         category == .honeymoon
             ? workspace.members.filter { $0.participantRole == .host }
             : workspace.members
@@ -857,7 +857,7 @@ struct EventEditorView: View {
         guard !didLoadMain else { return }
         title = workspace.title
         mainStatus = workspace.mainEventStatus
-        startsAt = workspace.weddingDate
+        startsAt = workspace.mainEventStartsAt
         endsAt = workspace.mainEventEndsAt
         isAllDay = workspace.mainEventIsAllDay
         timeZoneIdentifier = workspace.mainEventTimeZoneIdentifier
@@ -935,7 +935,7 @@ struct EventEditorView: View {
         dismiss()
     }
 
-    private func toggle(_ member: WeddingMember) {
+    private func toggle(_ member: WorkspaceMember) {
         if selectedParticipantIDs.contains(member.id) {
             selectedParticipantIDs.remove(member.id)
         } else {
@@ -946,7 +946,7 @@ struct EventEditorView: View {
 
 /// Keeps the financial decision focused: a budget is an optional limit, not a cost entry.
 private struct EventBudgetSettingsView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
 
     let isMainEvent: Bool
@@ -1124,7 +1124,7 @@ private struct EventBudgetSettingsView: View {
 
 /// A small ledger kept out of the main event form so setup remains about the event itself.
 private struct EventCostsEditorView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
 
     @Binding var expenses: [EventExpense]
@@ -1298,7 +1298,7 @@ private struct EventExpenseEditorTarget: Identifiable {
 }
 
 private struct EventExpenseEditorView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var amount: String

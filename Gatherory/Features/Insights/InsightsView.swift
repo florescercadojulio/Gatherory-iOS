@@ -3,7 +3,7 @@ import SwiftUI
 struct InsightsView: View {
     var onExitWorkspace: (() -> Void)?
 
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @State private var allocationTarget: BudgetAllocationTarget?
 
     private var currencyCode: String {

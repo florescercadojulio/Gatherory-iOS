@@ -2,15 +2,15 @@ import SwiftUI
 
 /// Settings whose scope is the current planning workspace rather than the signed-in person.
 struct WorkspaceSettingsView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @State private var isEditingMainEvent = false
 
     private var eventDateText: String {
         if workspace.mainEventIsAllDay {
-            return workspace.weddingDate.formatted(date: .abbreviated, time: .omitted)
+            return workspace.mainEventStartsAt.formatted(date: .abbreviated, time: .omitted)
         }
 
-        return workspace.weddingDate.formatted(
+        return workspace.mainEventStartsAt.formatted(
             .dateTime
                 .month(.abbreviated)
                 .day()
@@ -39,7 +39,7 @@ struct WorkspaceSettingsView: View {
                 HStack(alignment: .center, spacing: AppTheme.Spacing.standard) {
                     MediaArtwork(
                         imageData: workspace.mainEventImageData,
-                        assetName: workspace.mainEventImageData == nil ? "WeddingVenueHero" : nil,
+                        assetName: workspace.mainEventImageData == nil ? "DefaultVenueHero" : nil,
                         symbol: "calendar",
                         colors: [
                             AppTheme.ColorToken.accentSecondary,
@@ -200,7 +200,7 @@ private struct WorkspaceSettingDetailRow: View {
 }
 
 private struct WorkspaceParticipantStack: View {
-    let members: [WeddingMember]
+    let members: [WorkspaceMember]
 
     var body: some View {
         HStack(spacing: -8) {
@@ -217,12 +217,12 @@ private struct WorkspaceParticipantStack: View {
 }
 
 private struct WorkspacePeopleView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @State private var isManagingPeople = false
 
     var body: some View {
         List {
-            ForEach(WeddingParticipantRole.allCases) { role in
+            ForEach(WorkspaceRole.allCases) { role in
                 let people = workspace.members.filter { $0.participantRole == role }
 
                 if !people.isEmpty {
@@ -283,6 +283,6 @@ private struct WorkspacePeopleView: View {
 #Preview {
     NavigationStack {
         WorkspaceSettingsView()
-            .environment(WeddingWorkspace.sample)
+            .environment(PlanningWorkspace.sample)
     }
 }

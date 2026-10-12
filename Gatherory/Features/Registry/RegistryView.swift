@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RegistryView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @State private var isAddingItem = false
     @State private var selectedCollection = RegistryCollection.available
     @State private var selectedItemID: UUID?
@@ -227,7 +227,7 @@ private struct RegistryArtworkThumbnail: View {
 }
 
 private struct RegistryItemDetailView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @State private var isEditingItem = false
     let itemID: UUID
     let transitionNamespace: Namespace.ID
@@ -429,7 +429,7 @@ private struct RegistryMetadataRow: View {
 }
 
 private struct RegistryItemEditorView: View {
-    @Environment(WeddingWorkspace.self) private var workspace
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
 
     private let item: RegistryItem?
@@ -558,6 +558,6 @@ private struct RegistryItemEditorView: View {
 #Preview {
     NavigationStack {
         RegistryView()
-            .environment(WeddingWorkspace.sample)
+            .environment(PlanningWorkspace.sample)
     }
 }
