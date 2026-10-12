@@ -28,6 +28,8 @@ struct HomeView: View {
     @State private var didUpdateContextForSwipe = false
     @State private var isHandlingHomeReselection = false
     @State private var homeReselectionTask: Task<Void, Never>?
+    @State private var eventSwitcherFadeTask: Task<Void, Never>?
+    @State private var eventSwitcherOpacity = 0.0
     @Namespace private var invitationTransition
 
     private let pullToCreateThreshold: CGFloat = 200
@@ -113,6 +115,9 @@ struct HomeView: View {
         .overlay(alignment: .trailing) {
             if workspace.visibleEventContexts.count > 1 {
                 eventContextSwitcher
+                    // Like a scroll indicator, the rail stays interactive at
+                    // rest but becomes visually discoverable through motion.
+                    .opacity(eventSwitcherOpacity)
             }
         }
         .toolbar {
@@ -225,6 +230,7 @@ struct HomeView: View {
         } action: { _, geometry in
             currentScrollOffset = geometry.offset
             isPullToCreateRegionVisible = geometry.pullToCreateDistance > 0
+            updateEventSwitcherReveal(offset: geometry.offset)
             updateEventContextAtSwipeStart(offset: geometry.offset)
             updatePullToCreate(distance: geometry.pullToCreateDistance)
         }
@@ -236,6 +242,9 @@ struct HomeView: View {
                 scrollInteractionStartOffset = currentScrollOffset
                 swipeOriginEventReference = visibleEventReference ?? workspace.selectedEventReference
                 didUpdateContextForSwipe = false
+                eventSwitcherFadeTask?.cancel()
+                eventSwitcherFadeTask = nil
+                eventSwitcherOpacity = 0
             }
 
             if oldPhase == .interacting, newPhase != .interacting {
@@ -257,6 +266,7 @@ struct HomeView: View {
             scrollInteractionStartOffset = nil
             swipeOriginEventReference = nil
             didUpdateContextForSwipe = false
+            scheduleEventSwitcherFade()
         }
         .onChange(of: workspace.selectedEventReference) { _, reference in
             let target = HomeScrollTarget.event(reference)
@@ -275,6 +285,7 @@ struct HomeView: View {
         .sensoryFeedback(.success, trigger: pullToCreateHaptic)
         .onDisappear {
             homeReselectionTask?.cancel()
+            eventSwitcherFadeTask?.cancel()
         }
     }
 
@@ -478,6 +489,7 @@ struct HomeView: View {
         let references = workspace.visibleEventContexts
         guard references.indices.contains(index) else { return }
 
+        revealEventSwitcher()
         isScrubbingEvents = true
         guard scrubbedEventIndex != index else { return }
         scrubbedEventIndex = index
@@ -499,6 +511,44 @@ struct HomeView: View {
         workspace.selectEventContext(reference)
         isScrubbingEvents = false
         scrubbedEventIndex = nil
+        scheduleEventSwitcherFade()
+    }
+
+    private func updateEventSwitcherReveal(offset: CGFloat) {
+        guard workspace.visibleEventContexts.count > 1,
+              isScrollInteractionActive,
+              let startOffset = scrollInteractionStartOffset else { return }
+
+        let progress = min(abs(offset - startOffset) / 72, 1)
+        guard progress > eventSwitcherOpacity else { return }
+
+        withAnimation(.easeOut(duration: 0.12)) {
+            eventSwitcherOpacity = progress
+        }
+    }
+
+    private func revealEventSwitcher() {
+        guard workspace.visibleEventContexts.count > 1 else { return }
+        eventSwitcherFadeTask?.cancel()
+        eventSwitcherFadeTask = nil
+
+        withAnimation(.easeOut(duration: 0.16)) {
+            eventSwitcherOpacity = 1
+        }
+    }
+
+    private func scheduleEventSwitcherFade() {
+        guard eventSwitcherOpacity > 0 else { return }
+        eventSwitcherFadeTask?.cancel()
+
+        eventSwitcherFadeTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1_100))
+            guard !Task.isCancelled, !isScrollInteractionActive, !isScrubbingEvents else { return }
+
+            withAnimation(.easeOut(duration: 0.28)) {
+                eventSwitcherOpacity = 0
+            }
+        }
     }
 
     private func commitVisibleScrollTarget() {
@@ -793,21 +843,7 @@ private struct EventContextSwitcher: View {
         .overlay(alignment: .trailing) {
             if let previewIndex, references.indices.contains(previewIndex) {
                 let reference = references[previewIndex]
-                Text(date(reference), format: .dateTime.month(.abbreviated).day().year())
-                    .font(.caption.weight(.semibold))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 10)
-                    .frame(minHeight: 32)
-                    .background(.regularMaterial, in: Capsule())
-                    .overlay {
-                        Capsule()
-                            .stroke(Color.primary.opacity(0.18), lineWidth: 0.5)
-                    }
-                    .offset(x: -AppTheme.Layout.minimumTouchTarget)
-                    .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .trailing)))
-                    .allowsHitTesting(false)
+                eventDateBubble(for: reference)
             }
         }
         .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: previewIndex)
@@ -834,6 +870,26 @@ private struct EventContextSwitcher: View {
         guard references.indices.contains(currentIndex) else { return "No event" }
         let reference = references[currentIndex]
         return "\(title(reference)), \(currentIndex + 1) of \(references.count)"
+    }
+
+    private func eventDateBubble(for reference: EventReference) -> some View {
+        Text(date(reference), format: .dateTime.month(.abbreviated).day().year())
+            .font(.caption.weight(.semibold))
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.9)
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 10)
+            .frame(width: 164)
+            .frame(minHeight: 32)
+            .background(.regularMaterial, in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(Color.primary.opacity(0.18), lineWidth: 0.5)
+            }
+            .offset(x: -AppTheme.Layout.minimumTouchTarget)
+            .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .trailing)))
+            .allowsHitTesting(false)
     }
 
     private func candleWidth(at index: Int) -> CGFloat {
