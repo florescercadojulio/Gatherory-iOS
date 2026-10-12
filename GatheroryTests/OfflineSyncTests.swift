@@ -64,6 +64,19 @@ struct OfflineSyncTests {
         #expect(draft.entityID == ideaID)
         #expect(draft.baseVersion == 4)
         #expect(decoded.title == "Garden ceremony")
+
+        let pending = PendingMutation(
+            id: draft.id,
+            scopeID: draft.scopeID,
+            entityType: draft.entityType,
+            entityID: draft.entityID,
+            operation: draft.operation,
+            payload: draft.payload,
+            baseVersion: draft.baseVersion,
+            createdAt: draft.createdAt
+        )
+        let envelope = PendingMutationSnapshot(pending)
+        #expect(envelope.payloadSchemaVersion == 1)
     }
 
     @Test("A workspace and its outbox mutation persist in one local store")

@@ -1119,8 +1119,18 @@ final class WorkspacePersistenceController {
         let entitiesByScope = Dictionary(grouping: entities, by: \.scopeID)
 
         for snapshot in snapshots where !pendingScopes.contains(snapshot.scopeID) {
+            guard snapshot.effectivePayloadSchemaVersion == SyncPayloadContract.currentVersion else {
+                throw WorkspacePersistenceError.unsupportedSyncPayloadVersion(
+                    snapshot.effectivePayloadSchemaVersion
+                )
+            }
             var archive = try decoder.decode(WorkspaceArchiveV1.self, from: snapshot.payload)
             for entity in entitiesByScope[snapshot.scopeID] ?? [] {
+                guard entity.effectivePayloadSchemaVersion == SyncPayloadContract.currentVersion else {
+                    throw WorkspacePersistenceError.unsupportedSyncPayloadVersion(
+                        entity.effectivePayloadSchemaVersion
+                    )
+                }
                 try archive.applyEntity(
                     type: entity.entityType,
                     id: entity.entityID,
@@ -1183,6 +1193,11 @@ final class WorkspacePersistenceController {
         var shouldDeleteWorkspace = false
 
         for change in page.changes where !appliedIDs.contains(change.id) {
+            guard change.effectivePayloadSchemaVersion == SyncPayloadContract.currentVersion else {
+                throw WorkspacePersistenceError.unsupportedSyncPayloadVersion(
+                    change.effectivePayloadSchemaVersion
+                )
+            }
             if change.entityType == .workspace {
                 switch change.operation {
                 case .delete:
@@ -1274,4 +1289,5 @@ final class WorkspacePersistenceController {
 
 enum WorkspacePersistenceError: Error {
     case unsupportedArchiveVersion(Int)
+    case unsupportedSyncPayloadVersion(Int)
 }

@@ -261,6 +261,7 @@ nonisolated struct SyncMutationDraft: Sendable {
 nonisolated struct PendingMutationSnapshot: Codable, Hashable, Sendable {
     let id: UUID
     let scopeID: UUID
+    let payloadSchemaVersion: Int
     let entityType: SyncEntityType
     let entityID: UUID
     let operation: SyncMutationOperation
@@ -272,6 +273,7 @@ nonisolated struct PendingMutationSnapshot: Codable, Hashable, Sendable {
     init(_ mutation: PendingMutation) {
         id = mutation.id
         scopeID = mutation.scopeID
+        payloadSchemaVersion = SyncPayloadContract.currentVersion
         entityType = mutation.entityType
         entityID = mutation.entityID
         operation = mutation.operation
@@ -280,6 +282,12 @@ nonisolated struct PendingMutationSnapshot: Codable, Hashable, Sendable {
         createdAt = mutation.createdAt
         attemptCount = mutation.attemptCount
     }
+}
+
+/// Version of the entity payload inside the replication envelope. This is
+/// independent from the server's optimistic-concurrency version.
+nonisolated enum SyncPayloadContract {
+    static let currentVersion = 1
 }
 
 /// Registers a mutation without saving the context. The persistence boundary

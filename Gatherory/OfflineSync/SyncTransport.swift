@@ -21,12 +21,18 @@ nonisolated struct SyncPushResponse: Codable, Sendable {
 nonisolated struct RemoteChangeEnvelope: Codable, Sendable {
     let id: UUID
     let scopeID: UUID
+    /// Optional while older deployments roll forward. Missing means v1.
+    var payloadSchemaVersion: Int? = nil
     let entityType: SyncEntityType
     let entityID: UUID
     let operation: SyncMutationOperation
     let payload: Data
     let serverVersion: Int
     let occurredAt: Date
+
+    var effectivePayloadSchemaVersion: Int {
+        payloadSchemaVersion ?? 1
+    }
 }
 
 nonisolated struct SyncPullPage: Codable, Sendable {
@@ -37,18 +43,30 @@ nonisolated struct SyncPullPage: Codable, Sendable {
 
 nonisolated struct RemoteWorkspaceSnapshot: Codable, Sendable {
     let scopeID: UUID
+    /// Optional while older deployments roll forward. Missing means v1.
+    var payloadSchemaVersion: Int? = nil
     let payload: Data
     let serverVersion: Int
     let updatedAt: Date
+
+    var effectivePayloadSchemaVersion: Int {
+        payloadSchemaVersion ?? 1
+    }
 }
 
 nonisolated struct RemoteEntitySnapshot: Codable, Sendable {
     let scopeID: UUID
+    /// Optional while older deployments roll forward. Missing means v1.
+    var payloadSchemaVersion: Int? = nil
     let entityType: SyncEntityType
     let entityID: UUID
     let payload: Data
     let serverVersion: Int
     let updatedAt: Date
+
+    var effectivePayloadSchemaVersion: Int {
+        payloadSchemaVersion ?? 1
+    }
 }
 
 nonisolated struct SyncAccountState: Codable, Sendable {
