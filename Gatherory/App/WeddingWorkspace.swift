@@ -235,7 +235,25 @@ final class WeddingWorkspace {
     }
 
     var decisionQueue: [WeddingIdea] {
-        contextualIdeas.filter { $0.status == .new }
+        decisionQueue(for: nil)
+    }
+
+    /// The decision deck is workspace-wide. Event context controls where new
+    /// ideas are created and viewed, but it must not hide another event's
+    /// pending decision.
+    func decisionQueue(for eventID: UUID?) -> [WeddingIdea] {
+        ideas
+            .filter { idea in
+                guard idea.status == .new else { return false }
+                guard let eventID else { return true }
+                return (idea.eventID ?? mainEventID) == eventID
+            }
+            .sorted {
+                if $0.submittedAt != $1.submittedAt {
+                    return $0.submittedAt > $1.submittedAt
+                }
+                return $0.id.uuidString > $1.id.uuidString
+            }
     }
 
     var availableEventContexts: [EventReference] {
@@ -291,6 +309,15 @@ final class WeddingWorkspace {
         case .idea:
             title
         }
+    }
+
+    func eventTitle(for eventID: UUID) -> String {
+        guard eventID != mainEventID else { return title }
+        return timeline.first(where: { $0.id == eventID })?.title ?? title
+    }
+
+    func eventTitle(for idea: WeddingIdea) -> String {
+        eventTitle(for: idea.eventID ?? mainEventID)
     }
 
     var contextualIdeas: [WeddingIdea] {

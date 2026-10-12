@@ -12,14 +12,28 @@ struct DecisionDeckView: View {
 
     @Environment(WeddingWorkspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("hasSeenDecideTimelinePrimer") private var hasSeenTimelinePrimer = false
+    @AppStorage("hasSeenDecideTimelinePrimer") private var hasSeenDecidePrimer = false
     @State private var dragOffset: CGSize = .zero
     @State private var selectedIdeaID: UUID?
-    @State private var isShowingTimelinePrimer = false
+    @State private var isShowingDecidePrimer = false
+    @State private var decisionScope: DecisionScope = .queue
     @Namespace private var decisionTransition
 
     private var currentIdea: WeddingIdea? {
-        workspace.decisionQueue.first
+        workspace.decisionQueue(for: decisionScope.eventID).first
+    }
+
+    private var scopeTitle: String {
+        switch decisionScope {
+        case .queue:
+            currentIdea.map(workspace.eventTitle(for:)) ?? "Decide"
+        case .event(let eventID):
+            workspace.eventTitle(for: eventID)
+        }
+    }
+
+    private var isFilteringToEvent: Bool {
+        decisionScope.eventID != nil
     }
 
     var body: some View {
@@ -27,6 +41,7 @@ struct DecisionDeckView: View {
             if let idea = currentIdea {
                 DecisionCard(
                     idea: idea,
+                    eventTitle: idea.category == .event ? nil : workspace.eventTitle(for: idea),
                     currencyCode: workspace.currencyCode,
                     dragOffset: dragOffset,
                     transitionNamespace: decisionTransition
@@ -54,10 +69,26 @@ struct DecisionDeckView: View {
                     .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82), value: dragOffset)
             } else {
                 ContentUnavailableView {
-                    Label("You're all caught up", systemImage: "checkmark.circle.fill")
+                    Label(
+                        isFilteringToEvent ? "Nothing left for \(scopeTitle)" : "You're all caught up",
+                        systemImage: "checkmark.circle.fill"
+                    )
                 } description: {
-                    Text("New ideas from your support circle will appear here.")
+                    Text(
+                        isFilteringToEvent
+                            ? "Continue through the rest of your decision queue."
+                            : "New ideas from your support circle will appear here."
+                    )
                 } actions: {
+                    if isFilteringToEvent {
+                        Button("Continue deciding", systemImage: "arrow.triangle.branch") {
+                            withAnimation(.snappy) {
+                                decisionScope = .queue
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
                     if workspace.canUndoDecision {
                         Button("Undo last decision", systemImage: "arrow.uturn.backward") {
                             workspace.undoLastDecision()
@@ -73,18 +104,12 @@ struct DecisionDeckView: View {
         .padding(.bottom, AppTheme.Layout.screenTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.ColorToken.background)
-        .navigationTitle("Decide")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                EventContextLabel(section: "Decide", eventTitle: workspace.selectedEventTitle)
-            }
-
-            if let onExitWorkspace {
-                ToolbarItem(placement: .topBarLeading) {
-                    WorkspaceLibraryToolbarButton(action: onExitWorkspace)
-                }
+            ToolbarItem(placement: .topBarLeading) {
+                decisionScopeMenu
             }
 
             ToolbarItem(placement: .topBarTrailing) {
@@ -97,10 +122,10 @@ struct DecisionDeckView: View {
                 transitionNamespace: decisionTransition
             )
         }
-        .sheet(isPresented: $isShowingTimelinePrimer) {
-            DecideTimelinePrimer {
-                hasSeenTimelinePrimer = true
-                isShowingTimelinePrimer = false
+        .sheet(isPresented: $isShowingDecidePrimer) {
+            DecideEventPrimer {
+                hasSeenDecidePrimer = true
+                isShowingDecidePrimer = false
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -112,20 +137,58 @@ struct DecisionDeckView: View {
             guard isActive else { return }
             presentPrimerIfNeeded()
         }
-        .onChange(of: isShowingTimelinePrimer) { wasShowing, isShowing in
+        .onChange(of: isShowingDecidePrimer) { wasShowing, isShowing in
             if wasShowing && !isShowing {
-                hasSeenTimelinePrimer = true
+                hasSeenDecidePrimer = true
             }
         }
     }
 
+    private var decisionScopeMenu: some View {
+        Menu {
+            Button {
+                decisionScope = .queue
+            } label: {
+                Label(
+                    "Follow decision queue",
+                    systemImage: decisionScope == .queue ? "checkmark" : "arrow.triangle.branch"
+                )
+            }
+
+            Divider()
+
+            ForEach(workspace.availableEventContexts, id: \.self) { reference in
+                let scope = DecisionScope.event(eventID(for: reference))
+                Button {
+                    decisionScope = scope
+                } label: {
+                    Label(
+                        workspace.eventTitle(for: eventID(for: reference)),
+                        systemImage: decisionScope == scope ? "checkmark" : "calendar"
+                    )
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text(scopeTitle)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption.weight(.semibold))
+            }
+            .font(.headline.weight(.semibold))
+            .foregroundStyle(.primary)
+        }
+        .accessibilityLabel("Decision event filter")
+        .accessibilityValue(isFilteringToEvent ? "\(scopeTitle), filtered" : "\(scopeTitle), following queue")
+    }
+
     private func presentPrimerIfNeeded() {
         guard DecidePrimerPresentationPolicy.shouldPresent(
-            hasSeenPrimer: hasSeenTimelinePrimer,
+            hasSeenPrimer: hasSeenDecidePrimer,
             isDecideTabActive: isActive
         ) else { return }
 
-        isShowingTimelinePrimer = true
+        isShowingDecidePrimer = true
     }
 
     private func dragGesture(for idea: WeddingIdea) -> some Gesture {
@@ -150,6 +213,26 @@ struct DecisionDeckView: View {
         withAnimation(reduceMotion ? nil : .snappy) {
             workspace.decide(choice, on: idea)
             dragOffset = .zero
+            returnToQueueIfNeeded()
+        }
+    }
+
+    private func returnToQueueIfNeeded() {
+        guard case .event(let eventID) = decisionScope,
+              workspace.decisionQueue(for: eventID).isEmpty else {
+            return
+        }
+        decisionScope = .queue
+    }
+
+    private func eventID(for reference: EventReference) -> UUID {
+        switch reference {
+        case .main:
+            workspace.mainEventID
+        case .subevent(let eventID):
+            eventID
+        case .idea:
+            workspace.mainEventID
         }
     }
 
@@ -160,7 +243,7 @@ struct DecisionDeckView: View {
     }
 }
 
-private struct DecideTimelinePrimer: View {
+private struct DecideEventPrimer: View {
     let continueAction: () -> Void
 
     var body: some View {
@@ -174,7 +257,7 @@ private struct DecideTimelinePrimer: View {
                 Text("Decide what moves forward")
                     .font(.title2.bold())
 
-                Text("Love an idea to approve it. Gatherory sends approved event ideas to Timeline so the next step is always clear.")
+                Text("Love an idea to approve it. Dated event ideas appear on Home, while ideas without a date stay here until you schedule them.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -183,12 +266,12 @@ private struct DecideTimelinePrimer: View {
                 primerRow(
                     symbol: "calendar.badge.checkmark",
                     title: "Already has a date",
-                    detail: "It joins your scheduled events."
+                    detail: "It appears in Home with your events."
                 )
                 primerRow(
                     symbol: "calendar.badge.exclamationmark",
                     title: "Still needs a date",
-                    detail: "It waits in Timeline under Needs Date and stays off Home until you schedule it."
+                    detail: "It stays in Ideas until you add a date."
                 )
             }
 
@@ -231,6 +314,7 @@ private struct DecisionCard: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     let idea: WeddingIdea
+    let eventTitle: String?
     let currencyCode: String
     let dragOffset: CGSize
     let transitionNamespace: Namespace.ID
@@ -297,6 +381,20 @@ private struct DecisionCard: View {
 
     private var ideaDetails: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let eventTitle {
+                Label(eventTitle, systemImage: "calendar")
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                    .background(.black.opacity(reduceTransparency ? 0.72 : 0.24), in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(.white.opacity(0.14), lineWidth: 0.5)
+                    }
+                    .accessibilityLabel("For \(eventTitle)")
+            }
+
             HStack(spacing: AppTheme.Spacing.compact) {
                 Label(idea.category.title, systemImage: idea.category.symbol)
                     .font(.caption.weight(.semibold))
@@ -347,6 +445,16 @@ private struct DecisionCard: View {
         } else if dragOffset.height < -35 {
             SwipeLabel(title: "Maybe", symbol: "bookmark.fill")
         }
+    }
+}
+
+private enum DecisionScope: Hashable {
+    case queue
+    case event(UUID)
+
+    var eventID: UUID? {
+        guard case .event(let eventID) = self else { return nil }
+        return eventID
     }
 }
 

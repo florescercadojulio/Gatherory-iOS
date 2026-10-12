@@ -797,14 +797,15 @@ struct GatheroryTests {
         #expect(workspace.members.contains { $0.id == participantID })
     }
 
-    @Test("Ideas and decisions follow the selected event context")
-    func ideasFollowSelectedEventContext() throws {
+    @Test("Ideas follow context while decisions stay workspace-wide")
+    func ideasFollowSelectedEventContextWhileDecisionsStayWorkspaceWide() throws {
         let workspace = WeddingWorkspace.sample
         let child = try #require(workspace.childEvents.first)
+        let initialDecisionIDs = Set(workspace.decisionQueue.map(\.id))
 
         workspace.selectEventContext(.subevent(child.id))
         #expect(workspace.contextualIdeas.isEmpty)
-        #expect(workspace.decisionQueue.isEmpty)
+        #expect(Set(workspace.decisionQueue.map(\.id)) == initialDecisionIDs)
 
         workspace.addIdea(
             WeddingIdea(
@@ -817,7 +818,8 @@ struct GatheroryTests {
 
         let scopedIdea = try #require(workspace.contextualIdeas.first)
         #expect(scopedIdea.eventID == child.id)
-        #expect(workspace.decisionQueue.first?.id == scopedIdea.id)
+        #expect(workspace.decisionQueue.contains { $0.id == scopedIdea.id })
+        #expect(workspace.decisionQueue(for: child.id).contains { $0.id == scopedIdea.id })
 
         workspace.selectEventContext(.main)
         #expect(workspace.contextualIdeas.contains { $0.id == scopedIdea.id } == false)
