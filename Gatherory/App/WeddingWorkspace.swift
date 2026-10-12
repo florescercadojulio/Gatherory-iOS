@@ -332,6 +332,25 @@ final class WeddingWorkspace {
         }
     }
 
+    /// A playlist is a living event resource. It stays open while its event is
+    /// being planned or underway, then becomes read-only with the completed
+    /// event so the published soundtrack remains an accurate record.
+    func canEditMusicPlaylist(for playlist: WeddingIdea) -> Bool {
+        canEditMusicPlaylist(forEventID: playlist.eventID ?? mainEventID)
+    }
+
+    func canEditMusicPlaylist(forEventID eventID: UUID) -> Bool {
+        if eventID == mainEventID {
+            return !isMainEventDeleted && !currentMainEventStatus.isReadOnly
+        }
+
+        return timeline.contains {
+            $0.id == eventID
+                && $0.status != .archived
+                && $0.completionStatus != .complete
+        }
+    }
+
     /// The single guest-presentation policy for ideas. Approval alone does not
     /// publish a planning choice: it must also be marked for the invitation and
     /// belong to the event being viewed.
@@ -1266,6 +1285,7 @@ final class WeddingWorkspace {
 
     private func upsertMusicPlaylist(_ playlist: WeddingIdea) {
         let eventID = playlist.eventID ?? selectedEventID
+        guard canEditMusicPlaylist(forEventID: eventID) else { return }
         let matchingIndices = ideas.indices.filter {
             ideas[$0].category == .music
                 && (ideas[$0].eventID ?? mainEventID) == eventID

@@ -65,54 +65,31 @@ struct WorkspaceSettingsView: View {
                             .lineLimit(1)
                     }
 
-                    Spacer(minLength: AppTheme.Spacing.compact)
-
-                    Button {
-                        isEditingMainEvent = true
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.body.weight(.semibold))
-                            .frame(
-                                width: AppTheme.Layout.minimumTouchTarget,
-                                height: AppTheme.Layout.minimumTouchTarget
-                            )
-                            .background(AppTheme.ColorToken.elevatedSurface, in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(AppTheme.ColorToken.accent)
-                    .accessibilityLabel("Edit workspace details")
                 }
                 .padding(.vertical, 8)
             }
             .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("Main Event") {
-                LabeledContent {
-                    Label(
-                        workspace.currentMainEventStatus.title,
-                        systemImage: workspace.currentMainEventStatus.symbol
-                    )
-                    .foregroundStyle(statusColor)
-                } label: {
-                    Label("Status", systemImage: "checklist")
-                }
+                WorkspaceSettingDetailRow(
+                    title: "Status",
+                    symbol: "checklist",
+                    value: workspace.currentMainEventStatus.title,
+                    valueSymbol: workspace.currentMainEventStatus.symbol,
+                    valueColor: statusColor
+                )
 
-                LabeledContent {
-                    Text(eventDateText)
-                        .foregroundStyle(AppTheme.ColorToken.textSecondary)
-                        .multilineTextAlignment(.trailing)
-                } label: {
-                    Label("Date", systemImage: "calendar")
-                }
+                WorkspaceSettingDetailRow(
+                    title: "Date",
+                    symbol: "calendar",
+                    value: eventDateText
+                )
 
-                LabeledContent {
-                    Text(locationText)
-                        .foregroundStyle(AppTheme.ColorToken.textSecondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.trailing)
-                } label: {
-                    Label("Location", systemImage: "mappin.and.ellipse")
-                }
+                WorkspaceSettingDetailRow(
+                    title: "Location",
+                    symbol: "mappin.and.ellipse",
+                    value: locationText
+                )
 
                 Button("Edit Main Event", systemImage: "pencil") {
                     isEditingMainEvent = true
@@ -141,7 +118,7 @@ struct WorkspaceSettingsView: View {
                     }
                 }
             } header: {
-                Text("Planning")
+                Text("People & Access")
             } footer: {
                 Text("Manage the people, roles, and invitation access for this workspace.")
             }
@@ -173,6 +150,51 @@ struct WorkspaceSettingsView: View {
             AppTheme.ColorToken.accent
         case .finished:
             AppTheme.ColorToken.success
+        }
+    }
+}
+
+/// Keeps the workspace summary scannable at standard sizes and lets the
+/// value take a full line when Dynamic Type makes a trailing layout too tight.
+private struct WorkspaceSettingDetailRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let title: String
+    let symbol: String
+    let value: String
+    var valueSymbol: String? = nil
+    var valueColor: Color = AppTheme.ColorToken.textSecondary
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(title, systemImage: symbol)
+                        .foregroundStyle(AppTheme.ColorToken.textPrimary)
+
+                    valueLabel
+                        .padding(.leading, AppTheme.Layout.minimumTouchTarget)
+                }
+            } else {
+                LabeledContent {
+                    valueLabel
+                        .multilineTextAlignment(.trailing)
+                } label: {
+                    Label(title, systemImage: symbol)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var valueLabel: some View {
+        if let valueSymbol {
+            Label(value, systemImage: valueSymbol)
+                .foregroundStyle(valueColor)
+        } else {
+            Text(value)
+                .foregroundStyle(valueColor)
         }
     }
 }

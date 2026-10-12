@@ -15,12 +15,11 @@ struct EventInvitationScreen: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var selectedChild: TimelineItem?
     @State private var selectedMomentPhotos: [PhotosPickerItem] = []
-    @State private var isPickingMusic = false
     @State private var isShowingAttendees = false
-    @State private var playlistReceivingSongsID: UUID?
-    @State private var pickedSongs: [Song] = []
+    @State private var selectedPlaylistIdeaID: UUID?
     @State private var weather = EventWeatherModel()
     @Namespace private var childTransition
+    @Namespace private var playlistTransition
 
     let reference: EventReference
 
@@ -161,13 +160,17 @@ struct EventInvitationScreen: View {
                             reduceTransparency: reduceTransparency
                         )
 
+                        // This is a finite event detail surface, not an unbounded feed.
+                        // Resolving the complete layout up front keeps the bottom edge stable
+                        // when the final cards (map, album, or guest ideas) appear.
                         ScrollView {
-                            LazyVStack(spacing: 0) {
+                            VStack(spacing: 0) {
                                 hero(presentation, height: heroHeight)
                                 information(presentation)
                             }
                         }
                         .scrollIndicators(.hidden)
+                        .scrollBounceBehavior(.basedOnSize)
                         .appSoftScrollEdges()
                         .onScrollGeometryChange(for: CGFloat.self) { geometry in
                             max(geometry.contentOffset.y + geometry.contentInsets.top, 0)
@@ -184,6 +187,9 @@ struct EventInvitationScreen: View {
         .background(.black)
         .navigationDestination(item: $selectedChild) { item in
             TimelineEventReadOnlyView(item: item, transitionNamespace: childTransition)
+        }
+        .navigationDestination(item: $selectedPlaylistIdeaID) { ideaID in
+            IdeaDetailView(ideaID: ideaID, transitionNamespace: playlistTransition)
         }
         .sheet(isPresented: $isShowingAttendees) {
             NavigationStack {
@@ -209,14 +215,6 @@ struct EventInvitationScreen: View {
                 }
                 selectedMomentPhotos = []
             }
-        }
-        .musicPicker(
-            isPresented: $isPickingMusic,
-            title: Text("Add to Event Playlist"),
-            selection: $pickedSongs
-        )
-        .onChange(of: pickedSongs) { _, songs in
-            appendPickedSongs(songs)
         }
         .onDisappear {
             previewPlayer.stop()
@@ -280,7 +278,7 @@ struct EventInvitationScreen: View {
     }
 
     private func information(_ event: EventPresentation) -> some View {
-        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
             peopleCard(event)
             timingCard(event)
 
@@ -509,107 +507,60 @@ struct EventInvitationScreen: View {
             VStack(spacing: AppTheme.Spacing.compact) {
                 ForEach(group.ideas) { idea in
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-                        HStack(alignment: .center, spacing: AppTheme.Spacing.compact) {
-                            if let imageData = idea.imageData, let image = UIImage(data: imageData) {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 58, height: 58)
-                                    .clipShape(RoundedRectangle(
-                                        cornerRadius: AppTheme.Radius.control,
-                                        style: .continuous
-                                    ))
-                                    .accessibilityHidden(true)
-                            } else if let track = idea.musicTrack {
-                                MusicTrackArtwork(track: track)
-                                    .frame(width: 58, height: 58)
-                                    .clipShape(RoundedRectangle(
-                                        cornerRadius: AppTheme.Radius.control,
-                                        style: .continuous
-                                    ))
-                                    .accessibilityHidden(true)
-                            } else {
-                                Image(systemName: group.category.symbol)
-                                    .symbolRenderingMode(.hierarchical)
-                                    .font(.title2)
-                                    .foregroundStyle(.white.opacity(0.82))
-                                    .frame(width: 58, height: 58)
-                                    .background(.white.opacity(0.10), in: RoundedRectangle(
-                                        cornerRadius: AppTheme.Radius.control,
-                                        style: .continuous
-                                    ))
-                                    .accessibilityHidden(true)
-                            }
-
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(idea.title)
-                                    .font(.headline)
-
-                                if let detail = invitationDetail(for: idea) {
-                                    Text(detail)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.white.opacity(0.72))
-                                        .lineLimit(3)
-                                }
-                            }
-
-                            Spacer(minLength: 0)
-                        }
-
                         if case .music(let configuration) = idea.configuration {
-                            ForEach(Array(configuration.tracks.prefix(3))) { track in
-                                Divider()
-                                    .overlay(.white.opacity(0.12))
+                            EventPlaylistArtworkPreview(
+                                playlistTitle: idea.title,
+                                tracks: configuration.tracks
+                            ) {
+                                selectedPlaylistIdeaID = idea.id
+                            }
+                        } else {
+                            HStack(alignment: .center, spacing: AppTheme.Spacing.compact) {
+                                if let imageData = idea.imageData, let image = UIImage(data: imageData) {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 58, height: 58)
+                                        .clipShape(RoundedRectangle(
+                                            cornerRadius: AppTheme.Radius.control,
+                                            style: .continuous
+                                        ))
+                                        .accessibilityHidden(true)
+                                } else if let track = idea.musicTrack {
+                                    MusicTrackArtwork(track: track)
+                                        .frame(width: 58, height: 58)
+                                        .clipShape(RoundedRectangle(
+                                            cornerRadius: AppTheme.Radius.control,
+                                            style: .continuous
+                                        ))
+                                        .accessibilityHidden(true)
+                                } else {
+                                    Image(systemName: group.category.symbol)
+                                        .symbolRenderingMode(.hierarchical)
+                                        .font(.title2)
+                                        .foregroundStyle(.white.opacity(0.82))
+                                        .frame(width: 58, height: 58)
+                                        .background(.white.opacity(0.10), in: RoundedRectangle(
+                                            cornerRadius: AppTheme.Radius.control,
+                                            style: .continuous
+                                        ))
+                                        .accessibilityHidden(true)
+                                }
 
-                                HStack(spacing: AppTheme.Spacing.compact) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(track.title)
-                                            .font(.subheadline.weight(.semibold))
-                                            .lineLimit(1)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(idea.title)
+                                        .font(.headline)
 
-                                        Text(track.artistName)
-                                            .font(.caption)
-                                            .foregroundStyle(.white.opacity(0.68))
-                                            .lineLimit(1)
-                                    }
-
-                                    Spacer(minLength: AppTheme.Spacing.compact)
-
-                                    if track.previewURL != nil {
-                                        MusicPreviewButton(track: track, tint: .white)
-                                    }
-
-                                    if let externalURL = track.externalURL {
-                                        Link(destination: externalURL) {
-                                            Image(systemName: "arrow.up.forward")
-                                                .font(.caption.weight(.semibold))
-                                                .frame(
-                                                    width: AppTheme.Layout.minimumTouchTarget,
-                                                    height: AppTheme.Layout.minimumTouchTarget
-                                                )
-                                                .contentShape(Rectangle())
-                                        }
-                                        .accessibilityLabel(
-                                            "Open \(track.title) in \(track.providerID.displayName)"
-                                        )
+                                    if let detail = invitationDetail(for: idea) {
+                                        Text(detail)
+                                            .font(.subheadline)
+                                            .foregroundStyle(.white.opacity(0.72))
+                                            .lineLimit(3)
                                     }
                                 }
-                            }
 
-                            Divider()
-                                .overlay(.white.opacity(0.12))
-
-                            Button {
-                                playlistReceivingSongsID = idea.id
-                                isPickingMusic = true
-                            } label: {
-                                Label("Add Songs", systemImage: "music.note.badge.plus")
-                                    .font(.subheadline.weight(.semibold))
-                                    .frame(maxWidth: .infinity)
-                                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                                Spacer(minLength: 0)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.white.opacity(0.18))
                         }
                     }
                     .padding(AppTheme.Spacing.compact)
@@ -621,26 +572,6 @@ struct EventInvitationScreen: View {
                 }
             }
         }
-    }
-
-    private func appendPickedSongs(_ songs: [Song]) {
-        guard !songs.isEmpty,
-              let playlistReceivingSongsID,
-              var playlist = workspace.ideas.first(where: { $0.id == playlistReceivingSongsID }) else {
-            pickedSongs.removeAll()
-            return
-        }
-
-        var tracks = playlist.musicTracks
-        for song in songs {
-            let track = MusicTrack(appleMusicSong: song)
-            guard !tracks.contains(where: { $0.id == track.id }) else { continue }
-            tracks.append(track)
-        }
-        playlist.configuration = .music(MusicIdeaConfiguration(tracks: tracks))
-        workspace.updateIdea(playlist)
-        pickedSongs.removeAll()
-        self.playlistReceivingSongsID = nil
     }
 
     private func attireOptions(for event: EventPresentation) -> [InvitationAttireOption] {
@@ -1019,6 +950,82 @@ private struct EventInvitationFeatureCard<Content: View>: View {
                     .stroke(.white.opacity(reduceTransparency ? 0.14 : 0.22), lineWidth: 0.5)
             }
             .foregroundStyle(.white)
+    }
+}
+
+/// The invitation only needs a compact visual cue. Playlist information and
+/// editing live in the idea detail screen, one tap away.
+private struct EventPlaylistArtworkPreview: View {
+    let playlistTitle: String
+    let tracks: [MusicTrack]
+    let openPlaylist: () -> Void
+
+    private var displayedTracks: [MusicTrack] {
+        Array(tracks.prefix(4))
+    }
+
+    var body: some View {
+        Button(action: openPlaylist) {
+            EventPlaylistArtworkGrid(tracks: displayedTracks)
+                .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(EventPlaylistPreviewButtonStyle())
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint("Opens the full event playlist")
+    }
+
+    private var accessibilityLabel: String {
+        let count = "\(tracks.count) \(tracks.count == 1 ? "song" : "songs")"
+        return tracks.isEmpty
+            ? "\(playlistTitle). No songs yet."
+            : "\(playlistTitle). \(count)."
+    }
+}
+
+private struct EventPlaylistArtworkGrid: View {
+    let tracks: [MusicTrack]
+
+    private let tileSide: CGFloat = 52
+    private let gap: CGFloat = 4
+
+    var body: some View {
+        if tracks.isEmpty {
+            Image(systemName: "music.note.list")
+                .font(.title3)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.white.opacity(0.72))
+                .frame(width: tileSide, height: tileSide)
+                .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .accessibilityHidden(true)
+        } else {
+            LazyVGrid(
+                columns: [
+                    GridItem(.fixed(tileSide), spacing: gap),
+                    GridItem(.fixed(tileSide), spacing: gap)
+                ],
+                alignment: .center,
+                spacing: gap
+            ) {
+                ForEach(tracks.prefix(4)) { track in
+                    MusicTrackArtwork(track: track)
+                        .frame(width: tileSide, height: tileSide)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(.white.opacity(0.18), lineWidth: 0.5)
+                        }
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+    }
+}
+
+private struct EventPlaylistPreviewButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.72 : 1)
     }
 }
 

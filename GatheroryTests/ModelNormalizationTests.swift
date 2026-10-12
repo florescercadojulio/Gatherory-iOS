@@ -175,6 +175,72 @@ struct ModelNormalizationTests {
         #expect(workspace.musicPlaylist(for: workspace.mainEventID)?.musicTracks == [secondTrack])
     }
 
+    @Test("Playlists remain editable until their event is complete")
+    @MainActor
+    func playlistEditingClosesWithItsEvent() throws {
+        let workspace = WeddingWorkspace.newWorkspace(
+            title: "Wedding",
+            startsAt: .now,
+            eventLocation: nil,
+            imageData: nil
+        )
+        let firstTrack = musicTrack(id: "first", title: "First Dance")
+        let secondTrack = musicTrack(id: "second", title: "Last Dance")
+        workspace.addIdea(
+            musicPlaylist(
+                eventID: workspace.mainEventID,
+                title: "Wedding Playlist",
+                tracks: [firstTrack]
+            )
+        )
+
+        let mainPlaylist = try #require(workspace.musicPlaylist(for: workspace.mainEventID))
+        #expect(workspace.canEditMusicPlaylist(for: mainPlaylist))
+
+        workspace.mainEventStatus = .finished
+        #expect(!workspace.canEditMusicPlaylist(for: mainPlaylist))
+
+        var editedMainPlaylist = mainPlaylist
+        editedMainPlaylist.configuration = .music(MusicIdeaConfiguration(tracks: [secondTrack]))
+        workspace.updateIdea(editedMainPlaylist)
+        #expect(workspace.musicPlaylist(for: workspace.mainEventID)?.musicTracks == [firstTrack])
+
+        let childWorkspace = WeddingWorkspace.newWorkspace(
+            title: "Wedding",
+            startsAt: .now,
+            eventLocation: nil,
+            imageData: nil
+        )
+        let reception = TimelineItem(
+            title: "Reception",
+            category: .reception,
+            purpose: .eventExperience,
+            scheduledAt: .now,
+            location: "",
+            participantIDs: childWorkspace.mainEventParticipantIDs,
+            parentEventID: childWorkspace.mainEventID
+        )
+        childWorkspace.addTimelineItem(reception)
+        childWorkspace.addIdea(
+            musicPlaylist(
+                eventID: reception.id,
+                title: "Reception Playlist",
+                tracks: [firstTrack]
+            )
+        )
+
+        let childPlaylist = try #require(childWorkspace.musicPlaylist(for: reception.id))
+        #expect(childWorkspace.canEditMusicPlaylist(for: childPlaylist))
+
+        childWorkspace.toggleTimelineItem(reception)
+        #expect(!childWorkspace.canEditMusicPlaylist(for: childPlaylist))
+
+        var editedChildPlaylist = childPlaylist
+        editedChildPlaylist.configuration = .music(MusicIdeaConfiguration(tracks: [secondTrack]))
+        childWorkspace.updateIdea(editedChildPlaylist)
+        #expect(childWorkspace.musicPlaylist(for: reception.id)?.musicTracks == [firstTrack])
+    }
+
     @Test("The main event and a child event keep separate playlists")
     @MainActor
     func playlistsAreScopedByEvent() throws {

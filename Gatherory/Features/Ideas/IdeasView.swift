@@ -502,12 +502,14 @@ struct IdeaDetailView: View {
         .appImageNavigationBarAppearance()
         .toolbar {
             if let idea {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Edit idea", systemImage: "pencil") {
-                        editorDetent = .large
-                        isEditingIdea = true
+                if idea.category != .music || workspace.canEditMusicPlaylist(for: idea) {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Edit idea", systemImage: "pencil") {
+                            editorDetent = .large
+                            isEditingIdea = true
+                        }
+                        .labelStyle(.iconOnly)
                     }
-                    .labelStyle(.iconOnly)
                 }
 
                 if idea.category != .music {
@@ -772,6 +774,10 @@ private struct IdeaCategoryDetailContent: View {
     @State private var pickedSongs: [Song] = []
 
     let idea: WeddingIdea
+
+    private var canEditMusicPlaylist: Bool {
+        workspace.canEditMusicPlaylist(for: idea)
+    }
 
     var body: some View {
         Group {
@@ -1092,12 +1098,14 @@ private struct IdeaCategoryDetailContent: View {
 
                 Spacer(minLength: AppTheme.Spacing.compact)
 
-                Button {
-                    isPickingMusic = true
-                } label: {
-                    Label("Add Songs", systemImage: "music.note.badge.plus")
+                if canEditMusicPlaylist {
+                    Button {
+                        isPickingMusic = true
+                    } label: {
+                        Label("Add Songs", systemImage: "music.note.badge.plus")
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
 
             if !idea.note.isEmpty {
@@ -1115,7 +1123,17 @@ private struct IdeaCategoryDetailContent: View {
             }
 
             if idea.musicTracks.isEmpty {
-                Text("No songs yet. Add the first one for everyone attending this event.")
+                Text(
+                    canEditMusicPlaylist
+                        ? "No songs yet. Add the first one for everyone attending this event."
+                        : "No songs were added before this event was completed."
+                )
+                    .foregroundStyle(.secondary)
+            }
+
+            if !canEditMusicPlaylist {
+                Label("This playlist is finalized", systemImage: "checkmark.seal.fill")
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
         }
@@ -1123,7 +1141,10 @@ private struct IdeaCategoryDetailContent: View {
     }
 
     private func appendPickedSongs(_ songs: [Song]) {
-        guard !songs.isEmpty else { return }
+        guard !songs.isEmpty, canEditMusicPlaylist else {
+            pickedSongs.removeAll()
+            return
+        }
         var updatedIdea = idea
         var tracks = idea.musicTracks
         for song in songs {
@@ -1606,6 +1627,14 @@ struct IdeaEditorView: View {
         return workspace.ideas.first { $0.id == editingMusicPlaylistID }
     }
 
+    private var musicPlaylistEventID: UUID {
+        ideaBeingEdited?.eventID ?? workspace.selectedEventID
+    }
+
+    private var canEditMusicPlaylist: Bool {
+        category != .music || workspace.canEditMusicPlaylist(forEventID: musicPlaylistEventID)
+    }
+
     private var suggestedTitle: String {
         switch category {
         case .event:
@@ -1915,7 +1944,7 @@ struct IdeaEditorView: View {
                     Button(ideaBeingEdited == nil ? "Add" : "Save") {
                         saveIdea()
                     }
-                    .disabled(!isValid || !hasChanges)
+                    .disabled(!isValid || !hasChanges || !canEditMusicPlaylist)
                 }
             }
         }
@@ -2710,25 +2739,33 @@ struct IdeaEditorView: View {
                 ForEach(musicTracks) { track in
                     MusicTrackRow(track: track)
                         .swipeActions {
-                            Button("Remove", systemImage: "trash", role: .destructive) {
-                                musicTracks.removeAll { $0.id == track.id }
+                            if canEditMusicPlaylist {
+                                Button("Remove", systemImage: "trash", role: .destructive) {
+                                    musicTracks.removeAll { $0.id == track.id }
+                                }
                             }
                         }
                 }
 
-                Button {
-                    isPickingMusic = true
-                } label: {
-                    Label(
-                        musicTracks.isEmpty ? "Add Songs" : "Add More Songs",
-                        systemImage: "music.note.badge.plus"
-                    )
-                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                if canEditMusicPlaylist {
+                    Button {
+                        isPickingMusic = true
+                    } label: {
+                        Label(
+                            musicTracks.isEmpty ? "Add Songs" : "Add More Songs",
+                            systemImage: "music.note.badge.plus"
+                        )
+                        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                    }
                 }
             } header: {
                 Text("Shared Event Playlist")
             } footer: {
-                Text("Gatherory keeps one playlist for this event. Everyone participating in the event can contribute songs.")
+                Text(
+                    canEditMusicPlaylist
+                        ? "Gatherory keeps one playlist for this event. Everyone participating in the event can contribute songs."
+                        : "This playlist is finalized because the event is complete."
+                )
             }
 
         case .other:
@@ -2761,6 +2798,7 @@ struct IdeaEditorView: View {
     }
 
     private func saveIdea() {
+        guard canEditMusicPlaylist else { return }
         if ideaBeingEdited == nil {
             workspace.addIdea(editedIdea)
         } else {
@@ -2784,7 +2822,10 @@ struct IdeaEditorView: View {
     }
 
     private func appendPickedSongs(_ songs: [Song]) {
-        guard !songs.isEmpty else { return }
+        guard !songs.isEmpty, canEditMusicPlaylist else {
+            pickedSongs.removeAll()
+            return
+        }
         for song in songs {
             let track = MusicTrack(appleMusicSong: song)
             guard !musicTracks.contains(where: { $0.id == track.id }) else { continue }

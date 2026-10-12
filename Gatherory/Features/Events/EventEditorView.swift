@@ -300,8 +300,17 @@ struct EventEditorView: View {
 
     private var eventIdentitySection: some View {
         Section {
-            TextField(isMainEvent ? "Event name" : "Custom name (optional)", text: $title)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(isMainEvent ? "Event Name" : "Custom Name (Optional)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                TextField(
+                    isMainEvent ? "Name your event" : "Use the suggested name",
+                    text: $title
+                )
                 .textInputAutocapitalization(.words)
+            }
 
             if isMainEvent {
                 Picker("Status", selection: $mainStatus) {
@@ -318,7 +327,7 @@ struct EventEditorView: View {
                 }
             }
         } header: {
-            Text("Event Details")
+            Text(isMainEvent ? "Main Event" : "Event Details")
         } footer: {
             if !isMainEvent && trimmedTitle.isEmpty {
                 Text("The event will be named “\(resolvedTitle)”.")
@@ -457,7 +466,8 @@ struct EventEditorView: View {
                 editorRow(
                     symbol: "mappin.and.ellipse",
                     title: "Location",
-                    value: eventLocation?.formatted ?? "Add Location"
+                    value: eventLocation?.formatted ?? "Add Location",
+                    isEmphasized: eventLocation == nil
                 )
             }
             .buttonStyle(.plain)
@@ -511,12 +521,22 @@ struct EventEditorView: View {
 
     private var eventCardSection: some View {
         Section {
-            TextField("Description (optional)", text: $eventDescription, axis: .vertical)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Description")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                TextField(
+                    "Tell guests what to expect (optional)",
+                    text: $eventDescription,
+                    axis: .vertical
+                )
                 .textInputAutocapitalization(.sentences)
                 .lineLimit(3...8)
                 .onChange(of: eventDescription) { _, value in
                     if value.count > 750 { eventDescription = String(value.prefix(750)) }
                 }
+            }
 
             Text("\(eventDescription.count)/750")
                 .font(.caption)
@@ -618,10 +638,14 @@ struct EventEditorView: View {
             }
         }
         .appKeyboardDismissal()
+        .formStyle(.grouped)
+        .contentMargins(.top, AppTheme.Spacing.compact, for: .scrollContent)
         .scrollContentBackground(.hidden)
+        .appSoftScrollEdges()
         .background(AppTheme.ColorToken.background)
         .navigationTitle(isCreating || workspace.isMainEventDeleted ? "New Event" : "Edit Event")
         .navigationBarTitleDisplayMode(.inline)
+        .appClearNavigationBar()
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") { dismiss() }
@@ -802,18 +826,31 @@ struct EventEditorView: View {
         )
     }
 
-    private func editorRow(symbol: String, title: String, value: String) -> some View {
+    private func editorRow(
+        symbol: String,
+        title: String,
+        value: String,
+        isEmphasized: Bool = false
+    ) -> some View {
         HStack(spacing: AppTheme.Spacing.standard) {
             Image(systemName: symbol).foregroundStyle(AppTheme.ColorToken.accent).frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.subheadline).foregroundStyle(.secondary)
-                Text(value).foregroundStyle(value == "Add Location" ? AppTheme.ColorToken.accent : .primary)
+                Text(value)
+                    .foregroundStyle(isEmphasized ? AppTheme.ColorToken.accent : .primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
+
+            Image(systemName: "chevron.forward")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
         }
         .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens location editor")
     }
 
     private func loadMainEventIfNeeded() {
