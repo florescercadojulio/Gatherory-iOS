@@ -1777,7 +1777,7 @@ struct IdeaEditorView: View {
             title: resolvedTitle,
             note: trimmedNote,
             category: category,
-            submittedBy: baseIdea?.submittedBy ?? workspace.members.first?.name ?? "You",
+            submittedBy: baseIdea?.submittedBy ?? workspace.currentViewerMember?.name ?? "You",
             submittedByUserID: baseIdea?.submittedByUserID,
             estimatedCost: category == .music || category == .link ? nil : parsedEstimate,
             status: category == .music ? .chosen : baseIdea?.status ?? .new,

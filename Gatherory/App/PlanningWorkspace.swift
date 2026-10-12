@@ -57,6 +57,14 @@ final class PlanningWorkspace {
     /// It is always either the root event or one of its direct children.
     var selectedEventReference: EventReference = .main
 
+    /// The signed-in account is runtime presentation context, not persisted
+    /// workspace data. Keeping only its stable identity here lets every feature
+    /// enforce the same participant perspective without coupling archives to an
+    /// authentication session.
+    private var viewerUserID: String?
+    private var viewerEmail: String?
+    private var isViewerConfigured = false
+
     private var decisionHistory: [DecisionRecord] = []
 
     init(
@@ -266,6 +274,59 @@ final class PlanningWorkspace {
             }
     }
 
+    /// Planners see the complete event plan. Guests only see invitations for
+    /// events in which they have an explicit participation relationship.
+    var visibleEventContexts: [EventReference] {
+        guard !showsPlanningInterface else { return availableEventContexts }
+        return availableEventContexts.filter { currentViewerMember(for: $0) != nil }
+    }
+
+    /// Resolves the signed-in account to this workspace's normalized person.
+    /// Unconfigured workspaces retain the first-member fallback for previews,
+    /// migration tests, and locally-created workspaces before the app shell has
+    /// attached its authentication context.
+    var currentViewerMember: WorkspaceMember? {
+        identityMember
+    }
+
+    var showsPlanningInterface: Bool {
+        guard let member = currentViewerMember(for: .main) else { return false }
+        return member.participantRole != .guest
+    }
+
+    var isGuestViewer: Bool {
+        !showsPlanningInterface
+    }
+
+    func configureViewer(_ account: UserAccount?) {
+        isViewerConfigured = true
+        viewerUserID = account?.id
+        viewerEmail = account?.email
+
+        if !visibleEventContexts.contains(selectedEventReference),
+           let firstVisibleEvent = visibleEventContexts.first {
+            selectedEventReference = firstVisibleEvent
+        }
+    }
+
+    func currentViewerMember(for reference: EventReference) -> WorkspaceMember? {
+        guard let identityMember else { return nil }
+        return participants(for: reference).first { $0.id == identityMember.id }
+    }
+
+    private var identityMember: WorkspaceMember? {
+        guard isViewerConfigured else { return members.first }
+
+        return members.first { member in
+            if let viewerUserID, member.userID == viewerUserID {
+                return true
+            }
+
+            guard let viewerEmail, let memberEmail = member.email else { return false }
+            return memberEmail.caseInsensitiveCompare(viewerEmail) == .orderedSame
+        }
+    }
+
     /// The child event that is happening now, or the next incomplete child
     /// event on the calendar. Home-tab reselection uses this as the companion
     /// destination to the main event.
@@ -341,14 +402,10 @@ final class PlanningWorkspace {
 
     func canEditMusicPlaylist(forEventID eventID: UUID) -> Bool {
         if eventID == mainEventID {
-            return !isMainEventDeleted && !currentMainEventStatus.isReadOnly
+            return canManageEvent(.main)
         }
 
-        return timeline.contains {
-            $0.id == eventID
-                && $0.status != .archived
-                && $0.completionStatus != .complete
-        }
+        return canManageEvent(.subevent(eventID))
     }
 
     /// The single guest-presentation policy for ideas. Approval alone does not
@@ -850,11 +907,28 @@ final class PlanningWorkspace {
     }
 
     var canManageMainEvent: Bool {
-        members.first?.planningPermission == .manage && !mainEventStatus.isReadOnly
+        canManageEvent(.main)
     }
 
     var canDeleteMainEvent: Bool {
-        members.first?.planningPermission == .manage && mainEventStatus == .draft
+        showsPlanningInterface && mainEventStatus == .draft
+    }
+
+    func canManageEvent(_ reference: EventReference) -> Bool {
+        guard showsPlanningInterface else { return false }
+
+        switch reference {
+        case .main:
+            return !isMainEventDeleted && !mainEventStatus.isReadOnly
+        case .subevent(let id):
+            return timeline.contains {
+                $0.id == id
+                    && $0.status != .archived
+                    && $0.completionStatus != .complete
+            }
+        case .idea:
+            return false
+        }
     }
 
     func moments(for reference: EventReference) -> [EventMoment] {
@@ -1071,7 +1145,7 @@ final class PlanningWorkspace {
             eventID = linkedEventID
         }
 
-        let contributor = members.first?.name ?? "Guest"
+        let contributor = currentViewerMember?.name ?? "Guest"
         eventMoments.insert(
             EventMoment(eventID: eventID, imageData: imageData, addedBy: contributor),
             at: 0

@@ -16,6 +16,7 @@ private enum AppTab: Hashable {
 
 struct AppRootView: View {
     @Environment(WorkspaceLibrary.self) private var workspaceLibrary
+    @Environment(\.currentUserAccount) private var currentUserAccount
 
     private var isPresentingWorkspace: Binding<Bool> {
         Binding(
@@ -35,8 +36,14 @@ struct AppRootView: View {
         .tint(AppTheme.ColorToken.accent)
         .fullScreenCover(isPresented: isPresentingWorkspace) {
             if let workspace = workspaceLibrary.selectedWorkspace {
-                WorkspaceSessionView(workspace: workspace)
+                WorkspaceSessionView(
+                    workspace: workspace,
+                    account: currentUserAccount
+                )
             }
+        }
+        .task(id: currentUserAccount) {
+            workspaceLibrary.configureViewer(currentUserAccount)
         }
     }
 }
@@ -44,6 +51,11 @@ struct AppRootView: View {
 private struct WorkspaceSessionView: View {
     @Environment(\.dismiss) private var dismiss
     let workspace: PlanningWorkspace
+
+    init(workspace: PlanningWorkspace, account: UserAccount?) {
+        self.workspace = workspace
+        workspace.configureViewer(account)
+    }
 
     var body: some View {
         ContentView {
@@ -76,6 +88,19 @@ struct ContentView: View {
     }
 
     var body: some View {
+        Group {
+            if workspace.showsPlanningInterface {
+                planningTabs
+            } else {
+                NavigationStack {
+                    HomeView(onExitWorkspace: onExitWorkspace)
+                }
+            }
+        }
+        .tint(AppTheme.ColorToken.accent)
+    }
+
+    private var planningTabs: some View {
         TabView(selection: tabSelection) {
             Tab("Home", systemImage: "house.fill", value: .home) {
                 NavigationStack {
@@ -113,7 +138,6 @@ struct ContentView: View {
                 ? .never
                 : .onScrollDown
         )
-        .tint(AppTheme.ColorToken.accent)
     }
 }
 

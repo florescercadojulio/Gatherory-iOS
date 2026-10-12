@@ -286,7 +286,7 @@ private struct CollaborationInviteScreen: View {
 
                         VStack(spacing: 0) {
                             ForEach(people) { member in
-                                let isCurrentUser = member.id == workspace.members.first?.id
+                                let isCurrentUser = member.id == workspace.currentViewerMember?.id
 
                                 Button {
                                     participantEditorTarget = ParticipantEditorTarget(

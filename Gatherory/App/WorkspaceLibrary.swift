@@ -7,6 +7,8 @@ import Observation
 final class WorkspaceLibrary {
     private(set) var workspaces: [PlanningWorkspace]
     private(set) var selectedWorkspaceID: UUID?
+    private var viewerAccount: UserAccount?
+    private var isViewerConfigured = false
 
     init(workspaces: [PlanningWorkspace] = []) {
         self.workspaces = workspaces
@@ -28,6 +30,9 @@ final class WorkspaceLibrary {
 
     func add(_ workspace: PlanningWorkspace, openAfterAdding: Bool = true) {
         guard !workspaces.contains(where: { $0.mainEventID == workspace.mainEventID }) else { return }
+        if isViewerConfigured {
+            workspace.configureViewer(viewerAccount)
+        }
         workspaces.insert(workspace, at: 0)
         if openAfterAdding {
             selectedWorkspaceID = workspace.mainEventID
@@ -47,6 +52,11 @@ final class WorkspaceLibrary {
     }
 
     func replaceAll(with replacements: [PlanningWorkspace]) {
+        if isViewerConfigured {
+            for workspace in replacements {
+                workspace.configureViewer(viewerAccount)
+            }
+        }
         workspaces = replacements
         if let selectedWorkspaceID,
            !replacements.contains(where: { $0.mainEventID == selectedWorkspaceID }) {
@@ -55,6 +65,9 @@ final class WorkspaceLibrary {
     }
 
     func upsert(_ workspace: PlanningWorkspace) {
+        if isViewerConfigured {
+            workspace.configureViewer(viewerAccount)
+        }
         if let index = workspaces.firstIndex(where: {
             $0.mainEventID == workspace.mainEventID
         }) {
@@ -70,6 +83,14 @@ final class WorkspaceLibrary {
             selectedWorkspaceID = nil
         }
     }
+
+    func configureViewer(_ account: UserAccount?) {
+        viewerAccount = account
+        isViewerConfigured = true
+        for workspace in workspaces {
+            workspace.configureViewer(account)
+        }
+    }
 }
 
 extension WorkspaceLibrary {
@@ -78,7 +99,20 @@ extension WorkspaceLibrary {
     }
 
     static var sample: WorkspaceLibrary {
-        WorkspaceLibrary(workspaces: [.sample, .secondarySample])
+        let workspaces = [PlanningWorkspace.sample, .secondarySample]
+        let developmentAccount = DevelopmentAccountFixtures.planner
+
+        for workspace in workspaces {
+            guard let hostIndex = workspace.members.firstIndex(where: {
+                $0.participantRole == .host
+            }) else { continue }
+            workspace.members[hostIndex].userID = developmentAccount.id
+            workspace.members[hostIndex].email = developmentAccount.email
+            workspace.members[hostIndex].profileImageAssetName = developmentAccount.profileImageAssetName
+            workspace.members[hostIndex].profileImageURL = developmentAccount.profileImageURL
+        }
+
+        return WorkspaceLibrary(workspaces: workspaces)
     }
 }
 

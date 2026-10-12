@@ -63,15 +63,17 @@ struct HomeView: View {
                         } description: {
                             Text("Create the event that anchors this gathering.")
                         } actions: {
-                            Button("Create Event", systemImage: "plus") {
-                                editorTarget = .main
+                            if workspace.showsPlanningInterface {
+                                Button("Create Event", systemImage: "plus") {
+                                    editorTarget = .main
+                                }
+                                .buttonStyle(.borderedProminent)
                             }
-                            .buttonStyle(.borderedProminent)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, AppTheme.Spacing.section)
                     } else {
-                        ForEach(workspace.availableEventContexts, id: \.self) { reference in
+                        ForEach(workspace.visibleEventContexts, id: \.self) { reference in
                             eventHero(for: reference)
                                 .id(HomeScrollTarget.event(reference))
                         }
@@ -109,8 +111,8 @@ struct HomeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .overlay(alignment: .trailing) {
-            if workspace.availableEventContexts.count > 1 {
-                eventDateScrubber
+            if workspace.visibleEventContexts.count > 1 {
+                eventContextSwitcher
             }
         }
         .toolbar {
@@ -121,14 +123,14 @@ struct HomeView: View {
             }
 
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if workspace.isMainEventDeleted {
+                if workspace.isMainEventDeleted, workspace.showsPlanningInterface {
                     Button("Create event", systemImage: "plus") {
                         editorTarget = .main
                     }
                     .labelStyle(.iconOnly)
                     .foregroundStyle(.primary)
                     .tint(.primary)
-                } else {
+                } else if workspace.showsPlanningInterface {
                     Button("Send a note", systemImage: "megaphone") {
                         isComposingNote = true
                     }
@@ -422,13 +424,12 @@ struct HomeView: View {
         return totalCount == 1 ? "1 person invited" : "\(totalCount) people invited"
     }
 
-    private var eventDateScrubber: some View {
-        EventDateScrubber(
-            references: workspace.availableEventContexts,
+    private var eventContextSwitcher: some View {
+        EventContextSwitcher(
+            references: workspace.visibleEventContexts,
             selectedReference: visibleEventReference ?? workspace.selectedEventReference,
             previewIndex: scrubbedEventIndex,
             title: title(for:),
-            date: date(for:),
             onPreview: previewEvent(at:),
             onCommit: commitScrubbedEvent(at:)
         )
@@ -447,7 +448,7 @@ struct HomeView: View {
 
         let activeReference = visibleEventReference ?? workspace.selectedEventReference
         let targetReference: EventReference = if activeReference == .main {
-            workspace.currentOrNextChildEventReference() ?? .main
+            workspace.currentOrNextChildEventReference() ?? workspace.visibleEventContexts.first ?? .main
         } else {
             .main
         }
@@ -473,8 +474,9 @@ struct HomeView: View {
     }
 
     private func previewEvent(at index: Int) {
-        let references = workspace.availableEventContexts
+        let references = workspace.visibleEventContexts
         guard references.indices.contains(index) else { return }
+
         isScrubbingEvents = true
         guard scrubbedEventIndex != index else { return }
         scrubbedEventIndex = index
@@ -484,7 +486,7 @@ struct HomeView: View {
     }
 
     private func commitScrubbedEvent(at index: Int) {
-        let references = workspace.availableEventContexts
+        let references = workspace.visibleEventContexts
         guard references.indices.contains(index) else {
             isScrubbingEvents = false
             scrubbedEventIndex = nil
@@ -513,7 +515,7 @@ struct HomeView: View {
         let delta = offset - startOffset
         guard abs(delta) >= 8 else { return }
 
-        let references = workspace.availableEventContexts
+        let references = workspace.visibleEventContexts
         guard let originIndex = references.firstIndex(of: originReference) else { return }
 
         let destinationIndex = delta > 0 ? originIndex + 1 : originIndex - 1
@@ -557,7 +559,7 @@ struct HomeView: View {
     private func restoreLastEventAfterPullIfNeeded() {
         guard isPullToCreateRegionVisible,
               !isRestoringFromPullToCreate,
-              let lastReference = workspace.availableEventContexts.last else { return }
+              let lastReference = workspace.visibleEventContexts.last else { return }
 
         isRestoringFromPullToCreate = true
         let target = HomeScrollTarget.event(lastReference)
@@ -613,8 +615,8 @@ struct HomeView: View {
         switch reference {
         case .main:
             workspace.canManageMainEvent
-        case .subevent(let id):
-            workspace.timeline.contains(where: { $0.id == id })
+        case .subevent:
+            workspace.canManageEvent(reference)
         case .idea:
             false
         }
@@ -699,83 +701,71 @@ private struct PullToCreateEventIndicator: View {
     }
 }
 
-/// A compact, date-ordered event index. A neutral material rail keeps the
-/// control legible over every cover image without competing with the event.
-private struct EventDateScrubber: View {
+/// A compact event index inspired by Camera Control. Its tapered housing docks
+/// to the trailing edge, while candle marks communicate the current event and
+/// its neighbors without competing with the invitation artwork.
+private struct EventContextSwitcher: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let references: [EventReference]
     let selectedReference: EventReference
     let previewIndex: Int?
     let title: (EventReference) -> String
-    let date: (EventReference) -> Date
     let onPreview: (Int) -> Void
     let onCommit: (Int) -> Void
 
-    private let railHeight: CGFloat = 196
-    private let markerLimit = 14
-    private let verticalInset: CGFloat = 8
-    private let indexLaneWidth: CGFloat = 30
-    private let indexTrailingInset: CGFloat = 6
-
     private var currentIndex: Int {
-        if let previewIndex { return previewIndex }
+        if let previewIndex, references.indices.contains(previewIndex) {
+            return previewIndex
+        }
         return references.firstIndex(of: selectedReference) ?? 0
     }
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .trailing) {
-                Capsule()
-                    .fill(.regularMaterial)
-                    .overlay {
-                        Capsule()
-                            .stroke(Color.primary.opacity(0.18), lineWidth: 0.5)
-                    }
-                    .shadow(color: .black.opacity(0.14), radius: 3, y: 1)
-                    .frame(width: indexLaneWidth)
+                ZStack(alignment: .trailing) {
+                    EventIndexDockShape()
+                        .fill(.regularMaterial)
 
-                if references.count <= markerLimit {
                     VStack(spacing: 0) {
                         ForEach(references.indices, id: \.self) { index in
-                            let isCurrent = index == currentIndex
-                            Capsule()
-                                .fill(
-                                    isCurrent
-                                        ? Color.primary
-                                        : Color.primary.opacity(0.36)
-                                )
-                                .frame(
-                                    width: isCurrent ? 18 : 5,
-                                    height: isCurrent ? 4 : 3
-                                )
-                                .clipShape(Capsule())
-                                .frame(width: indexLaneWidth, alignment: .trailing)
-                                .frame(maxHeight: .infinity)
+                            let isSelected = index == currentIndex
+
+                            HStack(spacing: 0) {
+                                Spacer(minLength: 0)
+
+                                EventIndexCandle()
+                                    .fill(
+                                        isSelected
+                                            ? AppTheme.ColorToken.accent
+                                            : Color.primary.opacity(candleOpacity(at: index))
+                                    )
+                                    .frame(
+                                        width: candleWidth(at: index),
+                                        height: isSelected ? 6 : 4
+                                    )
+                                    .animation(
+                                        reduceMotion ? nil : .snappy(duration: 0.22),
+                                        value: currentIndex
+                                    )
+                            }
+                            .frame(maxHeight: .infinity)
                         }
                     }
-                    .padding(.vertical, verticalInset)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .padding(.trailing, indexTrailingInset)
-                } else {
-                    ZStack(alignment: .trailing) {
-                        Capsule()
-                            .fill(Color.primary.opacity(0.22))
-                            .frame(width: 2)
-                            .padding(.vertical, verticalInset)
-                            .offset(x: -9)
-
-                        Capsule()
-                            .fill(Color.primary)
-                            .frame(width: 18, height: 4)
-                            .position(
-                                x: indexLaneWidth - 9,
-                                y: markerPosition(for: currentIndex, height: proxy.size.height)
-                            )
-                    }
-                    .frame(width: indexLaneWidth, height: proxy.size.height, alignment: .trailing)
-                    .padding(.trailing, indexTrailingInset)
+                    .padding(.vertical, 12)
+                    .padding(.trailing, 2)
                 }
+                // Keep the visible control entirely in the page gutter. The
+                // invitation cards use the same horizontal inset, so the dock
+                // meets their outside edge instead of floating over artwork.
+                .frame(width: AppTheme.Layout.screenHorizontal)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // GeometryReader provides the 44-point interaction lane, but a
+            // ZStack otherwise adopts its child's narrow width. Expand it
+            // explicitly so the visible dock is aligned to the lane's—and
+            // therefore the device's—trailing edge.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .local)
@@ -787,30 +777,13 @@ private struct EventDateScrubber: View {
                     }
             )
         }
-        .frame(width: 44, height: railHeight)
-        .overlay(alignment: .leading) {
-            if let previewIndex, references.indices.contains(previewIndex) {
-                let reference = references[previewIndex]
-                VStack(alignment: .leading) {
-                    Text(date(reference), format: .dateTime.month(.abbreviated).day().year())
-                        .font(.caption.bold())
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.9)
-                }
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .frame(width: 140, alignment: .leading)
-                .background(.regularMaterial, in: Capsule())
-                .offset(x: -148)
-                .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .trailing)))
-                .allowsHitTesting(false)
-            }
-        }
+        // The visual dock is deliberately narrow, but this keeps its drag
+        // target at Apple's recommended minimum size.
+        .frame(width: AppTheme.Layout.minimumTouchTarget, height: 196)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Event index")
+        .accessibilityLabel("Event switcher")
         .accessibilityValue(accessibilityValue)
-        .accessibilityHint("Swipe up or down to preview events, then release to select")
+        .accessibilityHint("Tap or drag along the rail to select an event")
         .accessibilityAdjustableAction { direction in
             let nextIndex: Int
             switch direction {
@@ -829,20 +802,104 @@ private struct EventDateScrubber: View {
     private var accessibilityValue: String {
         guard references.indices.contains(currentIndex) else { return "No event" }
         let reference = references[currentIndex]
-        return "\(title(reference)), \(date(reference).formatted(date: .abbreviated, time: .omitted))"
+        return "\(title(reference)), \(currentIndex + 1) of \(references.count)"
+    }
+
+    private func candleWidth(at index: Int) -> CGFloat {
+        switch abs(index - currentIndex) {
+        case 0: AppTheme.Layout.screenHorizontal - 2
+        case 1: 8
+        default: 4
+        }
+    }
+
+    private func candleOpacity(at index: Int) -> Double {
+        abs(index - currentIndex) == 1 ? 0.62 : 0.34
     }
 
     private func index(at yPosition: CGFloat, height: CGFloat) -> Int {
-        guard references.count > 1 else { return 0 }
-        let usableHeight = max(height - (verticalInset * 2), 1)
-        let clamped = min(max(yPosition - verticalInset, 0), usableHeight)
-        return Int((clamped / usableHeight * CGFloat(references.count - 1)).rounded())
+        guard !references.isEmpty, height > 0 else { return 0 }
+        let clampedY = min(max(yPosition, 0), height - 0.001)
+        return min(Int((clampedY / height) * CGFloat(references.count)), references.count - 1)
     }
+}
 
-    private func markerPosition(for index: Int, height: CGFloat) -> CGFloat {
-        guard references.count > 1 else { return height / 2 }
-        let usableHeight = max(height - (verticalInset * 2), 1)
-        return verticalInset + (CGFloat(index) / CGFloat(references.count - 1) * usableHeight)
+/// A horizontal mark that is narrower toward the center of the display and
+/// fuller at the screen edge. The curved ends keep the transition soft.
+private struct EventIndexCandle: Shape {
+    func path(in rect: CGRect) -> Path {
+        let leadingHalfHeight = rect.height * 0.28
+        let midpoint = rect.midY
+        let radius = min(rect.height / 2, 3)
+
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX + radius, y: midpoint - leadingHalfHeight))
+        path.addCurve(
+            to: CGPoint(x: rect.minX, y: midpoint),
+            control1: CGPoint(x: rect.minX, y: midpoint - leadingHalfHeight),
+            control2: CGPoint(x: rect.minX, y: midpoint - leadingHalfHeight / 2)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + radius, y: midpoint + leadingHalfHeight),
+            control1: CGPoint(x: rect.minX, y: midpoint + leadingHalfHeight / 2),
+            control2: CGPoint(x: rect.minX, y: midpoint + leadingHalfHeight)
+        )
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.maxY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.maxY - radius),
+            control: CGPoint(x: rect.maxX, y: rect.maxY)
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + radius))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX - radius, y: rect.minY),
+            control: CGPoint(x: rect.maxX, y: rect.minY)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// A rounded trapezoid whose full-height side sits at the screen edge and
+/// whose shorter side faces inward toward the event content.
+private struct EventIndexDockShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let taper = min(rect.height * 0.08, 14)
+        let innerRadius = min(rect.width * 0.18, 4)
+        let inverseRadius = min(rect.width * 0.36, 8)
+
+        var path = Path()
+        path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addCurve(
+            to: CGPoint(x: rect.maxX - inverseRadius, y: rect.minY + inverseRadius),
+            control1: CGPoint(x: rect.maxX, y: rect.minY + inverseRadius * 0.55),
+            control2: CGPoint(
+                x: rect.maxX - inverseRadius * 0.45,
+                y: rect.minY + inverseRadius
+            )
+        )
+        path.addLine(to: CGPoint(x: rect.minX + innerRadius, y: rect.minY + taper))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX, y: rect.minY + taper + innerRadius),
+            control: CGPoint(x: rect.minX, y: rect.minY + taper)
+        )
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - taper - innerRadius))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX + innerRadius, y: rect.maxY - taper),
+            control: CGPoint(x: rect.minX, y: rect.maxY - taper)
+        )
+        path.addLine(
+            to: CGPoint(x: rect.maxX - inverseRadius, y: rect.maxY - inverseRadius)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.maxX, y: rect.maxY),
+            control1: CGPoint(
+                x: rect.maxX - inverseRadius * 0.45,
+                y: rect.maxY - inverseRadius
+            ),
+            control2: CGPoint(x: rect.maxX, y: rect.maxY - inverseRadius * 0.55)
+        )
+        path.closeSubpath()
+        return path
     }
 }
 

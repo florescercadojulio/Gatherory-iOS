@@ -299,6 +299,59 @@ struct GatheroryTests {
         )
     }
 
+    @Test("Collaborators receive the complete planning interface")
+    func collaboratorViewerReceivesHostControls() throws {
+        let workspace = PlanningWorkspace.sample
+        let collaboratorIndex = try #require(
+            workspace.members.firstIndex { $0.participantRole == .collaborator }
+        )
+        workspace.members[collaboratorIndex].userID = "collaborator-user"
+        workspace.members[collaboratorIndex].email = "collaborator@gatherory.test"
+
+        workspace.configureViewer(
+            UserAccount(
+                id: "collaborator-user",
+                email: "collaborator@gatherory.test",
+                displayName: "Sarah",
+                role: .member,
+                authenticationProvider: .password,
+                createdAt: .now
+            )
+        )
+
+        #expect(workspace.showsPlanningInterface)
+        #expect(workspace.canManageMainEvent)
+        #expect(workspace.canDeleteMainEvent)
+        #expect(workspace.visibleEventContexts == workspace.availableEventContexts)
+    }
+
+    @Test("Guests only receive Home events in their invitation scope")
+    func guestViewerReceivesInvitationOnlyScope() throws {
+        let workspace = PlanningWorkspace.sample
+        let guestIndex = try #require(
+            workspace.members.firstIndex { $0.participantRole == .guest }
+        )
+        workspace.members[guestIndex].userID = "guest-user"
+        workspace.members[guestIndex].email = "guest@gatherory.test"
+
+        workspace.configureViewer(
+            UserAccount(
+                id: "guest-user",
+                email: "guest@gatherory.test",
+                displayName: "Chris",
+                role: .member,
+                authenticationProvider: .password,
+                createdAt: .now
+            )
+        )
+
+        #expect(!workspace.showsPlanningInterface)
+        #expect(workspace.isGuestViewer)
+        #expect(!workspace.canManageMainEvent)
+        #expect(!workspace.canDeleteMainEvent)
+        #expect(workspace.visibleEventContexts == [.main])
+    }
+
     private func workspaceFilterFixture(
         title: String,
         date: Date,
