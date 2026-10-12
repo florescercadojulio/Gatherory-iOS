@@ -430,6 +430,7 @@ struct HomeView: View {
             selectedReference: visibleEventReference ?? workspace.selectedEventReference,
             previewIndex: scrubbedEventIndex,
             title: title(for:),
+            date: date(for:),
             onPreview: previewEvent(at:),
             onCommit: commitScrubbedEvent(at:)
         )
@@ -706,11 +707,13 @@ private struct PullToCreateEventIndicator: View {
 /// its neighbors without competing with the invitation artwork.
 private struct EventContextSwitcher: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     let references: [EventReference]
     let selectedReference: EventReference
     let previewIndex: Int?
     let title: (EventReference) -> String
+    let date: (EventReference) -> Date
     let onPreview: (Int) -> Void
     let onCommit: (Int) -> Void
 
@@ -726,7 +729,14 @@ private struct EventContextSwitcher: View {
             ZStack(alignment: .trailing) {
                 ZStack(alignment: .trailing) {
                     EventIndexDockShape()
-                        .fill(.regularMaterial)
+                        .fill(colorScheme == .light ? .thickMaterial : .regularMaterial)
+                        .overlay {
+                            EventIndexDockShape()
+                                .stroke(
+                                    Color.primary.opacity(colorScheme == .light ? 0.26 : 0.18),
+                                    lineWidth: 0.5
+                                )
+                        }
 
                     VStack(spacing: 0) {
                         ForEach(references.indices, id: \.self) { index in
@@ -780,6 +790,27 @@ private struct EventContextSwitcher: View {
         // The visual dock is deliberately narrow, but this keeps its drag
         // target at Apple's recommended minimum size.
         .frame(width: AppTheme.Layout.minimumTouchTarget, height: 196)
+        .overlay(alignment: .trailing) {
+            if let previewIndex, references.indices.contains(previewIndex) {
+                let reference = references[previewIndex]
+                Text(date(reference), format: .dateTime.month(.abbreviated).day().year())
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 32)
+                    .background(.regularMaterial, in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(Color.primary.opacity(0.18), lineWidth: 0.5)
+                    }
+                    .offset(x: -AppTheme.Layout.minimumTouchTarget)
+                    .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .trailing)))
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: previewIndex)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Event switcher")
         .accessibilityValue(accessibilityValue)
