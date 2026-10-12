@@ -1183,7 +1183,12 @@ final class WeddingWorkspace {
 
     func addIdea(_ idea: WeddingIdea) {
         var scopedIdea = idea
-        if scopedIdea.eventID == nil {
+        if scopedIdea.category == .event {
+            // Event ideas become first-level sub-events when approved. Never
+            // attach one to an existing child event, because the event tree
+            // deliberately stops at two levels.
+            scopedIdea.eventID = mainEventID
+        } else if scopedIdea.eventID == nil {
             scopedIdea.eventID = selectedEventID
         }
         if scopedIdea.category == .music {

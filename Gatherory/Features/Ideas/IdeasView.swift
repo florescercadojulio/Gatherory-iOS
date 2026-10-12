@@ -9,13 +9,34 @@ struct IdeasView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.layoutDirection) private var layoutDirection
     @State private var filter: IdeaFilter = .all
+    @State private var scope: IdeasScope = .all
     @State private var isAddingIdea = false
     @State private var addIdeaDetent: PresentationDetent = .medium
     @State private var selectedIdeaID: UUID?
     @Namespace private var ideaTransition
 
     private var filteredIdeas: [WeddingIdea] {
-        workspace.contextualIdeas.filter(filter.includes)
+        let ideas = switch scope {
+        case .all:
+            workspace.ideas
+        case .selectedEvent:
+            workspace.contextualIdeas
+        }
+
+        return ideas.filter(filter.includes)
+    }
+
+    private var scopeTitle: String {
+        switch scope {
+        case .all:
+            "All Ideas"
+        case .selectedEvent:
+            workspace.selectedEventTitle
+        }
+    }
+
+    private var isFilteringToEvent: Bool {
+        scope == .selectedEvent
     }
 
     var body: some View {
@@ -28,37 +49,13 @@ struct IdeasView: View {
         .scrollIndicators(.hidden)
         .appSoftScrollEdges()
         .background(AppTheme.ColorToken.background)
-        .navigationTitle("Ideas")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                EventContextLabel(section: "Ideas", eventTitle: workspace.selectedEventTitle)
-            }
-
             ToolbarItemGroup(placement: .topBarLeading) {
-                if let onExitWorkspace {
-                    WorkspaceLibraryToolbarButton(action: onExitWorkspace)
-                }
-
-                Menu {
-                    ForEach(IdeaFilter.allCases) { option in
-                        Button {
-                            withAnimation(.snappy) {
-                                filter = option
-                            }
-                        } label: {
-                            Label(
-                                option.title,
-                                systemImage: option == filter ? "checkmark" : option.symbol
-                            )
-                        }
-                    }
-                } label: {
-                    Label(filter.title, systemImage: "line.3.horizontal.decrease")
-                }
-                .accessibilityLabel("Filter ideas")
-                .accessibilityValue(filter.title)
+                scopeMenu
+                statusFilterMenu
             }
 
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -94,9 +91,9 @@ struct IdeasView: View {
     private var ideaCollection: some View {
         if filteredIdeas.isEmpty {
             ContentUnavailableView(
-                filter.emptyTitle,
+                emptyStateTitle,
                 systemImage: filter.symbol,
-                description: Text(filter.emptyDescription)
+                description: Text(emptyStateDescription)
             )
             .frame(maxWidth: .infinity)
             .padding(.vertical, AppTheme.Spacing.section)
@@ -110,6 +107,103 @@ struct IdeasView: View {
                     ideaButton(idea)
                 }
             }
+        }
+    }
+
+    private var emptyStateTitle: String {
+        guard isFilteringToEvent else { return filter.emptyTitle }
+        guard filter == .all else { return "\(filter.emptyTitle) for \(scopeTitle)" }
+        return "No ideas for \(scopeTitle)"
+    }
+
+    private var emptyStateDescription: String {
+        guard isFilteringToEvent, filter == .all else { return filter.emptyDescription }
+        return "Add an idea to start shaping this event."
+    }
+
+    private var scopeMenu: some View {
+        Menu {
+            Button {
+                withAnimation(.snappy) {
+                    scope = .all
+                }
+            } label: {
+                Label("All Ideas", systemImage: scope == .all ? "checkmark" : "square.grid.2x2")
+            }
+
+            Divider()
+
+            ForEach(workspace.availableEventContexts, id: \.self) { reference in
+                Button {
+                    withAnimation(.snappy) {
+                        workspace.selectEventContext(reference)
+                        scope = .selectedEvent
+                    }
+                } label: {
+                    Label(
+                        workspace.eventTitle(for: eventID(for: reference)),
+                        systemImage: isSelectedEvent(reference) ? "checkmark" : "calendar"
+                    )
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text(scopeTitle)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .accessibilityHidden(true)
+            }
+            .font(.headline.weight(.semibold))
+            .foregroundStyle(.primary)
+            .frame(width: 150, height: AppTheme.Layout.minimumTouchTarget, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Ideas event filter")
+        .accessibilityValue(isFilteringToEvent ? "\(scopeTitle), filtered" : "All Ideas")
+    }
+
+    private var statusFilterMenu: some View {
+        Menu {
+            ForEach(IdeaFilter.allCases) { option in
+                Button {
+                    withAnimation(.snappy) {
+                        filter = option
+                    }
+                } label: {
+                    Label(
+                        option.title,
+                        systemImage: option == filter ? "checkmark" : option.symbol
+                    )
+                }
+            }
+        } label: {
+            Label(filter.title, systemImage: "line.3.horizontal.decrease")
+                .labelStyle(.iconOnly)
+                .frame(
+                    width: AppTheme.Layout.minimumTouchTarget,
+                    height: AppTheme.Layout.minimumTouchTarget
+                )
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Filter ideas")
+        .accessibilityValue(filter.title)
+    }
+
+    private func isSelectedEvent(_ reference: EventReference) -> Bool {
+        scope == .selectedEvent && workspace.selectedEventReference == reference
+    }
+
+    private func eventID(for reference: EventReference) -> UUID {
+        switch reference {
+        case .main:
+            workspace.mainEventID
+        case .subevent(let eventID):
+            eventID
+        case .idea:
+            workspace.mainEventID
         }
     }
 
@@ -170,6 +264,11 @@ struct IdeasView: View {
             workspace.updateIdea(idea, status: status)
         }
     }
+}
+
+private enum IdeasScope: Hashable {
+    case all
+    case selectedEvent
 }
 
 enum IdeaFilter: String, CaseIterable, Identifiable {
@@ -1377,7 +1476,6 @@ struct IdeaEditorView: View {
     @State private var isEditingEventDateAndTime = false
     @State private var eventLocation: EventLocation?
     @State private var isEditingEventLocation = false
-    @State private var isShowingEventContextPrompt = false
     @State private var registryCategory: RegistryCategory = .home
     @State private var registryPrice = ""
     @State private var registryQuantity = 1
@@ -1646,7 +1744,7 @@ struct IdeaEditorView: View {
         let baseIdea = ideaBeingEdited
         return WeddingIdea(
             id: baseIdea?.id ?? UUID(),
-            eventID: baseIdea?.eventID ?? workspace.selectedEventID,
+            eventID: baseIdea?.eventID ?? destinationEventID,
             title: resolvedTitle,
             note: trimmedNote,
             category: category,
@@ -1771,6 +1869,21 @@ struct IdeaEditorView: View {
         }
     }
 
+    private var destinationEventID: UUID {
+        guard ideaBeingEdited == nil, category == .event else {
+            return ideaBeingEdited?.eventID ?? workspace.selectedEventID
+        }
+        return workspace.mainEventID
+    }
+
+    private var destinationEventTitle: String {
+        workspace.eventTitle(for: destinationEventID)
+    }
+
+    private var isNewSubeventIdea: Bool {
+        ideaBeingEdited == nil && category == .event
+    }
+
     var body: some View {
         Group {
             if isChoosingCategory {
@@ -1806,14 +1919,6 @@ struct IdeaEditorView: View {
                 }
             }
         }
-        .alert("Switch to the Main Event?", isPresented: $isShowingEventContextPrompt) {
-            Button("Not Now", role: .cancel) {}
-            Button("Switch & Continue") {
-                switchToMainEventAndContinue()
-            }
-        } message: {
-            Text("Event ideas are only available in the main event context.")
-        }
         .onDisappear {
             previewPlayer.stop()
         }
@@ -1823,8 +1928,8 @@ struct IdeaEditorView: View {
         ScrollView {
             categoryGrid(selectedCategory: category)
                 .padding(.horizontal, AppTheme.Layout.screenHorizontal)
-                .padding(.top, AppTheme.Spacing.compact)
-                .padding(.bottom, AppTheme.Layout.screenBottom)
+            .padding(.top, AppTheme.Spacing.compact)
+            .padding(.bottom, AppTheme.Layout.screenBottom)
         }
         .scrollIndicators(.hidden)
         .background(AppTheme.ColorToken.background)
@@ -1832,6 +1937,7 @@ struct IdeaEditorView: View {
 
     private func ideaEditor(for category: IdeaCategory) -> some View {
         Form {
+            ideaDestinationSection
             selectedCategorySection(for: category)
 
             switch category {
@@ -1910,6 +2016,23 @@ struct IdeaEditorView: View {
         }
     }
 
+    private var ideaDestinationSection: some View {
+        Section {
+            Label(destinationEventTitle, systemImage: "calendar")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(AppTheme.ColorToken.textPrimary)
+                .frame(minHeight: AppTheme.Layout.minimumTouchTarget, alignment: .leading)
+                .accessibilityLabel("Adding this idea to \(destinationEventTitle)")
+        } header: {
+            Text("Adding To")
+        } footer: {
+            if isNewSubeventIdea {
+                Text("This creates a sub-event of \(destinationEventTitle) when it is approved.")
+            }
+        }
+        .listRowBackground(AppTheme.ColorToken.surface)
+    }
+
     private func selectedCategorySection(for category: IdeaCategory) -> some View {
         Section {
             Button {
@@ -1932,11 +2055,6 @@ struct IdeaEditorView: View {
                         Text(category.title)
                             .font(.headline)
                             .foregroundStyle(AppTheme.ColorToken.textPrimary)
-
-                        Text("For \(workspace.selectedEventTitle)")
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.ColorToken.textSecondary)
-                            .lineLimit(2)
                     }
 
                     Spacer(minLength: AppTheme.Spacing.compact)
@@ -1954,9 +2072,7 @@ struct IdeaEditorView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(
-                "Idea type, \(category.title), for \(workspace.selectedEventTitle)"
-            )
+            .accessibilityLabel("Idea type, \(category.title)")
             .accessibilityHint("Choose a different idea type")
         } header: {
             Text("Idea Type")
@@ -2158,14 +2274,8 @@ struct IdeaEditorView: View {
     }
 
     private func categoryTile(_ option: IdeaCategory, isSelected: Bool) -> some View {
-        let isContextRestricted = option == .event && !workspace.isMainEventContext
-
         return Button {
-            if isContextRestricted {
-                isShowingEventContextPrompt = true
-            } else {
-                select(option)
-            }
+            select(option)
         } label: {
             VStack(spacing: 6) {
                 ZStack(alignment: .topTrailing) {
@@ -2173,23 +2283,16 @@ struct IdeaEditorView: View {
                         .symbolRenderingMode(.hierarchical)
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(
-                            isContextRestricted
-                                ? AppTheme.ColorToken.textSecondary
-                                : isSelected ? AppTheme.ColorToken.onAccent : option.artworkAccent
+                            isSelected ? AppTheme.ColorToken.onAccent : option.artworkAccent
                         )
                         .frame(width: 38, height: 38)
                         .background(
-                            isSelected && !isContextRestricted ? option.artworkAccent : Color.clear,
+                            isSelected ? option.artworkAccent : Color.clear,
                             in: Circle()
                         )
                         .background(.regularMaterial, in: Circle())
 
-                    if isContextRestricted {
-                        Image(systemName: "lock.fill")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(AppTheme.ColorToken.textSecondary)
-                            .offset(x: 3, y: -3)
-                    } else if isSelected {
+                    if isSelected {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(AppTheme.ColorToken.onAccent, AppTheme.ColorToken.accent)
@@ -2200,18 +2303,14 @@ struct IdeaEditorView: View {
                 Text(option.title)
                     .font(.caption2.weight(.semibold))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(
-                        isContextRestricted
-                            ? AppTheme.ColorToken.textSecondary
-                            : AppTheme.ColorToken.textPrimary
-                    )
+                    .foregroundStyle(AppTheme.ColorToken.textPrimary)
                     .lineLimit(2)
             }
             .frame(maxWidth: .infinity)
             .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 112 : 76)
             .padding(4)
             .background(
-                isSelected && !isContextRestricted
+                isSelected
                     ? option.artworkAccent.opacity(0.14)
                     : AppTheme.ColorToken.elevatedSurface,
                 in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
@@ -2219,27 +2318,18 @@ struct IdeaEditorView: View {
             .overlay {
                 RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
                     .stroke(
-                        isSelected && !isContextRestricted
+                        isSelected
                             ? option.artworkAccent
                             : AppTheme.ColorToken.cardBorder,
-                        lineWidth: isSelected && !isContextRestricted ? 2 : 0.5
+                        lineWidth: isSelected ? 2 : 0.5
                     )
             }
             .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
-            .saturation(isContextRestricted ? 0 : 1)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(option.title)
-        .accessibilityValue(
-            isContextRestricted
-                ? "Available from the main event"
-                : isSelected ? "Selected" : "Not selected"
-        )
-        .accessibilityHint(
-            isContextRestricted
-                ? "Offers to switch to the main event and continue"
-                : "Selects the \(option.title.lowercased()) idea form"
-        )
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityHint("Selects the \(option.title.lowercased()) idea form")
     }
 
     private func optionStrip<Option: Identifiable & Equatable>(
@@ -2668,11 +2758,6 @@ struct IdeaEditorView: View {
             isChoosingCategory = false
             setDetent(.large)
         }
-    }
-
-    private func switchToMainEventAndContinue() {
-        workspace.selectEventContext(.main)
-        select(.event)
     }
 
     private func saveIdea() {

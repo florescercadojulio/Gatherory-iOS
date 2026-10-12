@@ -825,6 +825,24 @@ struct GatheroryTests {
         #expect(workspace.contextualIdeas.contains { $0.id == scopedIdea.id } == false)
     }
 
+    @Test("Event ideas from a child context remain first-level subevents")
+    func eventIdeasCreatedFromChildContextUseMainEvent() throws {
+        let workspace = WeddingWorkspace.sample
+        let child = try #require(workspace.childEvents.first)
+        workspace.selectEventContext(.subevent(child.id))
+
+        let proposal = WeddingIdea(
+            title: "After party",
+            note: "Keep it as a first-level event.",
+            category: .event,
+            submittedBy: "Alex"
+        )
+        workspace.addIdea(proposal)
+
+        let storedProposal = try #require(workspace.ideas.first { $0.id == proposal.id })
+        #expect(storedProposal.eventID == workspace.mainEventID)
+    }
+
     @Test("Removing the active subevent returns planning to the main event")
     func deletingActiveSubeventRestoresMainContext() throws {
         let workspace = WeddingWorkspace.sample
