@@ -8,7 +8,6 @@ struct HomeView: View {
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var isInvitingCollaborators = false
     @State private var isComposingNote = false
     @State private var editorTarget: HomeEventEditorTarget?
     @State private var openedEventReference: EventReference?
@@ -117,8 +116,6 @@ struct HomeView: View {
                 if let onExitWorkspace {
                     WorkspaceLibraryToolbarButton(action: onExitWorkspace)
                 }
-
-                eventCollaboratorButton
             }
 
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -178,10 +175,6 @@ struct HomeView: View {
                 .navigationTransition(
                     .zoom(sourceID: reference, in: invitationTransition)
                 )
-        }
-        .fullScreenCover(isPresented: $isInvitingCollaborators) {
-            CollaborationInviteView()
-                .environment(workspace)
         }
         .sheet(isPresented: $isComposingNote) {
             NoteComposerView()
@@ -412,41 +405,6 @@ struct HomeView: View {
         }
 
         return totalCount == 1 ? "1 person invited" : "\(totalCount) people invited"
-    }
-
-    private var eventCollaboratorButton: some View {
-        let coordinators = workspace.selectedEventCoordinators
-
-        return Button {
-            isInvitingCollaborators = true
-        } label: {
-            HStack(spacing: -7) {
-                ForEach(coordinators.prefix(3)) { member in
-                    ParticipantAvatarView(member: member, size: 28, style: .toolbar)
-                }
-
-                if coordinators.count > 3 {
-                    Text("+\(coordinators.count - 3)")
-                        .font(.caption2.bold())
-                        .foregroundStyle(.primary)
-                        .frame(width: 28, height: 28)
-                        .background(.thinMaterial, in: Circle())
-                        .overlay(Circle().stroke(.primary.opacity(0.24), lineWidth: 0.5))
-                }
-
-                Image(systemName: "person.badge.plus")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 28, height: 28)
-                    .background(.thinMaterial, in: Circle())
-                    .overlay(Circle().stroke(.primary.opacity(0.24), lineWidth: 0.5))
-            }
-            .padding(.horizontal, 4)
-            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Event collaborators and invitations")
-        .accessibilityValue("\(coordinators.count) coordinating \(workspace.selectedEventTitle)")
     }
 
     private var eventDateScrubber: some View {
@@ -727,9 +685,8 @@ private struct PullToCreateEventIndicator: View {
     }
 }
 
-/// A compact date-ordered index inspired by the system section index.
-/// Small collections show one marker per event; large collections use a
-/// continuous track so rendering cost stays constant.
+/// A compact, date-ordered event index. A neutral material rail keeps the
+/// control legible over every cover image without competing with the event.
 private struct EventDateScrubber: View {
     let references: [EventReference]
     let selectedReference: EventReference
@@ -742,8 +699,8 @@ private struct EventDateScrubber: View {
     private let railHeight: CGFloat = 196
     private let markerLimit = 14
     private let verticalInset: CGFloat = 8
-    private let markerLaneWidth: CGFloat = 10
-    private let markerTrailingInset: CGFloat = 3
+    private let indexLaneWidth: CGFloat = 30
+    private let indexTrailingInset: CGFloat = 6
 
     private var currentIndex: Int {
         if let previewIndex { return previewIndex }
@@ -753,54 +710,55 @@ private struct EventDateScrubber: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .trailing) {
+                Capsule()
+                    .fill(.regularMaterial)
+                    .overlay {
+                        Capsule()
+                            .stroke(Color.primary.opacity(0.18), lineWidth: 0.5)
+                    }
+                    .shadow(color: .black.opacity(0.14), radius: 3, y: 1)
+                    .frame(width: indexLaneWidth)
+
                 if references.count <= markerLimit {
                     VStack(spacing: 0) {
                         ForEach(references.indices, id: \.self) { index in
-                            let reference = references[index]
-                            let isMainEvent = reference == .main
                             let isCurrent = index == currentIndex
-                            Circle()
+                            Capsule()
                                 .fill(
-                                    isMainEvent
-                                        ? AppTheme.ColorToken.mainEventMarker
-                                        : isCurrent ? AppTheme.ColorToken.accent : Color.white.opacity(0.68)
+                                    isCurrent
+                                        ? Color.primary
+                                        : Color.primary.opacity(0.36)
                                 )
                                 .frame(
-                                    width: isMainEvent ? 10 : isCurrent ? 9 : 4,
-                                    height: isMainEvent ? 10 : isCurrent ? 9 : 4
+                                    width: isCurrent ? 18 : 5,
+                                    height: isCurrent ? 4 : 3
                                 )
-                                .overlay {
-                                    if isMainEvent || isCurrent {
-                                        Circle()
-                                            .stroke(.white.opacity(0.95), lineWidth: 1.5)
-                                    }
-                                }
-                                .shadow(color: .black.opacity(0.34), radius: 1, y: 1)
-                                .frame(width: markerLaneWidth)
+                                .clipShape(Capsule())
+                                .frame(width: indexLaneWidth, alignment: .trailing)
                                 .frame(maxHeight: .infinity)
                         }
                     }
                     .padding(.vertical, verticalInset)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .padding(.trailing, markerTrailingInset)
+                    .padding(.trailing, indexTrailingInset)
                 } else {
-                    let currentReference = references[currentIndex]
-                    Capsule()
-                        .fill(
-                            currentReference == .main
-                                ? AppTheme.ColorToken.mainEventMarker
-                                : AppTheme.ColorToken.accent
-                        )
-                        .frame(width: 6, height: 20)
-                        .overlay {
-                            Capsule()
-                                .stroke(.white.opacity(0.95), lineWidth: 1.5)
-                        }
-                        .shadow(color: .black.opacity(0.34), radius: 1, y: 1)
-                        .position(
-                            x: proxy.size.width - markerTrailingInset - (markerLaneWidth / 2),
-                            y: markerPosition(for: currentIndex, height: proxy.size.height)
-                        )
+                    ZStack(alignment: .trailing) {
+                        Capsule()
+                            .fill(Color.primary.opacity(0.22))
+                            .frame(width: 2)
+                            .padding(.vertical, verticalInset)
+                            .offset(x: -9)
+
+                        Capsule()
+                            .fill(Color.primary)
+                            .frame(width: 18, height: 4)
+                            .position(
+                                x: indexLaneWidth - 9,
+                                y: markerPosition(for: currentIndex, height: proxy.size.height)
+                            )
+                    }
+                    .frame(width: indexLaneWidth, height: proxy.size.height, alignment: .trailing)
+                    .padding(.trailing, indexTrailingInset)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -819,17 +777,17 @@ private struct EventDateScrubber: View {
         .overlay(alignment: .leading) {
             if let previewIndex, references.indices.contains(previewIndex) {
                 let reference = references[previewIndex]
-                VStack(alignment: .trailing) {
+                VStack(alignment: .leading) {
                     Text(date(reference), format: .dateTime.month(.abbreviated).day().year())
                         .font(.caption.bold())
                         .lineLimit(1)
                         .minimumScaleFactor(0.9)
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
-                .frame(width: 140, alignment: .trailing)
-                .background(.black.opacity(0.78), in: Capsule())
+                .frame(width: 140, alignment: .leading)
+                .background(.regularMaterial, in: Capsule())
                 .offset(x: -148)
                 .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .trailing)))
                 .allowsHitTesting(false)

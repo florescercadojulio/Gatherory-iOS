@@ -16,6 +16,7 @@ struct EventInvitationScreen: View {
     @State private var selectedChild: TimelineItem?
     @State private var selectedMomentPhotos: [PhotosPickerItem] = []
     @State private var isPickingMusic = false
+    @State private var isShowingAttendees = false
     @State private var playlistReceivingSongsID: UUID?
     @State private var pickedSongs: [Song] = []
     @State private var weather = EventWeatherModel()
@@ -23,12 +24,12 @@ struct EventInvitationScreen: View {
 
     let reference: EventReference
 
+    @MainActor
     private var presentation: EventPresentation? {
         switch reference {
         case .main:
-            let hosts = workspace.members
-                .filter { $0.participantRole == .host }
-                .map { EventPersonPresentation($0) }
+            let attendees = workspace.participants(for: .main)
+                .map(EventPersonPresentation.init)
 
             return EventPresentation(
                 title: workspace.title,
@@ -47,10 +48,9 @@ struct EventInvitationScreen: View {
                 purpose: nil,
                 statusTitle: workspace.currentMainEventStatus.title,
                 statusSymbol: workspace.currentMainEventStatus.symbol,
-                peopleLabel: "Hosted By",
-                people: hosts.isEmpty
-                    ? [EventPersonPresentation(name: "Your hosts", id: "main-hosts")]
-                    : hosts,
+                peopleLabel: "Who's Coming",
+                people: attendees,
+                showsAttendeeList: true,
                 response: workspace.mainEventResponse,
                 permitsResponse: !workspace.currentMainEventStatus.isReadOnly,
                 note: workspace.eventMessage,
@@ -62,15 +62,8 @@ struct EventInvitationScreen: View {
 
         case .subevent(let id):
             guard let item = workspace.timeline.first(where: { $0.id == id }) else { return nil }
-            let participantIDs = Set(item.participantIDs)
-            let participants = workspace.members
-                .filter {
-                    guard participantIDs.contains($0.id) else { return false }
-                    return item.purpose == .eventExperience
-                        ? $0.participantRole == .host
-                        : $0.participantRole != .guest
-                }
-                .map { EventPersonPresentation($0) }
+            let attendees = workspace.participants(for: .subevent(id))
+                .map(EventPersonPresentation.init)
 
             return EventPresentation(
                 title: item.title,
@@ -89,15 +82,9 @@ struct EventInvitationScreen: View {
                 purpose: item.purpose,
                 statusTitle: item.status.title,
                 statusSymbol: item.status.symbol,
-                peopleLabel: item.purpose == .eventExperience ? "Hosted By" : "Planning Team",
-                people: participants.isEmpty
-                    ? [
-                        EventPersonPresentation(
-                            name: item.purpose == .eventExperience ? "Your hosts" : "Planning team",
-                            id: "\(item.id.uuidString)-participants"
-                        )
-                    ]
-                    : participants,
+                peopleLabel: "Who's Coming",
+                people: attendees,
+                showsAttendeeList: true,
                 response: item.response,
                 permitsResponse: item.status != .archived,
                 note: item.eventDescription,
@@ -135,6 +122,7 @@ struct EventInvitationScreen: View {
                         id: "\(idea.id.uuidString)-submitter"
                     )
                 ],
+                showsAttendeeList: false,
                 response: nil,
                 permitsResponse: false,
                 note: idea.note,
@@ -196,6 +184,16 @@ struct EventInvitationScreen: View {
         .background(.black)
         .navigationDestination(item: $selectedChild) { item in
             TimelineEventReadOnlyView(item: item, transitionNamespace: childTransition)
+        }
+        .sheet(isPresented: $isShowingAttendees) {
+            NavigationStack {
+                EventAttendeeListView(
+                    eventTitle: presentation?.title ?? "Event",
+                    people: presentation?.people ?? []
+                )
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .task(id: weatherRequestID) {
             guard let presentation, let startsAt = presentation.startsAt else { return }
@@ -283,7 +281,7 @@ struct EventInvitationScreen: View {
 
     private func information(_ event: EventPresentation) -> some View {
         LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
-            hostCard(event)
+            peopleCard(event)
             timingCard(event)
 
             if let location = event.location {
@@ -333,23 +331,97 @@ struct EventInvitationScreen: View {
         .appImageOverlayAppearance()
     }
 
-    private func hostCard(_ event: EventPresentation) -> some View {
-        EventInvitationFeatureCard {
-            VStack(spacing: AppTheme.Spacing.standard) {
-                Text(event.peopleLabel)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.68))
-
-                EventPeopleBubbles(people: event.people)
-
-                Text(event.people.map(\.name).formatted())
-                    .font(.title3.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+    @ViewBuilder
+    private func peopleCard(_ event: EventPresentation) -> some View {
+        if event.showsAttendeeList {
+            EventInvitationFeatureCard(contentPadding: 0) {
+                Button {
+                    guard !event.people.isEmpty else { return }
+                    isShowingAttendees = true
+                } label: {
+                    attendeeCardContent(event)
+                }
+                .buttonStyle(.plain)
+                .disabled(event.people.isEmpty)
+                .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
+                .accessibilityLabel("Who's coming")
+                .accessibilityValue(attendeeAccessibilitySummary(for: event.people))
+                .accessibilityHint(event.people.isEmpty ? "No attendees have been added yet." : "Opens the attendee list.")
             }
-            .frame(maxWidth: .infinity)
-            .accessibilityElement(children: .combine)
+        } else {
+            EventInvitationFeatureCard {
+                VStack(spacing: AppTheme.Spacing.standard) {
+                    Text(event.peopleLabel)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.68))
+
+                    EventPeopleBubbles(people: event.people)
+
+                    Text(event.people.map(\.name).formatted())
+                        .font(.title3.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
+            }
         }
+    }
+
+    @ViewBuilder
+    private func attendeeCardContent(_ event: EventPresentation) -> some View {
+        let displayedPeople = attendeeBubbles(for: event.people)
+
+        VStack(spacing: AppTheme.Spacing.standard) {
+            Text(event.peopleLabel)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.68))
+
+            if displayedPeople.isEmpty {
+                Image(systemName: "person.3")
+                    .font(.system(size: 38, weight: .light))
+                    .foregroundStyle(.white.opacity(0.74))
+                    .frame(height: 42)
+                    .accessibilityHidden(true)
+
+                Text("No one invited yet")
+                    .font(.title3.weight(.semibold))
+            } else {
+                EventPeopleBubbles(people: displayedPeople)
+
+                Text(attendeeSummary(for: event.people))
+                    .font(.title3.weight(.semibold))
+            }
+
+            if !event.people.isEmpty {
+                Label("View attendees", systemImage: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .labelStyle(.titleAndIcon)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(AppTheme.Spacing.spacious)
+        .frame(maxWidth: .infinity)
+        .multilineTextAlignment(.center)
+    }
+
+    private func attendeeBubbles(for people: [EventPersonPresentation]) -> [EventPersonPresentation] {
+        let confirmedPeople = people.filter { $0.member?.attendance == .going }
+        return confirmedPeople.isEmpty ? people : confirmedPeople
+    }
+
+    private func attendeeSummary(for people: [EventPersonPresentation]) -> String {
+        let confirmedCount = people.filter { $0.member?.attendance == .going }.count
+        if confirmedCount > 0 {
+            return confirmedCount == 1 ? "1 person going" : "\(confirmedCount) people going"
+        }
+        return people.count == 1 ? "1 person invited" : "\(people.count) people invited"
+    }
+
+    private func attendeeAccessibilitySummary(for people: [EventPersonPresentation]) -> String {
+        guard !people.isEmpty else { return "No attendees" }
+        return attendeeSummary(for: people)
     }
 
     private func timingCard(_ event: EventPresentation) -> some View {
@@ -833,6 +905,7 @@ private struct EventPresentation {
     let statusSymbol: String
     let peopleLabel: String
     let people: [EventPersonPresentation]
+    let showsAttendeeList: Bool
     let response: EventResponse?
     let permitsResponse: Bool
     let note: String
@@ -990,6 +1063,142 @@ private struct EventPeopleBubbles: View {
 
     private func bubbleColor(at index: Int) -> Color {
         AppTheme.ColorToken.avatar(index).opacity(0.88)
+    }
+}
+
+/// Keeps the invitation itself quiet while making each person's role and RSVP
+/// available at the point a guest chooses to see the full attendee list.
+private struct EventAttendeeListView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.appContentColorScheme) private var appContentColorScheme
+
+    let eventTitle: String
+    let people: [EventPersonPresentation]
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(people) { person in
+                    attendeeRow(person)
+                        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(accessibilityDescription(for: person))
+                }
+            } header: {
+                Text(eventTitle)
+            } footer: {
+                Text("Attendance reflects each person's response for this event.")
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.ColorToken.background)
+        .navigationTitle("Who's Coming")
+        .navigationBarTitleDisplayMode(.inline)
+        .appClearNavigationBar()
+        // The invitation deliberately forces a dark appearance over its artwork.
+        // This utility sheet instead follows the saved app appearance at every detent.
+        .environment(\.colorScheme, appContentColorScheme)
+        .preferredColorScheme(appContentColorScheme)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func attendeeRow(_ person: EventPersonPresentation) -> some View {
+        let role = person.member?.participantRole.title ?? "Guest"
+        let attendance = person.member?.attendance ?? .invited
+
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                HStack(spacing: AppTheme.Spacing.standard) {
+                    avatar(for: person)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(person.name)
+                            .font(.body.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(role)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                attendanceLabel(attendance)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        } else {
+            HStack(spacing: AppTheme.Spacing.standard) {
+                avatar(for: person)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(person.name)
+                        .font(.body.weight(.semibold))
+                        .lineLimit(2)
+                    Text(role)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: AppTheme.Spacing.compact)
+                attendanceLabel(attendance)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func avatar(for person: EventPersonPresentation) -> some View {
+        if let member = person.member {
+            ParticipantAvatarView(member: member, size: 48)
+        } else {
+            Text(initials(for: person.name))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
+                .frame(width: 48, height: 48)
+                .background(AppTheme.ColorToken.accent, in: Circle())
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func attendanceLabel(_ attendance: AttendanceStatus) -> some View {
+        Label(attendance.title, systemImage: attendanceSymbol(for: attendance))
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(attendanceColor(for: attendance))
+            .lineLimit(1)
+    }
+
+    private func attendanceSymbol(for attendance: AttendanceStatus) -> String {
+        switch attendance {
+        case .invited: "envelope.fill"
+        case .going: "checkmark.circle.fill"
+        case .maybe: "questionmark.circle.fill"
+        case .declined: "xmark.circle.fill"
+        }
+    }
+
+    private func attendanceColor(for attendance: AttendanceStatus) -> Color {
+        switch attendance {
+        case .invited: .secondary
+        case .going: .green
+        case .maybe: .orange
+        case .declined: .red
+        }
+    }
+
+    private func accessibilityDescription(for person: EventPersonPresentation) -> String {
+        let role = person.member?.participantRole.title ?? "Guest"
+        let attendance = (person.member?.attendance ?? .invited).title
+        return "\(person.name), \(role), \(attendance)"
+    }
+
+    private func initials(for name: String) -> String {
+        String(name.split(separator: " ").prefix(2).compactMap(\.first)).uppercased()
     }
 }
 

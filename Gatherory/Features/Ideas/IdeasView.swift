@@ -255,7 +255,7 @@ private struct IdeaCollectionCard: View {
             return min(max(image.size.width / image.size.height, 0.72), 1.35)
         }
 
-        if idea.musicTrack?.artworkURL != nil {
+        if idea.musicTrack != nil {
             return 1
         }
 

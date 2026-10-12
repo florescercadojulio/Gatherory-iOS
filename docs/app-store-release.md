@@ -40,7 +40,10 @@ Create a dedicated production account with these properties:
 - It does not expire during review and does not require an employee to approve
   a login.
 - It does not require SMS, email, passkey, or other second-factor interaction.
-- It starts with either an empty workspace list or clearly labeled review data.
+- It opens directly into a clearly labeled, populated review workspace. The
+  workspace includes a main event, sub-events, people, ideas, decisions,
+  budget data, a shared playlist, and image-backed content so reviewers can
+  inspect the product without first creating setup data.
 - It can create and edit workspaces, events, ideas, costs, participants, and
   shared-album entries.
 - If different roles expose different behavior, provide credentials for every
@@ -63,19 +66,17 @@ Run this exact walkthrough against the archived Release build before copying it
 into App Store Connect.
 
 1. Launch Gatherory and sign in with the review account.
-2. If the account is empty, complete onboarding and create a workspace with an
-   event name, date, and optional budget. Location is optional.
-3. Open the workspace. Home shows the main event and provides access to its
-   invitation-style details.
-4. Add a sub-event from Home or Timeline. Add a location to exercise MapKit and,
+2. Open the preloaded review workspace. Home shows the main event and provides
+   access to its invitation-style details.
+3. Add a sub-event from Home or Timeline. Add a location to exercise MapKit and,
    when the date is inside WeatherKit’s forecast range, weather.
-5. In Ideas, add an attire or food idea. In Decide, approve it and confirm the
+4. In Ideas, add an attire or food idea. In Decide, approve it and confirm the
    decision is reflected in the correct event context.
-6. In Insights, add a cost and verify it rolls up against the workspace budget.
-7. Open an event’s shared album and add a photo if Photos access is available.
+5. In Insights, add a cost and verify it rolls up against the workspace budget.
+6. Open an event’s shared album and add a photo if Photos access is available.
    Photo persistence is currently local; do not use this step to claim cross-device
    media sync until the S3 transfer path is connected.
-8. Return to the workspace browser, background or terminate the app, relaunch,
+7. Return to the workspace browser, background or terminate the app, relaunch,
    and confirm the workspace, events, ideas, costs, and image remain.
 
 Permission prompts are contextual:
@@ -96,9 +97,10 @@ Replace every bracketed value before submitting.
 
 ```text
 Gatherory is an event-planning workspace for hosts, collaborators, and guests.
-The reviewed build lets people create a main event, organize direct sub-events,
-collect and decide on ideas, manage participants, track budgets and costs, and
-attach event photos.
+The review account opens directly into a populated wedding workspace so that
+all core flows are available immediately. The reviewed build lets people create
+a main event, organize direct sub-events, collect and decide on ideas, manage
+participants, track budgets and costs, and attach event photos.
 
 Review account
 Email: [REVIEW ACCOUNT EMAIL]
@@ -106,12 +108,17 @@ Password: [REVIEW ACCOUNT PASSWORD]
 [ADD OTHER ROLE CREDENTIALS OR DELETE THIS LINE]
 
 Suggested review path
-1. Sign in and open [REVIEW WORKSPACE NAME], or create a workspace.
+1. Sign in and open [REVIEW WORKSPACE NAME].
 2. Open the main event on Home to view its invitation-style details.
 3. Add or edit a sub-event from Home/Timeline.
 4. Add an idea, then approve it in Decide.
 5. Open Insights to review the budget and add a cost.
 6. Background and relaunch the app to confirm local persistence.
+
+First-run guidance
+On a clean installation, brief contextual primers appear as reviewers visit
+the relevant planning areas. These primers do not block access to the
+preloaded review workspace.
 
 External Apple services
 - MapKit and Core Location: event locations and optional current location.

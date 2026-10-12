@@ -84,6 +84,26 @@ struct GatheroryTests {
         #expect(playlist.musicTrack?.artworkURL == firstArtworkURL)
     }
 
+    @Test("Library-only MusicKit artwork falls back to catalog recovery")
+    func musicKitArtworkRequiresRecovery() throws {
+        let libraryArtworkURL = try #require(
+            URL(string: "musicKit://artwork/library/track/600x600")
+        )
+        let track = MusicTrack(
+            providerID: .appleMusic,
+            catalogID: "i.4YBN1YWf2a62bq9",
+            title: "BABYDOLL (Speed)",
+            artistName: "Ari Abdul",
+            albumTitle: "BABYDOLL (Speed) - Single",
+            artworkURL: libraryArtworkURL,
+            externalURL: nil,
+            isrc: nil,
+            duration: 156.651
+        )
+
+        #expect(track.displayArtworkURL == nil)
+    }
+
     @Test("Money entry groups large values while preserving their numeric value")
     func moneyEntryFormatting() {
         let locale = Locale(identifier: "en_US")

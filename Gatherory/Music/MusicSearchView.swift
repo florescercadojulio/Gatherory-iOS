@@ -225,7 +225,7 @@ struct MusicTrackArtwork: View {
     @State private var recoveredArtworkURL: URL?
 
     private var artworkURL: URL? {
-        track.artworkURL ?? recoveredArtworkURL
+        track.displayArtworkURL ?? recoveredArtworkURL
     }
 
     var body: some View {
@@ -249,7 +249,7 @@ struct MusicTrackArtwork: View {
             // not, however, such as when MusicKit returns a lightweight picker
             // result or an older device persisted the playlist before artwork
             // was available. Recover it from the durable catalog ID.
-            guard track.artworkURL == nil else { return }
+            guard track.displayArtworkURL == nil else { return }
             recoveredArtworkURL = await musicCatalog.artworkURL(for: track)
         }
         .accessibilityHidden(true)
@@ -279,7 +279,7 @@ struct MusicPlaylistArtwork: View {
     }
 
     private var artworkURL: URL? {
-        firstTrack?.artworkURL ?? recoveredArtworkURL
+        firstTrack?.displayArtworkURL ?? recoveredArtworkURL
     }
 
     var body: some View {
@@ -296,7 +296,7 @@ struct MusicPlaylistArtwork: View {
         .task(id: firstTrack?.id) {
             guard imageData == nil,
                   let firstTrack,
-                  firstTrack.artworkURL == nil else {
+                  firstTrack.displayArtworkURL == nil else {
                 return
             }
             recoveredArtworkURL = await musicCatalog.artworkURL(for: firstTrack)

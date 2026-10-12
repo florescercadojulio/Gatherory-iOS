@@ -265,6 +265,10 @@ enum AppAppearance: String, CaseIterable, Identifiable {
         case .dark: .dark
         }
     }
+
+    func resolvedColorScheme(systemColorScheme: ColorScheme) -> ColorScheme {
+        colorScheme ?? systemColorScheme
+    }
 }
 
 /// The person's app-wide color preference. This belongs to their account
@@ -309,10 +313,21 @@ private struct AppColorThemeChoiceKey: EnvironmentKey {
     static let defaultValue = AppColorThemeChoice.gatheroryBlue
 }
 
+private struct AppContentColorSchemeKey: EnvironmentKey {
+    static let defaultValue = ColorScheme.light
+}
+
 extension EnvironmentValues {
     var appColorThemeChoice: AppColorThemeChoice {
         get { self[AppColorThemeChoiceKey.self] }
         set { self[AppColorThemeChoiceKey.self] = newValue }
+    }
+
+    /// The saved app appearance before individual photo-led views introduce
+    /// local readability overrides such as a dark image overlay.
+    var appContentColorScheme: ColorScheme {
+        get { self[AppContentColorSchemeKey.self] }
+        set { self[AppContentColorSchemeKey.self] = newValue }
     }
 }
 

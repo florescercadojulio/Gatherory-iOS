@@ -61,6 +61,19 @@ struct MusicTrack: Identifiable, Codable, Hashable, Sendable {
 }
 
 extension MusicTrack {
+    /// Artwork returned for a library item can use MusicKit's private URL
+    /// scheme. `AsyncImage` can only load web URLs, so keep that reference as
+    /// metadata and recover a catalog image before rendering it.
+    var displayArtworkURL: URL? {
+        guard let artworkURL,
+              let scheme = artworkURL.scheme?.lowercased(),
+              scheme == "https" || scheme == "http" else {
+            return nil
+        }
+
+        return artworkURL
+    }
+
     init(appleMusicSong song: Song) {
         self.init(
             providerID: .appleMusic,
@@ -68,7 +81,13 @@ extension MusicTrack {
             title: song.title,
             artistName: song.artistName,
             albumTitle: song.albumTitle,
-            artworkURL: song.artwork?.url(width: 600, height: 600),
+            artworkURL: song.artwork?.url(width: 600, height: 600).flatMap { url in
+                guard let scheme = url.scheme?.lowercased(),
+                      scheme == "https" || scheme == "http" else {
+                    return nil
+                }
+                return url
+            },
             previewURL: song.previewAssets?.compactMap(\.url).first,
             externalURL: song.url,
             isrc: song.isrc,
@@ -125,7 +144,16 @@ struct AppleMusicCatalogProvider: MusicCatalogProviding {
 
     func artworkURL(for track: MusicTrack) async -> URL? {
         guard track.providerID == id else { return nil }
-        return await AppleMusicArtworkLookup.shared.artworkURL(for: track.catalogID)
+        if let artworkURL = track.displayArtworkURL {
+            return artworkURL
+        }
+
+        return await AppleMusicArtworkLookup.shared.artworkURL(
+            catalogID: track.catalogID,
+            title: track.title,
+            artistName: track.artistName,
+            cacheKey: "\(track.providerID.rawValue):\(track.catalogID)"
+        )
     }
 }
 
@@ -137,25 +165,82 @@ private actor AppleMusicArtworkLookup {
 
     private var cachedURLs: [String: URL?] = [:]
 
-    func artworkURL(for catalogID: String) async -> URL? {
-        if let cachedURL = cachedURLs[catalogID] {
+    func artworkURL(
+        catalogID: String,
+        title: String,
+        artistName: String,
+        cacheKey: String
+    ) async -> URL? {
+        if let cachedURL = cachedURLs[cacheKey] {
             return cachedURL
         }
 
+        // Catalog IDs can be resolved directly. Library IDs (for example
+        // `i.…`) belong to the signed-in person's library, so try that lookup
+        // first and fall back to the public catalog using the durable song
+        // metadata. The catalog result has an HTTPS artwork URL that every
+        // participant can render.
         let artworkURL: URL?
+        if let catalogArtworkURL = await catalogArtworkURL(for: catalogID) {
+            artworkURL = catalogArtworkURL
+        } else if let libraryArtworkURL = await libraryArtworkURL(for: catalogID) {
+            artworkURL = libraryArtworkURL
+        } else {
+            artworkURL = await searchedArtworkURL(title: title, artistName: artistName)
+        }
+
+        cachedURLs[cacheKey] = artworkURL
+        return artworkURL
+    }
+
+    private func catalogArtworkURL(for catalogID: String) async -> URL? {
         do {
             let request = MusicCatalogResourceRequest<Song>(
                 matching: \.id,
                 equalTo: MusicItemID(catalogID)
             )
             let response = try await request.response()
-            artworkURL = response.items.first?.artwork?.url(width: 900, height: 900)
+            return response.items.first?.artwork?.url(width: 900, height: 900).flatMap(webArtworkURL)
         } catch {
-            artworkURL = nil
+            return nil
         }
+    }
 
-        cachedURLs[catalogID] = artworkURL
-        return artworkURL
+    private func libraryArtworkURL(for libraryID: String) async -> URL? {
+        do {
+            var request = MusicLibraryRequest<Song>()
+            request.filter(matching: \.id, equalTo: MusicItemID(libraryID))
+            let response = try await request.response()
+            return response.items.first?.artwork?.url(width: 900, height: 900).flatMap(webArtworkURL)
+        } catch {
+            return nil
+        }
+    }
+
+    private func searchedArtworkURL(title: String, artistName: String) async -> URL? {
+        do {
+            var request = MusicCatalogSearchRequest(
+                term: "\(title) \(artistName)",
+                types: [Song.self]
+            )
+            request.limit = 10
+            let response = try await request.response()
+            let song = response.songs.first(where: {
+                $0.title.caseInsensitiveCompare(title) == .orderedSame
+                    && $0.artistName.caseInsensitiveCompare(artistName) == .orderedSame
+            }) ?? response.songs.first
+            return song?.artwork?.url(width: 900, height: 900).flatMap(webArtworkURL)
+        } catch {
+            return nil
+        }
+    }
+
+    private func webArtworkURL(_ url: URL) -> URL? {
+        guard let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http" else {
+            return nil
+        }
+        return url
     }
 }
 

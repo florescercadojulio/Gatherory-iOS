@@ -13,6 +13,7 @@ import SwiftData
 @MainActor
 struct GatheroryApp: App {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var systemColorScheme
     @State private var authentication: AuthenticationSession
     @State private var workspaceLibrary: WorkspaceLibrary
     @State private var cloudSync: WorkspaceCloudSyncController
@@ -47,6 +48,10 @@ struct GatheroryApp: App {
         AppColorThemeChoice(rawValue: colorTheme) ?? .gatheroryBlue
     }
 
+    private var selectedAppearance: AppAppearance {
+        AppAppearance(rawValue: appearance) ?? .system
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {
@@ -63,7 +68,11 @@ struct GatheroryApp: App {
             .environment(musicPreviewPlayer)
             .environment(persistence)
             .environment(cloudSync)
-            .appUserAppearance(AppAppearance(rawValue: appearance) ?? .system)
+            .appUserAppearance(selectedAppearance)
+            .environment(
+                \.appContentColorScheme,
+                selectedAppearance.resolvedColorScheme(systemColorScheme: systemColorScheme)
+            )
             .appColorTheme(selectedColorTheme)
             .modelContainer(persistence.container)
             .task {
