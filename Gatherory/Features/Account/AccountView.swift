@@ -11,6 +11,7 @@ struct AccountView: View {
     @AppStorage("planningNotifications") private var notificationsEnabled = true
     @State private var isEditingProfile = false
     @State private var isDeletingAccount = false
+    @State private var weatherAttribution: EventWeatherAttribution?
 
     private var selectedAppearance: AppAppearance {
         AppAppearance(rawValue: appearanceRawValue) ?? .system
@@ -210,6 +211,27 @@ struct AccountView: View {
             }
             .listRowBackground(AppTheme.ColorToken.surface)
 
+            Section("Privacy & Information") {
+                AccountExternalLink(
+                    title: "How Your Data Is Managed",
+                    systemImage: "hand.raised",
+                    destination: GatheroryLegalDestination.privacyPolicy
+                )
+
+                AccountExternalLink(
+                    title: "Terms of Use",
+                    systemImage: "doc.text",
+                    destination: GatheroryLegalDestination.termsOfUse
+                )
+
+                AccountExternalLink(
+                    title: "Privacy Questions",
+                    systemImage: "envelope",
+                    destination: GatheroryLegalDestination.privacyQuestions
+                )
+            }
+            .listRowBackground(AppTheme.ColorToken.surface)
+
             Section("Account") {
                 Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right") {
                     dismiss()
@@ -221,6 +243,19 @@ struct AccountView: View {
                 }
             }
             .listRowBackground(AppTheme.ColorToken.surface)
+
+            Section {
+                AccountWeatherAttributionFooter(attribution: weatherAttribution)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(
+                        EdgeInsets(
+                            top: AppTheme.Spacing.standard,
+                            leading: AppTheme.Spacing.standard,
+                            bottom: AppTheme.Spacing.compact,
+                            trailing: AppTheme.Spacing.standard
+                        )
+                    )
+            }
         }
         .formStyle(.grouped)
         .contentMargins(.top, AppTheme.Spacing.compact, for: .scrollContent)
@@ -232,6 +267,9 @@ struct AccountView: View {
         .appClearNavigationBar()
         .appUserAppearance(selectedAppearance)
         .appColorTheme(selectedColorTheme)
+        .task {
+            weatherAttribution = try? await WeatherKitEventWeatherProvider().attribution()
+        }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") {
@@ -260,6 +298,78 @@ struct AccountView: View {
             .presentationDragIndicator(.visible)
             .interactiveDismissDisabled(authentication.isProcessing)
         }
+    }
+}
+
+enum GatheroryLegalDestination {
+    static let privacyPolicy = URL(string: "https://gatherory.com/privacy")!
+    static let termsOfUse = URL(string: "https://gatherory.com/terms")!
+    static let privacyQuestions = URL(string: "mailto:privacy@gatherory.com")!
+}
+
+private struct AccountExternalLink: View {
+    let title: String
+    let systemImage: String
+    let destination: URL
+
+    var body: some View {
+        Link(destination: destination) {
+            Label(title, systemImage: systemImage)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityHint(destination.isFileURL ? "Opens a document" : "Opens outside Gatherory")
+    }
+}
+
+private struct AccountWeatherAttributionFooter: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let attribution: EventWeatherAttribution?
+
+    var body: some View {
+        Group {
+            if let attribution {
+                Link(destination: attribution.legalPageURL) {
+                    HStack(spacing: 4) {
+                        Text("Weather data provided by")
+                        weatherMark(for: attribution)
+                        Text("Learn More")
+                            .foregroundStyle(AppTheme.ColorToken.accent)
+                    }
+                    .font(.footnote)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Weather data attribution")
+                .accessibilityHint("Opens Apple Weather data sources")
+            } else {
+                Text("Weather data provided by Apple Weather")
+                    .font(.footnote)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .foregroundStyle(AppTheme.ColorToken.textSecondary)
+    }
+
+    @ViewBuilder
+    private func weatherMark(for attribution: EventWeatherAttribution) -> some View {
+        AsyncImage(
+            url: colorScheme == .light
+                ? attribution.combinedMarkLightURL
+                : attribution.combinedMarkDarkURL
+        ) { phase in
+            if let image = phase.image {
+                image
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Text(attribution.serviceName)
+                    .font(.caption2)
+            }
+        }
+        .frame(width: 92, height: 22, alignment: .leading)
+        .accessibilityHidden(true)
     }
 }
 

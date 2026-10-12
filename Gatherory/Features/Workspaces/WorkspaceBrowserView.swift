@@ -2,8 +2,10 @@ import SwiftUI
 
 struct WorkspaceBrowserView: View {
     @Environment(WorkspaceLibrary.self) private var library
+    @Environment(\.currentUserAccount) private var currentUserAccount
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isAddingWorkspace = false
+    @State private var workspaceFilter: WorkspaceFilter = .all
 
     private var columns: [GridItem] {
         if dynamicTypeSize.isAccessibilitySize {
@@ -13,14 +15,23 @@ struct WorkspaceBrowserView: View {
         return [GridItem(.adaptive(minimum: 300, maximum: 520), spacing: AppTheme.Spacing.standard)]
     }
 
+    private var filteredWorkspaces: [WeddingWorkspace] {
+        workspaceFilter.workspaces(
+            from: library.workspaces,
+            for: currentUserAccount
+        )
+    }
+
     var body: some View {
         Group {
             if library.workspaces.isEmpty {
                 emptyState
+            } else if filteredWorkspaces.isEmpty {
+                filteredEmptyState
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: AppTheme.Spacing.standard) {
-                        ForEach(library.workspaces, id: \.mainEventID) { workspace in
+                        ForEach(filteredWorkspaces, id: \.mainEventID) { workspace in
                             Button {
                                 library.open(workspace)
                             } label: {
@@ -42,6 +53,10 @@ struct WorkspaceBrowserView: View {
         .navigationTitle("Workspaces")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                workspaceFilterMenu
+            }
+
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Add workspace", systemImage: "plus") {
                     isAddingWorkspace = true
@@ -73,6 +88,179 @@ struct WorkspaceBrowserView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(AppTheme.Spacing.spacious)
+    }
+
+    private var filteredEmptyState: some View {
+        ContentUnavailableView {
+            Label(workspaceFilter.emptyTitle, systemImage: workspaceFilter.symbol)
+        } description: {
+            Text(workspaceFilter.emptyDescription)
+        } actions: {
+            Button("Show All Workspaces") {
+                workspaceFilter = .all
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(AppTheme.Spacing.spacious)
+    }
+
+    private var workspaceFilterMenu: some View {
+        Menu {
+            filterActions(for: WorkspaceFilter.primaryFilters)
+
+            Divider()
+
+            filterActions(for: WorkspaceFilter.participationFilters)
+        } label: {
+            Label(workspaceFilter.title, systemImage: workspaceFilter.symbol)
+                .labelStyle(.titleAndIcon)
+                .lineLimit(1)
+                .frame(minHeight: AppTheme.Layout.minimumTouchTarget, alignment: .leading)
+        }
+        .accessibilityLabel("Filter workspaces")
+        .accessibilityValue("\(workspaceFilter.title), \(filteredWorkspaces.count) workspaces")
+        .accessibilityHint("Shows workspaces matching the selected filter")
+    }
+
+    @ViewBuilder
+    private func filterActions(for filters: [WorkspaceFilter]) -> some View {
+        ForEach(filters) { filter in
+            Button {
+                workspaceFilter = filter
+            } label: {
+                Label {
+                    Text("\(filter.title) (\(filter.workspaces(from: library.workspaces, for: currentUserAccount).count))")
+                } icon: {
+                    Image(systemName: workspaceFilter == filter ? "checkmark" : filter.symbol)
+                }
+            }
+        }
+    }
+}
+
+/// The high-level ways someone can browse their workspaces. These scopes are
+/// intentionally derived rather than persisted: a workspace's role and date
+/// can change as people RSVP or the event moves through its lifecycle.
+enum WorkspaceFilter: String, CaseIterable, Identifiable {
+    case upcoming
+    case all
+    case past
+    case drafts
+    case hosting
+    case attending
+
+    static let primaryFilters: [WorkspaceFilter] = [.upcoming, .all, .past, .drafts]
+    static let participationFilters: [WorkspaceFilter] = [.hosting, .attending]
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .upcoming: "Upcoming"
+        case .all: "All Workspaces"
+        case .past: "Past Events"
+        case .drafts: "Drafts"
+        case .hosting: "Hosting"
+        case .attending: "Attending"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .upcoming: "calendar"
+        case .all: "square.grid.2x2"
+        case .past: "arrow.counterclockwise"
+        case .drafts: "pencil"
+        case .hosting: "crown.fill"
+        case .attending: "checkmark.circle"
+        }
+    }
+
+    var emptyTitle: String {
+        switch self {
+        case .all: "No Workspaces"
+        case .upcoming: "No Upcoming Workspaces"
+        case .past: "No Past Events"
+        case .drafts: "No Drafts"
+        case .hosting: "No Hosted Workspaces"
+        case .attending: "No Events You're Attending"
+        }
+    }
+
+    var emptyDescription: String {
+        switch self {
+        case .all:
+            "Create a workspace to start shaping an event with your people."
+        case .upcoming:
+            "Workspaces with a scheduled event will appear here."
+        case .past:
+            "Finished celebrations stay here as read-only memories."
+        case .drafts:
+            "Workspaces that are still being planned will appear here."
+        case .hosting:
+            "Workspaces where you're a host will appear here."
+        case .attending:
+            "Events you've been invited to or may attend will appear here."
+        }
+    }
+
+    func workspaces(
+        from workspaces: [WeddingWorkspace],
+        for account: UserAccount?,
+        now: Date = .now,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> [WeddingWorkspace] {
+        workspaces.filter { workspace in
+            includes(workspace, account: account, now: now, calendar: calendar)
+        }
+    }
+
+    func includes(
+        _ workspace: WeddingWorkspace,
+        account: UserAccount?,
+        now: Date = .now,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .drafts:
+            return workspace.currentMainEventStatus == .draft
+        case .upcoming:
+            return workspace.currentMainEventStatus != .draft
+                && workspace.currentMainEventStatus != .finished
+                && calendar.startOfDay(for: workspace.weddingDate)
+                    >= calendar.startOfDay(for: now)
+        case .past:
+            return workspace.currentMainEventStatus == .finished
+                || (
+                    workspace.currentMainEventStatus != .draft
+                        && calendar.startOfDay(for: workspace.weddingDate)
+                            < calendar.startOfDay(for: now)
+                )
+        case .hosting:
+            return member(in: workspace, matching: account)?.participantRole == .host
+        case .attending:
+            guard let member = member(in: workspace, matching: account) else { return false }
+            return member.participantRole != .host
+                && member.attendance != .declined
+        }
+    }
+
+    private func member(
+        in workspace: WeddingWorkspace,
+        matching account: UserAccount?
+    ) -> WeddingMember? {
+        guard let account else { return nil }
+
+        return workspace.participants(for: .main).first { member in
+            member.userID == account.id
+                || (
+                    member.email?.caseInsensitiveCompare(account.email)
+                        == .orderedSame
+                )
+        }
     }
 }
 

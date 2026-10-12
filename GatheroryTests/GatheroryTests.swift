@@ -142,6 +142,22 @@ struct GatheroryTests {
         }
     }
 
+    @Test("Account privacy links use Gatherory's public legal destinations")
+    func accountPrivacyLinksUsePublicLegalDestinations() {
+        #expect(
+            GatheroryLegalDestination.privacyPolicy.absoluteString
+                == "https://gatherory.com/privacy"
+        )
+        #expect(
+            GatheroryLegalDestination.termsOfUse.absoluteString
+                == "https://gatherory.com/terms"
+        )
+        #expect(
+            GatheroryLegalDestination.privacyQuestions.absoluteString
+                == "mailto:privacy@gatherory.com"
+        )
+    }
+
     @Test("The Decide primer waits until the Decide tab is active")
     func decidePrimerPresentationRequiresActiveTab() {
         #expect(
@@ -199,6 +215,108 @@ struct GatheroryTests {
         #expect(emptyLibrary.workspaces.isEmpty)
         #expect(seededLibrary.selectedWorkspace == nil)
         #expect(emptyLibrary.selectedWorkspace == nil)
+    }
+
+    @Test("Workspace filters separate lifecycle and participation scopes")
+    func workspaceFiltersMatchTheSignedInPersonAndEventLifecycle() {
+        let now = Date.now
+        let account = UserAccount(
+            id: "jordan-user",
+            email: "jordan@example.com",
+            displayName: "Jordan Lee",
+            role: .member,
+            authenticationProvider: .password,
+            createdAt: now
+        )
+        let host = WeddingMember(
+            userID: account.id,
+            name: account.displayName,
+            participantRole: .host,
+            initials: "JL",
+            email: account.email,
+            planningPermission: .manage
+        )
+        let attendee = WeddingMember(
+            userID: account.id,
+            name: account.displayName,
+            participantRole: .guest,
+            initials: "JL",
+            attendance: .going,
+            email: account.email,
+            planningPermission: .viewOnly
+        )
+
+        let hostedUpcoming = workspaceFilterFixture(
+            title: "Hosted upcoming",
+            date: now.addingTimeInterval(86_400),
+            status: .ongoing,
+            member: host
+        )
+        let attendedUpcoming = workspaceFilterFixture(
+            title: "Attended upcoming",
+            date: now.addingTimeInterval(172_800),
+            status: .ongoing,
+            member: attendee
+        )
+        let draft = workspaceFilterFixture(
+            title: "Draft",
+            date: now.addingTimeInterval(259_200),
+            status: .draft,
+            member: host
+        )
+        let past = workspaceFilterFixture(
+            title: "Past",
+            date: now.addingTimeInterval(-86_400),
+            status: .finished,
+            member: host
+        )
+        let workspaces = [hostedUpcoming, attendedUpcoming, draft, past]
+
+        #expect(
+            WorkspaceFilter.upcoming.workspaces(from: workspaces, for: account, now: now)
+                .map(\.title)
+                == ["Hosted upcoming", "Attended upcoming"]
+        )
+        #expect(
+            WorkspaceFilter.drafts.workspaces(from: workspaces, for: account, now: now)
+                .map(\.title)
+                == ["Draft"]
+        )
+        #expect(
+            WorkspaceFilter.past.workspaces(from: workspaces, for: account, now: now)
+                .map(\.title)
+                == ["Past"]
+        )
+        #expect(
+            WorkspaceFilter.hosting.workspaces(from: workspaces, for: account, now: now)
+                .map(\.title)
+                == ["Hosted upcoming", "Draft", "Past"]
+        )
+        #expect(
+            WorkspaceFilter.attending.workspaces(from: workspaces, for: account, now: now)
+                .map(\.title)
+                == ["Attended upcoming"]
+        )
+    }
+
+    private func workspaceFilterFixture(
+        title: String,
+        date: Date,
+        status: MainEventStatus,
+        member: WeddingMember
+    ) -> WeddingWorkspace {
+        WeddingWorkspace(
+            title: title,
+            weddingDate: date,
+            venueName: "",
+            location: "",
+            planningMode: .openToIdeas,
+            members: [member],
+            ideas: [],
+            timeline: [],
+            mainEventStatus: status,
+            registry: []
+        )
     }
 
     @Test("Development authentication always includes the planner account")
