@@ -747,10 +747,6 @@ struct EventInvitationScreen: View {
                 Label("Shared Album", systemImage: "photo.on.rectangle.angled")
                     .font(.title3.bold())
 
-                if !workspace.isInvitationProjection {
-                    WorkspaceSaveStatusView(scopeID: workspace.mainEventID, isEditingDraft: false)
-                }
-
                 let visiblePhotos = moments.filter { !imageSafety.isHidden($0) }
                 if visiblePhotos.isEmpty {
                     Image(systemName: "photo.stack")

@@ -15,18 +15,6 @@ enum AppCopy {
         static var leave: String { String(localized: "event.leave", defaultValue: "Leave Event") }
         static var leaveMessage: String { String(localized: "event.leave.message", defaultValue: "You’ll lose access to this invitation. The event and everyone else’s plans stay unchanged. You can join again with a valid invitation.") }
     }
-    enum Save {
-        static var editExplanation: String { String(localized: "save.editExplanation", defaultValue: "Sync status applies to saved changes, not unsaved edits in this form.") }
-        static var local: String { String(localized: "save.local", defaultValue: "Saved on this device") }
-        static var waiting: String { String(localized: "save.waiting", defaultValue: "Saved on device · Waiting to sync") }
-        static var syncing: String { String(localized: "save.syncing", defaultValue: "Syncing changes…") }
-        static var uploading: String { String(localized: "save.uploading", defaultValue: "Uploading photos…") }
-        static var photosWaiting: String { String(localized: "save.photosWaiting", defaultValue: "Saved on device · Photos waiting to upload") }
-        static var upToDate: String { String(localized: "save.upToDate", defaultValue: "Up to date") }
-        static var needsAttention: String { String(localized: "save.needsAttention", defaultValue: "Cloud sync needs attention") }
-        static var localFailure: String { String(localized: "save.localFailure", defaultValue: "Changes could not be saved") }
-        static var recovery: String { String(localized: "save.recovery", defaultValue: "Keep the app installed. Try again when connected, or check Cloud Sync in Account.") }
-    }
     enum Calendar {
         static var add: String { String(localized: "calendar.add", defaultValue: "Add to Calendar") }
         static var copyExplanation: String { String(localized: "calendar.copyExplanation", defaultValue: "Saves a copy. Later changes in Gatherory won’t update your calendar.") }

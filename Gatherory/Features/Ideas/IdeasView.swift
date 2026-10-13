@@ -1990,8 +1990,6 @@ struct IdeaEditorView: View {
 
     private func ideaEditor(for category: IdeaCategory) -> some View {
         Form {
-            Section { WorkspaceSaveStatusView(scopeID: workspace.mainEventID) }
-                .listRowBackground(Color.clear)
             ideaDestinationSection
             selectedCategorySection(for: category)
 

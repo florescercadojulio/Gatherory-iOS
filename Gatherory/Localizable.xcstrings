@@ -7271,8 +7271,18 @@
     },
     "Restore %@" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Restore %@" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Restaurar %@" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurar %@"
+          }
+        }
       }
     },
     "Restore %arg" : {
@@ -7742,6 +7752,7 @@
       }
     },
     "save.editExplanation" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7758,6 +7769,7 @@
       }
     },
     "save.local" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7774,6 +7786,7 @@
       }
     },
     "save.localFailure" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7790,6 +7803,7 @@
       }
     },
     "save.needsAttention" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7806,6 +7820,7 @@
       }
     },
     "save.photosWaiting" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7822,6 +7837,7 @@
       }
     },
     "save.recovery" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7838,6 +7854,7 @@
       }
     },
     "save.syncing" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7854,6 +7871,7 @@
       }
     },
     "save.uploading" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7870,6 +7888,7 @@
       }
     },
     "save.upToDate" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7886,6 +7905,7 @@
       }
     },
     "save.waiting" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

@@ -118,6 +118,38 @@ final class GatheroryUITests: XCTestCase {
     }
 
     @MainActor
+    func testEventEditorDoesNotDuplicateAccountSyncStatus() throws {
+        for appearance in ["Light", "Dark"] {
+            let app = fixtureApplication()
+            app.launchArguments += ["-UseProductionOnboarding", "-AppleLanguages", "(en)", "-AppleInterfaceStyle", appearance]
+            app.launch()
+            let workspace = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Maya & Theo")).firstMatch
+            XCTAssertTrue(workspace.waitForExistence(timeout: 8))
+            workspace.tap()
+            XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 5))
+            let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Maya & Theo")).firstMatch
+            XCTAssertTrue(card.waitForExistence(timeout: 5))
+            card.tap()
+            let actions = app.buttons["Event Actions"]
+            XCTAssertTrue(actions.waitForExistence(timeout: 5))
+            actions.tap()
+            let edit = app.buttons["Edit Event"]
+            XCTAssertTrue(edit.waitForExistence(timeout: 5))
+            edit.tap()
+            XCTAssertTrue(app.navigationBars["Edit Event"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.textFields["Name your event"].isHittable)
+            for copy in ["Sync status applies to saved changes, not unsaved edits in this form.", "Saved on this device", "Up to date", "Cloud sync needs attention"] {
+                XCTAssertFalse(app.staticTexts[copy].exists)
+            }
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Event Editor Without Sync UI — \(appearance)"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testCancellationKeepsInvitationButClosesEditing() throws {
         for appearance in ["Light", "Dark"] {
             let app = fixtureApplication()

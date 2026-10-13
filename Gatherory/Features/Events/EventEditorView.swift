@@ -567,8 +567,6 @@ struct EventEditorView: View {
 
     var body: some View {
         Form {
-            Section { WorkspaceSaveStatusView(scopeID: workspace.mainEventID) }
-                .listRowBackground(Color.clear)
             if !isMainEvent {
                 eventTypeSection
             }
