@@ -436,7 +436,10 @@ private struct DeleteAccountView: View {
                         Text(errorMessage)
                             .foregroundStyle(.red)
                     } else {
-                        Text("You may be asked to sign in again if your current session is no longer recent.")
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("You may be asked to sign in again if your current session is no longer recent.")
+                            Text("If you used Sign in with Apple before this update, you can also remove Gatherory in Settings > your name > Sign in with Apple.")
+                        }
                     }
                 }
                 .listRowBackground(AppTheme.ColorToken.surface)

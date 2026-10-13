@@ -378,6 +378,8 @@ struct AuthenticationView: View {
                 let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
                 let tokenData = credential.identityToken,
                 let identityToken = String(data: tokenData, encoding: .utf8),
+                let codeData = credential.authorizationCode,
+                let authorizationCode = String(data: codeData, encoding: .utf8),
                 let nonce = currentAppleNonce
             else {
                 errorMessage = AuthenticationFailure.invalidServerResponse.localizedDescription
@@ -386,6 +388,7 @@ struct AuthenticationView: View {
 
             let identity = AppleIdentity(
                 identityToken: identityToken,
+                authorizationCode: authorizationCode,
                 nonce: nonce,
                 email: credential.email,
                 givenName: credential.fullName?.givenName,

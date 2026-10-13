@@ -8,6 +8,7 @@ enum RegistrationOutcome: Equatable, Sendable {
 
 struct AppleIdentity: Sendable {
     let identityToken: String
+    let authorizationCode: String
     let nonce: String
     let email: String?
     let givenName: String?
@@ -205,6 +206,22 @@ struct BetterAuthClient: AuthenticationClient {
             )
         )
         try saveToken(from: response)
+        do {
+            guard let token = try tokenStore.read() else {
+                throw AuthenticationFailure.invalidSession
+            }
+            let receipt: AppleRevocationTokenResponse = try await request(
+                path: ["apple-token"],
+                body: AppleAuthorizationCodeRequest(authorizationCode: identity.authorizationCode),
+                token: token
+            )
+            guard receipt.saved else { throw AuthenticationFailure.invalidServerResponse }
+        } catch {
+            // Do not leave an Apple session active without the token needed
+            // to disconnect it if the user later deletes the account.
+            await signOut()
+            throw error
+        }
         return response.user.account(provider: .apple)
     }
 
@@ -348,7 +365,7 @@ struct BetterAuthClient: AuthenticationClient {
             if statusCode == 401 {
                 return .invalidSession
             }
-            return .server(message: response?.message)
+            return .server(message: response?.userMessage ?? response?.message)
         }
     }
 
@@ -396,6 +413,14 @@ private struct SocialSignInRequest: Encodable {
     let requestSignUp: Bool
 }
 
+private struct AppleAuthorizationCodeRequest: Encodable {
+    let authorizationCode: String
+}
+
+private struct AppleRevocationTokenResponse: Decodable {
+    let saved: Bool
+}
+
 private struct EmptyRequest: Encodable {}
 
 private struct SignOutResponse: Decodable {
@@ -439,4 +464,5 @@ private struct BetterAuthUser: Decodable {
 private struct APIErrorResponse: Decodable {
     let code: String?
     let message: String?
+    let userMessage: String?
 }
