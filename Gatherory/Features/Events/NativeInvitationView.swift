@@ -140,6 +140,7 @@ struct GuestEventInvitationView: View {
     @Environment(GuestInvitationStore.self) private var guests
     @Environment(\.dismiss) private var dismiss
     let eventID: UUID
+    @State private var isConfirmingLeave = false
 
     var body: some View {
         NavigationStack {
@@ -155,7 +156,16 @@ struct GuestEventInvitationView: View {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Close", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly)
                         }
-                        ToolbarItem(placement: .primaryAction) { AccountToolbarButton() }
+                        ToolbarItemGroup(placement: .primaryAction) {
+                            if guests.canLeave(eventID: eventID) {
+                                Menu {
+                                    Button(AppCopy.Lifecycle.leave, systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { isConfirmingLeave = true }
+                                } label: { Image(systemName: "ellipsis") }
+                                    .disabled(guests.isResponding)
+                                    .accessibilityLabel(AppCopy.EventRemoval.actions)
+                            }
+                            AccountToolbarButton()
+                        }
                     }
                 } else {
                     ContentUnavailableView("Event unavailable", systemImage: "calendar.badge.exclamationmark")
@@ -174,5 +184,11 @@ struct GuestEventInvitationView: View {
             }
         }
         .appImageDetailAppearance()
+        .confirmationDialog(AppCopy.Lifecycle.leave, isPresented: $isConfirmingLeave, titleVisibility: .visible) {
+            Button(AppCopy.Lifecycle.leave, role: .destructive) {
+                Task { if await guests.leave(eventID: eventID) { dismiss() } }
+            }
+            Button(AppCopy.Common.cancel, role: .cancel) {}
+        } message: { Text(AppCopy.Lifecycle.leaveMessage) }
     }
 }

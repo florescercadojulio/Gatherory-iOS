@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import PostHog
 
 enum AccountOnboardingState: Equatable, Sendable {
     case signedOut
@@ -38,6 +39,13 @@ final class WorkspaceCloudSyncController {
     private(set) var lastError: Error?
     private(set) var lastMediaError: Error?
     private(set) var hasPendingMediaUploads = false
+    private(set) var pendingChangeScopeIDs: Set<UUID> = []
+    private(set) var pendingPhotoScopeIDs: Set<UUID> = []
+    private(set) var confirmedSyncScopeIDs: Set<UUID> = []
+    private(set) var photoAttentionScopeIDs: Set<UUID> = []
+    private(set) var activeSyncScopeID: UUID?
+    private(set) var failedSyncScopeID: UUID?
+    private(set) var cannotReadSaveState = false
     private(set) var lastSuccessfulSyncAt: Date?
     private(set) var accountOnboardingState: AccountOnboardingState = .signedOut
 
@@ -81,6 +89,12 @@ final class WorkspaceCloudSyncController {
         lastError = nil
         lastMediaError = nil
         hasPendingMediaUploads = false
+        pendingChangeScopeIDs = []
+        pendingPhotoScopeIDs = []
+        confirmedSyncScopeIDs = []
+        photoAttentionScopeIDs = []
+        activeSyncScopeID = nil
+        failedSyncScopeID = nil
         accountOnboardingState = userID == nil
             ? .signedOut
             : AppRuntimeConfiguration.usesRemoteAccountState ? .resolving : .needsOnboarding
@@ -121,6 +135,7 @@ final class WorkspaceCloudSyncController {
     }
 
     func schedule(trigger: SyncTrigger) {
+        refreshSaveState()
         guard activeUserID != nil else { return }
         scheduledTask?.cancel()
         scheduledTask = Task { @MainActor [weak self] in
@@ -143,8 +158,14 @@ final class WorkspaceCloudSyncController {
         }
 
         isSynchronizing = true
-        defer { isSynchronizing = false }
+        refreshSaveState()
+        defer {
+            isSynchronizing = false
+            activeSyncScopeID = nil
+            refreshSaveState()
+        }
 
+        PostHogSDK.shared.logger?.info("workspace_sync_started trigger=\(trigger.rawValue)")
         let transport = PostgresSyncTransport(baseURL: baseURL)
         syncPass: repeat {
             needsAnotherSync = false
@@ -196,6 +217,8 @@ final class WorkspaceCloudSyncController {
 
                 for scopeID in scopes.sorted(by: { $0.uuidString < $1.uuidString }) {
                     guard activeUserID == userID else { return }
+                    activeSyncScopeID = scopeID
+                    refreshSaveState()
                     let syncSummary = try await coordinator.synchronize(
                         scopeID: scopeID,
                         trigger: trigger
@@ -213,6 +236,8 @@ final class WorkspaceCloudSyncController {
                         throw CloudSyncFailure.server(failureCode)
                     }
                     let mediaSummary = try await mediaCoordinator.uploadPendingMedia(scopeID: scopeID)
+                    if mediaSummary.deferredError != nil { photoAttentionScopeIDs.insert(scopeID) }
+                    else { photoAttentionScopeIDs.remove(scopeID) }
                     mediaError = mediaError ?? mediaSummary.deferredError
                     if mediaSummary.changed {
                         // Asset ids are tiny entity updates. Push them
@@ -224,6 +249,9 @@ final class WorkspaceCloudSyncController {
                         )
                     }
                     await mediaCoordinator.downloadMissingMedia(scopeID: scopeID)
+                    confirmedSyncScopeIDs.insert(scopeID)
+                    if failedSyncScopeID == scopeID { failedSyncScopeID = nil }
+                    refreshSaveState()
                 }
 
                 if let failureCode = try persistence.pendingSyncAttentionFailureCode() {
@@ -238,7 +266,10 @@ final class WorkspaceCloudSyncController {
                     lastMediaError = nil
                 }
                 lastSuccessfulSyncAt = .now
+                PostHogSDK.shared.logger?.info("workspace_sync_completed")
             } catch {
+                failedSyncScopeID = activeSyncScopeID
+                PostHogSDK.shared.logger?.error("workspace_sync_failed")
                 lastError = error
                 if hasBootstrappedUserID == nil {
                     accountOnboardingState = hasConfirmedOnboarding(for: userID) || !library.workspaces.isEmpty
@@ -248,6 +279,15 @@ final class WorkspaceCloudSyncController {
                 return
             }
         } while needsAnotherSync && activeUserID == userID
+    }
+
+    private func refreshSaveState() {
+        do {
+            pendingChangeScopeIDs = try persistence.pendingScopeIDs()
+            pendingPhotoScopeIDs = try persistence.pendingMediaScopeIDs()
+            hasPendingMediaUploads = !pendingPhotoScopeIDs.isEmpty
+            cannotReadSaveState = false
+        } catch { cannotReadSaveState = true }
     }
 
     private func hasConfirmedOnboarding(for userID: String) -> Bool {

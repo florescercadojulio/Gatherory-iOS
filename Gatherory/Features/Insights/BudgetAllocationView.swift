@@ -1,3 +1,4 @@
+import PostHog
 import SwiftUI
 
 /// Edits the selected event's final allocation. The direction of the transfer
@@ -297,11 +298,11 @@ struct BudgetAllocationView: View {
     private func save() {
         guard let selectedAccount else { return }
 
-        let transfer: (amount: Decimal, source: BudgetAccount, destination: BudgetAccount)? = switch change {
+        let transfer: (amount: Decimal, source: BudgetAccount, destination: BudgetAccount, direction: String)? = switch change {
         case .increase(let amount):
-            (amount, selectedAccount, .event(target))
+            (amount, selectedAccount, .event(target), change.direction)
         case .decrease(let amount):
-            (amount, .event(target), selectedAccount)
+            (amount, .event(target), selectedAccount, change.direction)
         case .unchanged, .invalid:
             nil
         }
@@ -317,6 +318,10 @@ struct BudgetAllocationView: View {
             return
         }
 
+        PostHogSDK.shared.capture(
+            "budget_allocation_updated",
+            properties: ["direction": transfer.direction]
+        )
         dismiss()
     }
 
@@ -373,6 +378,19 @@ private enum BudgetAllocationChange: Equatable {
             true
         case .unchanged, .invalid:
             false
+        }
+    }
+
+    var direction: String {
+        switch self {
+        case .increase:
+            "increase"
+        case .decrease:
+            "decrease"
+        case .unchanged:
+            "unchanged"
+        case .invalid:
+            "invalid"
         }
     }
 

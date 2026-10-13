@@ -10,6 +10,7 @@
 		FA0F24143077118000762213 /* Glur in Frameworks */ = {isa = PBXBuildFile; productRef = FA0F24133077118000762213 /* Glur */; };
 		FA0F24163077118000762213 /* GlurBackdrop in Frameworks */ = {isa = PBXBuildFile; productRef = FA0F24153077118000762213 /* GlurBackdrop */; };
 		FA0F24263077118000762213 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = FA0F24253077118000762213 /* GoogleSignIn */; };
+		FA0F24273077118000762213 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = FA0F24283077118000762213 /* PostHog */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,6 +73,7 @@
 		FA0F23E53077114C00762213 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				FA0F24273077118000762213 /* PostHog in Frameworks */,
 				FA0F24263077118000762213 /* GoogleSignIn in Frameworks */,
 				FA0F24163077118000762213 /* GlurBackdrop in Frameworks */,
 				FA0F24143077118000762213 /* Glur in Frameworks */,
@@ -141,6 +143,7 @@
 				FA0F24133077118000762213 /* Glur */,
 				FA0F24153077118000762213 /* GlurBackdrop */,
 				FA0F24253077118000762213 /* GoogleSignIn */,
+				FA0F24283077118000762213 /* PostHog */,
 			);
 			productName = Gatherory;
 			productReference = FA0F23E83077114C00762213 /* Gatherory.app */;
@@ -232,6 +235,7 @@
 			packageReferences = (
 				FA0F24123077118000762213 /* XCRemoteSwiftPackageReference "Glur" */,
 				FA0F24243077118000762213 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				FA0F24293077118000762213 /* XCRemoteSwiftPackageReference "posthog-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FA0F23E93077114C00762213 /* Products */;
@@ -636,6 +640,14 @@
 				minimumVersion = 9.0.0;
 			};
 		};
+		FA0F24293077118000762213 /* XCRemoteSwiftPackageReference "posthog-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/PostHog/posthog-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.59.3;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -653,6 +665,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FA0F24243077118000762213 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
 			productName = GoogleSignIn;
+		};
+		FA0F24283077118000762213 /* PostHog */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FA0F24293077118000762213 /* XCRemoteSwiftPackageReference "posthog-ios" */;
+			productName = PostHog;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

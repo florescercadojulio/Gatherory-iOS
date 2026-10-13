@@ -1,14 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "primer.decide.example.title" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Welcome Dinner"}},"es":{"stringUnit":{"state":"translated","value":"Cena de bienvenida"}}}},
-    "primer.decide.example.event" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Weekend Together"}},"es":{"stringUnit":{"state":"translated","value":"Fin de semana juntos"}}}},
-    "primer.decide.practice.label" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Practice idea"}},"es":{"stringUnit":{"state":"translated","value":"Idea de práctica"}}}},
-    "primer.decide.practice.instruction" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Try a swipe or tap a choice. Your real ideas won’t change."}},"es":{"stringUnit":{"state":"translated","value":"Desliza o toca una opción. Tus ideas reales no cambiarán."}}}},
-    "primer.decide.practice.accessibility" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Swipe left to pass, up to save for later, or right to approve. This is a practice idea and won’t change your plans."}},"es":{"stringUnit":{"state":"translated","value":"Desliza a la izquierda para pasar, hacia arriba para guardar para después o a la derecha para aprobar. Esta idea es de práctica y no cambiará tus planes."}}}},
-    "primer.decide.feedback.pass" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Passed. Keep exploring ideas."}},"es":{"stringUnit":{"state":"translated","value":"Pasaste esta idea. Sigue explorando otras."}}}},
-    "primer.decide.feedback.maybe" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Saved for later in Ideas."}},"es":{"stringUnit":{"state":"translated","value":"Guardada para después en Ideas."}}}},
-    "primer.decide.feedback.love" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Approved. Dated event ideas appear on Home."}},"es":{"stringUnit":{"state":"translated","value":"Aprobada. Las ideas de eventos con fecha aparecen en Inicio."}}}},
     "" : {
       "localizations" : {
         "es" : {
@@ -1131,6 +1123,7 @@
       }
     },
     "Already has a date" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1371,6 +1364,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Archivado"
+          }
+        }
+      }
+    },
+    "Archived Events" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived Events"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eventos archivados"
           }
         }
       }
@@ -1653,6 +1662,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pastel"
+          }
+        }
+      }
+    },
+    "calendar.add" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add to Calendar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir al calendario"
+          }
+        }
+      }
+    },
+    "calendar.copyExplanation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saves a copy. Later changes in Gatherory won’t update your calendar."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarda una copia. Los cambios posteriores en Gatherory no actualizarán tu calendario."
           }
         }
       }
@@ -2646,6 +2687,7 @@
       }
     },
     "Decide what moves forward" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -3389,6 +3431,118 @@
         }
       }
     },
+    "event.cancel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel Event"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar evento"
+          }
+        }
+      }
+    },
+    "event.cancel.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The event will be marked cancelled for everyone after sync. Its details are kept. Guests can no longer respond. Existing calendar copies won’t be updated."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El evento aparecerá como cancelado para todos después de sincronizar. Se conservarán sus detalles. Los invitados ya no podrán responder. Las copias del calendario no se actualizarán."
+          }
+        }
+      }
+    },
+    "event.cancelled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelled"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelado"
+          }
+        }
+      }
+    },
+    "event.cancelled.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The event was cancelled. Its history is kept, but attendance and planning are closed."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El evento se canceló. Se conserva su historial, pero la asistencia y la planificación están cerradas."
+          }
+        }
+      }
+    },
+    "event.leave" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leave Event"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salir del evento"
+          }
+        }
+      }
+    },
+    "event.leave.failed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You haven’t left the event. Connect and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No has salido del evento. Conéctate e inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "event.leave.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You’ll lose access to this invitation. The event and everyone else’s plans stay unchanged. You can join again with a valid invitation."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perderás el acceso a esta invitación. El evento y los planes de los demás no cambiarán. Podrás volver a unirte con una invitación válida."
+          }
+        }
+      }
+    },
     "event.removal.actions" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3504,6 +3658,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No se puede quitar el evento"
+          }
+        }
+      }
+    },
+    "Events you archive will be kept here with their ideas, costs, and memories." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Events you archive will be kept here with their ideas, costs, and memories."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los eventos archivados se conservarán aquí con sus ideas, gastos y recuerdos."
           }
         }
       }
@@ -4104,6 +4274,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Máxima %arg, mínima %arg"
+          }
+        }
+      }
+    },
+    "History" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "History"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Historial"
           }
         }
       }
@@ -4741,6 +4927,7 @@
       }
     },
     "It appears in Home with your events." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4751,6 +4938,7 @@
       }
     },
     "It stays in Ideas until you add a date." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4985,6 +5173,7 @@
       }
     },
     "Love an idea to approve it. Dated event ideas appear on Home, while ideas without a date stay here until you schedule them." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5283,6 +5472,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Siguiente"
+          }
+        }
+      }
+    },
+    "No Archived Events" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Archived Events"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay eventos archivados"
           }
         }
       }
@@ -6323,7 +6528,6 @@
       }
     },
     "primer.decide.action" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6340,7 +6544,6 @@
       }
     },
     "primer.decide.dated.detail" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6357,7 +6560,6 @@
       }
     },
     "primer.decide.dated.title" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6373,8 +6575,87 @@
         }
       }
     },
+    "primer.decide.example.event" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekend Together"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fin de semana juntos"
+          }
+        }
+      }
+    },
+    "primer.decide.example.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Welcome Dinner"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cena de bienvenida"
+          }
+        }
+      }
+    },
+    "primer.decide.feedback.love" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Approved. Dated event ideas appear on Home."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aprobada. Las ideas de eventos con fecha aparecen en Inicio."
+          }
+        }
+      }
+    },
+    "primer.decide.feedback.maybe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved for later in Ideas."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardada para después en Ideas."
+          }
+        }
+      }
+    },
+    "primer.decide.feedback.pass" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passed. Keep exploring ideas."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pasaste esta idea. Sigue explorando otras."
+          }
+        }
+      }
+    },
     "primer.decide.message" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6390,8 +6671,55 @@
         }
       }
     },
+    "primer.decide.practice.accessibility" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swipe left to pass, up to save for later, or right to approve. This is a practice idea and won’t change your plans."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desliza a la izquierda para pasar, hacia arriba para guardar para después o a la derecha para aprobar. Esta idea es de práctica y no cambiará tus planes."
+          }
+        }
+      }
+    },
+    "primer.decide.practice.instruction" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try a swipe or tap a choice. Your real ideas won’t change."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desliza o toca una opción. Tus ideas reales no cambiarán."
+          }
+        }
+      }
+    },
+    "primer.decide.practice.label" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Practice idea"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idea de práctica"
+          }
+        }
+      }
+    },
     "primer.decide.title" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6408,7 +6736,6 @@
       }
     },
     "primer.decide.undated.detail" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6425,7 +6752,6 @@
       }
     },
     "primer.decide.undated.title" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6943,12 +7269,51 @@
         }
       }
     },
+    "Restore %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Restore %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Restaurar %@" } }
+      }
+    },
+    "Restore %arg" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore %arg"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurar %arg"
+          }
+        }
+      }
+    },
     "Restore as Draft" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Restaurar como borrador"
+          }
+        }
+      }
+    },
+    "Restoring keeps the original event status. Events without a saved status return as drafts." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restoring keeps the original event status. Events without a saved status return as drafts."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al restaurar se conserva el estado original del evento. Los eventos sin un estado guardado vuelven como borradores."
           }
         }
       }
@@ -7004,6 +7369,358 @@
         }
       }
     },
+    "safety.block" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Block Person"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloquear persona"
+          }
+        }
+      }
+    },
+    "safety.blockedPeople" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocked People"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personas bloqueadas"
+          }
+        }
+      }
+    },
+    "safety.blockedPerson" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocked person"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Persona bloqueada"
+          }
+        }
+      }
+    },
+    "safety.blockExplanation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocked people’s content is hidden for you and new invitations between you are prevented. Blocking doesn’t remove anyone’s event access."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El contenido de las personas bloqueadas se oculta para ti y se impiden nuevas invitaciones entre vosotros. Bloquear no elimina el acceso de nadie al evento."
+          }
+        }
+      }
+    },
+    "safety.blockWaiting" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hidden on this device · Waiting to block on your account"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oculto en este dispositivo · Pendiente de bloquear en tu cuenta"
+          }
+        }
+      }
+    },
+    "safety.contact" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Support & Report a Concern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soporte y denuncias"
+          }
+        }
+      }
+    },
+    "safety.image.detail" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Additional details (optional)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detalles adicionales (opcional)"
+          }
+        }
+      }
+    },
+    "safety.image.explanation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This hides the photo for you and sends a report to Gatherory. Event hosts do not need to approve normal photo uploads."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La foto se oculta para ti y se envía una denuncia a Gatherory. Los anfitriones no tienen que aprobar las fotos que se suben normalmente."
+          }
+        }
+      }
+    },
+    "safety.image.failed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your report was not sent. Try again or contact support."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se envió tu denuncia. Inténtalo de nuevo o contacta con soporte."
+          }
+        }
+      }
+    },
+    "safety.image.hiddenLocally" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The photo is hidden on this device. It could not be hidden on your other devices. Try again when connected."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La foto está oculta en este dispositivo. No se pudo ocultar en tus otros dispositivos. Inténtalo de nuevo cuando tengas conexión."
+          }
+        }
+      }
+    },
+    "safety.image.hide" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Photo for Me"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar foto para mí"
+          }
+        }
+      }
+    },
+    "safety.image.reason" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reason"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Motivo"
+          }
+        }
+      }
+    },
+    "safety.image.report" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Report Photo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denunciar foto"
+          }
+        }
+      }
+    },
+    "safety.image.sending" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviando…"
+          }
+        }
+      }
+    },
+    "safety.image.submit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Report"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar denuncia"
+          }
+        }
+      }
+    },
+    "safety.noBlockedPeople" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You haven’t blocked anyone."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No has bloqueado a nadie."
+          }
+        }
+      }
+    },
+    "safety.personActionsHint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touch and hold a linked person for personal safety options."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén pulsada una persona vinculada para ver las opciones de seguridad personal."
+          }
+        }
+      }
+    },
+    "safety.reason.harassment" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Harassment"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acoso"
+          }
+        }
+      }
+    },
+    "safety.reason.inappropriate" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inappropriate image"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imagen inapropiada"
+          }
+        }
+      }
+    },
+    "safety.reason.other" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other concern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otro problema"
+          }
+        }
+      }
+    },
+    "safety.reason.privacy" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privacy concern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Problema de privacidad"
+          }
+        }
+      }
+    },
+    "safety.unblock" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unblock"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desbloquear"
+          }
+        }
+      }
+    },
     "Save" : {
       "localizations" : {
         "es" : {
@@ -7020,6 +7737,166 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Guardar por ahora"
+          }
+        }
+      }
+    },
+    "save.editExplanation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync status applies to saved changes, not unsaved edits in this form."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El estado de sincronización corresponde a los cambios guardados, no a las ediciones sin guardar de este formulario."
+          }
+        }
+      }
+    },
+    "save.local" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved on this device"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado en este dispositivo"
+          }
+        }
+      }
+    },
+    "save.localFailure" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changes could not be saved"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar los cambios"
+          }
+        }
+      }
+    },
+    "save.needsAttention" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cloud sync needs attention"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La sincronización necesita atención"
+          }
+        }
+      }
+    },
+    "save.photosWaiting" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved on device · Photos waiting to upload"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado en el dispositivo · Fotos pendientes de subir"
+          }
+        }
+      }
+    },
+    "save.recovery" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep the app installed. Try again when connected, or check Cloud Sync in Account."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No desinstales la app. Inténtalo de nuevo cuando tengas conexión o revisa la sincronización en Cuenta."
+          }
+        }
+      }
+    },
+    "save.syncing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncing changes…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sincronizando cambios…"
+          }
+        }
+      }
+    },
+    "save.uploading" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uploading photos…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subiendo fotos…"
+          }
+        }
+      }
+    },
+    "save.upToDate" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Up to date"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualizado"
+          }
+        }
+      }
+    },
+    "save.waiting" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved on device · Waiting to sync"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado en el dispositivo · Pendiente de sincronizar"
           }
         }
       }
@@ -7544,6 +8421,7 @@
       }
     },
     "Start Deciding" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7564,6 +8442,7 @@
       }
     },
     "Still needs a date" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {

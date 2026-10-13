@@ -240,7 +240,7 @@ struct GatheroryTests {
         )
         #expect(
             GatheroryLegalDestination.privacyQuestions.absoluteString
-                == "mailto:privacy@gatherory.com"
+                == "mailto:legal@gatherory.com"
         )
     }
 

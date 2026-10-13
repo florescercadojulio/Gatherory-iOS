@@ -1,3 +1,4 @@
+import PostHog
 import SwiftUI
 import UIKit
 
@@ -161,6 +162,7 @@ struct TimelineView: View {
             withAnimation {
                 workspace.toggleTimelineItem(item)
             }
+            captureCompletionChange(for: item)
         }
         .contextMenu {
             if item.status == .archived {
@@ -168,6 +170,7 @@ struct TimelineView: View {
                     withAnimation {
                         workspace.setEventStatus(.draft, for: item)
                     }
+                    PostHogSDK.shared.capture("timeline_event_restored")
                 }
             } else {
                 Button(
@@ -177,15 +180,24 @@ struct TimelineView: View {
                     withAnimation {
                         workspace.toggleTimelineItem(item)
                     }
+                    captureCompletionChange(for: item)
                 }
 
                 Button("Archive Event", systemImage: "archivebox") {
                     withAnimation {
                         workspace.setEventStatus(.archived, for: item)
                     }
+                    PostHogSDK.shared.capture("timeline_event_archived")
                 }
             }
         }
+    }
+
+    private func captureCompletionChange(for item: TimelineItem) {
+        PostHogSDK.shared.capture(
+            "timeline_event_completed",
+            properties: ["is_complete": item.completionStatus != .complete]
+        )
     }
 }
 
@@ -1303,6 +1315,7 @@ private struct TimelineEventDetailView: View {
                                 withAnimation {
                                     workspace.setEventStatus(.draft, for: item)
                                 }
+                                PostHogSDK.shared.capture("timeline_event_restored")
                             }
                         } else {
                             Button(
@@ -1312,12 +1325,17 @@ private struct TimelineEventDetailView: View {
                                 withAnimation {
                                     workspace.toggleTimelineItem(item)
                                 }
+                                PostHogSDK.shared.capture(
+                                    "timeline_event_completed",
+                                    properties: ["is_complete": item.completionStatus != .complete]
+                                )
                             }
 
                             Button("Archive Event", systemImage: "archivebox") {
                                 withAnimation {
                                     workspace.setEventStatus(.archived, for: item)
                                 }
+                                PostHogSDK.shared.capture("timeline_event_archived")
                                 dismiss()
                             }
                         }
@@ -1339,6 +1357,7 @@ private struct TimelineEventDetailView: View {
             if let item {
                 Button("Delete Event", role: .destructive) {
                     workspace.deleteTimelineItem(item)
+                    PostHogSDK.shared.capture("timeline_event_deleted")
                     dismiss()
                 }
             }

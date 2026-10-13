@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AccountView: View {
+    @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(WorkspaceLibrary.self) private var workspaceLibrary
     @Environment(WorkspacePersistenceController.self) private var persistence
@@ -213,6 +214,11 @@ struct AccountView: View {
             .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("Privacy & Information") {
+                NavigationLink {
+                    BlockedPeopleView()
+                } label: {
+                    Label(AppCopy.Safety.blockedPeople, systemImage: "person.crop.circle.badge.minus")
+                }
                 AccountExternalLink(
                     title: "How Your Data Is Managed",
                     systemImage: "hand.raised",
@@ -229,6 +235,11 @@ struct AccountView: View {
                     title: "Privacy Questions",
                     systemImage: "envelope",
                     destination: GatheroryLegalDestination.privacyQuestions
+                )
+                AccountExternalLink(
+                    title: AppCopy.Safety.contact,
+                    systemImage: "lifepreserver",
+                    destination: GatheroryLegalDestination.support
                 )
             }
             .listRowBackground(AppTheme.ColorToken.surface)
@@ -293,7 +304,10 @@ struct AccountView: View {
             ) {
                 let deletedUserID = authentication.currentUser?.id
                 try await authentication.deleteAccount()
-                if let deletedUserID { try guestInvitations.purgeCache(accountID: deletedUserID) }
+                if let deletedUserID {
+                    imageSafety.purge(accountID: deletedUserID)
+                    try guestInvitations.purgeCache(accountID: deletedUserID)
+                }
                 try persistence.purgeAllLocalData(from: workspaceLibrary)
                 dismiss()
             }
@@ -307,7 +321,8 @@ struct AccountView: View {
 enum GatheroryLegalDestination {
     static let privacyPolicy = URL(string: "https://gatherory.com/privacy")!
     static let termsOfUse = URL(string: "https://gatherory.com/terms")!
-    static let privacyQuestions = URL(string: "mailto:privacy@gatherory.com")!
+    static let privacyQuestions = URL(string: "mailto:legal@gatherory.com")!
+    static let support = URL(string: "mailto:info@gatherory.com")!
 }
 
 private struct AccountExternalLink: View {

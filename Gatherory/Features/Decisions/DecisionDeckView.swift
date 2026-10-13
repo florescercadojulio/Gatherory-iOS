@@ -1,3 +1,4 @@
+import PostHog
 import SwiftUI
 
 enum DecidePrimerPresentationPolicy {
@@ -7,6 +8,7 @@ enum DecidePrimerPresentationPolicy {
 }
 
 struct DecisionDeckView: View {
+    @Environment(ImageSafetyStore.self) private var safety
     var isActive = true
     var onExitWorkspace: (() -> Void)?
 
@@ -20,7 +22,7 @@ struct DecisionDeckView: View {
     @Namespace private var decisionTransition
 
     private var currentIdea: PlanningIdea? {
-        workspace.decisionQueue(for: decisionScope.eventID).first
+        workspace.decisionQueue(for: decisionScope.eventID).first { !safety.isBlocked($0.submittedByUserID) }
     }
 
     private var scopeTitle: String {
@@ -89,12 +91,6 @@ struct DecisionDeckView: View {
                         .buttonStyle(.bordered)
                     }
 
-                    if workspace.canUndoDecision {
-                        Button("Undo last decision", systemImage: "arrow.uturn.backward") {
-                            workspace.undoLastDecision()
-                        }
-                        .buttonStyle(.bordered)
-                    }
                 }
                 .frame(maxHeight: .infinity)
             }
@@ -112,7 +108,17 @@ struct DecisionDeckView: View {
                 decisionScopeMenu
             }
 
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if workspace.canUndoDecision {
+                    Button("Undo last decision", systemImage: "arrow.uturn.backward") {
+                        withAnimation(reduceMotion ? nil : .snappy) {
+                            workspace.undoLastDecision()
+                            dragOffset = .zero
+                            decisionScope = .queue
+                        }
+                    }
+                    .labelStyle(.iconOnly)
+                }
                 AccountToolbarButton()
             }
         }
@@ -213,6 +219,10 @@ struct DecisionDeckView: View {
     private func decide(_ choice: DecisionChoice, idea: PlanningIdea) {
         withAnimation(reduceMotion ? nil : .snappy) {
             workspace.decide(choice, on: idea)
+            PostHogSDK.shared.capture(
+                "idea_decided",
+                properties: ["choice": String(describing: choice)]
+            )
             dragOffset = .zero
             returnToQueueIfNeeded()
         }
@@ -220,7 +230,7 @@ struct DecisionDeckView: View {
 
     private func returnToQueueIfNeeded() {
         guard case .event(let eventID) = decisionScope,
-              workspace.decisionQueue(for: eventID).isEmpty else {
+              workspace.decisionQueue(for: eventID).allSatisfy({ safety.isBlocked($0.submittedByUserID) }) else {
             return
         }
         decisionScope = .queue
@@ -245,6 +255,7 @@ struct DecisionDeckView: View {
 }
 
 private struct DecisionCard: View {
+    @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     let idea: PlanningIdea
@@ -297,7 +308,7 @@ private struct DecisionCard: View {
     private var artwork: some View {
         if idea.category == .music {
             MusicPlaylistArtwork(
-                imageData: idea.imageData,
+                imageData: imageSafety.visibleImageData(idea.imageData, assetID: idea.mediaAssetID),
                 tracks: idea.musicTracks,
                 symbol: idea.category.symbol,
                 colors: idea.category.artworkColors,
@@ -305,7 +316,7 @@ private struct DecisionCard: View {
             )
         } else {
             MediaArtwork(
-                imageData: idea.imageData,
+                imageData: imageSafety.visibleImageData(idea.imageData, assetID: idea.mediaAssetID),
                 symbol: idea.category.symbol,
                 colors: idea.category.artworkColors,
                 accent: idea.category.artworkAccent

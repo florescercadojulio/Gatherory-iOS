@@ -1,3 +1,4 @@
+import PostHog
 import SwiftUI
 
 enum EventEditorMode {
@@ -566,6 +567,8 @@ struct EventEditorView: View {
 
     var body: some View {
         Form {
+            Section { WorkspaceSaveStatusView(scopeID: workspace.mainEventID) }
+                .listRowBackground(Color.clear)
             if !isMainEvent {
                 eventTypeSection
             }
@@ -713,6 +716,7 @@ struct EventEditorView: View {
         .confirmationDialog("Delete this event?", isPresented: $isConfirmingDeletion, titleVisibility: .visible) {
             Button("Delete Event", role: .destructive) {
                 workspace.deleteMainEvent()
+                PostHogSDK.shared.capture("main_event_deleted")
                 dismiss()
             }
             Button("Cancel", role: .cancel) {}
@@ -932,6 +936,14 @@ struct EventEditorView: View {
             }
         }
         workspace.replaceExpenses(eventExpenses, forEventID: expenseEventID)
+        PostHogSDK.shared.capture(
+            isCreating ? "event_created" : "event_updated",
+            properties: [
+                "is_main_event": isMainEvent,
+                "has_scheduled_date": hasScheduledDate,
+                "uses_budget": usesBudget
+            ]
+        )
         dismiss()
     }
 

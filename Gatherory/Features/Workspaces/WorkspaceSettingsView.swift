@@ -95,6 +95,7 @@ struct WorkspaceSettingsView: View {
                     isEditingMainEvent = true
                 }
                 .foregroundStyle(AppTheme.ColorToken.accent)
+                .disabled(!workspace.canManageMainEvent)
             }
             .listRowBackground(AppTheme.ColorToken.surface)
 
@@ -121,6 +122,19 @@ struct WorkspaceSettingsView: View {
                 Text("People & Access")
             } footer: {
                 Text("Manage the people, roles, and invitation access for this workspace.")
+            }
+            .listRowBackground(AppTheme.ColorToken.surface)
+            Section("History") {
+                NavigationLink {
+                    ArchivedEventsView()
+                } label: {
+                    HStack {
+                        Label("Archived Events", systemImage: "archivebox")
+                        Spacer()
+                        Text(workspace.archivedChildEvents.count.formatted())
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .listRowBackground(AppTheme.ColorToken.surface)
         }
@@ -150,6 +164,8 @@ struct WorkspaceSettingsView: View {
             AppTheme.ColorToken.accent
         case .finished:
             AppTheme.ColorToken.success
+        case .cancelled:
+            AppTheme.ColorToken.warning
         }
     }
 }

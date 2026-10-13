@@ -6,6 +6,7 @@
 //
 
 import GoogleSignIn
+import PostHog
 import SwiftUI
 import SwiftData
 
@@ -21,12 +22,15 @@ struct GatheroryApp: App {
     @State private var guestInvitations = GuestInvitationStore(baseURL: AppRuntimeConfiguration.authenticationBaseURL)
     @State private var musicCatalog = MusicCatalog()
     @State private var musicPreviewPlayer = MusicPreviewPlayer()
+    @State private var imageSafety = ImageSafetyStore()
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
     @AppStorage(AppColorThemeChoice.storageKey) private var colorTheme = AppColorThemeChoice.gatheroryBlue.rawValue
 
     private let persistence: WorkspacePersistenceController
 
     init() {
+        Self.configurePostHog()
+
         let authentication = AuthenticationSession.bootstrap()
         let persistence = WorkspacePersistenceController.bootstrap(
             isStoredInMemoryOnly: AppRuntimeConfiguration.usesEphemeralDataStore
@@ -46,6 +50,28 @@ struct GatheroryApp: App {
                 baseURL: AppRuntimeConfiguration.authenticationBaseURL
             )
         )
+    }
+
+    private static func configurePostHog() {
+        guard AppRuntimeConfiguration.postHogEnabled else { return }
+        guard let projectToken = AppRuntimeConfiguration.postHogProjectToken else {
+#if DEBUG
+            assertionFailure("POSTHOG_PROJECT_TOKEN variable required by PostHog is missing or un-configured, this causes events to be silently missed. This error stops appearing once POSTHOG_PROJECT_TOKEN is configured")
+#endif
+            return
+        }
+
+        guard let host = AppRuntimeConfiguration.postHogHost else {
+#if DEBUG
+            assertionFailure("POSTHOG_HOST variable required by PostHog is missing or un-configured, this causes events to be silently missed. This error stops appearing once POSTHOG_HOST is configured")
+#endif
+            return
+        }
+
+        let config = PostHogConfig(projectToken: projectToken, host: host)
+        config.errorTrackingConfig.autoCapture = true
+        PostHogSDK.shared.setup(config)
+        PostHogSDK.shared.logger?.info("posthog_log_capture_configured")
     }
 
     private var selectedColorTheme: AppColorThemeChoice {
@@ -74,6 +100,7 @@ struct GatheroryApp: App {
             .environment(cloudSync)
             .environment(invitations)
             .environment(guestInvitations)
+            .environment(imageSafety)
             .appUserAppearance(selectedAppearance)
             .environment(
                 \.appContentColorScheme,
@@ -84,8 +111,13 @@ struct GatheroryApp: App {
             .task {
                 persistence.startObserving(workspaceLibrary)
             }
+            .task(id: authentication.currentUser?.id) {
+                imageSafety.configure(accountID: authentication.currentUser?.id)
+                await imageSafety.refresh()
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
+                    Task { await imageSafety.refresh() }
                     cloudSync.schedule(trigger: .appBecameActive)
                     Task { await guestInvitations.refresh() }
                     Task {

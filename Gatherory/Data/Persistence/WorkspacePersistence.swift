@@ -1041,6 +1041,11 @@ final class WorkspacePersistenceController {
             .contains { $0.ownerUserID == activeUserID }
     }
 
+    func pendingMediaScopeIDs() throws -> Set<UUID> {
+        Set(try context.fetch(FetchDescriptor<PendingMediaTransfer>())
+            .filter { $0.ownerUserID == activeUserID }.map(\.scopeID))
+    }
+
     func markMediaTransferUploading(_ id: UUID) throws {
         guard let transfer = try mediaTransfer(id) else { return }
         transfer.state = .uploading

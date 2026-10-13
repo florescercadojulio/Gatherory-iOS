@@ -252,7 +252,7 @@ final class PlanningWorkspace {
     func decisionQueue(for eventID: UUID?) -> [PlanningIdea] {
         ideas
             .filter { idea in
-                guard idea.status == .new else { return false }
+                guard idea.status == .new, canDecide(on: idea) else { return false }
                 guard let eventID else { return true }
                 return (idea.eventID ?? mainEventID) == eventID
             }
@@ -873,6 +873,28 @@ final class PlanningWorkspace {
             .sorted { $0.scheduledAt < $1.scheduledAt }
     }
 
+    var archivedChildEvents: [TimelineItem] {
+        timeline.filter { $0.parentEventID == mainEventID && $0.status == .archived }
+            .sorted { $0.scheduledAt < $1.scheduledAt }
+    }
+
+    var canRestoreArchivedEvents: Bool {
+        showsPlanningInterface && !isMainEventDeleted && !currentMainEventStatus.isReadOnly
+            && currentViewerMember(for: .main)?.planningPermission != .viewOnly
+    }
+
+    @discardableResult
+    func restoreArchivedEvent(_ id: UUID) -> Bool {
+        guard canRestoreArchivedEvents,
+              let index = timeline.firstIndex(where: {
+                  $0.id == id && $0.parentEventID == mainEventID && $0.status == .archived
+              }) else { return false }
+        let previous = timeline[index].statusBeforeArchiving ?? .draft
+        timeline[index].status = previous == .archived ? .draft : previous
+        timeline[index].statusBeforeArchiving = nil
+        return true
+    }
+
     var scheduledChildEvents: [TimelineItem] {
         childEvents.filter(\.hasScheduledDate)
     }
@@ -959,6 +981,7 @@ final class PlanningWorkspace {
     func canManageEvent(_ reference: EventReference) -> Bool {
         guard !isInvitationProjection else { return false }
         guard showsPlanningInterface else { return false }
+        guard !currentMainEventStatus.isReadOnly else { return false }
 
         switch reference {
         case .main:
@@ -967,6 +990,7 @@ final class PlanningWorkspace {
             return timeline.contains {
                 $0.id == id
                     && $0.status != .archived
+                    && $0.status != .cancelled
                     && $0.completionStatus != .complete
             }
         case .idea:
@@ -994,15 +1018,15 @@ final class PlanningWorkspace {
     }
 
     func canAddEventMoments(to reference: EventReference) -> Bool {
-        guard !isInvitationProjection else { return false }
+        guard !isInvitationProjection, !isMainEventDeleted, !currentMainEventStatus.isReadOnly else { return false }
         return switch reference {
         case .main:
             !isMainEventDeleted && !currentMainEventStatus.isReadOnly
         case .subevent(let id):
-            timeline.contains { $0.id == id && $0.status != .archived }
+            timeline.contains { $0.id == id && $0.status != .archived && $0.status != .cancelled }
         case .idea(let ideaID):
             timeline.contains {
-                $0.linkedIdeaID == ideaID && $0.status != .archived
+                $0.linkedIdeaID == ideaID && $0.status != .archived && $0.status != .cancelled
             }
         }
     }
@@ -1022,7 +1046,7 @@ final class PlanningWorkspace {
     }
 
     var currentMainEventStatus: MainEventStatus {
-        guard mainEventStatus != .draft, mainEventStatus != .finished else {
+        guard mainEventStatus != .draft, !mainEventStatus.isReadOnly else {
             return mainEventStatus
         }
 
@@ -1038,11 +1062,38 @@ final class PlanningWorkspace {
     }
 
     var canUndoDecision: Bool {
-        !decisionHistory.isEmpty
+        guard let decision = decisionHistory.last,
+              let idea = ideas.first(where: { $0.id == decision.ideaID }) else { return false }
+        return canDecide(on: idea)
+    }
+
+    private func canDecide(on idea: PlanningIdea) -> Bool {
+        guard !isInvitationProjection, showsPlanningInterface, !isMainEventDeleted,
+              !currentMainEventStatus.isReadOnly else { return false }
+        guard let eventID = idea.eventID, eventID != mainEventID else { return true }
+        return timeline.contains { $0.id == eventID && $0.status != .cancelled }
+    }
+
+    func canCancelEvent(_ reference: EventReference) -> Bool {
+        guard canManageEvent(reference), let viewer = currentViewerMember(for: .main),
+              viewer.participantRole == .host || viewer.planningPermission == .manage else { return false }
+        return true
+    }
+
+    @discardableResult func cancelEvent(_ reference: EventReference) -> Bool {
+        guard canCancelEvent(reference) else { return false }
+        switch reference {
+        case .main: mainEventStatus = .cancelled
+        case .subevent(let id):
+            guard let item = timeline.first(where: { $0.id == id }) else { return false }
+            setEventStatus(.cancelled, for: item)
+        case .idea: return false
+        }
+        return true
     }
 
     func decide(_ choice: DecisionChoice, on idea: PlanningIdea) {
-        guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
+        guard let index = ideas.firstIndex(where: { $0.id == idea.id }), canDecide(on: ideas[index]) else { return }
 
         decisionHistory.append(
             DecisionRecord(ideaID: idea.id, previousStatus: ideas[index].status)
@@ -1058,7 +1109,7 @@ final class PlanningWorkspace {
     }
 
     func undoLastDecision() {
-        guard let decision = decisionHistory.popLast(),
+        guard canUndoDecision, let decision = decisionHistory.popLast(),
               let index = ideas.firstIndex(where: { $0.id == decision.ideaID }) else {
             return
         }
@@ -1069,7 +1120,9 @@ final class PlanningWorkspace {
     }
 
     func toggleTimelineItem(_ item: TimelineItem) {
-        guard let index = timeline.firstIndex(where: { $0.id == item.id }) else { return }
+        guard !currentMainEventStatus.isReadOnly,
+              let index = timeline.firstIndex(where: { $0.id == item.id }),
+              timeline[index].status != .cancelled else { return }
         timeline[index].completionStatus = timeline[index].completionStatus == .complete ? .upcoming : .complete
     }
 
@@ -1131,6 +1184,11 @@ final class PlanningWorkspace {
 
     func setEventStatus(_ status: EventStatus, for item: TimelineItem) {
         guard let index = timeline.firstIndex(where: { $0.id == item.id }) else { return }
+        if status == .archived, timeline[index].status != .archived {
+            timeline[index].statusBeforeArchiving = timeline[index].status
+        } else if status != .archived {
+            timeline[index].statusBeforeArchiving = nil
+        }
         timeline[index].status = status
         if status == .archived, selectedEventReference == .subevent(item.id) {
             selectedEventReference = .main

@@ -1,4 +1,5 @@
 import Glur
+import PostHog
 import SwiftUI
 import UIKit
 
@@ -410,6 +411,10 @@ private struct CollaborationInviteScreen: View {
             )
             guard workspace.selectedEventID == eventID else { return }
             generatedInvitation = invitation
+            PostHogSDK.shared.capture(
+                "invitation_link_created",
+                properties: ["role": String(describing: invitedRole)]
+            )
         } catch {
             invitationError = error.localizedDescription
         }
@@ -423,6 +428,7 @@ private struct CollaborationInviteScreen: View {
         do {
             try await EventInvitationClient(baseURL: baseURL).revoke(eventID: invitation.eventId)
             clearInvitation()
+            PostHogSDK.shared.capture("invitation_link_revoked")
         } catch { invitationError = error.localizedDescription }
     }
 }
@@ -532,6 +538,10 @@ private struct EmailInvitationView: View {
                 eventID: eventID, name: trimmedName.isEmpty ? nil : trimmedName,
                 email: email, role: role,
                 permission: role == .guest ? .viewOnly : .manage
+            )
+            PostHogSDK.shared.capture(
+                "email_invitation_link_created",
+                properties: ["role": String(describing: role)]
             )
         } catch { errorMessage = error.localizedDescription }
     }

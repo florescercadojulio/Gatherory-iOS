@@ -3,6 +3,20 @@ import Foundation
 import Observation
 import UIKit
 
+@MainActor protocol GuestInvitationTransport {
+    func invitations() async throws -> GuestInvitationFeed
+    func leaveInvitation(eventID: UUID) async throws -> UUID
+}
+
+extension InvitationAPIClient: GuestInvitationTransport {
+    func invitations() async throws -> GuestInvitationFeed { try await request("api/events/invitations") }
+    func leaveInvitation(eventID: UUID) async throws -> UUID {
+        struct Acknowledgement: Decodable { let eventId: UUID }
+        let result: Acknowledgement = try await request("api/events/invitations", method: "DELETE", body: ["eventId": eventID.uuidString])
+        return result.eventId
+    }
+}
+
 /// An account-scoped, read-only cache. Never inserted into WorkspaceLibrary or its outbox.
 @MainActor @Observable
 final class GuestInvitationStore {
@@ -15,17 +29,23 @@ final class GuestInvitationStore {
     @ObservationIgnored private var account: UserAccount?
     @ObservationIgnored private let baseURL: URL?
     @ObservationIgnored private let cacheDirectory: URL
+    @ObservationIgnored private let injectedClient: (any GuestInvitationTransport)?
     @ObservationIgnored private var artwork: [UUID: Data] = [:]
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var mediaTask: Task<Void, Never>?
     @ObservationIgnored private var feedRevision = UUID()
 
-    init(baseURL: URL?, cacheDirectory: URL? = nil) {
+    init(baseURL: URL?, cacheDirectory: URL? = nil, client: (any GuestInvitationTransport)? = nil) {
         self.baseURL = baseURL
+        injectedClient = client
         self.cacheDirectory = cacheDirectory ?? URL.applicationSupportDirectory.appending(path: "GuestInvitations")
     }
 
     var selectedPresentation: PlanningWorkspace? { selectedEventID.flatMap { presentations[$0] } }
+
+    private var client: (any GuestInvitationTransport)? {
+        injectedClient ?? baseURL.map { InvitationAPIClient(baseURL: $0) }
+    }
 
     func purgeCache(accountID: String) throws {
         let source = "\(baseURL?.absoluteString ?? "local")|\(accountID)"
@@ -73,15 +93,16 @@ final class GuestInvitationStore {
             await refreshTask.value
             if !force { return }
         }
-        guard account != nil, baseURL != nil else { return }
+        guard account != nil, client != nil else { return }
         let task = Task { await loadFeed() }
         refreshTask = task
         await task.value
     }
 
     private func loadFeed() async {
-        guard let account, let baseURL else { return }
+        guard let account, let client else { return }
         let userID = account.id
+        let requestRevision = feedRevision
         isRefreshing = true
         defer {
             if self.account?.id == userID {
@@ -90,8 +111,8 @@ final class GuestInvitationStore {
             }
         }
         do {
-            let feed: GuestInvitationFeed = try await InvitationAPIClient(baseURL: baseURL).request("api/events/invitations")
-            guard self.account?.id == userID, !Task.isCancelled else { return }
+            let feed = try await client.invitations()
+            guard self.account?.id == userID, feedRevision == requestRevision, !Task.isCancelled else { return }
             events = feed.events
             let revision = UUID()
             feedRevision = revision
@@ -151,6 +172,38 @@ final class GuestInvitationStore {
         } catch {
             guard account?.id == userID else { return }
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func canLeave(eventID: UUID) -> Bool {
+        events.contains { $0.id == eventID && $0.role == "guest" }
+    }
+
+    func leave(eventID: UUID) async -> Bool {
+        guard !isResponding, canLeave(eventID: eventID), let client, let userID = account?.id else { return false }
+        isResponding = true
+        defer { if account?.id == userID { isResponding = false } }
+        do {
+            let acknowledgedEventID = try await client.leaveInvitation(eventID: eventID)
+            guard account?.id == userID, acknowledgedEventID == eventID else { return false }
+            feedRevision = UUID()
+            mediaTask?.cancel()
+            events.removeAll { $0.id == eventID }
+            let retained = Set(events.flatMap { event in [event.coverId].compactMap { $0 } + event.ideas.compactMap(\.imageId) + event.moments.map(\.id) })
+            artwork = artwork.filter { retained.contains($0.key) }
+            rebuildPresentations()
+            do { try saveCache() }
+            catch {
+                // Never keep a stale invitation on disk after the server has
+                // acknowledged departure. The remaining feed is recoverable.
+                if let cacheURL { try? FileManager.default.removeItem(at: cacheURL) }
+            }
+            errorMessage = nil
+            return true
+        } catch {
+            guard account?.id == userID else { return false }
+            errorMessage = AppCopy.Lifecycle.leaveFailed
+            return false
         }
     }
 

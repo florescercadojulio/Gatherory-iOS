@@ -12,6 +12,12 @@
 	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
 	<key>GIDServerClientID</key>
 	<string>$(GOOGLE_SERVER_CLIENT_ID)</string>
+	<key>POSTHOG_HOST</key>
+	<string>$(POSTHOG_HOST)</string>
+	<key>POSTHOG_ENABLED</key>
+	<string>$(POSTHOG_ENABLED)</string>
+	<key>POSTHOG_PROJECT_TOKEN</key>
+	<string>$(POSTHOG_PROJECT_TOKEN)</string>
 	<key>SEED_DEVELOPMENT_DATA</key>
 	<string>$(SEED_DEVELOPMENT_DATA)</string>
 	<key>SIMULATE_PRODUCTION_FLOW</key>

@@ -1,3 +1,4 @@
+import PostHog
 import SwiftUI
 
 struct RegistryView: View {
@@ -264,6 +265,7 @@ private struct RegistryItemDetailView: View {
                         withAnimation(.snappy) {
                             workspace.commitToRegistryItem(item)
                         }
+                        PostHogSDK.shared.capture("registry_item_reserved")
                     } label: {
                         Text(item.isFulfilled ? "Reserved" : "Reserve")
                     }
@@ -546,6 +548,10 @@ private struct RegistryItemEditorView: View {
                     } else {
                         workspace.updateRegistryItem(updatedItem)
                     }
+                    PostHogSDK.shared.capture(
+                        item == nil ? "registry_item_created" : "registry_item_updated",
+                        properties: ["category": String(describing: category)]
+                    )
 
                     dismiss()
                 }

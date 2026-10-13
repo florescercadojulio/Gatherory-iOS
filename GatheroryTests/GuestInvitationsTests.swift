@@ -4,6 +4,31 @@ import Testing
 @testable import Gatherory
 
 struct GuestInvitationsTests {
+    @Test("Leaving a guest invitation requires server acknowledgement and never deletes other events")
+    @MainActor func departure() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "guest-leave-test-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let guest = try fixture(role: "guest"), other = try fixture(role: "guest"), planner = try fixture(role: "collaborator")
+        let transport = GuestTestTransport(events: [guest, other, planner])
+        let store = GuestInvitationStore(baseURL: nil, cacheDirectory: directory, client: transport)
+        await store.activate(account: account("guest-a"))
+        #expect(store.canLeave(eventID: guest.id))
+        #expect(!store.canLeave(eventID: planner.id))
+        transport.failLeave = true
+        #expect(await store.leave(eventID: guest.id) == false)
+        #expect(store.events.count == 3)
+        #expect(store.errorMessage == AppCopy.Lifecycle.leaveFailed)
+        transport.failLeave = false
+        #expect(await store.leave(eventID: guest.id))
+        #expect(store.presentations[guest.id] == nil)
+        #expect(store.events.count == 2)
+        #expect(store.events.contains { $0.id == other.id })
+        #expect(store.events.contains { $0.id == planner.id })
+        let restored = GuestInvitationStore(baseURL: nil, cacheDirectory: directory)
+        await restored.activate(account: account("guest-a"))
+        #expect(restored.events.count == 2)
+        #expect(!restored.events.contains { $0.id == guest.id })
+    }
     @Test("Invitation intent survives authentication and relaunch, and rejects other hosts")
     @MainActor
     func invitationContinuation() throws {
@@ -94,5 +119,17 @@ struct GuestInvitationsTests {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(GuestEventInvitation.self, from: data)
+    }
+}
+
+@MainActor private final class GuestTestTransport: GuestInvitationTransport {
+    var events: [GuestEventInvitation]
+    var failLeave = false
+    init(events: [GuestEventInvitation]) { self.events = events }
+    func invitations() async throws -> GuestInvitationFeed { GuestInvitationFeed(events: events) }
+    func leaveInvitation(eventID: UUID) async throws -> UUID {
+        if failLeave { throw EventInvitationFailure.unavailable }
+        events.removeAll { $0.id == eventID }
+        return eventID
     }
 }

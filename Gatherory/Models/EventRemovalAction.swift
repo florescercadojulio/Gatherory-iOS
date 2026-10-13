@@ -5,11 +5,13 @@ import Foundation
 enum EventRemovalAction: Equatable {
     case deleteDraftMainEvent
     case archiveSubevent
+    case cancelEvent
 
     var title: String {
         switch self {
         case .deleteDraftMainEvent: AppCopy.EventRemoval.deleteTitle
         case .archiveSubevent: AppCopy.EventRemoval.archiveTitle
+        case .cancelEvent: AppCopy.Lifecycle.cancelEvent
         }
     }
 
@@ -17,6 +19,7 @@ enum EventRemovalAction: Equatable {
         switch self {
         case .deleteDraftMainEvent: "trash"
         case .archiveSubevent: "archivebox"
+        case .cancelEvent: "calendar.badge.minus"
         }
     }
 
@@ -24,6 +27,7 @@ enum EventRemovalAction: Equatable {
         switch self {
         case .deleteDraftMainEvent: AppCopy.EventRemoval.deleteMessage
         case .archiveSubevent: AppCopy.EventRemoval.archiveMessage
+        case .cancelEvent: AppCopy.Lifecycle.cancelMessage
         }
     }
 }

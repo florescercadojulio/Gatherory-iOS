@@ -118,6 +118,43 @@ final class GatheroryUITests: XCTestCase {
     }
 
     @MainActor
+    func testCancellationKeepsInvitationButClosesEditing() throws {
+        for appearance in ["Light", "Dark"] {
+            let app = fixtureApplication()
+            app.launchArguments += ["-UseProductionOnboarding", "-AppleLanguages", "(en)", "-AppleInterfaceStyle", appearance]
+            app.launch()
+            let workspace = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Maya & Theo")).firstMatch
+            XCTAssertTrue(workspace.waitForExistence(timeout: 8))
+            workspace.tap()
+            let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Maya & Theo")).firstMatch
+            XCTAssertTrue(card.waitForExistence(timeout: 5))
+            card.tap()
+            let actions = app.buttons["Event Actions"]
+            XCTAssertTrue(actions.waitForExistence(timeout: 5))
+            actions.tap()
+            app.buttons["Cancel Event"].tap()
+            let confirmation = app.alerts.firstMatch
+            XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+            confirmation.buttons["Cancel"].tap()
+            XCTAssertTrue(actions.exists)
+            actions.tap()
+            app.buttons["Cancel Event"].tap()
+            XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+            confirmation.buttons["Cancel Event"].tap()
+            XCTAssertTrue(card.waitForExistence(timeout: 5), "Cancellation retains the invitation instead of deleting it.")
+            card.tap()
+            XCTAssertFalse(app.buttons["Edit Event"].exists)
+            XCTAssertFalse(app.buttons["Cancel Event"].exists)
+            XCTAssertTrue(app.staticTexts["Cancelled"].waitForExistence(timeout: 3))
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Cancelled Invitation — \(appearance)"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testArchiveSubeventFromEventDetailsMoreMenu() throws {
         let app = fixtureApplication()
         app.launchArguments += ["-UseProductionOnboarding", "-AppleLanguages", "(en)"]

@@ -996,6 +996,7 @@ enum EventStatus: String, CaseIterable, Identifiable, Codable {
     case notSure
     case rejected
     case archived
+    case cancelled
 
     var id: Self { self }
 
@@ -1006,6 +1007,7 @@ enum EventStatus: String, CaseIterable, Identifiable, Codable {
         case .notSure: "Not Sure"
         case .rejected: "Rejected"
         case .archived: "Archived"
+        case .cancelled: AppCopy.Lifecycle.cancelled
         }
     }
 
@@ -1016,6 +1018,7 @@ enum EventStatus: String, CaseIterable, Identifiable, Codable {
         case .notSure: "questionmark.circle.fill"
         case .rejected: "xmark.circle.fill"
         case .archived: "archivebox.fill"
+        case .cancelled: "calendar.badge.minus"
         }
     }
 }
@@ -1024,6 +1027,7 @@ enum MainEventStatus: String, CaseIterable, Identifiable, Codable {
     case draft
     case ongoing
     case finished
+    case cancelled
 
     var id: Self { self }
 
@@ -1032,6 +1036,7 @@ enum MainEventStatus: String, CaseIterable, Identifiable, Codable {
         case .draft: "Draft"
         case .ongoing: "Ongoing"
         case .finished: "Finished"
+        case .cancelled: AppCopy.Lifecycle.cancelled
         }
     }
 
@@ -1043,6 +1048,8 @@ enum MainEventStatus: String, CaseIterable, Identifiable, Codable {
             "The celebration is happening, including its scheduled events."
         case .finished:
             "The event is preserved as a read-only memory."
+        case .cancelled:
+            AppCopy.Lifecycle.cancelledDetail
         }
     }
 
@@ -1051,11 +1058,12 @@ enum MainEventStatus: String, CaseIterable, Identifiable, Codable {
         case .draft: "doc.badge.ellipsis"
         case .ongoing: "sparkles"
         case .finished: "checkmark.seal.fill"
+        case .cancelled: "calendar.badge.minus"
         }
     }
 
     var isReadOnly: Bool {
-        self == .finished
+        self == .finished || self == .cancelled
     }
 }
 
@@ -1407,6 +1415,8 @@ struct TimelineItem: Identifiable, Hashable, Codable {
     var participantIDs: [UUID]
     var parentEventID: UUID?
     var status: EventStatus
+    /// Restore the original state rather than silently approving an archived draft.
+    var statusBeforeArchiving: EventStatus?
     var completionStatus: EventCompletionStatus
     var response: EventResponse?
     var linkedIdeaID: UUID?
@@ -1456,6 +1466,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         self.participantIDs = participantIDs
         self.parentEventID = parentEventID
         self.status = status
+        self.statusBeforeArchiving = nil
         self.completionStatus = completionStatus
         self.response = response
         self.linkedIdeaID = linkedIdeaID
@@ -1502,6 +1513,7 @@ struct TimelineItem: Identifiable, Hashable, Codable {
         self.participantIDs = participantIDs
         self.parentEventID = parentEventID
         self.status = status
+        self.statusBeforeArchiving = nil
         self.completionStatus = completionStatus
         self.response = response
         self.linkedIdeaID = linkedIdeaID

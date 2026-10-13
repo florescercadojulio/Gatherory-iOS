@@ -47,7 +47,7 @@ struct GuestEventInvitation: Codable, Identifiable {
 
     func makePresentation(account: UserAccount, artwork: [UUID: Data]) -> PlanningWorkspace {
         let members = people.map { person in
-            WorkspaceMember(id: person.id, userID: person.id == viewerPersonId ? account.id : nil,
+            WorkspaceMember(id: person.id, userID: person.userId ?? (person.id == viewerPersonId ? account.id : nil),
                 name: person.name, participantRole: WorkspaceRole(rawValue: person.role) ?? .guest,
                 initials: person.name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased(),
                 attendance: Self.attendance(person.attendance), profileImageURL: person.imageURL,
@@ -56,8 +56,8 @@ struct GuestEventInvitation: Codable, Identifiable {
         let publishedIdeas = ideas.compactMap { item -> PlanningIdea? in
             guard let category = IdeaCategory(rawValue: item.category) else { return nil }
             return PlanningIdea(id: item.id, eventID: id, title: item.title, note: item.note,
-                category: category, submittedBy: "", status: .chosen,
-                imageData: item.imageId.flatMap { artwork[$0] }, configuration: item.configuration,
+                category: category, submittedBy: "", submittedByUserID: item.submittedByUserId, status: .chosen,
+                imageData: item.imageId.flatMap { artwork[$0] }, mediaAssetID: item.imageId, configuration: item.configuration,
                 invitationVisibility: .shownToGuests)
         }
         let workspace = PlanningWorkspace(mainEventID: id, title: title,
@@ -69,13 +69,14 @@ struct GuestEventInvitation: Codable, Identifiable {
             mainEventImageData: coverId.flatMap { artwork[$0] }, venueName: locationName ?? "", location: locationAddress ?? "",
             dressCode: dressCode ?? "", eventMessage: description ?? "", planningMode: .quietPlanning,
             members: members, ideas: publishedIdeas, timeline: [],
-            mainEventStatus: status == "finished" || complete == "complete" ? .finished : status == "draft" ? .draft : .ongoing,
+            mainEventStatus: status == "cancelled" ? .cancelled : status == "finished" || complete == "complete" ? .finished : status == "draft" ? .draft : .ongoing,
             mainEventResponse: Self.response(attendance),
             eventMoments: moments.compactMap { photo in
                 guard let data = artwork[photo.id] else { return nil }
-                return EventMoment(id: photo.id, eventID: id, imageData: data, addedBy: photo.addedBy, addedAt: photo.addedAt)
+                return EventMoment(id: photo.id, eventID: id, mediaAssetID: photo.id, imageData: data, addedBy: photo.addedBy, addedByUserID: photo.addedByUserId, addedAt: photo.addedAt)
             }, registry: [])
         workspace.isInvitationProjection = true
+        workspace.mainEventMediaAssetID = coverId
         workspace.invitationDateIsUndecided = startsAt == nil
         if locationName == nil && locationAddress == nil && latitude == nil { workspace.mainEventLocation = nil }
         workspace.configureViewer(account)
@@ -95,6 +96,7 @@ struct GuestInvitationMoment: Codable {
     let imageURL: URL?
     let addedAt: Date
     let addedBy: String
+    var addedByUserId: String? = nil
 }
 
 struct GuestInvitationPerson: Codable {
@@ -103,6 +105,7 @@ struct GuestInvitationPerson: Codable {
     let imageURL: URL?
     let role: String
     var attendance: String
+    var userId: String? = nil
 }
 
 struct GuestInvitationIdea: Codable {
@@ -115,8 +118,9 @@ struct GuestInvitationIdea: Codable {
     let imageURL: URL?
     let imageId: UUID?
     let configuration: IdeaConfiguration
+    let submittedByUserId: String?
 
-    enum CodingKeys: String, CodingKey { case id, category, title, note, tracks, linkURL, imageURL, imageId, configuration }
+    enum CodingKeys: String, CodingKey { case id, category, title, note, tracks, linkURL, imageURL, imageId, configuration, submittedByUserId }
     init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         id = try values.decode(UUID.self, forKey: .id)
@@ -127,6 +131,7 @@ struct GuestInvitationIdea: Codable {
         linkURL = try values.decodeIfPresent(URL.self, forKey: .linkURL)
         imageURL = try values.decodeIfPresent(URL.self, forKey: .imageURL)
         imageId = try values.decodeIfPresent(UUID.self, forKey: .imageId)
+        submittedByUserId = try values.decodeIfPresent(String.self, forKey: .submittedByUserId)
         configuration = (try? values.decode(IdeaConfiguration.self, forKey: .configuration)) ?? .standard
     }
 }

@@ -9,6 +9,7 @@ import UIKit
 struct EventInvitationScreen: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(MusicPreviewPlayer.self) private var previewPlayer
+    @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -18,6 +19,9 @@ struct EventInvitationScreen: View {
     @State private var isShowingAttendees = false
     @State private var selectedPlaylistIdeaID: UUID?
     @State private var weather = EventWeatherModel()
+    @State private var reportedMoment: EventMoment?
+    @State private var hideFailure: String?
+    @State private var calendarDraft: CalendarEventDraft?
     @Namespace private var childTransition
     @Namespace private var playlistTransition
 
@@ -42,7 +46,7 @@ struct EventInvitationScreen: View {
                 isAllDay: workspace.mainEventIsAllDay,
                 timeZoneIdentifier: workspace.mainEventTimeZoneIdentifier,
                 location: workspace.mainEventLocation,
-                imageData: workspace.mainEventImageData,
+                imageData: imageSafety.visibleImageData(workspace.mainEventImageData, assetID: workspace.mainEventMediaAssetID),
                 fallbackAssetName: "DefaultVenueHero",
                 colors: TimelineCategory.ceremony.artworkColors,
                 accent: TimelineCategory.ceremony.artworkAccent,
@@ -56,9 +60,10 @@ struct EventInvitationScreen: View {
                 permitsResponse: !workspace.currentMainEventStatus.isReadOnly,
                 note: workspace.eventMessage,
                 dressCode: workspace.dressCode,
-                guestIdeas: workspace.invitationIdeas(for: reference),
+                guestIdeas: workspace.invitationIdeas(for: reference).filter { !imageSafety.isBlocked($0.submittedByUserID) },
                 children: workspace.approvedChildEvents.filter { $0.purpose == .eventExperience },
-                moments: workspace.moments(for: .main)
+                moments: workspace.moments(for: .main),
+                isCancelled: workspace.currentMainEventStatus == .cancelled
             )
 
         case .subevent(let id):
@@ -76,23 +81,24 @@ struct EventInvitationScreen: View {
                 isAllDay: item.isAllDay,
                 timeZoneIdentifier: item.timeZoneIdentifier,
                 location: item.eventLocation,
-                imageData: item.imageData,
+                imageData: imageSafety.visibleImageData(item.imageData, assetID: item.mediaAssetID),
                 fallbackAssetName: item.category == .venue ? "DefaultVenueHero" : nil,
                 colors: item.category.artworkColors,
                 accent: item.category.artworkAccent,
                 purpose: item.purpose,
-                statusTitle: item.status.title,
-                statusSymbol: item.status.symbol,
+                statusTitle: workspace.currentMainEventStatus == .cancelled ? AppCopy.Lifecycle.cancelled : item.status.title,
+                statusSymbol: workspace.currentMainEventStatus == .cancelled ? "calendar.badge.minus" : item.status.symbol,
                 peopleLabel: "Who's Coming",
                 people: attendees,
                 showsAttendeeList: true,
                 response: item.response,
-                permitsResponse: item.status != .archived,
+                permitsResponse: item.status != .archived && item.status != .cancelled && item.completionStatus != .complete && !workspace.currentMainEventStatus.isReadOnly,
                 note: item.eventDescription,
                 dressCode: item.dressCode,
-                guestIdeas: workspace.invitationIdeas(for: reference),
+                guestIdeas: workspace.invitationIdeas(for: reference).filter { !imageSafety.isBlocked($0.submittedByUserID) },
                 children: [],
-                moments: workspace.moments(for: .subevent(id))
+                moments: workspace.moments(for: .subevent(id)),
+                isCancelled: item.status == .cancelled || workspace.currentMainEventStatus == .cancelled
             )
 
         case .idea(let id):
@@ -109,7 +115,7 @@ struct EventInvitationScreen: View {
                 isAllDay: configuration.isAllDay,
                 timeZoneIdentifier: configuration.timeZoneIdentifier,
                 location: configuration.location,
-                imageData: idea.imageData,
+                imageData: imageSafety.visibleImageData(idea.imageData, assetID: idea.mediaAssetID),
                 fallbackAssetName: configuration.category == .venue ? "DefaultVenueHero" : nil,
                 colors: configuration.category.artworkColors,
                 accent: configuration.category.artworkAccent,
@@ -130,7 +136,8 @@ struct EventInvitationScreen: View {
                 dressCode: "",
                 guestIdeas: [],
                 children: [],
-                moments: workspace.moments(for: .idea(id))
+                moments: workspace.moments(for: .idea(id)),
+                isCancelled: workspace.currentMainEventStatus == .cancelled
             )
         }
     }
@@ -203,6 +210,16 @@ struct EventInvitationScreen: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(item: $reportedMoment) { moment in
+            ReportImageView(moment: moment)
+        }
+        .sheet(item: $calendarDraft) { draft in
+            CalendarEventEditor(draft: draft).ignoresSafeArea()
+        }
+        .alert(AppCopy.Safety.hide, isPresented: Binding(get: { hideFailure != nil }, set: { if !$0 { hideFailure = nil } })) {
+            Button(AppCopy.Common.done) { hideFailure = nil }
+        } message: { Text(hideFailure ?? "") }
+        .task { await imageSafety.refresh() }
         .task(id: weatherRequestID) {
             guard let presentation, let startsAt = presentation.startsAt else { return }
             await weather.load(on: startsAt, location: presentation.location)
@@ -232,6 +249,13 @@ struct EventInvitationScreen: View {
             Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 150 : 260)
 
             VStack(spacing: AppTheme.Spacing.standard) {
+                if event.isCancelled {
+                    Label(AppCopy.Lifecycle.cancelled, systemImage: "calendar.badge.minus")
+                        .font(.headline)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.black.opacity(0.48), in: Capsule())
+                }
                 if let eyebrow = event.eyebrow, !eyebrow.isEmpty {
                     Text(eyebrow)
                         .font(.subheadline.weight(.medium))
@@ -285,7 +309,11 @@ struct EventInvitationScreen: View {
             timingCard(event)
 
             if let location = event.location {
-                if event.startsAt != nil {
+                if event.isCancelled {
+                    Text(AppCopy.Lifecycle.cancelledDetail).font(.footnote)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if event.startsAt != nil {
                     EventInvitationWeatherView(
                         phase: weather.phase,
                         attribution: weather.attribution,
@@ -450,6 +478,17 @@ struct EventInvitationScreen: View {
                             eventMetadataPill(purpose.shortTitle, symbol: purpose.symbol)
                         }
                     }
+                }
+                if event.startsAt != nil {
+                    Button(AppCopy.Calendar.add, systemImage: "calendar.badge.plus") {
+                        calendarDraft = CalendarEventDraft.make(title: event.title, startsAt: event.startsAt,
+                            endsAt: event.endsAt, isAllDay: event.isAllDay, timeZoneIdentifier: event.timeZoneIdentifier,
+                            location: event.location?.formatted, notes: event.note)
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    Text(AppCopy.Calendar.copyExplanation).font(.caption).foregroundStyle(.white.opacity(0.72))
+                        .multilineTextAlignment(.center)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -708,7 +747,12 @@ struct EventInvitationScreen: View {
                 Label("Shared Album", systemImage: "photo.on.rectangle.angled")
                     .font(.title3.bold())
 
-                if moments.isEmpty {
+                if !workspace.isInvitationProjection {
+                    WorkspaceSaveStatusView(scopeID: workspace.mainEventID, isEditingDraft: false)
+                }
+
+                let visiblePhotos = moments.filter { !imageSafety.isHidden($0) }
+                if visiblePhotos.isEmpty {
                     Image(systemName: "photo.stack")
                         .font(.system(size: 52, weight: .light))
                         .foregroundStyle(.white.opacity(0.74))
@@ -720,7 +764,7 @@ struct EventInvitationScreen: View {
                         .multilineTextAlignment(.center)
                 } else {
                     GeometryReader { proxy in
-                        let visibleMoments = Array(moments.prefix(3))
+                        let visibleMoments = Array(visiblePhotos.prefix(3))
                         let overlap: CGFloat = 24
                         let photoWidth = min(
                             118,
@@ -751,6 +795,20 @@ struct EventInvitationScreen: View {
                                         .rotationEffect(.degrees((Double(index) - centerIndex) * 5))
                                         .zIndex(Double(visibleMoments.count - index))
                                         .accessibilityLabel("Photo added by \(moment.addedBy)")
+                                        .contextMenu {
+                                            Button(AppCopy.Safety.hide, systemImage: "eye.slash") {
+                                                imageSafety.hide(moment)
+                                                if let assetID = moment.mediaAssetID, let baseURL = AppRuntimeConfiguration.authenticationBaseURL {
+                                                    Task {
+                                                        do { try await ImageSafetyClient(baseURL: baseURL).hide(assetID) }
+                                                        catch { hideFailure = AppCopy.Safety.hiddenLocally }
+                                                    }
+                                                }
+                                            }
+                                            if moment.mediaAssetID != nil {
+                                                Button(AppCopy.Safety.report, systemImage: "flag", role: .destructive) { reportedMoment = moment }
+                                            }
+                                        }
                                 }
                             }
                         }
@@ -850,6 +908,7 @@ private struct EventPresentation {
     let guestIdeas: [PlanningIdea]
     let children: [TimelineItem]
     let moments: [EventMoment]
+    let isCancelled: Bool
 }
 
 private struct InvitationAttireOption: Identifiable {
@@ -1036,11 +1095,15 @@ private struct EventPlaylistPreviewButtonStyle: ButtonStyle {
 }
 
 private struct EventPeopleBubbles: View {
+    @Environment(ImageSafetyStore.self) private var safety
     let people: [EventPersonPresentation]
+    private var visiblePeople: [EventPersonPresentation] {
+        people.filter { !safety.isBlocked($0.member?.userID) }
+    }
 
     var body: some View {
         HStack(spacing: -10) {
-            ForEach(Array(people.prefix(5).enumerated()), id: \.element.id) { index, person in
+            ForEach(Array(visiblePeople.prefix(5).enumerated()), id: \.element.id) { index, person in
                 if let member = person.member {
                     ParticipantAvatarView(member: member, size: 42, style: .hero)
                 } else {
@@ -1054,8 +1117,8 @@ private struct EventPeopleBubbles: View {
                 }
             }
 
-            if people.count > 5 {
-                Text("+\(people.count - 5)")
+            if visiblePeople.count > 5 {
+                Text("+\(visiblePeople.count - 5)")
                     .font(.caption.bold())
                     .foregroundStyle(.white)
                     .frame(width: 42, height: 42)
@@ -1082,6 +1145,11 @@ private struct EventPeopleBubbles: View {
 /// Keeps the invitation itself quiet while making each person's role and RSVP
 /// available at the point a guest chooses to see the full attendee list.
 private struct EventAttendeeListView: View {
+    @Environment(ImageSafetyStore.self) private var safety
+    @Environment(\.currentUserAccount) private var account
+    @State private var pendingBlockID: String?
+    @State private var pendingBlockName = ""
+    @State private var blockError: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.appContentColorScheme) private var appContentColorScheme
@@ -1092,23 +1160,44 @@ private struct EventAttendeeListView: View {
     var body: some View {
         List {
             Section {
-                ForEach(people) { person in
+                ForEach(people.filter { !safety.isBlocked($0.member?.userID) }) { person in
                     attendeeRow(person)
                         .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
                         .accessibilityElement(children: .combine)
                         .accessibilityLabel(accessibilityDescription(for: person))
+                        .contextMenu {
+                            if let userID = person.member?.userID, userID != account?.id {
+                                Button(AppCopy.Safety.block, systemImage: "person.crop.circle.badge.minus", role: .destructive) {
+                                    pendingBlockID = userID; pendingBlockName = person.name
+                                }
+                            }
+                        }
                 }
             } header: {
                 Text(eventTitle)
             } footer: {
                 Text("Attendance reflects each person's response for this event.")
+                Text(AppCopy.Safety.personActionsHint)
             }
+            if let blockError { Text(blockError).foregroundStyle(AppTheme.ColorToken.warning) }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
         .navigationTitle("Who's Coming")
         .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog(AppCopy.Safety.block, isPresented: Binding(get: { pendingBlockID != nil }, set: { if !$0 { pendingBlockID = nil } }), titleVisibility: .visible) {
+            Button(AppCopy.Safety.block, role: .destructive) {
+                guard let userID = pendingBlockID else { return }
+                let name = pendingBlockName
+                pendingBlockID = nil
+                Task {
+                    do { try await safety.block(userID, name: name) }
+                    catch { blockError = AppCopy.Safety.blockWaiting + ". " + error.localizedDescription }
+                }
+            }
+            Button(AppCopy.Common.cancel, role: .cancel) { pendingBlockID = nil }
+        } message: { Text(AppCopy.Safety.blockExplanation) }
         .appClearNavigationBar()
         // The invitation deliberately forces a dark appearance over its artwork.
         // This utility sheet instead follows the saved app appearance at every detent.

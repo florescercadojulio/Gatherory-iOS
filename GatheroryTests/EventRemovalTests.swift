@@ -183,6 +183,138 @@ struct EventRemovalTests {
         #expect(restored.ideas.contains { $0.id == idea.id })
     }
 
+    @Test("Restoring archived events preserves their original approval status", arguments: EventStatus.allCases.filter { $0 != .archived })
+    func restoreStatus(status: EventStatus) throws {
+        let workspace = makeWorkspace()
+        let child = makeChild(in: workspace, status: status)
+        workspace.timeline.append(child)
+        #expect(workspace.removeEventFromHome(.subevent(child.id), expecting: .archiveSubevent))
+        #expect(workspace.archivedChildEvents.count == 1)
+        #expect(workspace.restoreArchivedEvent(child.id))
+        #expect(workspace.timeline.first?.status == status)
+        #expect(workspace.timeline.first?.statusBeforeArchiving == nil)
+        #expect(workspace.archivedChildEvents.isEmpty)
+        #expect(!workspace.restoreArchivedEvent(child.id))
+    }
+
+    @Test("Legacy archived events restore as drafts, not approved invitations")
+    func restoreLegacyArchive() {
+        let workspace = makeWorkspace()
+        workspace.timeline.append(makeChild(in: workspace, status: .archived))
+        #expect(workspace.restoreArchivedEvent(workspace.timeline[0].id))
+        #expect(workspace.timeline[0].status == .draft)
+    }
+
+    @Test("Restoration preserves the saved status across relaunches")
+    func restorePersistence() throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false)
+        let workspace = makeWorkspace()
+        let child = makeChild(in: workspace, status: .rejected)
+        workspace.timeline.append(child)
+        library.add(workspace)
+        #expect(workspace.removeEventFromHome(.subevent(child.id), expecting: .archiveSubevent))
+        persistence.flush(library)
+        let restored = try #require(persistence.restoreLibrary(seedData: false).workspaces.first)
+        #expect(restored.timeline.first?.statusBeforeArchiving == .rejected)
+        #expect(restored.restoreArchivedEvent(child.id))
+        #expect(restored.timeline.first?.status == .rejected)
+    }
+
+    @Test("Restoration checks current permissions and lifecycle")
+    func restorePermissions() {
+        for (role, permission) in [(WorkspaceRole.guest, PlanningPermission.viewOnly), (.collaborator, .viewOnly)] {
+            let workspace = makeWorkspace(role: role, permission: permission)
+            let child = makeChild(in: workspace, status: .archived)
+            workspace.timeline.append(child)
+            #expect(!workspace.restoreArchivedEvent(child.id))
+        }
+        let workspace = makeWorkspace(status: .finished)
+        let child = makeChild(in: workspace, status: .archived)
+        workspace.timeline.append(child)
+        #expect(!workspace.restoreArchivedEvent(child.id))
+    }
+
+    @Test("Undo works before the remaining decision queue is empty")
+    func undoWhileQueuePopulated() {
+        let workspace = makeWorkspace()
+        let first = PlanningIdea(title: "First", note: "", category: .other, submittedBy: "Planner")
+        let second = PlanningIdea(title: "Second", note: "", category: .other, submittedBy: "Planner")
+        workspace.addIdea(first); workspace.addIdea(second)
+        workspace.decide(.pass, on: first)
+        #expect(workspace.canUndoDecision)
+        workspace.undoLastDecision()
+        #expect(workspace.ideas.first { $0.id == first.id }?.status == first.status)
+        #expect(workspace.ideas.first { $0.id == second.id }?.status == second.status)
+        #expect(!workspace.canUndoDecision)
+    }
+
+    @Test("Cancellation preserves records but closes planning, decisions, and photo additions")
+    func cancellation() {
+        let workspace = makeWorkspace(status: .ongoing)
+        let child = makeChild(in: workspace)
+        workspace.timeline.append(child)
+        let idea = PlanningIdea(title: "Flowers", note: "", category: .other, submittedBy: "Planner")
+        workspace.addIdea(idea)
+        workspace.decide(.pass, on: idea)
+        #expect(workspace.canUndoDecision)
+        #expect(workspace.cancelEvent(.main))
+        #expect(workspace.currentMainEventStatus == .cancelled)
+        #expect(!workspace.canUndoDecision)
+        workspace.undoLastDecision()
+        workspace.decide(.love, on: idea)
+        #expect(workspace.ideas.first?.status == .passed)
+        #expect(!workspace.canManageEvent(.subevent(child.id)))
+        #expect(!workspace.canAddEventMoments(to: .subevent(child.id)))
+        workspace.toggleTimelineItem(child)
+        #expect(workspace.timeline.first?.completionStatus == child.completionStatus)
+        #expect(workspace.timeline.count == 1)
+        #expect(!workspace.cancelEvent(.main))
+        #expect(!workspace.isMainEventDeleted)
+    }
+
+    @Test("Cancelling one sub-event does not close its parent or other sub-events")
+    func cancelChild() {
+        let workspace = makeWorkspace()
+        let child = makeChild(in: workspace)
+        let other = makeChild(in: workspace)
+        workspace.timeline = [child, other]
+        #expect(workspace.cancelEvent(.subevent(child.id)))
+        #expect(workspace.timeline.first?.status == .cancelled)
+        #expect(!workspace.canAddEventMoments(to: .subevent(child.id)))
+        #expect(workspace.canManageEvent(.main))
+        #expect(workspace.canManageEvent(.subevent(other.id)))
+        #expect(workspace.canAddEventMoments(to: .subevent(other.id)))
+    }
+
+    @Test("Cancellation requires host or manage access and rechecks closed status")
+    func cancelPermissions() {
+        for (role, permission) in [(WorkspaceRole.guest, PlanningPermission.viewOnly), (.collaborator, .viewOnly), (.collaborator, .contribute)] {
+            let workspace = makeWorkspace(role: role, permission: permission)
+            #expect(!workspace.cancelEvent(.main))
+            #expect(workspace.mainEventStatus == .draft)
+        }
+        let manager = makeWorkspace(role: .collaborator, permission: .manage)
+        #expect(manager.cancelEvent(.main))
+        let finished = makeWorkspace(status: .finished)
+        #expect(!finished.cancelEvent(.main))
+    }
+
+    @Test("Cancelled lifecycle survives restoration without deleting its event")
+    func cancellationPersistence() throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false)
+        let workspace = makeWorkspace()
+        workspace.timeline.append(makeChild(in: workspace))
+        library.add(workspace)
+        #expect(workspace.cancelEvent(.main))
+        persistence.flush(library)
+        let restored = try #require(persistence.restoreLibrary(seedData: false).workspaces.first)
+        #expect(restored.currentMainEventStatus == .cancelled)
+        #expect(restored.timeline.count == 1)
+        #expect(!restored.isMainEventDeleted)
+    }
+
     private func makeWorkspace(
         status: MainEventStatus = .draft,
         role: WorkspaceRole = .host,

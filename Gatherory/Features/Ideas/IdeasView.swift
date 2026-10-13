@@ -3,6 +3,7 @@ import UIKit
 import MusicKit
 
 struct IdeasView: View {
+    @Environment(ImageSafetyStore.self) private var safety
     var onExitWorkspace: (() -> Void)?
 
     @Environment(PlanningWorkspace.self) private var workspace
@@ -23,7 +24,7 @@ struct IdeasView: View {
             workspace.contextualIdeas
         }
 
-        return ideas.filter(filter.includes)
+        return ideas.filter { filter.includes($0) && !safety.isBlocked($0.submittedByUserID) }
     }
 
     private var scopeTitle: String {
@@ -344,6 +345,7 @@ enum IdeaFilter: String, CaseIterable, Identifiable {
 }
 
 private struct IdeaCollectionCard: View {
+    @Environment(ImageSafetyStore.self) private var imageSafety
     let idea: PlanningIdea
     let transitionNamespace: Namespace.ID
 
@@ -416,7 +418,7 @@ private struct IdeaCollectionCard: View {
     private var artwork: some View {
         if idea.category == .music {
             MusicPlaylistArtwork(
-                imageData: idea.imageData,
+                imageData: imageSafety.visibleImageData(idea.imageData, assetID: idea.mediaAssetID),
                 tracks: idea.musicTracks,
                 symbol: idea.category.symbol,
                 colors: idea.category.artworkColors,
@@ -427,7 +429,7 @@ private struct IdeaCollectionCard: View {
             )
         } else {
             MediaArtwork(
-                imageData: idea.imageData,
+                imageData: imageSafety.visibleImageData(idea.imageData, assetID: idea.mediaAssetID),
                 symbol: idea.category.symbol,
                 colors: idea.category.artworkColors,
                 accent: idea.category.artworkAccent,
@@ -474,6 +476,7 @@ private extension IdeaCategory {
 }
 
 struct IdeaDetailView: View {
+    @Environment(ImageSafetyStore.self) private var safety
     @Environment(PlanningWorkspace.self) private var workspace
     @State private var isEditingIdea = false
     @State private var editorDetent: PresentationDetent = .large
@@ -481,7 +484,7 @@ struct IdeaDetailView: View {
     let transitionNamespace: Namespace.ID
 
     private var idea: PlanningIdea? {
-        workspace.ideas.first { $0.id == ideaID }
+        workspace.ideas.first { $0.id == ideaID && !safety.isBlocked($0.submittedByUserID) }
     }
 
     var body: some View {
@@ -605,6 +608,7 @@ struct IdeaDetailView: View {
 }
 
 private struct IdeaDetailScreen: View {
+    @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(MusicPreviewPlayer.self) private var previewPlayer
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -663,7 +667,7 @@ private struct IdeaDetailScreen: View {
         Group {
             if idea.category == .music {
                 MusicPlaylistArtwork(
-                    imageData: idea.imageData,
+                    imageData: imageSafety.visibleImageData(idea.imageData, assetID: idea.mediaAssetID),
                     tracks: idea.musicTracks,
                     symbol: idea.category.symbol,
                     colors: idea.category.artworkColors,
@@ -674,7 +678,7 @@ private struct IdeaDetailScreen: View {
                 )
             } else {
                 MediaArtwork(
-                    imageData: idea.imageData,
+                    imageData: imageSafety.visibleImageData(idea.imageData, assetID: idea.mediaAssetID),
                     symbol: idea.category.symbol,
                     colors: idea.category.artworkColors,
                     accent: idea.category.artworkAccent,
@@ -1986,6 +1990,8 @@ struct IdeaEditorView: View {
 
     private func ideaEditor(for category: IdeaCategory) -> some View {
         Form {
+            Section { WorkspaceSaveStatusView(scopeID: workspace.mainEventID) }
+                .listRowBackground(Color.clear)
             ideaDestinationSection
             selectedCategorySection(for: category)
 

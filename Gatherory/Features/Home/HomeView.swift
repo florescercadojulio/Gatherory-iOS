@@ -5,6 +5,7 @@ struct HomeView: View {
     var onExitWorkspace: (() -> Void)?
 
     @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -55,6 +56,8 @@ struct HomeView: View {
             "Happening now"
         case .finished:
             "Past event"
+        case .cancelled:
+            AppCopy.Lifecycle.cancelled
         }
     }
 
@@ -182,7 +185,7 @@ struct HomeView: View {
                 ))
                 .toolbar {
                     ToolbarItemGroup(placement: .topBarTrailing) {
-                        if reference == .main, workspace.canManageMainEvent {
+                        if reference == .main, workspace.showsPlanningInterface {
                             NavigationLink {
                                 WorkspaceSettingsView()
                             } label: {
@@ -191,7 +194,7 @@ struct HomeView: View {
                             }
                         }
 
-                        if canEdit(reference) || workspace.eventRemovalAction(for: reference) != nil {
+                        if canEdit(reference) || workspace.eventRemovalAction(for: reference) != nil || workspace.canCancelEvent(reference) {
                             Menu(AppCopy.EventRemoval.actions, systemImage: "ellipsis") {
                                 eventActions(for: reference)
                             }
@@ -415,6 +418,11 @@ struct HomeView: View {
                 editorTarget = editorTarget(for: reference)
             }
         }
+        if workspace.canCancelEvent(reference) {
+            Button(AppCopy.Lifecycle.cancelEvent, systemImage: "calendar.badge.minus", role: .destructive) {
+                pendingDetailRemoval = HomeEventRemovalRequest(reference: reference, action: .cancelEvent, title: title(for: reference))
+            }
+        }
         if let action = workspace.eventRemovalAction(for: reference) {
             if canEdit(reference) { Divider() }
             Button(action.title, systemImage: action.symbol, role: .destructive) {
@@ -427,7 +435,9 @@ struct HomeView: View {
 
     private func confirmRemoval(_ request: HomeEventRemovalRequest) {
         pendingDetailRemoval = nil
-        guard workspace.removeEventFromHome(request.reference, expecting: request.action) else {
+        let changed = request.action == .cancelEvent ? workspace.cancelEvent(request.reference)
+            : workspace.removeEventFromHome(request.reference, expecting: request.action)
+        guard changed else {
             isRemovalUnavailable = true
             return
         }
@@ -445,7 +455,8 @@ struct HomeView: View {
         let category = item?.category ?? .ceremony
 
         MediaArtwork(
-            imageData: reference == .main ? workspace.mainEventImageData : item?.imageData,
+            imageData: imageSafety.visibleImageData(reference == .main ? workspace.mainEventImageData : item?.imageData,
+                assetID: reference == .main ? workspace.mainEventMediaAssetID : item?.mediaAssetID),
             assetName: reference == .main || category == .venue ? "DefaultVenueHero" : nil,
             remoteURL: nil,
             symbol: category.symbol,

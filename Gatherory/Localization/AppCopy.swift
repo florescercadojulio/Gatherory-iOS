@@ -6,6 +6,55 @@ import Foundation
 /// that also appears in models, filters, menus, or more than one feature lives
 /// here so every surface resolves the same localized phrase.
 enum AppCopy {
+    enum Lifecycle {
+        static var leaveFailed: String { String(localized: "event.leave.failed", defaultValue: "You haven’t left the event. Connect and try again.") }
+        static var cancelled: String { String(localized: "event.cancelled", defaultValue: "Cancelled") }
+        static var cancelledDetail: String { String(localized: "event.cancelled.detail", defaultValue: "The event was cancelled. Its history is kept, but attendance and planning are closed.") }
+        static var cancelEvent: String { String(localized: "event.cancel", defaultValue: "Cancel Event") }
+        static var cancelMessage: String { String(localized: "event.cancel.message", defaultValue: "The event will be marked cancelled for everyone after sync. Its details are kept. Guests can no longer respond. Existing calendar copies won’t be updated.") }
+        static var leave: String { String(localized: "event.leave", defaultValue: "Leave Event") }
+        static var leaveMessage: String { String(localized: "event.leave.message", defaultValue: "You’ll lose access to this invitation. The event and everyone else’s plans stay unchanged. You can join again with a valid invitation.") }
+    }
+    enum Save {
+        static var editExplanation: String { String(localized: "save.editExplanation", defaultValue: "Sync status applies to saved changes, not unsaved edits in this form.") }
+        static var local: String { String(localized: "save.local", defaultValue: "Saved on this device") }
+        static var waiting: String { String(localized: "save.waiting", defaultValue: "Saved on device · Waiting to sync") }
+        static var syncing: String { String(localized: "save.syncing", defaultValue: "Syncing changes…") }
+        static var uploading: String { String(localized: "save.uploading", defaultValue: "Uploading photos…") }
+        static var photosWaiting: String { String(localized: "save.photosWaiting", defaultValue: "Saved on device · Photos waiting to upload") }
+        static var upToDate: String { String(localized: "save.upToDate", defaultValue: "Up to date") }
+        static var needsAttention: String { String(localized: "save.needsAttention", defaultValue: "Cloud sync needs attention") }
+        static var localFailure: String { String(localized: "save.localFailure", defaultValue: "Changes could not be saved") }
+        static var recovery: String { String(localized: "save.recovery", defaultValue: "Keep the app installed. Try again when connected, or check Cloud Sync in Account.") }
+    }
+    enum Calendar {
+        static var add: String { String(localized: "calendar.add", defaultValue: "Add to Calendar") }
+        static var copyExplanation: String { String(localized: "calendar.copyExplanation", defaultValue: "Saves a copy. Later changes in Gatherory won’t update your calendar.") }
+    }
+    enum Safety {
+        static var personActionsHint: String { String(localized: "safety.personActionsHint", defaultValue: "Touch and hold a linked person for personal safety options.") }
+        static var block: String { String(localized: "safety.block", defaultValue: "Block Person") }
+        static var unblock: String { String(localized: "safety.unblock", defaultValue: "Unblock") }
+        static var blockedPeople: String { String(localized: "safety.blockedPeople", defaultValue: "Blocked People") }
+        static var blockedPerson: String { String(localized: "safety.blockedPerson", defaultValue: "Blocked person") }
+        static var noBlockedPeople: String { String(localized: "safety.noBlockedPeople", defaultValue: "You haven’t blocked anyone.") }
+        static var blockExplanation: String { String(localized: "safety.blockExplanation", defaultValue: "Blocked people’s content is hidden for you and new invitations between you are prevented. Blocking doesn’t remove anyone’s event access.") }
+        static var blockWaiting: String { String(localized: "safety.blockWaiting", defaultValue: "Hidden on this device · Waiting to block on your account") }
+        static var hide: String { String(localized: "safety.image.hide", defaultValue: "Hide Photo for Me") }
+        static var report: String { String(localized: "safety.image.report", defaultValue: "Report Photo") }
+        static var reportExplanation: String { String(localized: "safety.image.explanation", defaultValue: "This hides the photo for you and sends a report to Gatherory. Event hosts do not need to approve normal photo uploads.") }
+        static var reason: String { String(localized: "safety.image.reason", defaultValue: "Reason") }
+        static var detail: String { String(localized: "safety.image.detail", defaultValue: "Additional details (optional)") }
+        static var submit: String { String(localized: "safety.image.submit", defaultValue: "Send Report") }
+        static var sending: String { String(localized: "safety.image.sending", defaultValue: "Sending…") }
+        static var failed: String { String(localized: "safety.image.failed", defaultValue: "Your report was not sent. Try again or contact support.") }
+        static var hiddenLocally: String { String(localized: "safety.image.hiddenLocally", defaultValue: "The photo is hidden on this device. It could not be hidden on your other devices. Try again when connected.") }
+        static var contact: String { String(localized: "safety.contact", defaultValue: "Support & Report a Concern") }
+        static var inappropriate: String { String(localized: "safety.reason.inappropriate", defaultValue: "Inappropriate image") }
+        static var harassment: String { String(localized: "safety.reason.harassment", defaultValue: "Harassment") }
+        static var privacy: String { String(localized: "safety.reason.privacy", defaultValue: "Privacy concern") }
+        static var other: String { String(localized: "safety.reason.other", defaultValue: "Other concern") }
+    }
     enum Tab {
         static var home: String { localized("tab.home", default: "Home") }
         static var ideas: String { localized("tab.ideas", default: "Ideas") }

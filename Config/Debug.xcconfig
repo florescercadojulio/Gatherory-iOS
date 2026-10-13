@@ -11,3 +11,7 @@ AUTH_BASE_URL = https:/$()/dev.gatherory.com
 GOOGLE_IOS_CLIENT_ID = 230060732276-qulnhq4cac5mrjrc9hk9l3qbo5jhe8pd.apps.googleusercontent.com
 GOOGLE_IOS_REVERSED_CLIENT_ID = com.googleusercontent.apps.230060732276-qulnhq4cac5mrjrc9hk9l3qbo5jhe8pd
 GOOGLE_SERVER_CLIENT_ID = 230060732276-2solr5ifutcsfnavjhd8t8nnc3jffha3.apps.googleusercontent.com
+POSTHOG_PROJECT_TOKEN = phc_xPbBBJcQnKQBmZMeS49hS6KKrcsugidmPV7GEJTaBX7A
+POSTHOG_HOST = https:/$()/us.i.posthog.com
+// Independent of Release; set to NO to disable telemetry in this configuration.
+POSTHOG_ENABLED = YES

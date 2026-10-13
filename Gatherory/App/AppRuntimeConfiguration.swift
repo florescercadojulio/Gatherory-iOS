@@ -96,6 +96,30 @@ enum AppRuntimeConfiguration {
         ProcessInfo.processInfo.arguments.contains("-UseEphemeralDataStore")
     }
 
+    static var postHogProjectToken: String? {
+        configuredValue(forKey: "POSTHOG_PROJECT_TOKEN")
+    }
+
+    static var postHogEnabled: Bool {
+        analyticsEnabled(
+            configurationValue: configuredValue(forKey: "POSTHOG_ENABLED"),
+            usesEphemeralStore: usesEphemeralDataStore,
+            isRunningTests: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+                || NSClassFromString("XCTestCase") != nil
+                || NSClassFromString("XCTest.XCTestCase") != nil
+        )
+    }
+
+    nonisolated static func analyticsEnabled(configurationValue: String?, usesEphemeralStore: Bool, isRunningTests: Bool) -> Bool {
+        guard !usesEphemeralStore, !isRunningTests else { return false }
+        guard let value = configurationValue else { return true }
+        return ["yes", "true", "1"].contains(value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+    }
+
+    static var postHogHost: String? {
+        configuredValue(forKey: "POSTHOG_HOST")
+    }
+
     static var authenticationBaseURL: URL? {
         let arguments = ProcessInfo.processInfo.arguments
 
@@ -106,6 +130,11 @@ enum AppRuntimeConfiguration {
         }
 
         return normalizedURL(from: infoString(forKey: "AUTH_BASE_URL"))
+    }
+
+    private static func configuredValue(forKey key: String) -> String? {
+        let value = infoString(forKey: key).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 
     private static func normalizedURL(from rawValue: String) -> URL? {

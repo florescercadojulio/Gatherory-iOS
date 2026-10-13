@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import PostHog
 
 enum AuthenticationFailure: LocalizedError, Equatable {
     case invalidCredentials
@@ -79,6 +80,10 @@ final class AuthenticationSession {
             developmentPasswords = [:]
             currentUser = nil
         }
+
+        if let currentUser {
+            identify(currentUser)
+        }
     }
 
     static func bootstrap() -> AuthenticationSession {
@@ -100,10 +105,16 @@ final class AuthenticationSession {
 
         do {
             currentUser = try await client.restoreSession()
+            if let currentUser {
+                identify(currentUser)
+            } else {
+                PostHogSDK.shared.reset()
+            }
         } catch {
             // A failed refresh must never manufacture an authenticated state.
             // The login screen will surface errors when the user actively retries.
             currentUser = nil
+            PostHogSDK.shared.reset()
         }
     }
 
@@ -114,7 +125,9 @@ final class AuthenticationSession {
         if let client {
             isProcessing = true
             defer { isProcessing = false }
-            currentUser = try await client.signIn(email: normalizedEmail, password: password)
+            let account = try await client.signIn(email: normalizedEmail, password: password)
+            currentUser = account
+            identify(account)
             return
         }
 
@@ -126,6 +139,7 @@ final class AuthenticationSession {
         }
 
         currentUser = account
+        identify(account)
     }
 
     func clearRegistrationNotice() {
@@ -157,6 +171,7 @@ final class AuthenticationSession {
             ) {
             case .authenticated(let account):
                 currentUser = account
+                identify(account)
             case .verificationRequired(let email):
                 currentUser = nil
                 registrationNotice = "Check \(email) for a verification link, then sign in."
@@ -183,6 +198,7 @@ final class AuthenticationSession {
         developmentAccounts.append(account)
         developmentPasswords[normalizedEmail] = password
         currentUser = account
+        identify(account)
     }
 
     func signIn(using provider: AuthenticationProvider) async throws {
@@ -194,6 +210,7 @@ final class AuthenticationSession {
         var planner = DevelopmentAccountFixtures.planner
         planner.authenticationProvider = provider
         currentUser = planner
+        identify(planner)
     }
 
     func signInWithApple(
@@ -209,10 +226,12 @@ final class AuthenticationSession {
 
         isProcessing = true
         defer { isProcessing = false }
-        currentUser = try await client.signInWithApple(
+        let account = try await client.signInWithApple(
             identity,
             requestingSignUp: requestingSignUp
         )
+        currentUser = account
+        identify(account)
     }
 
     func signInWithGoogle(
@@ -229,11 +248,13 @@ final class AuthenticationSession {
 
         isProcessing = true
         defer { isProcessing = false }
-        currentUser = try await client.signInWithGoogle(
+        let account = try await client.signInWithGoogle(
             identityToken: identityToken,
             nonce: nonce,
             requestingSignUp: requestingSignUp
         )
+        currentUser = account
+        identify(account)
     }
 
     @discardableResult
@@ -251,6 +272,7 @@ final class AuthenticationSession {
     }
 
     func signOut() {
+        PostHogSDK.shared.reset()
         currentUser = nil
         registrationNotice = nil
 
@@ -275,7 +297,18 @@ final class AuthenticationSession {
             developmentPasswords.removeValue(forKey: account.email.lowercased())
         }
 
+        PostHogSDK.shared.reset()
         currentUser = nil
         registrationNotice = nil
+    }
+
+    private func identify(_ account: UserAccount) {
+        PostHogSDK.shared.identify(
+            account.id,
+            userProperties: [
+                "role": account.role.rawValue,
+                "authentication_provider": account.authenticationProvider.rawValue
+            ]
+        )
     }
 }
