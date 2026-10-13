@@ -120,6 +120,9 @@ struct BetterAuthClient: AuthenticationClient {
         } else {
             let configuration = URLSessionConfiguration.ephemeral
             configuration.httpShouldSetCookies = false
+            configuration.httpCookieStorage = nil
+            configuration.urlCache = nil
+            configuration.urlCredentialStorage = nil
             configuration.waitsForConnectivity = true
             configuration.timeoutIntervalForRequest = 30
             self.urlSession = URLSession(configuration: configuration)
@@ -258,17 +261,31 @@ struct BetterAuthClient: AuthenticationClient {
             throw AuthenticationFailure.invalidServerResponse
         }
         tokenStore.delete()
+        await resetNetworkSession()
     }
 
     func signOut() async {
-        defer { tokenStore.delete() }
-        guard let token = try? tokenStore.read() else { return }
+        let token = try? tokenStore.read()
+        tokenStore.delete()
+        guard let token else {
+            await resetNetworkSession()
+            return
+        }
 
         let _: SignOutResponse? = try? await request(
             path: ["sign-out"],
             body: EmptyRequest(),
             token: token
         )
+        await resetNetworkSession()
+    }
+
+    private func resetNetworkSession() async {
+        // Keep the client reusable after deletion while discarding the
+        // cookies, credentials and cached responses of the former account.
+        await withCheckedContinuation { continuation in
+            urlSession.reset { continuation.resume() }
+        }
     }
 
     private func saveToken(from response: AuthResponse) throws {
@@ -311,6 +328,9 @@ struct BetterAuthClient: AuthenticationClient {
         token: String?
     ) async throws -> Response {
         var request = request
+        request.httpShouldHandleCookies = false
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
