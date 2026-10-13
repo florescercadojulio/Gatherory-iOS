@@ -13,8 +13,8 @@ struct PermissionPrimerView: View {
     let artwork: PermissionPrimerArtworkKind
     let title: String
     let message: String
-    var primaryTitle = "Continue"
-    var secondaryTitle = "Not Now"
+    var primaryTitle = AppCopy.Common.continueAction
+    var secondaryTitle = AppCopy.Common.notNow
     var isWorking = false
     let onContinue: () -> Void
     let onNotNow: () -> Void
@@ -242,7 +242,7 @@ private struct PermissionPrimerArtwork: View {
 
             VStack {
                 Spacer()
-                Label("Event location", systemImage: "location.fill")
+                Label(AppCopy.Primer.Permission.eventLocation, systemImage: "location.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.ColorToken.onMedia)
                     .padding(.horizontal, 14)

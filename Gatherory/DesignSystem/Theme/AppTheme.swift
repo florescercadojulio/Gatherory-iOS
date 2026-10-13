@@ -252,9 +252,9 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .system: "System"
-        case .light: "Light"
-        case .dark: "Dark"
+        case .system: AppCopy.Appearance.system
+        case .light: AppCopy.Appearance.light
+        case .dark: AppCopy.Appearance.dark
         }
     }
 

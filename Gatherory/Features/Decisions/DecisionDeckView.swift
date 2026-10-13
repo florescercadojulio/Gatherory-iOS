@@ -254,10 +254,10 @@ private struct DecideEventPrimer: View {
                     .foregroundStyle(AppTheme.ColorToken.accent)
                     .accessibilityHidden(true)
 
-                Text("Decide what moves forward")
+                Text(AppCopy.Primer.Decide.title)
                     .font(.title2.bold())
 
-                Text("Love an idea to approve it. Dated event ideas appear on Home, while ideas without a date stay here until you schedule them.")
+                Text(AppCopy.Primer.Decide.message)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -265,20 +265,20 @@ private struct DecideEventPrimer: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
                 primerRow(
                     symbol: "calendar.badge.checkmark",
-                    title: "Already has a date",
-                    detail: "It appears in Home with your events."
+                    title: AppCopy.Primer.Decide.datedTitle,
+                    detail: AppCopy.Primer.Decide.datedDetail
                 )
                 primerRow(
                     symbol: "calendar.badge.exclamationmark",
-                    title: "Still needs a date",
-                    detail: "It stays in Ideas until you add a date."
+                    title: AppCopy.Primer.Decide.undatedTitle,
+                    detail: AppCopy.Primer.Decide.undatedDetail
                 )
             }
 
             Spacer(minLength: 0)
 
             Button(action: continueAction) {
-                Text("Start Deciding")
+                Text(AppCopy.Primer.Decide.action)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)

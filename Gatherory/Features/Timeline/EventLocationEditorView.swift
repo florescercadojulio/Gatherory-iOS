@@ -7,6 +7,7 @@ import SwiftUI
 struct EventLocationEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dismissSearch) private var dismissSearch
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var searchModel = LocationSearchModel()
     @StateObject private var currentLocationModel = CurrentLocationModel()
     @State private var draft: EventLocation?
@@ -54,6 +55,11 @@ struct EventLocationEditorView: View {
                 draft = location
                 searchModel.query = ""
                 dismissSearch()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                currentLocationModel.retryPendingLocationRequest()
+                searchModel.refreshIfNeeded()
             }
             .navigationTitle("Location")
             .navigationBarTitleDisplayMode(.inline)
@@ -269,6 +275,7 @@ private final class CurrentLocationModel: NSObject, ObservableObject, CLLocation
 
     private let manager = CLLocationManager()
     private var requestsLocationAfterAuthorization = false
+    private var shouldRetryLocationWhenAuthorized = false
     private var locationUnknownRetryCount = 0
 
     override init() {
@@ -280,6 +287,7 @@ private final class CurrentLocationModel: NSObject, ObservableObject, CLLocation
     func requestLocation() {
         errorMessage = nil
         locationUnknownRetryCount = 0
+        shouldRetryLocationWhenAuthorized = true
 
         switch manager.authorizationStatus {
         case .notDetermined:
@@ -298,10 +306,9 @@ private final class CurrentLocationModel: NSObject, ObservableObject, CLLocation
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        guard requestsLocationAfterAuthorization else { return }
-
         switch manager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
+            guard requestsLocationAfterAuthorization || shouldRetryLocationWhenAuthorized else { return }
             requestsLocationAfterAuthorization = false
             beginLocationRequest()
         case .denied, .restricted:
@@ -317,8 +324,25 @@ private final class CurrentLocationModel: NSObject, ObservableObject, CLLocation
         }
     }
 
+    /// A person can grant location access in Settings after the first request
+    /// was denied. Keep their original "Use Current Location" intent and
+    /// resume it when Gatherory becomes active instead of requiring another
+    /// tap in the editor.
+    func retryPendingLocationRequest() {
+        guard shouldRetryLocationWhenAuthorized else { return }
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            beginLocationRequest()
+        case .notDetermined, .denied, .restricted:
+            break
+        @unknown default:
+            break
+        }
+    }
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         requestsLocationAfterAuthorization = false
+        shouldRetryLocationWhenAuthorized = false
         guard let location = locations.last else {
             isLocating = false
             errorMessage = "Your current location couldn’t be determined. Try again or search instead."
@@ -413,6 +437,17 @@ private final class LocationSearchModel: NSObject, ObservableObject, MKLocalSear
 
     @Published private(set) var completions: [MKLocalSearchCompletion] = []
     @Published private(set) var errorMessage: String?
+
+    /// Reissue an in-flight location search after the app returns active.
+    /// MapKit search itself needs no location permission, but this lets a
+    /// temporary service interruption recover without changing the query.
+    func refreshIfNeeded() {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else { return }
+        isSearching = true
+        errorMessage = nil
+        completer.queryFragment = trimmedQuery
+    }
     @Published private(set) var isSearching = false
 
     private let completer: MKLocalSearchCompleter

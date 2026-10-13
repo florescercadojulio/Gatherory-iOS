@@ -104,6 +104,18 @@ struct GatheroryTests {
         #expect(track.displayArtworkURL == nil)
     }
 
+    @Test("Approving Music access retries persisted artwork lookups")
+    @MainActor
+    func musicAuthorizationRefreshesArtwork() async {
+        let catalog = MusicCatalog(providers: [ArtworkAuthorizationProvider()])
+        let initialRevision = catalog.artworkRefreshRevision
+
+        let state = await catalog.requestAuthorization(for: .appleMusic)
+
+        #expect(state == .authorized)
+        #expect(catalog.artworkRefreshRevision == initialRevision + 1)
+    }
+
     @Test("Money entry groups large values while preserving their numeric value")
     func moneyEntryFormatting() {
         let locale = Locale(identifier: "en_US")
@@ -140,6 +152,80 @@ struct GatheroryTests {
         for category in TimelineCategory.allCases {
             #expect(category.artworkColors.count >= 3)
         }
+    }
+
+    @Test("Core product copy ships in English and Spanish")
+    func coreProductCopyIsLocalized() throws {
+        let localizablePath = try #require(
+            Bundle.main.path(
+                forResource: "Localizable",
+                ofType: "strings",
+                inDirectory: nil,
+                forLocalization: "es"
+            )
+        )
+        let infoPlistPath = try #require(
+            Bundle.main.path(
+                forResource: "InfoPlist",
+                ofType: "strings",
+                inDirectory: nil,
+                forLocalization: "es"
+            )
+        )
+        let localizableData = try Data(contentsOf: URL(fileURLWithPath: localizablePath))
+        let localizableStrings = try #require(
+            PropertyListSerialization.propertyList(
+                from: localizableData,
+                options: [],
+                format: nil
+            ) as? [String: String]
+        )
+        let infoPlistData = try Data(contentsOf: URL(fileURLWithPath: infoPlistPath))
+        let infoPlistStrings = try #require(
+            PropertyListSerialization.propertyList(
+                from: infoPlistData,
+                options: [],
+                format: nil
+            ) as? [String: String]
+        )
+
+        #expect(localizableStrings["tab.home"] == "Inicio")
+        #expect(localizableStrings["idea.category.music"] == "Música")
+        #expect(localizableStrings["primer.onboarding.welcome.title"] == "Bienvenido a Gatherory")
+        #expect(localizableStrings["primer.decide.title"] == "Decide qué sigue")
+        #expect(
+            infoPlistStrings["NSCameraUsageDescription"]
+                == "Toma fotos para las ideas, los regalos y los eventos que estás organizando."
+        )
+    }
+
+    @Test("Every catalog entry ships with a Spanish translation")
+    func everyCatalogEntryHasSpanishTranslation() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let catalogURL = repositoryRoot.appendingPathComponent("Gatherory/Localizable.xcstrings")
+        let catalogData = try Data(contentsOf: catalogURL)
+        let catalog = try #require(
+            JSONSerialization.jsonObject(with: catalogData) as? [String: Any]
+        )
+        let strings = try #require(catalog["strings"] as? [String: [String: Any]])
+
+        let missingSpanishKeys = strings.compactMap { key, entry -> String? in
+            guard
+                let localizations = entry["localizations"] as? [String: Any],
+                let spanish = localizations["es"] as? [String: Any],
+                let stringUnit = spanish["stringUnit"] as? [String: Any],
+                stringUnit["state"] as? String == "translated",
+                (stringUnit["value"] as? String) != nil
+            else {
+                return key
+            }
+
+            return nil
+        }
+
+        #expect(missingSpanishKeys.isEmpty)
     }
 
     @Test("Account privacy links use Gatherory's public legal destinations")
@@ -1488,6 +1574,17 @@ struct GatheroryTests {
         #expect(restored.note == idea.note)
     }
 
+}
+
+private struct ArtworkAuthorizationProvider: MusicCatalogProviding {
+    let id = MusicProviderID.appleMusic
+    let displayName = "Apple Music"
+
+    func authorizationState() -> MusicAuthorizationState { .notDetermined }
+
+    func requestAuthorization() async -> MusicAuthorizationState { .authorized }
+
+    func searchSongs(matching term: String, limit: Int) async throws -> [MusicTrack] { [] }
 }
 
 private struct LegacyMusicTrack: Encodable {

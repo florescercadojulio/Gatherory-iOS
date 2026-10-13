@@ -10,19 +10,19 @@ enum PlanningMode: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .openToIdeas: "Open to Ideas"
-        case .helpMeDecide: "Help Me Decide"
-        case .quietPlanning: "Quiet Planning"
-        case .decisionMade: "Decision Made"
+        case .openToIdeas: AppCopy.Planning.openToIdeas
+        case .helpMeDecide: AppCopy.Planning.helpMeDecide
+        case .quietPlanning: AppCopy.Planning.quietPlanning
+        case .decisionMade: AppCopy.Planning.decisionMade
         }
     }
 
     var detail: String {
         switch self {
-        case .openToIdeas: "Your circle can send inspiration."
-        case .helpMeDecide: "Invite votes on selected options."
-        case .quietPlanning: "Collect ideas without interruptions."
-        case .decisionMade: "This planning topic is closed."
+        case .openToIdeas: AppCopy.Planning.openToIdeasDetail
+        case .helpMeDecide: AppCopy.Planning.helpMeDecideDetail
+        case .quietPlanning: AppCopy.Planning.quietPlanningDetail
+        case .decisionMade: AppCopy.Planning.decisionMadeDetail
         }
     }
 
@@ -62,19 +62,19 @@ enum IdeaCategory: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .event: "Event"
-        case .registry: "Registry"
-        case .link: "Link"
-        case .venue: "Venue"
-        case .attire: "Attire"
-        case .flowers: "Flowers"
-        case .food: "Food & Cake"
-        case .photography: "Photography"
-        case .music: "Music"
-        case .decor: "Decor"
-        case .invitations: "Invitations"
-        case .honeymoon: "Honeymoon"
-        case .other: "Other"
+        case .event: AppCopy.IdeaCategory.event
+        case .registry: AppCopy.IdeaCategory.registry
+        case .link: AppCopy.IdeaCategory.link
+        case .venue: AppCopy.IdeaCategory.venue
+        case .attire: AppCopy.IdeaCategory.attire
+        case .flowers: AppCopy.IdeaCategory.flowers
+        case .food: AppCopy.IdeaCategory.food
+        case .photography: AppCopy.IdeaCategory.photography
+        case .music: AppCopy.IdeaCategory.music
+        case .decor: AppCopy.IdeaCategory.decor
+        case .invitations: AppCopy.IdeaCategory.invitations
+        case .honeymoon: AppCopy.IdeaCategory.honeymoon
+        case .other: AppCopy.IdeaCategory.other
         }
     }
 
@@ -128,12 +128,12 @@ enum IdeaStatus: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .new: "New"
-        case .maybe: "Maybe"
-        case .shortlisted: "Shortlisted"
-        case .chosen: "Approved"
-        case .passed: "Passed"
-        case .archived: "Archived"
+        case .new: AppCopy.IdeaStatus.new
+        case .maybe: AppCopy.IdeaStatus.maybe
+        case .shortlisted: AppCopy.IdeaStatus.shortlisted
+        case .chosen: AppCopy.IdeaStatus.approved
+        case .passed: AppCopy.IdeaStatus.passed
+        case .archived: AppCopy.IdeaStatus.archived
         }
     }
 
@@ -167,12 +167,12 @@ enum AttireStyle: String, CaseIterable, Identifiable, Codable, Hashable {
 
     var title: String {
         switch self {
-        case .any: "Any"
-        case .blackTie: "Black Tie"
-        case .formal: "Formal"
-        case .cocktail: "Cocktail"
-        case .garden: "Garden"
-        case .casual: "Casual"
+        case .any: AppCopy.Attire.any
+        case .blackTie: AppCopy.Attire.blackTie
+        case .formal: AppCopy.Attire.formal
+        case .cocktail: AppCopy.Attire.cocktail
+        case .garden: AppCopy.Attire.garden
+        case .casual: AppCopy.Attire.casual
         }
     }
 }
@@ -194,12 +194,12 @@ enum FoodIdeaType: String, CaseIterable, Identifiable, Codable, Hashable {
 
     var title: String {
         switch self {
-        case .meal: "Meal"
-        case .cake: "Cake"
-        case .dessert: "Dessert"
-        case .drinks: "Drinks"
-        case .tasting: "Tasting"
-        case .other: "Other"
+        case .meal: AppCopy.Food.meal
+        case .cake: AppCopy.Food.cake
+        case .dessert: AppCopy.Food.dessert
+        case .drinks: AppCopy.Food.drinks
+        case .tasting: AppCopy.Food.tasting
+        case .other: AppCopy.Food.other
         }
     }
 

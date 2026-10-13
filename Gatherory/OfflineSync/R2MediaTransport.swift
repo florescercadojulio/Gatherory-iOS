@@ -222,14 +222,9 @@ struct WorkspaceMediaSyncCoordinator {
             do {
                 try persistence.markMediaTransferUploading(transfer.id)
                 let mediaAssetID = try await transport.upload(transfer)
-                guard let workspace = library.workspaces.first(where: {
-                    $0.mainEventID == transfer.scopeID
-                }), workspace.applyMediaAssetID(mediaAssetID, to: transfer.entityID) else {
-                    try persistence.completeMediaTransfer(transfer.id)
-                    continue
+                if try completeUploadedMedia(mediaAssetID, for: transfer) {
+                    summary.changed = true
                 }
-                try persistence.completeMediaTransfer(transfer.id)
-                summary.changed = true
             } catch {
                 try? persistence.failMediaTransfer(transfer.id)
                 // Continue with the remaining attachments. Each transfer is
@@ -239,6 +234,18 @@ struct WorkspaceMediaSyncCoordinator {
         }
         if summary.changed { persistence.flush(library) }
         return summary
+    }
+
+    /// A workspace switch during upload must never retarget the completion
+    /// to the currently selected workspace or its selected child event.
+    func completeUploadedMedia(
+        _ mediaAssetID: UUID,
+        for transfer: PendingMediaTransferSnapshot
+    ) throws -> Bool {
+        let workspace = library.workspaces.first { $0.mainEventID == transfer.scopeID }
+        let changed = workspace?.applyMediaAssetID(mediaAssetID, to: transfer.entityID) ?? false
+        try persistence.completeMediaTransfer(transfer.id)
+        return changed
     }
 
     func downloadMissingMedia(scopeID: UUID) async {

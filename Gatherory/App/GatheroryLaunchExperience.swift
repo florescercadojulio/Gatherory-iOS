@@ -12,11 +12,15 @@ struct GatheroryLaunchContainer: View {
     @Environment(WorkspaceLibrary.self) private var workspaceLibrary
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(WorkspacePersistenceController.self) private var persistence
+    @Environment(InvitationRouter.self) private var invitations
+    @Environment(GuestInvitationStore.self) private var guestInvitations
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("hasSeenDecideTimelinePrimer") private var hasSeenDecideTimelinePrimer = false
     @State private var isShowingSplash = true
     @State private var completedOnboardingThisSession = false
+    @State private var preparedAccountID: String?
+    @State private var hasRestoredAuthentication = false
 
     private var shouldShowLocalOnboarding: Bool {
         guard !completedOnboardingThisSession else { return false }
@@ -26,8 +30,23 @@ struct GatheroryLaunchContainer: View {
     var body: some View {
         ZStack {
             Group {
-                if !authentication.isAuthenticated {
+                if let token = invitations.pendingToken {
+                    if invitations.requiresAuthentication && !authentication.isAuthenticated {
+                        NavigationStack {
+                            AuthenticationView()
+                                .toolbar {
+                                    ToolbarItem(placement: .cancellationAction) {
+                                        Button("Back", systemImage: "chevron.left") { invitations.requiresAuthentication = false }
+                                    }
+                                }
+                        }
+                    } else { NativeInvitationView(token: token).id(token) }
+                } else if !authentication.isAuthenticated {
                     AuthenticationView()
+                } else if preparedAccountID != authentication.currentUser?.id {
+                    AccountOnboardingLoadingView()
+                } else if !guestInvitations.events.isEmpty || invitations.didJoinThisSession {
+                    AppRootView()
                 } else if AppRuntimeConfiguration.alwaysShowsOnboarding && !completedOnboardingThisSession {
                     OnboardingView(onCreateWorkspace: finishOnboarding)
                 } else if AppRuntimeConfiguration.usesRemoteAccountState {
@@ -57,10 +76,7 @@ struct GatheroryLaunchContainer: View {
             }
 
             await authentication.restoreSession()
-            await cloudSync.activate(
-                userID: authentication.currentUser?.id,
-                seedData: AppRuntimeConfiguration.seedsDevelopmentData
-            )
+            hasRestoredAuthentication = true
             if !AppRuntimeConfiguration.usesRemoteAccountState,
                !workspaceLibrary.workspaces.isEmpty,
                !AppRuntimeConfiguration.alwaysShowsOnboarding {
@@ -73,11 +89,21 @@ struct GatheroryLaunchContainer: View {
                 isShowingSplash = false
             }
         }
-        .task(id: authentication.currentUser?.id) {
+        .task(id: "\(hasRestoredAuthentication)|\(authentication.currentUser?.id ?? "signed-out")") {
+            // Never synchronize using a cached profile before its bearer
+            // session has resolved to the canonical account identity.
+            guard hasRestoredAuthentication else { return }
+            invitations.resetJoinedSession()
+            preparedAccountID = nil
+            let account = authentication.currentUser
             await cloudSync.activate(
-                userID: authentication.currentUser?.id,
+                userID: account?.id,
                 seedData: AppRuntimeConfiguration.seedsDevelopmentData
             )
+            guard authentication.currentUser?.id == account?.id else { return }
+            await guestInvitations.activate(account: AppRuntimeConfiguration.usesRemoteAccountState ? account : nil)
+            guard authentication.currentUser?.id == account?.id else { return }
+            preparedAccountID = account?.id
             if !AppRuntimeConfiguration.usesRemoteAccountState,
                !workspaceLibrary.workspaces.isEmpty,
                !AppRuntimeConfiguration.alwaysShowsOnboarding {
@@ -88,6 +114,18 @@ struct GatheroryLaunchContainer: View {
 
     @ViewBuilder
     private var remoteAccountExperience: some View {
+        if guestInvitations.isRefreshing {
+            AccountOnboardingLoadingView()
+        } else if guestInvitations.errorMessage != nil && workspaceLibrary.workspaces.isEmpty {
+            ContentUnavailableView {
+                Label("Couldn’t Load Your Account", systemImage: "icloud.slash")
+            } description: {
+                Text(guestInvitations.errorMessage ?? "")
+            } actions: {
+                Button("Try Again") { Task { await guestInvitations.refresh(force: true); await cloudSync.retryInitialBootstrap() } }
+                Button("Sign Out", role: .destructive) { authentication.signOut() }
+            }
+        } else {
         switch cloudSync.accountOnboardingState {
         case .signedOut, .resolving:
             AccountOnboardingLoadingView()
@@ -105,8 +143,19 @@ struct GatheroryLaunchContainer: View {
                     Task { await cloudSync.retryInitialBootstrap() }
                 }
                 .buttonStyle(.borderedProminent)
+
+                Button(role: .destructive) {
+                    // Bootstrap may be unavailable even though a stale local
+                    // session still identifies an account. Always leave an
+                    // escape hatch so the user can authenticate again.
+                    authentication.signOut()
+                } label: {
+                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+                .buttonStyle(.bordered)
             }
             .padding()
+        }
         }
     }
 

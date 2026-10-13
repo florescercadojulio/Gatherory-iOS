@@ -9,6 +9,7 @@ struct HomeView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isComposingNote = false
+    @State private var isPresentingInvitationSharing = false
     @State private var editorTarget: HomeEventEditorTarget?
     @State private var isAddingEventIdea = false
     @State private var addEventIdeaDetent: PresentationDetent = .large
@@ -125,6 +126,14 @@ struct HomeView: View {
                 if let onExitWorkspace {
                     WorkspaceLibraryToolbarButton(action: onExitWorkspace)
                 }
+
+                if workspace.canManageEvent(workspace.selectedEventReference) {
+                    Button("Share Invitation", systemImage: "square.and.arrow.up") {
+                        isPresentingInvitationSharing = true
+                    }
+                    .labelStyle(.iconOnly)
+                    .accessibilityHint("Invite people to the selected event")
+                }
             }
 
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -188,6 +197,10 @@ struct HomeView: View {
         }
         .sheet(isPresented: $isComposingNote) {
             NoteComposerView()
+                .environment(workspace)
+        }
+        .fullScreenCover(isPresented: $isPresentingInvitationSharing) {
+            CollaborationInviteView()
                 .environment(workspace)
         }
         .sheet(item: $editorTarget) { target in

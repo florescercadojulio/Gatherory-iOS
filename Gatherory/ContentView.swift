@@ -17,13 +17,15 @@ private enum AppTab: Hashable {
 struct AppRootView: View {
     @Environment(WorkspaceLibrary.self) private var workspaceLibrary
     @Environment(\.currentUserAccount) private var currentUserAccount
+    @Environment(GuestInvitationStore.self) private var guests
 
     private var isPresentingWorkspace: Binding<Bool> {
         Binding(
-            get: { workspaceLibrary.selectedWorkspace != nil },
+            get: { workspaceLibrary.selectedWorkspace != nil || guests.selectedPresentation != nil },
             set: { isPresented in
                 if !isPresented {
                     workspaceLibrary.closeWorkspace()
+                    guests.selectedEventID = nil
                 }
             }
         )
@@ -35,7 +37,9 @@ struct AppRootView: View {
         }
         .tint(AppTheme.ColorToken.accent)
         .fullScreenCover(isPresented: isPresentingWorkspace) {
-            if let workspace = workspaceLibrary.selectedWorkspace {
+            if let eventID = guests.selectedEventID {
+                GuestEventInvitationView(eventID: eventID)
+            } else if let workspace = workspaceLibrary.selectedWorkspace {
                 WorkspaceSessionView(
                     workspace: workspace,
                     account: currentUserAccount
@@ -102,7 +106,7 @@ struct ContentView: View {
 
     private var planningTabs: some View {
         TabView(selection: tabSelection) {
-            Tab("Home", systemImage: "house.fill", value: .home) {
+            Tab(AppCopy.Tab.home, systemImage: "house.fill", value: .home) {
                 NavigationStack {
                     HomeView(
                         homeReselectionTrigger: homeReselectionTrigger,
@@ -111,13 +115,13 @@ struct ContentView: View {
                 }
             }
 
-            Tab("Ideas", systemImage: "sparkles.rectangle.stack.fill", value: .ideas) {
+            Tab(AppCopy.Tab.ideas, systemImage: "sparkles.rectangle.stack.fill", value: .ideas) {
                 NavigationStack {
                     IdeasView(onExitWorkspace: onExitWorkspace)
                 }
             }
 
-            Tab("Decide", systemImage: "rectangle.on.rectangle.angled", value: .decide) {
+            Tab(AppCopy.Tab.decide, systemImage: "rectangle.on.rectangle.angled", value: .decide) {
                 NavigationStack {
                     DecisionDeckView(
                         isActive: selectedTab == .decide,
@@ -126,7 +130,7 @@ struct ContentView: View {
                 }
             }
 
-            Tab("Insights", systemImage: "chart.bar.xaxis", value: .insights) {
+            Tab(AppCopy.Tab.insights, systemImage: "chart.bar.xaxis", value: .insights) {
                 NavigationStack {
                     InsightsView(onExitWorkspace: onExitWorkspace)
                 }

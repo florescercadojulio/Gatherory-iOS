@@ -52,10 +52,12 @@ final class PlanningWorkspace {
     var isCollaboratorLinkEnabled: Bool
     var requiresCollaboratorApproval: Bool
     var defaultCollaboratorPermission: PlanningPermission
-    var collaboratorInviteURL: URL
     /// The event currently being planned across Home, Ideas, and Decide.
     /// It is always either the root event or one of its direct children.
     var selectedEventReference: EventReference = .main
+    /// Event-only invitation projections are never editable planning archives.
+    var isInvitationProjection = false
+    var invitationDateIsUndecided = false
 
     /// The signed-in account is runtime presentation context, not persisted
     /// workspace data. Keeping only its stable identity here lets every feature
@@ -100,8 +102,7 @@ final class PlanningWorkspace {
         isRegistryShared: Bool = false,
         isCollaboratorLinkEnabled: Bool = true,
         requiresCollaboratorApproval: Bool = true,
-        defaultCollaboratorPermission: PlanningPermission = .contribute,
-        collaboratorInviteURL: URL = URL(string: "https://gatherory.app/join/planning-circle")!
+        defaultCollaboratorPermission: PlanningPermission = .contribute
     ) {
         self.mainEventID = mainEventID
         self.title = title
@@ -218,7 +219,6 @@ final class PlanningWorkspace {
         self.isCollaboratorLinkEnabled = isCollaboratorLinkEnabled
         self.requiresCollaboratorApproval = requiresCollaboratorApproval
         self.defaultCollaboratorPermission = defaultCollaboratorPermission
-        self.collaboratorInviteURL = collaboratorInviteURL
 
         // Dated, approved event ideas are the only ideas that become Home
         // events. Older local workspaces could contain linked undated items;
@@ -290,6 +290,7 @@ final class PlanningWorkspace {
     }
 
     var showsPlanningInterface: Bool {
+        guard !isInvitationProjection else { return false }
         guard let member = currentViewerMember(for: .main) else { return false }
         return member.participantRole != .guest
     }
@@ -915,6 +916,7 @@ final class PlanningWorkspace {
     }
 
     func canManageEvent(_ reference: EventReference) -> Bool {
+        guard !isInvitationProjection else { return false }
         guard showsPlanningInterface else { return false }
 
         switch reference {
@@ -951,7 +953,8 @@ final class PlanningWorkspace {
     }
 
     func canAddEventMoments(to reference: EventReference) -> Bool {
-        switch reference {
+        guard !isInvitationProjection else { return false }
+        return switch reference {
         case .main:
             !isMainEventDeleted && !currentMainEventStatus.isReadOnly
         case .subevent(let id):

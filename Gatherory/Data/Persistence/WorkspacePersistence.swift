@@ -47,7 +47,6 @@ struct WorkspaceArchiveV1: Codable {
     let isCollaboratorLinkEnabled: Bool
     let requiresCollaboratorApproval: Bool
     let defaultCollaboratorPermission: PlanningPermission
-    let collaboratorInviteURL: URL
 
     init(workspace: PlanningWorkspace) {
         mainEventID = workspace.mainEventID
@@ -83,7 +82,6 @@ struct WorkspaceArchiveV1: Codable {
         isCollaboratorLinkEnabled = workspace.isCollaboratorLinkEnabled
         requiresCollaboratorApproval = workspace.requiresCollaboratorApproval
         defaultCollaboratorPermission = workspace.defaultCollaboratorPermission
-        collaboratorInviteURL = workspace.collaboratorInviteURL
     }
 
     func makeWorkspace() -> PlanningWorkspace {
@@ -120,8 +118,7 @@ struct WorkspaceArchiveV1: Codable {
             isRegistryShared: isRegistryShared,
             isCollaboratorLinkEnabled: isCollaboratorLinkEnabled,
             requiresCollaboratorApproval: requiresCollaboratorApproval,
-            defaultCollaboratorPermission: defaultCollaboratorPermission,
-            collaboratorInviteURL: collaboratorInviteURL
+            defaultCollaboratorPermission: defaultCollaboratorPermission
         )
     }
 }

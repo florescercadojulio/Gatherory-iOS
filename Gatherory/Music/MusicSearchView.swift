@@ -228,6 +228,10 @@ struct MusicTrackArtwork: View {
         track.displayArtworkURL ?? recoveredArtworkURL
     }
 
+    private var artworkTaskID: String {
+        "\(track.id):\(musicCatalog.artworkRefreshRevision)"
+    }
+
     var body: some View {
         AsyncImage(url: artworkURL) { phase in
             switch phase {
@@ -244,7 +248,7 @@ struct MusicTrackArtwork: View {
                 }
             }
         }
-        .task(id: track.id) {
+        .task(id: artworkTaskID) {
             // Search results normally carry an artwork URL. A saved track may
             // not, however, such as when MusicKit returns a lightweight picker
             // result or an older device persisted the playlist before artwork
@@ -268,6 +272,7 @@ struct MusicPlaylistArtwork: View {
     let symbol: String
     let colors: [Color]
     let accent: Color
+    var fallbackAssetName: String? = nil
     var ambientBlurRadius: CGFloat = 36
     var progressiveBlurRadius: CGFloat = 22
     var blurStart: CGFloat = 0.38
@@ -282,18 +287,37 @@ struct MusicPlaylistArtwork: View {
         firstTrack?.displayArtworkURL ?? recoveredArtworkURL
     }
 
+    private var artworkTaskID: String {
+        "\(firstTrack?.id ?? "no-track"):\(musicCatalog.artworkRefreshRevision)"
+    }
+
     var body: some View {
-        MediaArtwork(
-            imageData: imageData,
-            remoteURL: artworkURL,
-            symbol: symbol,
-            colors: colors,
-            accent: accent,
-            ambientBlurRadius: ambientBlurRadius,
-            progressiveBlurRadius: progressiveBlurRadius,
-            blurStart: blurStart
-        )
-        .task(id: firstTrack?.id) {
+        Group {
+            if imageData != nil || artworkURL != nil {
+                MediaArtwork(
+                    imageData: imageData,
+                    remoteURL: artworkURL,
+                    symbol: symbol,
+                    colors: colors,
+                    accent: accent,
+                    ambientBlurRadius: ambientBlurRadius,
+                    progressiveBlurRadius: progressiveBlurRadius,
+                    blurStart: blurStart
+                )
+            } else {
+                MediaArtwork(
+                    imageData: nil,
+                    assetName: fallbackAssetName,
+                    symbol: symbol,
+                    colors: colors,
+                    accent: accent,
+                    ambientBlurRadius: ambientBlurRadius,
+                    progressiveBlurRadius: progressiveBlurRadius,
+                    blurStart: blurStart
+                )
+            }
+        }
+        .task(id: artworkTaskID) {
             guard imageData == nil,
                   let firstTrack,
                   firstTrack.displayArtworkURL == nil else {

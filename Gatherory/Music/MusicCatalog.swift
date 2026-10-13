@@ -165,6 +165,13 @@ private actor AppleMusicArtworkLookup {
 
     private var cachedURLs: [String: URL?] = [:]
 
+    /// Authorization can change after a failed catalog or library lookup.
+    /// Drop display-only URLs so visible playlist artwork can be resolved from
+    /// the newly available MusicKit session.
+    func invalidateCache() {
+        cachedURLs.removeAll()
+    }
+
     func artworkURL(
         catalogID: String,
         title: String,
@@ -248,6 +255,12 @@ private actor AppleMusicArtworkLookup {
 @Observable
 final class MusicCatalog {
     private let providers: [any MusicCatalogProviding]
+    private var observedAuthorizationStates: [MusicProviderID: MusicAuthorizationState] = [:]
+
+    /// Views include this value in their artwork task identity. Incrementing
+    /// it deliberately retries persisted tracks whose first lookup happened
+    /// before the person approved Music access.
+    private(set) var artworkRefreshRevision = 0
 
     init(providers: [any MusicCatalogProviding]? = nil) {
         self.providers = providers ?? [AppleMusicCatalogProvider()]
@@ -263,7 +276,18 @@ final class MusicCatalog {
 
     func requestAuthorization(for id: MusicProviderID) async -> MusicAuthorizationState {
         guard let provider = provider(for: id) else { return .restricted }
-        return await provider.requestAuthorization()
+        let state = await provider.requestAuthorization()
+        await recordAuthorizationState(state, for: id)
+        return state
+    }
+
+    /// Rechecks provider access when the app returns from Settings. This is
+    /// intentionally separate from rendering so the app can recover artwork
+    /// without making the person reopen each playlist.
+    func refreshAuthorizationStates() async {
+        for provider in providers {
+            await recordAuthorizationState(provider.authorizationState(), for: provider.id)
+        }
     }
 
     func searchSongs(
@@ -284,6 +308,21 @@ final class MusicCatalog {
 
     private func provider(for id: MusicProviderID) -> (any MusicCatalogProviding)? {
         providers.first { $0.id == id }
+    }
+
+    private func recordAuthorizationState(
+        _ state: MusicAuthorizationState,
+        for id: MusicProviderID
+    ) async {
+        let previousState = observedAuthorizationStates[id]
+        observedAuthorizationStates[id] = state
+
+        guard state == .authorized, previousState != .authorized else { return }
+
+        if id == .appleMusic {
+            await AppleMusicArtworkLookup.shared.invalidateCache()
+        }
+        artworkRefreshRevision &+= 1
     }
 }
 

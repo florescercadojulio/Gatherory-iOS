@@ -1,0 +1,173 @@
+import Foundation
+
+struct InvitationPreview: Decodable {
+    let requiresSignIn: Bool
+    let title: String?
+    let role: String?
+    let locationName: String?
+    let startsAt: String?
+    let status: String?
+}
+
+struct InvitationAcceptance: Decodable {
+    let eventId: UUID
+    let role: String
+    let planningScopeId: UUID?
+}
+
+struct GuestInvitationFeed: Codable {
+    let events: [GuestEventInvitation]
+}
+
+struct GuestEventInvitation: Codable, Identifiable {
+    let id: UUID
+    let title: String
+    let startsAt: Date?
+    let endsAt: Date?
+    let isAllDay: Bool
+    let timeZone: String
+    let locationName: String?
+    let locationAddress: String?
+    let locationAddressLine2: String?
+    let latitude: Double?
+    let longitude: Double?
+    let mapItemIdentifier: String?
+    let description: String?
+    let dressCode: String?
+    let status: String?
+    let complete: String
+    let viewerPersonId: UUID
+    let role: String
+    var attendance: String
+    let coverURL: URL?
+    let coverId: UUID?
+    var people: [GuestInvitationPerson]
+    let ideas: [GuestInvitationIdea]
+    let moments: [GuestInvitationMoment]
+
+    func makePresentation(account: UserAccount, artwork: [UUID: Data]) -> PlanningWorkspace {
+        let members = people.map { person in
+            WorkspaceMember(id: person.id, userID: person.id == viewerPersonId ? account.id : nil,
+                name: person.name, participantRole: WorkspaceRole(rawValue: person.role) ?? .guest,
+                initials: person.name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased(),
+                attendance: Self.attendance(person.attendance), profileImageURL: person.imageURL,
+                planningPermission: .viewOnly)
+        }
+        let publishedIdeas = ideas.compactMap { item -> PlanningIdea? in
+            guard let category = IdeaCategory(rawValue: item.category) else { return nil }
+            return PlanningIdea(id: item.id, eventID: id, title: item.title, note: item.note,
+                category: category, submittedBy: "", status: .chosen,
+                imageData: item.imageId.flatMap { artwork[$0] }, configuration: item.configuration,
+                invitationVisibility: .shownToGuests)
+        }
+        let workspace = PlanningWorkspace(mainEventID: id, title: title,
+            mainEventStartsAt: startsAt ?? .distantFuture, mainEventEndsAt: endsAt,
+            mainEventIsAllDay: isAllDay, mainEventTimeZoneIdentifier: timeZone,
+            mainEventLocation: EventLocation(address: locationAddress ?? "", locationName: locationName ?? "",
+                addressLine2: locationAddressLine2 ?? "", latitude: latitude, longitude: longitude,
+                mapItemIdentifier: mapItemIdentifier),
+            mainEventImageData: coverId.flatMap { artwork[$0] }, venueName: locationName ?? "", location: locationAddress ?? "",
+            dressCode: dressCode ?? "", eventMessage: description ?? "", planningMode: .quietPlanning,
+            members: members, ideas: publishedIdeas, timeline: [],
+            mainEventStatus: status == "finished" || complete == "complete" ? .finished : status == "draft" ? .draft : .ongoing,
+            mainEventResponse: Self.response(attendance),
+            eventMoments: moments.compactMap { photo in
+                guard let data = artwork[photo.id] else { return nil }
+                return EventMoment(id: photo.id, eventID: id, imageData: data, addedBy: photo.addedBy, addedAt: photo.addedAt)
+            }, registry: [])
+        workspace.isInvitationProjection = true
+        workspace.invitationDateIsUndecided = startsAt == nil
+        if locationName == nil && locationAddress == nil && latitude == nil { workspace.mainEventLocation = nil }
+        workspace.configureViewer(account)
+        return workspace
+    }
+
+    static func attendance(_ value: String) -> AttendanceStatus {
+        switch value { case "going": .going; case "not_sure": .maybe; case "not_going": .declined; default: .invited }
+    }
+    static func response(_ value: String) -> EventResponse? {
+        switch value { case "going": .going; case "not_sure": .notSure; case "not_going": .notGoing; default: nil }
+    }
+}
+
+struct GuestInvitationMoment: Codable {
+    let id: UUID
+    let imageURL: URL?
+    let addedAt: Date
+    let addedBy: String
+}
+
+struct GuestInvitationPerson: Codable {
+    let id: UUID
+    let name: String
+    let imageURL: URL?
+    let role: String
+    var attendance: String
+}
+
+struct GuestInvitationIdea: Codable {
+    let id: UUID
+    let category: String
+    let title: String
+    let note: String
+    let tracks: [MusicTrack]
+    let linkURL: URL?
+    let imageURL: URL?
+    let imageId: UUID?
+    let configuration: IdeaConfiguration
+
+    enum CodingKeys: String, CodingKey { case id, category, title, note, tracks, linkURL, imageURL, imageId, configuration }
+    init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        category = try values.decode(String.self, forKey: .category)
+        title = try values.decode(String.self, forKey: .title)
+        note = try values.decode(String.self, forKey: .note)
+        tracks = try values.decode([MusicTrack].self, forKey: .tracks)
+        linkURL = try values.decodeIfPresent(URL.self, forKey: .linkURL)
+        imageURL = try values.decodeIfPresent(URL.self, forKey: .imageURL)
+        imageId = try values.decodeIfPresent(UUID.self, forKey: .imageId)
+        configuration = (try? values.decode(IdeaConfiguration.self, forKey: .configuration)) ?? .standard
+    }
+}
+
+struct InvitationAPIClient {
+    let baseURL: URL
+    var session: URLSession = .shared
+    var tokenStore: any SessionTokenStore = KeychainSessionTokenStore()
+
+    func request<Value: Decodable>(_ path: String, method: String = "GET", body: [String: String]? = nil,
+                                   query: [URLQueryItem] = [], authenticated: Bool = true) async throws -> Value {
+        var components = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty { components.queryItems = query }
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = method
+        request.timeoutInterval = 30
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = try tokenStore.read(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else if authenticated { throw CloudSyncFailure.invalidSession }
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(body)
+        }
+        let (data, response) = try await session.data(for: request)
+        guard let response = response as? HTTPURLResponse else { throw EventInvitationFailure.unavailable }
+        if response.statusCode == 401 { throw CloudSyncFailure.invalidSession }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let result = try decoder.decode(InvitationEnvelope<Value>.self, from: data)
+        guard (200..<300).contains(response.statusCode), result.ok, let value = result.data else {
+            throw EventInvitationFailure.server(result.error?.userMessage ?? String(localized: "The invitation could not be loaded. Try again."))
+        }
+        return value
+    }
+}
+
+private struct InvitationEnvelope<Value: Decodable>: Decodable {
+    let ok: Bool
+    let data: Value?
+    let error: InvitationSafeError?
+}
+private struct InvitationSafeError: Decodable { let userMessage: String }

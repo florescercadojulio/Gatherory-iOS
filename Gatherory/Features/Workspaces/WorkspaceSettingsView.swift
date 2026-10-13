@@ -75,8 +75,8 @@ struct WorkspaceSettingsView: View {
                     title: "Status",
                     symbol: "checklist",
                     value: workspace.currentMainEventStatus.title,
-                    valueSymbol: workspace.currentMainEventStatus.symbol,
-                    valueColor: statusColor
+                    valueColor: statusColor,
+                    showsStatusMarker: true
                 )
 
                 WorkspaceSettingDetailRow(
@@ -162,8 +162,8 @@ private struct WorkspaceSettingDetailRow: View {
     let title: String
     let symbol: String
     let value: String
-    var valueSymbol: String? = nil
     var valueColor: Color = AppTheme.ColorToken.textSecondary
+    var showsStatusMarker = false
 
     var body: some View {
         Group {
@@ -176,26 +176,34 @@ private struct WorkspaceSettingDetailRow: View {
                         .padding(.leading, AppTheme.Layout.minimumTouchTarget)
                 }
             } else {
-                LabeledContent {
+                HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.standard) {
+                    Label(title, systemImage: symbol)
+                        .foregroundStyle(AppTheme.ColorToken.textPrimary)
+
+                    Spacer(minLength: AppTheme.Spacing.standard)
+
                     valueLabel
                         .multilineTextAlignment(.trailing)
-                } label: {
-                    Label(title, systemImage: symbol)
                 }
+                .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
             }
         }
         .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder
     private var valueLabel: some View {
-        if let valueSymbol {
-            Label(value, systemImage: valueSymbol)
-                .foregroundStyle(valueColor)
-        } else {
+        HStack(spacing: 6) {
+            if showsStatusMarker {
+                Circle()
+                    .fill(valueColor)
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+            }
+
             Text(value)
                 .foregroundStyle(valueColor)
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

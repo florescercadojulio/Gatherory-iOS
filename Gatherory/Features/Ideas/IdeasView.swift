@@ -496,7 +496,9 @@ struct IdeaDetailView: View {
                 ContentUnavailableView("Idea unavailable", systemImage: "sparkles")
             }
         }
-        .navigationTitle("Idea details")
+        // The idea's own title lives in the artwork-led content rather than
+        // competing with it in a fixed navigation header.
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .appImageNavigationBarAppearance()
@@ -605,35 +607,55 @@ struct IdeaDetailView: View {
 private struct IdeaDetailScreen: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(MusicPreviewPlayer.self) private var previewPlayer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @State private var scrollOffset: CGFloat = 0
 
     let idea: PlanningIdea
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack {
-                backgroundArtwork
-                readingScrim
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                        Spacer(minLength: max(proxy.size.height * 0.42, 260))
-                        ideaIdentity
-                        IdeaCategoryDetailContent(idea: idea)
-                        metadata
-                    }
-                    .padding(.horizontal, AppTheme.Layout.screenHorizontal)
-                    .padding(.bottom, AppTheme.Layout.screenBottom)
-                    .frame(minHeight: proxy.size.height, alignment: .bottom)
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+                    Spacer(minLength: max(proxy.size.height * 0.42, 260))
+                    ideaIdentity
+                    IdeaCategoryDetailContent(idea: idea)
+                    metadata
                 }
-                .scrollIndicators(.hidden)
+                .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+                .padding(.bottom, AppTheme.Layout.screenBottom)
+                .frame(minHeight: proxy.size.height, alignment: .bottom)
             }
-            .frame(width: proxy.size.width, height: proxy.size.height)
+            .scrollIndicators(.hidden)
+            .appSoftScrollEdges()
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                max(geometry.contentOffset.y + geometry.contentInsets.top, 0)
+            } action: { _, newOffset in
+                scrollOffset = newOffset
+            }
+            .background {
+                ZStack {
+                    backgroundArtwork
+                        .scaleEffect(1 + (0.06 * activeBlurProgress))
+                        .blur(radius: reduceTransparency ? 0 : 38 * activeBlurProgress, opaque: true)
+                        .clipped()
+                    readingScrim
+                }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+            }
         }
-        .background(.black)
         .onDisappear {
             previewPlayer.stop()
         }
+    }
+
+    private var blurProgress: CGFloat {
+        min(max(scrollOffset / 220, 0), 1)
+    }
+
+    private var activeBlurProgress: CGFloat {
+        reduceMotion ? 0 : blurProgress
     }
 
     @ViewBuilder
@@ -668,11 +690,9 @@ private struct IdeaDetailScreen: View {
     private var readingScrim: some View {
         LinearGradient(
             stops: [
-                .init(color: .clear, location: 0.30),
-                .init(color: .black.opacity(0.05), location: 0.48),
-                .init(color: .black.opacity(reduceTransparency ? 0.56 : 0.22), location: 0.65),
-                .init(color: .black.opacity(reduceTransparency ? 0.78 : 0.46), location: 0.82),
-                .init(color: .black.opacity(reduceTransparency ? 0.88 : 0.60), location: 1)
+                .init(color: .black.opacity(0.02), location: 0),
+                .init(color: .black.opacity(0.18 + 0.18 * blurProgress), location: 0.55),
+                .init(color: .black.opacity(reduceTransparency ? 0.88 : 0.64 + 0.18 * blurProgress), location: 1)
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -2070,15 +2090,7 @@ struct IdeaEditorView: View {
                 }
             } label: {
                 HStack(spacing: AppTheme.Spacing.standard) {
-                    Image(systemName: category.symbol)
-                        .symbolRenderingMode(.hierarchical)
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(category.artworkAccent)
-                        .frame(width: 48, height: 48)
-                        .background(
-                            category.artworkAccent.opacity(0.12),
-                            in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                        )
+                    CategoryGlassIcon(category: category, size: 48)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(category.title)
@@ -2308,18 +2320,9 @@ struct IdeaEditorView: View {
         } label: {
             VStack(spacing: 6) {
                 ZStack(alignment: .topTrailing) {
-                    Image(systemName: option.symbol)
-                        .symbolRenderingMode(.hierarchical)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(
-                            isSelected ? AppTheme.ColorToken.onAccent : option.artworkAccent
-                        )
-                        .frame(width: 38, height: 38)
-                        .background(
-                            isSelected ? option.artworkAccent : Color.clear,
-                            in: Circle()
-                        )
-                        .background(.regularMaterial, in: Circle())
+                    CategoryGlassIcon(category: option, size: 42)
+                        .scaleEffect(isSelected ? 1.06 : 1)
+                        .opacity(isSelected ? 1 : 0.9)
 
                     if isSelected {
                         Image(systemName: "checkmark.circle.fill")

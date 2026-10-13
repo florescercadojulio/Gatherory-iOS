@@ -22,6 +22,8 @@ struct EventInvitationScreen: View {
     @Namespace private var playlistTransition
 
     let reference: EventReference
+    var onAttendanceResponse: ((EventResponse) -> Void)? = nil
+    var isUpdatingAttendance = false
 
     @MainActor
     private var presentation: EventPresentation? {
@@ -35,7 +37,7 @@ struct EventInvitationScreen: View {
                 eyebrow: nil,
                 categoryTitle: "Main Event",
                 categorySymbol: "heart.fill",
-                startsAt: workspace.mainEventStartsAt,
+                startsAt: workspace.invitationDateIsUndecided ? nil : workspace.mainEventStartsAt,
                 endsAt: workspace.mainEventEndsAt,
                 isAllDay: workspace.mainEventIsAllDay,
                 timeZoneIdentifier: workspace.mainEventTimeZoneIdentifier,
@@ -264,7 +266,7 @@ struct EventInvitationScreen: View {
                         setResponse(response)
                     }
                 }
-                .disabled(!event.permitsResponse)
+                .disabled(!event.permitsResponse || isUpdatingAttendance)
                 .padding(.top, AppTheme.Spacing.compact)
                 .appImageOverlayAppearance()
                 .accessibilityLabel("Attendance response")
@@ -787,6 +789,10 @@ struct EventInvitationScreen: View {
     }
 
     private func setResponse(_ response: EventResponse) {
+        if let onAttendanceResponse {
+            onAttendanceResponse(response)
+            return
+        }
         switch reference {
         case .main:
             workspace.setMainEventResponse(response)

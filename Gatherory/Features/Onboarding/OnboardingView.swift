@@ -57,7 +57,7 @@ struct OnboardingView: View {
                         .frame(width: 108, height: 108)
                         .accessibilityHidden(true)
 
-                    Text("Welcome to Gatherory")
+                    Text(AppCopy.Primer.Onboarding.welcomeTitle)
                         .font(.largeTitle.bold())
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 340)
@@ -66,14 +66,14 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
                     OnboardingFeature(
                         symbol: "envelope.open.fill",
-                        title: "Received an invitation?",
-                        message: "Open the link you were sent to view the event and respond."
+                        title: AppCopy.Primer.Onboarding.invitationTitle,
+                        message: AppCopy.Primer.Onboarding.invitationMessage
                     )
 
                     OnboardingFeature(
                         symbol: "rectangle.stack.badge.plus",
-                        title: "Planning something?",
-                        message: "Create an event and bring everyone, every idea, and every detail together."
+                        title: AppCopy.Primer.Onboarding.planningTitle,
+                        message: AppCopy.Primer.Onboarding.planningMessage
                     )
                 }
                 .frame(maxWidth: 520)
@@ -86,7 +86,7 @@ struct OnboardingView: View {
                         .foregroundStyle(AppTheme.ColorToken.accent)
                         .accessibilityHidden(true)
 
-                    Text("Your event can include names, dates, locations, budgets, and participants. You decide who can join and collaborate.")
+                    Text(AppCopy.Primer.Onboarding.collaborationMessage)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -99,7 +99,7 @@ struct OnboardingView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .safeAreaInset(edge: .bottom) {
-            Button("Continue") {
+            Button(AppCopy.Common.continueAction) {
                 page = .create
             }
             .font(.headline)
@@ -120,7 +120,7 @@ struct OnboardingView: View {
                     ZStack(alignment: .topLeading) {
                         onboardingArtwork(width: proxy.size.width)
 
-                        Button("Back", systemImage: "chevron.backward") {
+                        Button(AppCopy.Common.back, systemImage: "chevron.backward") {
                             page = .welcome
                         }
                         .labelStyle(.iconOnly)
@@ -132,14 +132,14 @@ struct OnboardingView: View {
                     }
 
                     VStack(spacing: AppTheme.Spacing.standard) {
-                        Text("Welcome to")
+                        Text(AppCopy.Primer.Onboarding.welcomeEyebrow)
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(.secondary)
 
                         Text("Gatherory")
                             .font(.system(.largeTitle, design: .default, weight: .bold))
 
-                        Text("Create a beautiful home for your event, then shape every plan with the people who matter.")
+                        Text(AppCopy.Primer.Onboarding.createMessage)
                             .font(.title3)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -147,7 +147,7 @@ struct OnboardingView: View {
                     }
                     .padding(.horizontal, AppTheme.Spacing.spacious)
 
-                    Button("Create an Event") {
+                    Button(AppCopy.Primer.Onboarding.createEvent) {
                         isCreatingWorkspace = true
                     }
                     .font(.headline)
@@ -196,7 +196,7 @@ struct OnboardingView: View {
         .frame(height: cardHeight + 42)
         .clipped()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Examples of event workspaces in Gatherory")
+        .accessibilityLabel(AppCopy.Primer.Onboarding.artworkAccessibilityLabel)
     }
 
     private enum Page {

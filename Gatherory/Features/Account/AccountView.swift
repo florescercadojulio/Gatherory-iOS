@@ -5,6 +5,7 @@ struct AccountView: View {
     @Environment(WorkspaceLibrary.self) private var workspaceLibrary
     @Environment(WorkspacePersistenceController.self) private var persistence
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
+    @Environment(GuestInvitationStore.self) private var guestInvitations
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @AppStorage(AppColorThemeChoice.storageKey) private var colorThemeRawValue = AppColorThemeChoice.gatheroryBlue.rawValue
@@ -290,7 +291,9 @@ struct AccountView: View {
             DeleteAccountView(
                 isProcessing: authentication.isProcessing
             ) {
+                let deletedUserID = authentication.currentUser?.id
                 try await authentication.deleteAccount()
+                if let deletedUserID { try guestInvitations.purgeCache(accountID: deletedUserID) }
                 try persistence.purgeAllLocalData(from: workspaceLibrary)
                 dismiss()
             }

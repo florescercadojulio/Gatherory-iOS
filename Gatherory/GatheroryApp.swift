@@ -17,6 +17,8 @@ struct GatheroryApp: App {
     @State private var authentication: AuthenticationSession
     @State private var workspaceLibrary: WorkspaceLibrary
     @State private var cloudSync: WorkspaceCloudSyncController
+    @State private var invitations = InvitationRouter(baseURL: AppRuntimeConfiguration.authenticationBaseURL)
+    @State private var guestInvitations = GuestInvitationStore(baseURL: AppRuntimeConfiguration.authenticationBaseURL)
     @State private var musicCatalog = MusicCatalog()
     @State private var musicPreviewPlayer = MusicPreviewPlayer()
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
@@ -70,6 +72,8 @@ struct GatheroryApp: App {
             .environment(musicPreviewPlayer)
             .environment(persistence)
             .environment(cloudSync)
+            .environment(invitations)
+            .environment(guestInvitations)
             .appUserAppearance(selectedAppearance)
             .environment(
                 \.appContentColorScheme,
@@ -83,13 +87,20 @@ struct GatheroryApp: App {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     cloudSync.schedule(trigger: .appBecameActive)
+                    Task { await guestInvitations.refresh() }
+                    Task {
+                        await musicCatalog.refreshAuthorizationStates()
+                    }
                 } else {
                     musicPreviewPlayer.pause()
                     persistence.flush(workspaceLibrary)
                 }
             }
             .onOpenURL { url in
-                GIDSignIn.sharedInstance.handle(url)
+                if !invitations.receive(url) { GIDSignIn.sharedInstance.handle(url) }
+            }
+            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                if let url = activity.webpageURL { _ = invitations.receive(url) }
             }
         }
     }

@@ -13,15 +13,21 @@ struct CollaborationInviteView: View {
 
 private struct CollaborationInviteScreen: View {
     @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.openURL) private var openURL
     @State private var didCopyLink = false
     @State private var participantEditorTarget: ParticipantEditorTarget?
+    @State private var invitedRole: WorkspaceRole = .guest
+    @State private var isShowingEmailInvite = false
+    @State private var isConfirmingDisable = false
+    @State private var generatedInvitation: GeneratedEventInvitation?
+    @State private var isGenerating = false
+    @State private var invitationError: String?
 
-    private var invitationMessage: String {
-        "Join \(workspace.selectedEventTitle): \(workspace.collaboratorInviteURL.absoluteString)"
+    private var inviteURL: URL? {
+        generatedInvitation?.eventId == workspace.selectedEventID ? generatedInvitation?.url : nil
     }
 
     private var selectedTimelineEvent: TimelineItem? {
@@ -57,8 +63,6 @@ private struct CollaborationInviteScreen: View {
     }
 
     var body: some View {
-        @Bindable var workspace = workspace
-
         ZStack {
             CollaborationBackdrop(
                 imageData: selectedEventImageData,
@@ -71,10 +75,7 @@ private struct CollaborationInviteScreen: View {
                     eventPreview
                         .frame(maxWidth: .infinity)
 
-                    linkSharingCard(
-                        linkEnabled: $workspace.isCollaboratorLinkEnabled,
-                        requiresApproval: $workspace.requiresCollaboratorApproval
-                    )
+                    linkSharingCard
 
                     workspacePeople
                 }
@@ -96,31 +97,25 @@ private struct CollaborationInviteScreen: View {
                 .labelStyle(.iconOnly)
                 .tint(.white)
             }
-
-            ToolbarItemGroup(placement: .primaryAction) {
-                invitationShareLink {
-                    Label("Share Invitation", systemImage: "square.and.arrow.up")
-                        .labelStyle(.iconOnly)
-                }
-                .tint(.white)
-                .accessibilityHint("Opens sharing options including AirDrop")
-
-                NavigationLink {
-                    CollaboratorPickerView()
-                } label: {
-                    Label("Add Person", systemImage: "person.badge.plus")
-                        .labelStyle(.iconOnly)
-                }
-                .tint(.white)
-
-                NavigationLink {
-                    CollaborationSharingSettingsView()
-                } label: {
-                    Label("Sharing settings", systemImage: "slider.horizontal.3")
-                        .labelStyle(.iconOnly)
-                }
-                .tint(.white)
+        }
+        .navigationTitle("Invite")
+        .onChange(of: workspace.selectedEventID) { _, _ in clearInvitation() }
+        .onChange(of: invitedRole) { _, _ in clearInvitation() }
+        .confirmationDialog("Disable this invitation link?", isPresented: $isConfirmingDisable, titleVisibility: .visible) {
+            Button("Disable Link", role: .destructive) {
+                Task { await revokeInvitation() }
             }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Disabling a link stops new joins. People who already joined keep their access.")
+        }
+        .sheet(isPresented: $isShowingEmailInvite) {
+            NavigationStack {
+                EmailInvitationView(eventID: workspace.selectedEventID, eventTitle: workspace.selectedEventTitle)
+            }
+            .environment(cloudSync)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(item: $participantEditorTarget) { target in
             NavigationStack {
@@ -133,7 +128,11 @@ private struct CollaborationInviteScreen: View {
     }
 
     private var eventPreview: some View {
-        ZStack(alignment: .bottom) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: AppTheme.Spacing.standard))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: AppTheme.Spacing.standard))
+
+        return layout {
             MediaArtwork(
                 imageData: selectedEventImageData,
                 assetName: workspace.isMainEventContext ? "DefaultVenueHero" : nil,
@@ -142,122 +141,140 @@ private struct CollaborationInviteScreen: View {
                 accent: selectedEventCategory.artworkAccent,
                 progressiveBlurRadius: 0
             )
+            .frame(width: 72, height: 88)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .accessibilityHidden(true)
 
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.78)],
-                startPoint: .center,
-                endPoint: .bottom
-            )
-
-            VStack(spacing: 5) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(workspace.selectedEventTitle)
-                    .font(.headline)
-                    .lineLimit(2)
+                    .font(.title2.bold())
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text(selectedEventDate, format: .dateTime.month(.abbreviated).day().year())
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.84))
 
                 if let selectedEventLocation {
                     Text(selectedEventLocation)
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.72))
-                        .lineLimit(1)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.84))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .multilineTextAlignment(.center)
-            .padding(AppTheme.Spacing.standard)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .foregroundStyle(.white)
-        .frame(
-            width: dynamicTypeSize.isAccessibilitySize ? 210 : 168,
-            height: dynamicTypeSize.isAccessibilitySize ? 270 : 218
-        )
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                .stroke(.white.opacity(0.30), lineWidth: 0.5)
-        }
-        .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(eventPreviewAccessibilityLabel)
     }
 
-    private var eventPreviewAccessibilityLabel: String {
-        let date = selectedEventDate.formatted(date: .long, time: .omitted)
-        guard let selectedEventLocation else {
-            return "\(workspace.selectedEventTitle), \(date)"
-        }
-        return "\(workspace.selectedEventTitle), \(date), \(selectedEventLocation)"
-    }
-
-    private func linkSharingCard(
-        linkEnabled: Binding<Bool>,
-        requiresApproval: Binding<Bool>
-    ) -> some View {
+    private var linkSharingCard: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            HStack(alignment: .firstTextBaseline) {
+            if dynamicTypeSize.isAccessibilitySize {
+                Text("Anyone with the Link")
+                    .font(.headline)
+            } else {
                 Label("Anyone with the Link", systemImage: "link")
-                    .font(.title3.bold())
-
-                Spacer(minLength: AppTheme.Spacing.compact)
-
-                Toggle("Invite link", isOn: linkEnabled)
-                    .labelsHidden()
+                    .font(.headline)
             }
 
-            LazyVGrid(
-                columns: Array(
-                    repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.compact),
-                    count: 4
-                ),
-                spacing: AppTheme.Spacing.standard
-            ) {
-                inviteAction(title: "Messages", systemImage: "message.fill") {
-                    sendMessage()
-                }
+            if dynamicTypeSize.isAccessibilitySize {
+                linkAccessPicker.pickerStyle(.menu)
+            } else {
+                linkAccessPicker.pickerStyle(.segmented)
+            }
 
-                inviteAction(title: "Mail", systemImage: "envelope.fill") {
-                    sendEmail()
-                }
+            Text(invitedRole == .guest
+                 ? String(localized: "Guests can view the invitation and RSVP. Planning stays private.")
+                 : String(localized: "Anyone with this link will have planning controls. Share it only with people you trust."))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-                invitationShareLink {
-                    inviteActionLabel(
-                        title: "AirDrop & More",
-                        systemImage: "airplayaudio"
-                    )
-                }
-                .buttonStyle(.plain)
+            if let inviteURL {
+                InvitationDeliveryActions(
+                    eventTitle: workspace.selectedEventTitle,
+                    invitationURL: inviteURL,
+                    previewImage: invitationPreviewImage
+                )
+                .id(inviteURL)
+                .disabled(isGenerating)
 
-                inviteAction(
-                    title: didCopyLink ? "Copied" : "Copy Link",
-                    systemImage: didCopyLink ? "checkmark" : "link"
-                ) {
-                    UIPasteboard.general.url = workspace.collaboratorInviteURL
-                    withAnimation(.snappy) {
+                HStack {
+                    Button {
+                        UIPasteboard.general.url = inviteURL
                         didCopyLink = true
+                    } label: {
+                        Label(didCopyLink ? "Copied" : "Copy Link",
+                              systemImage: didCopyLink ? "checkmark" : "link")
                     }
+                    .frame(minHeight: 44)
+                    .disabled(isGenerating)
+
+                    Spacer()
+
+                    Menu {
+                        Button("Disable Link", systemImage: "link.badge.minus", role: .destructive) {
+                            isConfirmingDisable = true
+                        }
+                    } label: {
+                        Label("Link Options", systemImage: "ellipsis")
+                            .labelStyle(.iconOnly)
+                            .frame(width: 44, height: 44)
+                    }
+                    .disabled(isGenerating)
                 }
+            } else {
+                Button {
+                    Task { await generateInvitation() }
+                } label: {
+                    HStack {
+                        if isGenerating { ProgressView() }
+                        Text(isGenerating ? String(localized: "Preparing Invitation…") : String(localized: "Create Invitation Link"))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isGenerating)
+            }
+
+            if let invitationError {
+                Label {
+                    Text(invitationError)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                }
+                .font(.footnote)
+                .foregroundStyle(AppTheme.ColorToken.warning)
             }
 
             Divider()
 
-            Toggle(isOn: requiresApproval) {
-                Label("Approve Collaborators", systemImage: "lock.fill")
-                    .font(.body.weight(.medium))
+            Button {
+                isShowingEmailInvite = true
+            } label: {
+                HStack {
+                    Label("Invite by Email", systemImage: "envelope")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
-
-            Text(
-                workspace.requiresCollaboratorApproval
-                    ? "People who use the link will ask to join before they can see or change plans."
-                    : "Anyone with the link can join with the default access level."
-            )
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            .buttonStyle(.plain)
+            .disabled(isGenerating)
         }
-        .padding(AppTheme.Spacing.spacious)
+        .padding(AppTheme.Spacing.standard)
         .collaborationCard(reduceTransparency: reduceTransparency)
+    }
+
+    private var linkAccessPicker: some View {
+        Picker("Link Access", selection: $invitedRole) {
+            Text("Guest").tag(WorkspaceRole.guest)
+            Text("Collaborator").tag(WorkspaceRole.collaborator)
+        }
+        .disabled(isGenerating)
     }
 
     private var workspacePeople: some View {
@@ -365,66 +382,158 @@ private struct CollaborationInviteScreen: View {
         }
     }
 
-    private func inviteAction(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            inviteActionLabel(title: title, systemImage: systemImage)
-        }
-        .buttonStyle(.plain)
-        .disabled(!workspace.isCollaboratorLinkEnabled)
+    private func clearInvitation() {
+        generatedInvitation = nil
+        didCopyLink = false
+        invitationError = nil
     }
 
-    /// Sharing the invitation URL through the system sheet automatically
-    /// includes AirDrop and the system's supported nearby-device behavior.
-    private func invitationShareLink<Label: View>(
-        @ViewBuilder label: () -> Label
-    ) -> some View {
-        ShareLink(
-            item: workspace.collaboratorInviteURL,
-            subject: Text("Join \(workspace.selectedEventTitle)"),
-            message: Text(invitationMessage),
-            preview: SharePreview(
-                workspace.selectedEventTitle,
-                image: invitationPreviewImage
-            ),
-            label: label
-        )
-        .disabled(!workspace.isCollaboratorLinkEnabled)
-    }
-
-    private func inviteActionLabel(title: String, systemImage: String) -> some View {
-        VStack(spacing: 7) {
-            Image(systemName: systemImage)
-                .font(.title2)
-                .frame(width: 52, height: 52)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            Text(title)
-                .font(.caption)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .frame(minHeight: 30, alignment: .top)
-        }
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-        .opacity(workspace.isCollaboratorLinkEnabled ? 1 : 0.45)
-    }
-
-    private func sendMessage() {
-        guard let encodedMessage = invitationMessage.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "sms:&body=\(encodedMessage)") else {
+    @MainActor
+    private func generateInvitation() async {
+        clearInvitation()
+        guard !isGenerating, !cloudSync.isSynchronizing,
+              let baseURL = AppRuntimeConfiguration.authenticationBaseURL else {
+            invitationError = EventInvitationFailure.unavailable.localizedDescription
             return
         }
-        openURL(url)
+        let eventID = workspace.selectedEventID
+        isGenerating = true
+        defer { isGenerating = false }
+        do {
+            // A new/local event must exist canonically before an invite can reference it.
+            await cloudSync.synchronize(trigger: .manual)
+            if cloudSync.lastError != nil { throw EventInvitationFailure.unavailable }
+            let invitation = try await EventInvitationClient(baseURL: baseURL).create(
+                eventID: eventID, name: nil,
+                email: nil, role: invitedRole,
+                permission: invitedRole == .guest ? .viewOnly : .manage
+            )
+            guard workspace.selectedEventID == eventID else { return }
+            generatedInvitation = invitation
+        } catch {
+            invitationError = error.localizedDescription
+        }
     }
 
-    private func sendEmail() {
-        let subject = "Join \(workspace.selectedEventTitle)"
-        guard let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let encodedMessage = invitationMessage.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "mailto:?subject=\(encodedSubject)&body=\(encodedMessage)") else {
+    private func revokeInvitation() async {
+        guard !isGenerating, let invitation = generatedInvitation,
+              invitation.email == nil, let baseURL = AppRuntimeConfiguration.authenticationBaseURL else { return }
+        isGenerating = true
+        defer { isGenerating = false }
+        do {
+            try await EventInvitationClient(baseURL: baseURL).revoke(eventID: invitation.eventId)
+            clearInvitation()
+        } catch { invitationError = error.localizedDescription }
+    }
+}
+
+/// Email-bound invitations have their own draft, so preparing one never
+/// replaces the public link or its selected access level in the parent view.
+private struct EmailInvitationView: View {
+    @Environment(WorkspaceCloudSyncController.self) private var cloudSync
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var email = ""
+    @State private var role: WorkspaceRole = .guest
+    @State private var invitation: GeneratedEventInvitation?
+    @State private var isPreparing = false
+    @State private var errorMessage: String?
+    @State private var didCopyLink = false
+
+    let eventID: UUID
+    let eventTitle: String
+
+    var body: some View {
+        Form {
+            Section {
+                Text(eventTitle)
+                    .font(.headline)
+                TextField("Name (optional)", text: $name)
+                    .textContentType(.name)
+                TextField("Email", text: $email)
+                    .keyboardType(.emailAddress)
+                    .textContentType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Picker("Role", selection: $role) {
+                    ForEach(WorkspaceRole.allCases) { option in
+                        Text(LocalizedStringKey(option.title)).tag(option)
+                    }
+                }
+            } footer: {
+                Text("Only the invited email address can accept this link. Share it using the options below; Gatherory does not send an email automatically.")
+            }
+            .disabled(isPreparing)
+
+            Section {
+                if let invitation {
+                    InvitationDeliveryActions(eventTitle: eventTitle, invitationURL: invitation.url)
+                        .id(invitation.url)
+                    Button {
+                        UIPasteboard.general.url = invitation.url
+                        didCopyLink = true
+                    } label: {
+                        Label(didCopyLink ? "Copied" : "Copy Link", systemImage: didCopyLink ? "checkmark" : "link")
+                    }
+                } else {
+                    Button {
+                        Task { await prepareInvitation() }
+                    } label: {
+                        HStack {
+                            if isPreparing { ProgressView() }
+                            Text(isPreparing ? String(localized: "Preparing Invitation…") : String(localized: "Create Invitation Link"))
+                        }
+                    }
+                    .disabled(isPreparing || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+
+            if let errorMessage {
+                Section {
+                    Text(errorMessage)
+                        .foregroundStyle(AppTheme.ColorToken.warning)
+                }
+            }
+        }
+        .navigationTitle("Invite by Email")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close", systemImage: "xmark") { dismiss() }
+                    .labelStyle(.iconOnly)
+            }
+        }
+        .onChange(of: email) { _, _ in clearDraftLink() }
+        .onChange(of: name) { _, _ in clearDraftLink() }
+        .onChange(of: role) { _, _ in clearDraftLink() }
+    }
+
+    private func clearDraftLink() {
+        invitation = nil
+        didCopyLink = false
+        errorMessage = nil
+    }
+
+    @MainActor
+    private func prepareInvitation() async {
+        guard !isPreparing, !cloudSync.isSynchronizing,
+              let baseURL = AppRuntimeConfiguration.authenticationBaseURL else {
+            errorMessage = EventInvitationFailure.unavailable.localizedDescription
             return
         }
-        openURL(url)
+        isPreparing = true
+        errorMessage = nil
+        defer { isPreparing = false }
+        do {
+            await cloudSync.synchronize(trigger: .manual)
+            if cloudSync.lastError != nil { throw EventInvitationFailure.unavailable }
+            let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            invitation = try await EventInvitationClient(baseURL: baseURL).create(
+                eventID: eventID, name: trimmedName.isEmpty ? nil : trimmedName,
+                email: email, role: role,
+                permission: role == .guest ? .viewOnly : .manage
+            )
+        } catch { errorMessage = error.localizedDescription }
     }
 }
 
@@ -642,288 +751,6 @@ private struct CollaborationBackdrop: View {
     }
 }
 
-private struct CollaborationSharingSettingsView: View {
-    @Environment(PlanningWorkspace.self) private var workspace
-
-    var body: some View {
-        @Bindable var workspace = workspace
-
-        Form {
-            Section {
-                Toggle("Invite Link", systemImage: "link", isOn: $workspace.isCollaboratorLinkEnabled)
-
-                Toggle(
-                    "Approve Collaborators",
-                    systemImage: "person.badge.shield.checkmark.fill",
-                    isOn: $workspace.requiresCollaboratorApproval
-                )
-                .disabled(!workspace.isCollaboratorLinkEnabled)
-            } footer: {
-                Text("Approval keeps the planning circle private even if the link is forwarded.")
-            }
-
-            Section("Default access") {
-                Picker("Access", selection: $workspace.defaultCollaboratorPermission) {
-                    ForEach(PlanningPermission.inviteOptions) { permission in
-                        Label(permission.title, systemImage: permission.symbol)
-                            .tag(permission)
-                    }
-                }
-
-                Text(workspace.defaultCollaboratorPermission.detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .appSoftScrollEdges()
-        .background(AppTheme.ColorToken.background)
-        .navigationTitle("Sharing Settings")
-        .navigationBarTitleDisplayMode(.inline)
-        .appClearNavigationBar()
-    }
-}
-
-private struct CollaboratorPickerView: View {
-    @Environment(PlanningWorkspace.self) private var workspace
-    @Environment(\.dismiss) private var dismiss
-    @State private var searchText = ""
-    @State private var role: WorkspaceRole = .collaborator
-
-    private let suggestions = SuggestedCollaborator.samples
-
-    private var normalizedSearchText: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func matchesSearch(name: String, email: String?) -> Bool {
-        normalizedSearchText.isEmpty
-            || name.localizedCaseInsensitiveContains(normalizedSearchText)
-            || email?.localizedCaseInsensitiveContains(normalizedSearchText) == true
-    }
-
-    private var availableMainEventParticipants: [WorkspaceMember] {
-        guard !workspace.isMainEventContext else { return [] }
-        let includedIDs = Set(workspace.selectedEventParticipants.map(\.id))
-        return workspace.participants(for: .main).filter { member in
-            !includedIDs.contains(member.id)
-                && matchesSearch(name: member.name, email: member.email)
-        }
-    }
-
-    private var filteredSuggestions: [SuggestedCollaborator] {
-        suggestions.filter { suggestion in
-            let isNewToEvent = !workspace.selectedEventParticipants.contains { member in
-                let sameName = member.name.localizedCaseInsensitiveCompare(suggestion.name) == .orderedSame
-                let sameEmail = member.email?.localizedCaseInsensitiveCompare(suggestion.email) == .orderedSame
-                return sameName || sameEmail
-            }
-            return isNewToEvent && matchesSearch(name: suggestion.name, email: suggestion.email)
-        }
-    }
-
-    var body: some View {
-        List {
-            Section("Role") {
-                Picker("Role", selection: $role) {
-                    ForEach(WorkspaceRole.allCases) { option in
-                        Label(option.title, systemImage: option.symbol)
-                            .tag(option)
-                    }
-                }
-
-                Text(role.detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Not in Suggestions") {
-                NavigationLink {
-                    NewParticipantView(initialRole: role)
-                } label: {
-                    Label("New Person", systemImage: "plus.circle")
-                }
-            }
-
-            if !availableMainEventParticipants.isEmpty {
-                Section("From Main Event") {
-                    ForEach(availableMainEventParticipants) { member in
-                        Button {
-                            workspace.addParticipant(member.id)
-                            dismiss()
-                        } label: {
-                            ExistingParticipantRow(member: member)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-
-            Section("Suggested") {
-                ForEach(filteredSuggestions) { suggestion in
-                    Button {
-                        workspace.inviteParticipant(
-                            name: suggestion.name,
-                            email: suggestion.email,
-                            initials: initials(for: suggestion.name),
-                            role: role
-                        )
-                        dismiss()
-                    } label: {
-                        SuggestedCollaboratorRow(suggestion: suggestion)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .appSoftScrollEdges()
-        .background(AppTheme.ColorToken.background)
-        .navigationTitle("Choose a Person")
-        .navigationBarTitleDisplayMode(.inline)
-        .appClearNavigationBar()
-        .searchable(text: $searchText, prompt: "Name or email")
-    }
-}
-
-private struct ExistingParticipantRow: View {
-    let member: WorkspaceMember
-
-    var body: some View {
-        HStack(spacing: AppTheme.Spacing.standard) {
-            ParticipantAvatarView(member: member, size: 42)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(member.name)
-                    .foregroundStyle(.primary)
-
-                Text(member.participantRole.title)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Adds this person to the selected event")
-    }
-}
-
-private struct NewParticipantView: View {
-    @Environment(PlanningWorkspace.self) private var workspace
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var email = ""
-    @State private var role: WorkspaceRole
-
-    init(initialRole: WorkspaceRole) {
-        _role = State(initialValue: initialRole)
-    }
-
-    var body: some View {
-        Form {
-            Section("Person") {
-                TextField("Name", text: $name)
-                    .textContentType(.name)
-
-                TextField("Email (optional)", text: $email)
-                    .textContentType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.emailAddress)
-            }
-
-            Section("Role") {
-                Picker("Role", selection: $role) {
-                    ForEach(WorkspaceRole.allCases) { option in
-                        Label(option.title, systemImage: option.symbol)
-                            .tag(option)
-                    }
-                }
-
-                Text(role.detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .background(AppTheme.ColorToken.background)
-        .navigationTitle("New Person")
-        .navigationBarTitleDisplayMode(.inline)
-        .appClearNavigationBar()
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Invite") {
-                    invite()
-                }
-                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-    }
-
-    private func invite() {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        workspace.inviteParticipant(
-            name: trimmedName,
-            email: trimmedEmail.isEmpty ? nil : trimmedEmail,
-            initials: initials(for: trimmedName),
-            role: role
-        )
-        dismiss()
-    }
-}
-
-private struct SuggestedCollaboratorRow: View {
-    let suggestion: SuggestedCollaborator
-
-    var body: some View {
-        HStack(spacing: AppTheme.Spacing.standard) {
-            Text(initials(for: suggestion.name))
-                .font(.subheadline.bold())
-                .foregroundStyle(.white)
-                .frame(width: 42, height: 42)
-                .background(suggestion.tint, in: Circle())
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(suggestion.name)
-                    .foregroundStyle(.primary)
-
-                Text(suggestion.email)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Invites this person")
-    }
-}
-
-private struct SuggestedCollaborator: Identifiable {
-    let id = UUID()
-    let name: String
-    let email: String
-    let tint: Color
-
-    static let samples = [
-        SuggestedCollaborator(name: "Avery Morgan", email: "avery@example.com", tint: AppTheme.ColorToken.avatar(1)),
-        SuggestedCollaborator(name: "Casey Lee", email: "casey@example.com", tint: AppTheme.ColorToken.avatar(5)),
-        SuggestedCollaborator(name: "Elena Brooks", email: "elena@example.com", tint: AppTheme.ColorToken.avatar(2)),
-        SuggestedCollaborator(name: "Maya Patel", email: "maya@example.com", tint: AppTheme.ColorToken.avatar(3)),
-        SuggestedCollaborator(name: "Noah Kim", email: "noah@example.com", tint: AppTheme.ColorToken.avatar(0))
-    ]
-}
-
-private func initials(for name: String) -> String {
-    name
-        .split(separator: " ")
-        .prefix(2)
-        .compactMap(\.first)
-        .map(String.init)
-        .joined()
-        .uppercased()
-}
 
 private extension View {
     @ViewBuilder
@@ -948,6 +775,10 @@ private extension View {
 }
 
 #Preview {
+    let persistence = try! WorkspacePersistenceController(isStoredInMemoryOnly: true)
+    let library = WorkspaceLibrary.sample
+
     CollaborationInviteView()
         .environment(PlanningWorkspace.sample)
+        .environment(WorkspaceCloudSyncController(persistence: persistence, library: library, baseURL: nil))
 }

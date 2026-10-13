@@ -107,7 +107,14 @@ final class WorkspaceCloudSyncController {
     }
 
     func retryInitialBootstrap() async {
-        guard activeUserID != nil else { return }
+        guard let userID = activeUserID else { return }
+        // Do not let a pre-invitation bootstrap overwrite a later request to
+        // discover newly granted planning scopes.
+        while isSynchronizing {
+            do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+            guard activeUserID == userID else { return }
+        }
+        guard activeUserID == userID else { return }
         accountOnboardingState = .resolving
         hasBootstrappedUserID = nil
         await synchronize(trigger: .manual)

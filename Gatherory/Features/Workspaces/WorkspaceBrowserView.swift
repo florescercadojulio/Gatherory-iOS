@@ -2,6 +2,8 @@ import SwiftUI
 
 struct WorkspaceBrowserView: View {
     @Environment(WorkspaceLibrary.self) private var library
+    @Environment(GuestInvitationStore.self) private var guests
+    @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(\.currentUserAccount) private var currentUserAccount
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isAddingWorkspace = false
@@ -17,14 +19,20 @@ struct WorkspaceBrowserView: View {
 
     private var filteredWorkspaces: [PlanningWorkspace] {
         workspaceFilter.workspaces(
-            from: library.workspaces,
+            from: browsableWorkspaces,
             for: currentUserAccount
         )
     }
 
+    private var browsableWorkspaces: [PlanningWorkspace] {
+        let planning = library.workspaces.filter { $0.showsPlanningInterface || guests.presentations[$0.mainEventID] == nil }
+        let represented = Set(planning.flatMap { [$0.mainEventID] + $0.timeline.map(\.id) })
+        return planning + guests.events.compactMap { represented.contains($0.id) ? nil : guests.presentations[$0.id] }
+    }
+
     var body: some View {
         Group {
-            if library.workspaces.isEmpty {
+            if browsableWorkspaces.isEmpty {
                 emptyState
             } else if filteredWorkspaces.isEmpty {
                 filteredEmptyState
@@ -33,7 +41,8 @@ struct WorkspaceBrowserView: View {
                     LazyVGrid(columns: columns, spacing: AppTheme.Spacing.standard) {
                         ForEach(filteredWorkspaces, id: \.mainEventID) { workspace in
                             Button {
-                                library.open(workspace)
+                                if workspace.isInvitationProjection { guests.selectedEventID = workspace.mainEventID }
+                                else { library.open(workspace) }
                             } label: {
                                 WorkspacePreviewCard(workspace: workspace)
                             }
@@ -50,6 +59,18 @@ struct WorkspaceBrowserView: View {
             }
         }
         .background(AppTheme.ColorToken.background)
+        .refreshable {
+            await guests.refresh(force: true)
+            await cloudSync.synchronize(trigger: .manual)
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let message = guests.errorMessage {
+                VStack(spacing: 8) {
+                    Text(message).font(.footnote)
+                    Button("Try Again") { Task { await guests.refresh(force: true) } }
+                }.padding().frame(maxWidth: .infinity).background(.regularMaterial)
+            }
+        }
         .navigationTitle("Workspaces")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -130,7 +151,7 @@ struct WorkspaceBrowserView: View {
                 workspaceFilter = filter
             } label: {
                 Label {
-                    Text("\(filter.title) (\(filter.workspaces(from: library.workspaces, for: currentUserAccount).count))")
+                    Text("\(filter.title) (\(filter.workspaces(from: browsableWorkspaces, for: currentUserAccount).count))")
                 } icon: {
                     Image(systemName: workspaceFilter == filter ? "checkmark" : filter.symbol)
                 }
@@ -314,7 +335,7 @@ private struct WorkspacePreviewCard: View {
                     .font(AppTheme.Typography.sectionTitle)
                     .lineLimit(2)
 
-                Text(workspace.mainEventStartsAt.formatted(date: .long, time: .omitted))
+                Text(workspace.invitationDateIsUndecided ? String(localized: "Date to be decided") : workspace.mainEventStartsAt.formatted(date: .long, time: .omitted))
                     .font(.headline)
 
                 if let locationText {
@@ -352,7 +373,7 @@ private struct WorkspacePreviewCard: View {
     }
 
     private var accessibilitySummary: String {
-        let date = workspace.mainEventStartsAt.formatted(date: .long, time: .omitted)
+        let date = workspace.invitationDateIsUndecided ? String(localized: "Date to be decided") : workspace.mainEventStartsAt.formatted(date: .long, time: .omitted)
         let location = locationText.map { ", \($0)" } ?? ""
         return "\(workspace.title), \(date)\(location), \(workspace.currentMainEventStatus.title)"
     }

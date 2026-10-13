@@ -6,8 +6,8 @@ enum AccountRole: String, Codable, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .planner: "Planner"
-        case .member: "Member"
+        case .planner: AppCopy.Account.planner
+        case .member: AppCopy.Account.member
         }
     }
 }
@@ -19,9 +19,9 @@ enum AuthenticationProvider: String, Codable, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .apple: "Apple"
-        case .google: "Google"
-        case .password: "Email and password"
+        case .apple: AppCopy.Account.apple
+        case .google: AppCopy.Account.google
+        case .password: AppCopy.Account.emailAndPassword
         }
     }
 }

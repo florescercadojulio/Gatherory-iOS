@@ -4,6 +4,42 @@ import Testing
 @testable import Gatherory
 
 struct OfflineSyncTests {
+    @Test("Media upload completion keeps its queued workspace and child event after a context switch")
+    @MainActor
+    func mediaUploadContextSwitch() throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false)
+        let first = PlanningWorkspace.newWorkspace(title: "First workspace", startsAt: .now, eventLocation: nil, imageData: Data([0xFF, 0xD8, 0xFF, 0x01]))
+        let second = PlanningWorkspace.newWorkspace(title: "Second workspace", startsAt: .now, eventLocation: nil, imageData: Data([0xFF, 0xD8, 0xFF, 0x02]))
+        let child = TimelineItem(title: "First workspace child", category: .other, scheduledAt: .now, location: "", participantIDs: [], parentEventID: first.mainEventID, imageData: Data([0xFF, 0xD8, 0xFF, 0x03]))
+        first.timeline.append(child)
+        library.add(first)
+        library.add(second)
+        try persistence.prepareMediaTransfers(from: library)
+        defer {
+            for transfer in (try? persistence.pendingMediaTransfers()) ?? [] {
+                try? persistence.completeMediaTransfer(transfer.id)
+            }
+        }
+        let transfers = try persistence.pendingMediaTransfers(scopeID: first.mainEventID)
+        let mainTransfer = try #require(transfers.first { $0.entityID == first.mainEventID })
+        let childTransfer = try #require(transfers.first { $0.entityID == child.id })
+        #expect(childTransfer.scopeID == first.mainEventID)
+        #expect(childTransfer.scopeID != child.id)
+        library.open(second)
+        let coordinator = WorkspaceMediaSyncCoordinator(persistence: persistence, library: library, transport: R2MediaTransport(baseURL: URL(string: "https://example.invalid")!))
+        let mainAssetID = UUID()
+        let childAssetID = UUID()
+        #expect(try coordinator.completeUploadedMedia(mainAssetID, for: mainTransfer))
+        #expect(try coordinator.completeUploadedMedia(childAssetID, for: childTransfer))
+        #expect(first.mainEventMediaAssetID == mainAssetID)
+        #expect(first.timeline.first { $0.id == child.id }?.mediaAssetID == childAssetID)
+        #expect(second.mainEventMediaAssetID == nil)
+        #expect(library.selectedWorkspaceID == second.mainEventID)
+        #expect(try persistence.pendingMediaTransfers(scopeID: first.mainEventID).isEmpty)
+        #expect(try persistence.pendingMediaTransfers(scopeID: second.mainEventID).count == 1)
+    }
+
     @Test("Bootstrap carries the account onboarding state")
     func bootstrapAccountStateDecoding() throws {
         let response = try JSONDecoder().decode(
