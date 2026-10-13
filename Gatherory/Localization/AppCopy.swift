@@ -28,6 +28,24 @@ enum AppCopy {
         static var save: String { localized("common.save", default: "Save") }
     }
 
+    enum EventRemoval {
+        static var actions: String { localized("event.removal.actions", default: "Event Actions") }
+        static var deleteTitle: String { localized("event.removal.delete", default: "Delete Event") }
+        static var archiveTitle: String { localized("event.removal.archive", default: "Archive Event") }
+        static var deleteMessage: String {
+            localized("event.removal.delete.message", default: "This removes the draft main event and its sub-events from planning Home, and deletes their costs and shared moments. This cannot be undone here.")
+        }
+        static var archiveMessage: String {
+            localized("event.removal.archive.message", default: "This removes the sub-event from shared planning Home. Its details, ideas, and costs are kept. This does not cancel the invitation or notify guests.")
+        }
+        static var unavailableTitle: String {
+            localized("event.removal.unavailable.title", default: "Event Cannot Be Removed")
+        }
+        static var unavailableMessage: String {
+            localized("event.removal.unavailable.message", default: "The event’s status or your access changed. Review the latest event before trying again.")
+        }
+    }
+
     enum Account {
         static var planner: String { localized("account.role.planner", default: "Planner") }
         static var member: String { localized("account.role.member", default: "Member") }
@@ -165,28 +183,55 @@ enum AppCopy {
 
         enum Decide {
             static var title: String {
-                localized("primer.decide.title", default: "Decide what moves forward")
+                String(localized: "primer.decide.title", defaultValue: "Decide what moves forward")
             }
             static var message: String {
-                localized(
+                String(localized:
                     "primer.decide.message",
-                    default: "Love an idea to approve it. Dated event ideas appear on Home, while ideas without a date stay here until you schedule them."
+                    defaultValue: "Explore ideas from every event. Pass, save one for later, or love it to move the plan forward."
                 )
             }
             static var datedTitle: String {
-                localized("primer.decide.dated.title", default: "Already has a date")
+                String(localized: "primer.decide.dated.title", defaultValue: "Already has a date")
             }
             static var datedDetail: String {
-                localized("primer.decide.dated.detail", default: "It appears in Home with your events.")
+                String(localized: "primer.decide.dated.detail", defaultValue: "Approved event ideas appear on Home.")
             }
             static var undatedTitle: String {
-                localized("primer.decide.undated.title", default: "Still needs a date")
+                String(localized: "primer.decide.undated.title", defaultValue: "Still needs a date")
             }
             static var undatedDetail: String {
-                localized("primer.decide.undated.detail", default: "It stays in Ideas until you add a date.")
+                String(localized: "primer.decide.undated.detail", defaultValue: "Event ideas stay in Ideas until you add a date.")
             }
             static var action: String {
-                localized("primer.decide.action", default: "Start Deciding")
+                String(localized: "primer.decide.action", defaultValue: "Start Deciding")
+            }
+            static var pass: String { String(localized: "Pass") }
+            static var maybe: String { String(localized: "Maybe") }
+            static var love: String { String(localized: "Love It") }
+            static var exampleTitle: String {
+                String(localized: "primer.decide.example.title", defaultValue: "Welcome Dinner")
+            }
+            static var exampleEvent: String {
+                String(localized: "primer.decide.example.event", defaultValue: "Weekend Together")
+            }
+            static var practiceLabel: String {
+                String(localized: "primer.decide.practice.label", defaultValue: "Practice idea")
+            }
+            static var practiceInstruction: String {
+                String(localized: "primer.decide.practice.instruction", defaultValue: "Try a swipe or tap a choice. Your real ideas won’t change.")
+            }
+            static var practiceAccessibilityHint: String {
+                String(localized: "primer.decide.practice.accessibility", defaultValue: "Swipe left to pass, up to save for later, or right to approve. This is a practice idea and won’t change your plans.")
+            }
+            static var passFeedback: String {
+                String(localized: "primer.decide.feedback.pass", defaultValue: "Passed. Keep exploring ideas.")
+            }
+            static var maybeFeedback: String {
+                String(localized: "primer.decide.feedback.maybe", defaultValue: "Saved for later in Ideas.")
+            }
+            static var loveFeedback: String {
+                String(localized: "primer.decide.feedback.love", defaultValue: "Approved. Dated event ideas appear on Home.")
             }
         }
 

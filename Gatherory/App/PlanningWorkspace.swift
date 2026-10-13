@@ -912,7 +912,48 @@ final class PlanningWorkspace {
     }
 
     var canDeleteMainEvent: Bool {
-        showsPlanningInterface && mainEventStatus == .draft
+        !isMainEventDeleted && showsPlanningInterface && mainEventStatus == .draft
+            && currentViewerMember(for: .main)?.planningPermission != .viewOnly
+    }
+
+    /// Shared lifecycle action, not a personal hide/leave operation. Guests,
+    /// invitation projections and finished workspaces cannot remove records.
+    func eventRemovalAction(for reference: EventReference) -> EventRemovalAction? {
+        guard !isInvitationProjection, showsPlanningInterface,
+              !isMainEventDeleted, !currentMainEventStatus.isReadOnly,
+              let viewer = currentViewerMember(for: .main),
+              viewer.planningPermission != .viewOnly else { return nil }
+        switch reference {
+        case .main:
+            return canDeleteMainEvent ? .deleteDraftMainEvent : nil
+        case .subevent(let id):
+            guard timeline.contains(where: {
+                $0.id == id && $0.parentEventID == mainEventID && $0.status != .archived
+            }) else { return nil }
+            return .archiveSubevent
+        case .idea:
+            return nil
+        }
+    }
+
+    /// Recheck the identity, lifecycle and exact action after confirmation:
+    /// a remote update may have arrived while the dialog was open.
+    @discardableResult
+    func removeEventFromHome(
+        _ reference: EventReference,
+        expecting action: EventRemovalAction
+    ) -> Bool {
+        guard eventRemovalAction(for: reference) == action else { return false }
+        switch (reference, action) {
+        case (.main, .deleteDraftMainEvent):
+            deleteMainEvent()
+        case (.subevent(let id), .archiveSubevent):
+            guard let item = timeline.first(where: { $0.id == id }) else { return false }
+            setEventStatus(.archived, for: item)
+        default:
+            return false
+        }
+        return true
     }
 
     func canManageEvent(_ reference: EventReference) -> Bool {

@@ -179,6 +179,7 @@ struct DecisionDeckView: View {
             .foregroundStyle(.primary)
         }
         .accessibilityLabel("Decision event filter")
+        .accessibilityIdentifier("decision-event-filter")
         .accessibilityValue(isFilteringToEvent ? "\(scopeTitle), filtered" : "\(scopeTitle), following queue")
     }
 
@@ -240,73 +241,6 @@ struct DecisionDeckView: View {
         guard abs(dragOffset.width) < 10, abs(dragOffset.height) < 10 else { return }
         dragOffset = .zero
         selectedIdeaID = idea.id
-    }
-}
-
-private struct DecideEventPrimer: View {
-    let continueAction: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-                Image(systemName: "arrow.triangle.branch")
-                    .font(.title.bold())
-                    .foregroundStyle(AppTheme.ColorToken.accent)
-                    .accessibilityHidden(true)
-
-                Text(AppCopy.Primer.Decide.title)
-                    .font(.title2.bold())
-
-                Text(AppCopy.Primer.Decide.message)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                primerRow(
-                    symbol: "calendar.badge.checkmark",
-                    title: AppCopy.Primer.Decide.datedTitle,
-                    detail: AppCopy.Primer.Decide.datedDetail
-                )
-                primerRow(
-                    symbol: "calendar.badge.exclamationmark",
-                    title: AppCopy.Primer.Decide.undatedTitle,
-                    detail: AppCopy.Primer.Decide.undatedDetail
-                )
-            }
-
-            Spacer(minLength: 0)
-
-            Button(action: continueAction) {
-                Text(AppCopy.Primer.Decide.action)
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .controlSize(.large)
-        }
-        .padding(AppTheme.Spacing.spacious)
-        .background(AppTheme.ColorToken.background)
-    }
-
-    private func primerRow(symbol: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
-            Image(systemName: symbol)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(AppTheme.ColorToken.accent)
-                .frame(width: 32)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.headline)
-                Text(detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 

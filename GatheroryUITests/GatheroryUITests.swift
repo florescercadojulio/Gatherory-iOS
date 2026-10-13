@@ -88,6 +88,136 @@ final class GatheroryUITests: XCTestCase {
     }
 
     @MainActor
+    func testDraftEventRemovalFromMoreMenu() throws {
+        for appearance in ["Light", "Dark"] {
+            let app = fixtureApplication()
+            app.launchArguments += ["-UseProductionOnboarding", "-AppleLanguages", "(en)", "-AppleInterfaceStyle", appearance]
+            app.launch()
+            let workspace = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Maya & Theo")).firstMatch
+            XCTAssertTrue(workspace.waitForExistence(timeout: 8))
+            workspace.tap()
+            let mainCard = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Maya & Theo")).firstMatch
+            XCTAssertTrue(mainCard.waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["Event Actions"].exists, "Home must not show event actions.")
+            mainCard.press(forDuration: 1)
+            XCTAssertFalse(app.buttons["Delete Event"].exists, "Home must not expose removal through a context menu.")
+            mainCard.tap()
+            let actions = app.buttons["Event Actions"]
+            XCTAssertTrue(actions.waitForExistence(timeout: 5))
+            actions.tap()
+            app.buttons["Delete Event"].tap()
+            XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 3))
+            app.buttons["Cancel"].tap()
+            XCTAssertTrue(actions.waitForExistence(timeout: 3), "Cancel must leave the event unchanged.")
+            actions.tap()
+            app.buttons["Delete Event"].tap()
+            app.buttons["Delete Event"].tap()
+            XCTAssertTrue(app.staticTexts["No Main Event"].waitForExistence(timeout: 5))
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testArchiveSubeventFromEventDetailsMoreMenu() throws {
+        let app = fixtureApplication()
+        app.launchArguments += ["-UseProductionOnboarding", "-AppleLanguages", "(en)"]
+        app.launch()
+        let workspace = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Alex & Jordan")).firstMatch
+        XCTAssertTrue(workspace.waitForExistence(timeout: 8))
+        workspace.tap()
+        let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Ceremony,")).firstMatch
+        for _ in 0..<8 where !card.isHittable { app.swipeUp() }
+        XCTAssertTrue(card.isHittable)
+        XCTAssertFalse(app.buttons["Event Actions"].exists, "Home must not show event actions.")
+        card.tap()
+        let actions = app.buttons["Event Actions"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 5))
+        actions.tap()
+        app.buttons["Archive Event"].tap()
+        let confirmation = app.alerts.firstMatch
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+        confirmation.buttons["Cancel"].tap()
+        XCTAssertTrue(actions.exists, "Cancel must keep the sub-event open.")
+        actions.tap()
+        app.buttons["Archive Event"].tap()
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+        confirmation.buttons["Archive Event"].tap()
+        XCTAssertTrue(app.buttons["Share Invitation"].waitForExistence(timeout: 5), "Archiving must return to Home.")
+        XCTAssertTrue(card.waitForNonExistence(timeout: 5), "Archived sub-events must leave Home.")
+        app.terminate()
+    }
+
+    @MainActor
+    func testDecidePrimerPracticeAndLayout() throws {
+        for (appearance, largeText, language) in [
+            ("Light", false, "en"), ("Dark", false, "en"),
+            ("Light", true, "en"), ("Dark", false, "es")
+        ] {
+            let app = fixtureApplication()
+            app.launchArguments += [
+                "-UseProductionOnboarding", "-AppleLanguages", "(\(language))",
+                "-AppleInterfaceStyle", appearance, "-appAppearance", appearance.lowercased(),
+                "-hasSeenDecideTimelinePrimer", "NO"
+            ]
+            if largeText {
+                app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+            }
+            app.launch()
+            let workspace = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Alex & Jordan")).firstMatch
+            XCTAssertTrue(workspace.waitForExistence(timeout: 8))
+            workspace.tap()
+            app.tabBars.buttons[language == "es" ? "Decidir" : "Decide"].tap()
+
+            let start = app.buttons[language == "es" ? "Empezar a decidir" : "Start Deciding"]
+            XCTAssertTrue(start.waitForExistence(timeout: 5))
+            XCTAssertTrue(start.isHittable, "Continue must stay reachable even at accessibility text sizes.")
+            let initial = XCTAttachment(screenshot: app.screenshot())
+            initial.name = "Decide primer — \(appearance) — \(language)\(largeText ? " — Large Text" : "")"
+            initial.lifetime = .keepAlways
+            add(initial)
+
+            if appearance == "Light", !largeText, language == "en" {
+                let preview = app.descendants(matching: .any)["decide-primer-preview"]
+                XCTAssertTrue(preview.exists)
+                preview.swipeLeft()
+                XCTAssertEqual(app.staticTexts["decide-primer-feedback"].label, "Passed. Keep exploring ideas.")
+                preview.swipeUp()
+                XCTAssertEqual(app.staticTexts["decide-primer-feedback"].label, "Saved for later in Ideas.")
+                preview.swipeRight()
+                XCTAssertEqual(app.staticTexts["decide-primer-feedback"].label, "Approved. Dated event ideas appear on Home.")
+            }
+
+            for (choice, english, spanish) in [
+                ("pass", "Passed. Keep exploring ideas.", "Pasaste esta idea. Sigue explorando otras."),
+                ("maybe", "Saved for later in Ideas.", "Guardada para después en Ideas."),
+                ("love", "Approved. Dated event ideas appear on Home.", "Aprobada. Las ideas de eventos con fecha aparecen en Inicio.")
+            ] {
+                let button = app.buttons["decide-primer-\(choice)"]
+                for _ in 0..<5 where !button.isHittable { app.swipeUp() }
+                XCTAssertTrue(button.isHittable)
+                XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+                button.tap()
+                let feedback = app.staticTexts["decide-primer-feedback"]
+                XCTAssertTrue(feedback.waitForExistence(timeout: 3))
+                XCTAssertEqual(feedback.label, language == "es" ? spanish : english)
+            }
+            // The date explanation must remain reachable below the illustration.
+            let dated = app.staticTexts[language == "es" ? "Ya tiene una fecha" : "Already has a date"]
+            for _ in 0..<5 where !dated.isHittable { app.swipeUp() }
+            XCTAssertTrue(dated.exists)
+            let details = XCTAttachment(screenshot: app.screenshot())
+            details.name = "Decide primer details — \(appearance) — \(language)\(largeText ? " — Large Text" : "")"
+            details.lifetime = .keepAlways
+            add(details)
+            start.tap()
+            XCTAssertTrue(start.waitForNonExistence(timeout: 3))
+            XCTAssertFalse(app.buttons["Undo last decision"].exists, "Practice must not create real decisions.")
+            XCTAssertTrue(app.buttons["decision-event-filter"].exists)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     private func fixtureApplication() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += [

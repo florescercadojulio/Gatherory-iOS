@@ -31,6 +31,8 @@ struct HomeView: View {
     @State private var homeReselectionTask: Task<Void, Never>?
     @State private var eventSwitcherFadeTask: Task<Void, Never>?
     @State private var eventSwitcherOpacity = 0.0
+    @State private var pendingDetailRemoval: HomeEventRemovalRequest?
+    @State private var isRemovalUnavailable = false
     @Namespace private var invitationTransition
 
     private let pullToCreateThreshold: CGFloat = 200
@@ -172,6 +174,12 @@ struct HomeView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .appClearNavigationBar()
                 .appImageDetailAppearance()
+                .modifier(HomeEventRemovalConfirmation(
+                    request: $pendingDetailRemoval,
+                    isUnavailable: $isRemovalUnavailable,
+                    isActive: openedEventReference != nil,
+                    onConfirm: confirmRemoval
+                ))
                 .toolbar {
                     ToolbarItemGroup(placement: .topBarTrailing) {
                         if reference == .main, workspace.canManageMainEvent {
@@ -183,9 +191,9 @@ struct HomeView: View {
                             }
                         }
 
-                        if canEdit(reference) {
-                            Button("Edit Event", systemImage: "pencil") {
-                                editorTarget = editorTarget(for: reference)
+                        if canEdit(reference) || workspace.eventRemovalAction(for: reference) != nil {
+                            Menu(AppCopy.EventRemoval.actions, systemImage: "ellipsis") {
+                                eventActions(for: reference)
                             }
                             .labelStyle(.iconOnly)
                         }
@@ -398,6 +406,37 @@ struct HomeView: View {
             .accessibilityElement(children: .contain)
         }
         .frame(height: eventHeroHeight)
+    }
+
+    @ViewBuilder
+    private func eventActions(for reference: EventReference) -> some View {
+        if canEdit(reference) {
+            Button("Edit Event", systemImage: "pencil") {
+                editorTarget = editorTarget(for: reference)
+            }
+        }
+        if let action = workspace.eventRemovalAction(for: reference) {
+            if canEdit(reference) { Divider() }
+            Button(action.title, systemImage: action.symbol, role: .destructive) {
+                pendingDetailRemoval = HomeEventRemovalRequest(
+                    reference: reference, action: action, title: title(for: reference)
+                )
+            }
+        }
+    }
+
+    private func confirmRemoval(_ request: HomeEventRemovalRequest) {
+        pendingDetailRemoval = nil
+        guard workspace.removeEventFromHome(request.reference, expecting: request.action) else {
+            isRemovalUnavailable = true
+            return
+        }
+        if openedEventReference == request.reference { openedEventReference = nil }
+        scrubbedEventIndex = nil
+        isScrubbingEvents = false
+        pullToCreateProgress = 0
+        isPullToCreateArmed = false
+        visibleScrollTarget = workspace.isMainEventDeleted ? nil : .event(workspace.selectedEventReference)
     }
 
     @ViewBuilder
@@ -703,6 +742,49 @@ struct HomeView: View {
         }
     }
 
+}
+
+private struct HomeEventRemovalRequest {
+    let reference: EventReference
+    let action: EventRemovalAction
+    let title: String
+}
+
+/// A confirmation belongs to the visible screen, not its offscreen navigation parent.
+/// Only event details presents removal; Home remains a browsing surface.
+private struct HomeEventRemovalConfirmation: ViewModifier {
+    @Binding var request: HomeEventRemovalRequest?
+    @Binding var isUnavailable: Bool
+    var isActive: Bool
+    var onConfirm: (HomeEventRemovalRequest) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .alert(
+                request?.title ?? AppCopy.EventRemoval.actions,
+                isPresented: Binding(
+                    get: { isActive && request != nil },
+                    set: { if isActive && !$0 { request = nil } }
+                ),
+                presenting: request
+            ) { request in
+                Button(request.action.title, role: .destructive) { onConfirm(request) }
+                Button(AppCopy.Common.cancel, role: .cancel) {}
+            } message: { request in
+                Text(request.action.confirmationMessage)
+            }
+            .alert(
+                AppCopy.EventRemoval.unavailableTitle,
+                isPresented: Binding(
+                    get: { isActive && isUnavailable },
+                    set: { if isActive { isUnavailable = $0 } }
+                )
+            ) {
+                Button(AppCopy.Common.done, role: .cancel) {}
+            } message: {
+                Text(AppCopy.EventRemoval.unavailableMessage)
+            }
+    }
 }
 
 private enum HomeScrollTarget: Hashable {

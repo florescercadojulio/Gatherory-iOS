@@ -1,11 +1,14 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "AirDrop & More" : {"localizations":{"es":{"stringUnit":{"state":"translated","value":"AirDrop y más"}}}},
-    "Messages" : {"localizations":{"es":{"stringUnit":{"state":"translated","value":"Mensajes"}}}},
-    "Choose recipients and send using the system message composer" : {"localizations":{"es":{"stringUnit":{"state":"translated","value":"Elige destinatarios y envía con el editor de mensajes del sistema"}}}},
-    "Share using AirDrop, Messages, or another app. You choose who receives the invitation." : {"localizations":{"es":{"stringUnit":{"state":"translated","value":"Comparte por AirDrop, Mensajes u otra app. Tú eliges quién recibe la invitación."}}}},
-    "The message could not be sent. Try again or use AirDrop & More." : {"localizations":{"es":{"stringUnit":{"state":"translated","value":"No se pudo enviar el mensaje. Inténtalo de nuevo o usa AirDrop y más."}}}},
+    "primer.decide.example.title" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Welcome Dinner"}},"es":{"stringUnit":{"state":"translated","value":"Cena de bienvenida"}}}},
+    "primer.decide.example.event" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Weekend Together"}},"es":{"stringUnit":{"state":"translated","value":"Fin de semana juntos"}}}},
+    "primer.decide.practice.label" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Practice idea"}},"es":{"stringUnit":{"state":"translated","value":"Idea de práctica"}}}},
+    "primer.decide.practice.instruction" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Try a swipe or tap a choice. Your real ideas won’t change."}},"es":{"stringUnit":{"state":"translated","value":"Desliza o toca una opción. Tus ideas reales no cambiarán."}}}},
+    "primer.decide.practice.accessibility" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Swipe left to pass, up to save for later, or right to approve. This is a practice idea and won’t change your plans."}},"es":{"stringUnit":{"state":"translated","value":"Desliza a la izquierda para pasar, hacia arriba para guardar para después o a la derecha para aprobar. Esta idea es de práctica y no cambiará tus planes."}}}},
+    "primer.decide.feedback.pass" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Passed. Keep exploring ideas."}},"es":{"stringUnit":{"state":"translated","value":"Pasaste esta idea. Sigue explorando otras."}}}},
+    "primer.decide.feedback.maybe" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Saved for later in Ideas."}},"es":{"stringUnit":{"state":"translated","value":"Guardada para después en Ideas."}}}},
+    "primer.decide.feedback.love" : {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Approved. Dated event ideas appear on Home."}},"es":{"stringUnit":{"state":"translated","value":"Aprobada. Las ideas de eventos con fecha aparecen en Inicio."}}}},
     "" : {
       "localizations" : {
         "es" : {
@@ -1047,6 +1050,16 @@
         }
       }
     },
+    "AirDrop & More" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AirDrop y más"
+          }
+        }
+      }
+    },
     "All Ideas" : {
       "localizations" : {
         "es" : {
@@ -1837,6 +1850,16 @@
         }
       }
     },
+    "Choose recipients and send using the system message composer" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige destinatarios y envía con el editor de mensajes del sistema"
+          }
+        }
+      }
+    },
     "Choose the closest style, or choose Any to leave the dress code open. Add color, fabric, or other guidance below." : {
       "localizations" : {
         "es" : {
@@ -2283,12 +2306,22 @@
     },
     "Copied" : {
       "localizations" : {
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Copiado" } }
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiado"
+          }
+        }
       }
     },
     "Copy Link" : {
       "localizations" : {
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Copiar enlace" } }
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar enlace"
+          }
+        }
       }
     },
     "Cost" : {
@@ -3135,12 +3168,32 @@
         }
       }
     },
+    "Event Actions" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acciones del evento"
+          }
+        }
+      }
+    },
     "Event Budget" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Presupuesto del evento"
+          }
+        }
+      }
+    },
+    "Event Cannot Be Removed" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede quitar el evento"
           }
         }
       }
@@ -3332,6 +3385,125 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Periodo del evento"
+          }
+        }
+      }
+    },
+    "event.removal.actions" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Event Actions"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acciones del evento"
+          }
+        }
+      }
+    },
+    "event.removal.archive" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive Event"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivar evento"
+          }
+        }
+      }
+    },
+    "event.removal.archive.message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This removes the sub-event from shared planning Home. Its details, ideas, and costs are kept. This does not cancel the invitation or notify guests."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto quita el evento secundario del inicio de planificación compartida. Se conservan sus detalles, ideas y gastos. No cancela la invitación ni notifica a los invitados."
+          }
+        }
+      }
+    },
+    "event.removal.delete" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Event"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar evento"
+          }
+        }
+      }
+    },
+    "event.removal.delete.message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This removes the draft main event and its sub-events from planning Home, and deletes their costs and shared moments. This cannot be undone here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto quita el evento principal en borrador y sus eventos secundarios del inicio de planificación, y elimina sus gastos y momentos compartidos. No se puede deshacer aquí."
+          }
+        }
+      }
+    },
+    "event.removal.unavailable.message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The event’s status or your access changed. Review the latest event before trying again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El estado del evento o tu acceso cambió. Revisa el evento actualizado antes de intentarlo de nuevo."
+          }
+        }
+      }
+    },
+    "event.removal.unavailable.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Event Cannot Be Removed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede quitar el evento"
           }
         }
       }
@@ -4953,6 +5125,16 @@
         }
       }
     },
+    "Messages" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensajes"
+          }
+        }
+      }
+    },
     "Moments or shots to prioritize (optional)" : {
       "localizations" : {
         "es" : {
@@ -6163,13 +6345,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "It appears in Home with your events."
+            "value" : "Approved event ideas appear on Home."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aparece en Inicio con tus eventos."
+            "value" : "Las ideas de eventos aprobadas aparecen en Inicio."
           }
         }
       }
@@ -6197,13 +6379,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Love an idea to approve it. Dated event ideas appear on Home, while ideas without a date stay here until you schedule them."
+            "value" : "Explore ideas from every event. Pass, save one for later, or love it to move the plan forward."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Marca con Me gusta una idea para aprobarla. Las ideas de eventos con fecha aparecen en Inicio; las que no tienen fecha permanecen aquí hasta que las programes."
+            "value" : "Explora ideas de todos los eventos. Pasa una idea, guárdala para después o marca que te encanta para avanzar con el plan."
           }
         }
       }
@@ -6231,13 +6413,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "It stays in Ideas until you add a date."
+            "value" : "Event ideas stay in Ideas until you add a date."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Permanece en Ideas hasta que agregues una fecha."
+            "value" : "Las ideas de eventos permanecen en Ideas hasta que agregues una fecha."
           }
         }
       }
@@ -7168,6 +7350,16 @@
         }
       }
     },
+    "Share using AirDrop, Messages, or another app. You choose who receives the invitation." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comparte por AirDrop, Mensajes u otra app. Tú eliges quién recibe la invitación."
+          }
+        }
+      }
+    },
     "Shared Album" : {
       "localizations" : {
         "es" : {
@@ -7622,6 +7814,16 @@
         }
       }
     },
+    "The event’s status or your access changed. Review the latest event before trying again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El estado del evento o tu acceso cambió. Revisa el evento actualizado antes de intentarlo de nuevo."
+          }
+        }
+      }
+    },
     "The invitation could not be created. Try again." : {
       "localizations" : {
         "es" : {
@@ -7678,6 +7880,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El evento principal empieza con el presupuesto completo. Puedes asignar una parte a subeventos más tarde."
+          }
+        }
+      }
+    },
+    "The message could not be sent. Try again or use AirDrop & More." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo enviar el mensaje. Inténtalo de nuevo o usa AirDrop y más."
           }
         }
       }
@@ -7879,12 +8091,32 @@
         }
       }
     },
+    "This removes the draft main event and its sub-events from planning Home, and deletes their costs and shared moments. This cannot be undone here." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto quita el evento principal en borrador y sus eventos secundarios del inicio de planificación, y elimina sus gastos y momentos compartidos. No se puede deshacer aquí."
+          }
+        }
+      }
+    },
     "This removes the event from the shared timeline for everyone." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Esto elimina el evento de la cronología compartida para todos."
+          }
+        }
+      }
+    },
+    "This removes the sub-event from shared planning Home. Its details, ideas, and costs are kept. This does not cancel the invitation or notify guests." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto quita el evento secundario del inicio de planificación compartida. Se conservan sus detalles, ideas y gastos. No cancela la invitación ni notifica a los invitados."
           }
         }
       }
