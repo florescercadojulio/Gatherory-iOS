@@ -615,7 +615,14 @@
       }
     },
     "account.eventAccessUnavailable" : {
+      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gatherory can no longer access this event."
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
@@ -6594,7 +6601,14 @@
       }
     },
     "planning.eventScope" : {
+      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Planning event"
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",

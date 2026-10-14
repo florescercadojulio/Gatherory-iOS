@@ -98,7 +98,21 @@ struct WorkspaceRemoteMerger {
                 .filter { $0.ownerUserID == ownerUserID }
                 .map(\.id)
         )
-        let newChanges = page.changes.filter { !appliedIDs.contains($0.id) }
+        // Even a previously applied projection can prove that an old rejected
+        // update was only the nil-to-empty location restore bug. Re-merge that
+        // projection after removing the echo, retaining all genuine pending edits.
+        var repairedEnvelopeIDs = Set<UUID>()
+        for change in page.changes
+        where change.scopeID == scopeID && change.entityID == scopeID
+            && change.entityType == .workspace && change.operation != .delete
+            && change.effectivePayloadSchemaVersion == SyncPayloadContract.currentVersion {
+            if try stageRejectedLocationEchoRepair(change.payload, scopeID: scopeID) {
+                repairedEnvelopeIDs.insert(change.id)
+            }
+        }
+        let newChanges = page.changes.filter {
+            !appliedIDs.contains($0.id) || repairedEnvelopeIDs.contains($0.id)
+        }
         guard !newChanges.isEmpty else {
             return .checkpointOnly
         }
@@ -152,13 +166,15 @@ struct WorkspaceRemoteMerger {
             }
             latestUpdatedAt = max(latestUpdatedAt, change.occurredAt)
 
-            context.insert(
-                AppliedSyncEnvelope(
-                    id: change.id,
-                    scopeID: scopeID,
-                    ownerUserID: ownerUserID
+            if !appliedIDs.contains(change.id) {
+                context.insert(
+                    AppliedSyncEnvelope(
+                        id: change.id,
+                        scopeID: scopeID,
+                        ownerUserID: ownerUserID
+                    )
                 )
-            )
+            }
         }
 
         if archive?.isScopedEvent == true, var authoritativeArchive = archive {
@@ -242,6 +258,40 @@ struct WorkspaceRemoteMerger {
         }
 
         return .merged(archive: archive, shouldDeleteWorkspace: shouldDeleteWorkspace)
+    }
+
+    /// Requires a fresh authorized server projection, not the locally overlaid
+    /// archive. Stages only the exact restore artifact; the caller commits it
+    /// with the archive, envelope receipt, and cursor in the usual transaction.
+    private func stageRejectedLocationEchoRepair(_ payload: Data, scopeID: UUID) throws -> Bool {
+        guard let ownerUserID else { return false }
+        let candidates = try context.fetch(FetchDescriptor<PendingMutation>()).filter {
+            !$0.isDeleted && $0.ownerUserID == ownerUserID && $0.scopeID == scopeID
+                && $0.entityID == scopeID && $0.entityType == .event
+                && $0.operation == .update && $0.state == .requiresAttention
+                && $0.lastFailureCode == "EVENT_SCOPE_FORBIDDEN"
+        }
+        guard !candidates.isEmpty,
+              let archive = try? codec.decode(WorkspaceArchiveV1.self, from: payload),
+              archive.isScopedEvent == true, archive.mainEventID == scopeID,
+              archive.mainEventLocation == nil,
+              let canonical = try archive.syncEntities(using: codec)[.init(type: .event, id: scopeID)],
+              let expected = try JSONSerialization.jsonObject(with: canonical) as? [String: Any],
+              let emptyLocation = try JSONSerialization.jsonObject(with: codec.encode(EventLocation(address: ""))) as? NSDictionary
+        else { return false }
+        var repaired = false
+        for mutation in candidates {
+            guard var proposed = try? JSONSerialization.jsonObject(with: mutation.payload) as? [String: Any],
+                  let location = proposed["eventLocation"] as? NSDictionary,
+                  location.isEqual(emptyLocation) else { continue }
+            proposed.removeValue(forKey: "eventLocation")
+            // Compare raw JSON so unknown fields and genuine changes are never
+            // silently discarded by decoding into today's model.
+            guard NSDictionary(dictionary: proposed).isEqual(NSDictionary(dictionary: expected)) else { continue }
+            context.delete(mutation)
+            repaired = true
+        }
+        return repaired
     }
 
     private func discardWorkspaceMutations(scopeID: UUID) throws {

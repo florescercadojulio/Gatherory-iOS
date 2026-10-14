@@ -121,12 +121,18 @@ final class PlanningWorkspace {
         self.mainEventEndsAt = mainEventEndsAt
         self.mainEventIsAllDay = mainEventIsAllDay
         self.mainEventTimeZoneIdentifier = mainEventTimeZoneIdentifier
-        self.mainEventLocation = mainEventLocation ?? EventLocation(
-            address: location,
-            shortAddress: location,
-            placeName: venueName,
-            locationName: venueName
-        )
+        // A scoped projection's absent location is authoritative. Synthesizing
+        // an empty location here would echo an event edit on the next save.
+        self.mainEventLocation = if isScopedEvent {
+            mainEventLocation
+        } else {
+            mainEventLocation ?? EventLocation(
+                address: location,
+                shortAddress: location,
+                placeName: venueName,
+                locationName: venueName
+            )
+        }
         self.mainEventImageData = mainEventImageData
         self.mainEventMediaAssetID = mainEventMediaAssetID
         self.venueName = venueName
@@ -1005,6 +1011,16 @@ final class PlanningWorkspace {
     func canManageInvitations(for reference: EventReference) -> Bool {
         guard canManageEvent(reference), let viewer = currentViewerMember(for: reference) else { return false }
         return viewer.participantRole == .host || (viewer.participantRole == .collaborator && viewer.planningPermission == .manage)
+    }
+
+    /// Resolve the displayed event, never the currently selected Home card.
+    func joinRequestReviewEventID(for reference: EventReference) -> UUID? {
+        guard canManageInvitations(for: reference) else { return nil }
+        switch reference {
+        case .main: return mainEventID
+        case .subevent(let id): return id
+        case .idea: return nil
+        }
     }
 
     var canManageRegistry: Bool {

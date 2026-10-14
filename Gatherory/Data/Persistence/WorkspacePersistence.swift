@@ -579,19 +579,27 @@ final class WorkspacePersistenceController {
         let cachedScopedArchive = try context.fetch(FetchDescriptor<WorkspaceRecord>())
             .first(where: { $0.id == scopeID && $0.ownerUserID == activeUserID })
             .flatMap { try? codec.decode(WorkspaceArchiveV1.self, from: $0.payload) }
-        let result = try merger.stagePage(
-            page,
-            scopeID: scopeID,
-            existingWorkspaceCount: library.workspaces.count
-        )
+        let result: WorkspaceRemoteMerger.PageResult
+        do {
+            result = try merger.stagePage(
+                page,
+                scopeID: scopeID,
+                existingWorkspaceCount: library.workspaces.count
+            )
 
-        // Commit staged records and receipts with the cursor, before publishing.
-        if case let .merged(_, shouldDeleteWorkspace) = result,
-           shouldDeleteWorkspace, cachedScopedArchive?.isScopedEvent == true {
-            try discardPendingMutations(scopeID: scopeID)
-            try mediaBookkeeper.stageRemoval(scopeID: scopeID)
+            // Commit staged records, repairs, and receipts with the cursor,
+            // before publishing. A failed merge must not leak a staged repair
+            // into an unrelated later local save.
+            if case let .merged(_, shouldDeleteWorkspace) = result,
+               shouldDeleteWorkspace, cachedScopedArchive?.isScopedEvent == true {
+                try discardPendingMutations(scopeID: scopeID)
+                try mediaBookkeeper.stageRemoval(scopeID: scopeID)
+            }
+            try saveRemoteCheckpoint(page.nextCursor, scopeID: scopeID)
+        } catch {
+            context.rollback()
+            throw error
         }
-        try saveRemoteCheckpoint(page.nextCursor, scopeID: scopeID)
 
         switch result {
         case .checkpointOnly:

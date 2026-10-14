@@ -200,7 +200,11 @@ extension WorkspaceArchiveV1 {
 
 extension WorkspaceArchiveV1 {
     fileprivate var scopedMainEvent: TimelineItem {
-        let projectedStatus: MainEventStatus? = scopedEvent.map(Self.projectedMainStatus)
+        let projectedStatus: MainEventStatus? = if let scopedEvent {
+            Self.projectedMainStatus(scopedEvent)
+        } else {
+            nil
+        }
         let status: EventStatus = if let scopedEvent,
                                     projectedStatus == mainEventStatus {
             scopedEvent.status

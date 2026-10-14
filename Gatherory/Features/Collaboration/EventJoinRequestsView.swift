@@ -1,5 +1,39 @@
 import SwiftUI
 
+/// A persistent entry point, including when there are no cached requests yet.
+struct EventJoinRequestsLink: View {
+    @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(AuthenticationSession.self) private var authentication
+    @Environment(\.scenePhase) private var scenePhase
+    let eventID: UUID
+
+    private var count: Int {
+        workspace.joinRequestStore.requests(eventID: eventID, accountID: authentication.currentUser?.id).count
+    }
+
+    var body: some View {
+        NavigationLink {
+            EventJoinRequestsView(eventID: eventID)
+        } label: {
+            HStack(spacing: AppTheme.Spacing.standard) {
+                Label("Join Requests", systemImage: "person.crop.circle.badge.clock")
+                    .font(.headline)
+                Spacer(minLength: AppTheme.Spacing.compact)
+                Text(count.formatted()).monospacedDigit()
+                Image(systemName: "chevron.right").accessibilityHidden(true)
+            }
+            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("event-join-requests")
+        .task(id: "\(eventID)|\(authentication.currentUser?.id ?? "")|\(scenePhase)") {
+            guard scenePhase == .active, let accountID = authentication.currentUser?.id else { return }
+            await workspace.joinRequestStore.refresh(eventID: eventID, accountID: accountID)
+        }
+    }
+}
+
 struct EventJoinRequestsView: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(AuthenticationSession.self) private var authentication

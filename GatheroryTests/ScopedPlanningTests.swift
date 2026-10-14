@@ -4,6 +4,56 @@ import Testing
 
 @MainActor
 struct ScopedPlanningTests {
+    @Test("Join-request navigation uses the displayed child and its own permission",
+          arguments: [PlanningPermission.manage, .contribute, .viewOnly])
+    func childJoinRequestDestination(permission: PlanningPermission) {
+        let host = WorkspaceMember(name: "Host", participantRole: .host, initials: "H")
+        let child = TimelineItem(title: "Dinner", category: .other, scheduledAt: .now,
+                                 location: "", participantIDs: [host.id])
+        let sibling = TimelineItem(title: "Brunch", category: .other, scheduledAt: .now,
+                                   location: "", participantIDs: [host.id])
+        let mainEventID = UUID()
+        let participations = [
+            EventParticipation(eventID: mainEventID, memberID: host.id,
+                               role: .host, planningPermission: .manage,
+                               attendance: .invited, invitationStatus: .active),
+            EventParticipation(eventID: child.id, memberID: host.id,
+                               role: .collaborator, planningPermission: permission,
+                               attendance: .invited, invitationStatus: .active),
+            EventParticipation(eventID: sibling.id, memberID: host.id,
+                               role: .guest, planningPermission: .manage,
+                               attendance: .invited, invitationStatus: .active)
+        ]
+        let workspace = PlanningWorkspace(
+            mainEventID: mainEventID, title: "Weekend", mainEventStartsAt: .now,
+            venueName: "", location: "", planningMode: .openToIdeas,
+            members: [host], eventParticipations: participations, ideas: [],
+            timeline: [child, sibling], registry: []
+        )
+        workspace.selectedEventReference = .subevent(sibling.id)
+        #expect(workspace.joinRequestReviewEventID(for: .main) == workspace.mainEventID)
+        #expect(workspace.joinRequestReviewEventID(for: .subevent(child.id)) == (permission == .manage ? child.id : nil))
+        #expect(workspace.joinRequestReviewEventID(for: .subevent(sibling.id)) == nil)
+        #expect(workspace.joinRequestReviewEventID(for: .subevent(UUID())) == nil)
+        #expect(workspace.joinRequestReviewEventID(for: .idea(child.id)) == nil)
+    }
+
+    @Test("Child-only planners can review only with manage permission",
+          arguments: [PlanningPermission.manage, .contribute, .viewOnly])
+    func scopedJoinRequestDestination(permission: PlanningPermission) {
+        let workspace = PlanningWorkspace(
+            isScopedEvent: true, title: "Dinner", mainEventStartsAt: .now,
+            venueName: "", location: "", planningMode: .openToIdeas,
+            members: [WorkspaceMember(name: "Collaborator", participantRole: .collaborator,
+                                      initials: "C", planningPermission: permission)],
+            ideas: [], timeline: [], registry: []
+        )
+        #expect(workspace.joinRequestReviewEventID(for: .main) == (permission == .manage ? workspace.mainEventID : nil))
+        #expect(workspace.joinRequestReviewEventID(for: .subevent(UUID())) == nil)
+        workspace.mainEventStatus = .cancelled
+        #expect(workspace.joinRequestReviewEventID(for: .main) == nil)
+    }
+
     @Test("Scoped permissions separate contribution, management, and read-only access")
     func scopedCollaboratorControls() throws {
         let member = WorkspaceMember(

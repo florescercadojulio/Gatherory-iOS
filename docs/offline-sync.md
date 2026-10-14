@@ -48,6 +48,35 @@ app becomes active or another local edit is made.
     its pending work. Generic authorization failures and network errors never
     purge it.
 
+## Event join-request review
+
+Event details expose **Join Requests** beside **Who's Coming** for hosts and
+collaborators with manage permission on that exact event. This also applies to
+sub-events opened from a parent schedule and to child-only planning workspaces.
+The destination uses the displayed event ID, not the selected Home card or the
+parent workspace ID.
+
+Requests remain transient, account-scoped state in `EventJoinRequestStore`.
+Approval and decline use the existing online invitation API and refresh
+collaboration after success; they do not enqueue offline mutations or change
+archive, outbox, or sync transaction boundaries.
+
+## Scoped location restore recovery
+
+A missing location in a scoped event stays `nil` when its archive is restored.
+Root workspaces retain their legacy venue/address fallback. Merely opening a
+child invitation or switching accounts must not enqueue an event metadata edit.
+
+Older builds could queue an empty-location update and receive
+`EVENT_SCOPE_FORBIDDEN` for a contributor. A fresh authoritative scoped pull may
+remove that rejected update only when its account, scope, entity, operation,
+and failure code match, and every payload field except the empty location is
+identical to the server projection. Unknown fields and genuine changes prevent
+automatic cleanup. Other pending edits retain their payloads and mutation IDs.
+This recovery also handles an already-applied projection envelope and commits
+with the normal archive/receipt/cursor transaction; a page failure rolls it back.
+No server receipt, membership, or workspace reset is required.
+
 ## Runtime flow
 
 - `WorkspacePersistenceController` restores only the signed-in account's

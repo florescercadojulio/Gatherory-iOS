@@ -21,6 +21,8 @@ struct EventJoinRequestStoreTests {
         #expect(await store.review(request, eventID: second, accountID: "host", action: .decline))
         #expect(store.requests(eventID: second, accountID: "host").isEmpty)
         #expect(client.actions == [.approve, .decline])
+        #expect(client.reviewedEventIDs == [first, second])
+        #expect(client.reviewedRequestIDs == [request.id, request.id])
     }
 
     @Test("Passive refresh is throttled, explicit refresh bypasses it, and failures retain counts")
@@ -67,6 +69,8 @@ struct EventJoinRequestStoreTests {
 private final class JoinRequestsTestClient: EventJoinRequestTransport {
     var values: [EventJoinRequest] = []
     var actions: [JoinRequestReviewAction] = []
+    var reviewedEventIDs: [UUID] = []
+    var reviewedRequestIDs: [UUID] = []
     var reads = 0
     var fail = false
 
@@ -79,5 +83,7 @@ private final class JoinRequestsTestClient: EventJoinRequestTransport {
     func reviewJoinRequest(eventID: UUID, requestID: UUID, action: JoinRequestReviewAction) async throws {
         if fail { throw URLError(.notConnectedToInternet) }
         actions.append(action)
+        reviewedEventIDs.append(eventID)
+        reviewedRequestIDs.append(requestID)
     }
 }
