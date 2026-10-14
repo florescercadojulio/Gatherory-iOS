@@ -2,7 +2,17 @@
 
 ## Overview
 
-The project currently uses the standard SwiftUI and SwiftData application template. This is a good point to adopt a feature-first architecture: user-facing code is grouped by feature, while infrastructure shared across features is kept in clearly defined supporting layers.
+The current app is feature-organized SwiftUI with observable workspace state,
+SwiftData persistence, and an account-scoped offline sync outbox. For the
+implemented extractions of workspace responsibilities, see
+[Workspace boundaries](workspace-boundaries.md). That document describes the
+actual archive/codec, budget-rule, outbox-writer, remote-merge, and media-bookkeeping boundaries and
+the behavior they preserve.
+
+Much of the remaining document records the original design guidance, including
+proposed folder names and wedding-specific product examples. It is not a complete
+inventory of the current implementation; check the source and cross-project
+onboarding guide before treating a recommendation as implemented behavior.
 
 This structure is intended to support authentication, local persistence, networking, assets, localization, testing, and future features without over-engineering the initial application.
 

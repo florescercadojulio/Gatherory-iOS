@@ -2,357 +2,6 @@ import Foundation
 import Observation
 import SwiftData
 
-/// The first durable representation of a Gatherory workspace.
-///
-/// The app's observable domain graph remains optimized for SwiftUI. Keeping a
-/// versioned archive at the persistence boundary lets us adopt SwiftData now
-/// without forcing views to understand storage concerns. A later schema can
-/// promote frequently queried children into their own models without changing
-/// the feature-facing `PlanningWorkspace` API.
-struct WorkspaceArchiveV1: Codable {
-    static let schemaVersion = 1
-
-    let mainEventID: UUID
-    let title: String
-    let mainEventStartsAt: Date
-    let mainEventEndsAt: Date?
-    let mainEventIsAllDay: Bool
-    let mainEventTimeZoneIdentifier: String
-    let mainEventLocation: EventLocation?
-    var mainEventImageData: Data?
-    let mainEventMediaAssetID: UUID?
-    let venueName: String
-    let location: String
-    let dressCode: String
-    let eventMessage: String
-    let planningMode: PlanningMode
-    var members: [WorkspaceMember]
-    /// Optional so archives written before relationship normalization migrate.
-    var eventParticipations: [EventParticipation]?
-    let mainEventParticipantIDs: [UUID]
-    var ideas: [PlanningIdea]
-    var timeline: [TimelineItem]
-    var eventExpenses: [EventExpense]
-    let workspaceBudgetCap: Decimal?
-    /// Optional for archives written before currency was workspace-scoped.
-    let currencyCode: String?
-    let mainEventBudgetCap: Decimal?
-    var notes: [EventNote]
-    var ideaResponses: [IdeaResponse]?
-    let mainEventStatus: MainEventStatus
-    let mainEventResponse: EventResponse?
-    var eventMoments: [EventMoment]
-    let isMainEventDeleted: Bool
-    var registry: [RegistryItem]
-    let isRegistryShared: Bool
-    let isCollaboratorLinkEnabled: Bool
-    let requiresCollaboratorApproval: Bool
-    let defaultCollaboratorPermission: PlanningPermission
-
-    init(workspace: PlanningWorkspace) {
-        mainEventID = workspace.mainEventID
-        title = workspace.title
-        mainEventStartsAt = workspace.mainEventStartsAt
-        mainEventEndsAt = workspace.mainEventEndsAt
-        mainEventIsAllDay = workspace.mainEventIsAllDay
-        mainEventTimeZoneIdentifier = workspace.mainEventTimeZoneIdentifier
-        mainEventLocation = workspace.mainEventLocation
-        mainEventImageData = workspace.mainEventImageData
-        mainEventMediaAssetID = workspace.mainEventMediaAssetID
-        venueName = workspace.venueName
-        location = workspace.location
-        dressCode = workspace.dressCode
-        eventMessage = workspace.eventMessage
-        planningMode = workspace.planningMode
-        members = workspace.members
-        eventParticipations = workspace.eventParticipations
-        mainEventParticipantIDs = workspace.mainEventParticipantIDs
-        ideas = workspace.ideas
-        timeline = workspace.timeline
-        eventExpenses = workspace.eventExpenses
-        workspaceBudgetCap = workspace.workspaceBudgetCap
-        currencyCode = workspace.currencyCode
-        mainEventBudgetCap = workspace.mainEventBudgetCap
-        notes = workspace.notes
-        ideaResponses = workspace.ideaResponses
-        mainEventStatus = workspace.mainEventStatus
-        mainEventResponse = workspace.mainEventResponse
-        eventMoments = workspace.eventMoments
-        isMainEventDeleted = workspace.isMainEventDeleted
-        registry = workspace.registry
-        isRegistryShared = workspace.isRegistryShared
-        isCollaboratorLinkEnabled = workspace.isCollaboratorLinkEnabled
-        requiresCollaboratorApproval = workspace.requiresCollaboratorApproval
-        defaultCollaboratorPermission = workspace.defaultCollaboratorPermission
-    }
-
-    func makeWorkspace() -> PlanningWorkspace {
-        PlanningWorkspace(
-            mainEventID: mainEventID,
-            title: title,
-            mainEventStartsAt: mainEventStartsAt,
-            mainEventEndsAt: mainEventEndsAt,
-            mainEventIsAllDay: mainEventIsAllDay,
-            mainEventTimeZoneIdentifier: mainEventTimeZoneIdentifier,
-            mainEventLocation: mainEventLocation,
-            mainEventImageData: mainEventImageData,
-            mainEventMediaAssetID: mainEventMediaAssetID,
-            venueName: venueName,
-            location: location,
-            dressCode: dressCode,
-            eventMessage: eventMessage,
-            planningMode: planningMode,
-            members: members,
-            eventParticipations: eventParticipations,
-            mainEventParticipantIDs: mainEventParticipantIDs,
-            ideas: ideas,
-            timeline: timeline,
-            eventExpenses: eventExpenses,
-            workspaceBudgetCap: workspaceBudgetCap,
-            currencyCode: currencyCode ?? Locale.current.currency?.identifier ?? "USD",
-            mainEventBudgetCap: mainEventBudgetCap,
-            notes: notes,
-            ideaResponses: ideaResponses ?? [],
-            mainEventStatus: mainEventStatus,
-            mainEventResponse: mainEventResponse,
-            eventMoments: eventMoments,
-            isMainEventDeleted: isMainEventDeleted,
-            registry: registry,
-            isRegistryShared: isRegistryShared,
-            isCollaboratorLinkEnabled: isCollaboratorLinkEnabled,
-            requiresCollaboratorApproval: requiresCollaboratorApproval,
-            defaultCollaboratorPermission: defaultCollaboratorPermission
-        )
-    }
-}
-
-private struct WorkspaceSyncEntityKey: Hashable {
-    let type: SyncEntityType
-    let id: UUID
-}
-
-private extension WorkspaceArchiveV1 {
-    func syncPayload(using encoder: JSONEncoder) throws -> Data {
-        var remote = self
-        // Responses have independent versions; a workspace snapshot must not
-        // overwrite a teammate's input or resend it under another account.
-        remote.ideaResponses = nil
-        remote.mainEventImageData = nil
-        remote.ideas = remote.ideas.map { idea in
-            var idea = idea
-            idea.imageData = nil
-            return idea
-        }
-        remote.timeline = remote.timeline.map { event in
-            var event = event
-            event.imageData = nil
-            return event
-        }
-        remote.registry = remote.registry.map { item in
-            var item = item
-            item.imageData = nil
-            return item
-        }
-        remote.eventMoments = remote.eventMoments.map { moment in
-            var moment = moment
-            moment.imageData = Data()
-            return moment
-        }
-        return try encoder.encode(remote)
-    }
-
-    func syncEntities(using encoder: JSONEncoder) throws -> [WorkspaceSyncEntityKey: Data] {
-        var entities: [WorkspaceSyncEntityKey: Data] = [:]
-
-        for member in members {
-            entities[.init(type: .participant, id: member.id)] = try encoder.encode(member)
-        }
-        for participation in eventParticipations ?? [] {
-            entities[.init(type: .eventParticipation, id: participation.id)] = try encoder.encode(participation)
-        }
-        for idea in ideas {
-            var remote = idea
-            remote.imageData = nil
-            entities[.init(type: .idea, id: idea.id)] = try encoder.encode(remote)
-        }
-        for event in timeline {
-            var remote = event
-            remote.imageData = nil
-            entities[.init(type: .event, id: event.id)] = try encoder.encode(remote)
-        }
-        for expense in eventExpenses {
-            entities[.init(type: .expense, id: expense.id)] = try encoder.encode(expense)
-        }
-        for note in notes {
-            entities[.init(type: .note, id: note.id)] = try encoder.encode(note)
-        }
-        for response in ideaResponses ?? [] {
-            entities[.init(type: .ideaResponse, id: response.id)] = try encoder.encode(response)
-        }
-        for moment in eventMoments {
-            var remote = moment
-            remote.imageData = Data()
-            entities[.init(type: .moment, id: moment.id)] = try encoder.encode(remote)
-        }
-        for item in registry {
-            var remote = item
-            remote.imageData = nil
-            entities[.init(type: .registryItem, id: item.id)] = try encoder.encode(remote)
-        }
-
-        return entities
-    }
-
-    mutating func preserveCollaborativeEntities(from local: WorkspaceArchiveV1) {
-        if mainEventImageData == nil,
-           mainEventMediaAssetID == local.mainEventMediaAssetID {
-            mainEventImageData = local.mainEventImageData
-        }
-        members = local.members
-        eventParticipations = local.eventParticipations
-        ideas = local.ideas
-        timeline = local.timeline
-        eventExpenses = local.eventExpenses
-        notes = local.notes
-        ideaResponses = local.ideaResponses
-        eventMoments = local.eventMoments
-        registry = local.registry
-    }
-
-    /// Bootstrap is metadata-only. Keep this account's downloaded bytes when
-    /// the server still references exactly the same asset, without restoring
-    /// removed records or overwriting remote fields with an older local copy.
-    mutating func preserveDownloadedMedia(from local: WorkspaceArchiveV1) {
-        if mainEventImageData == nil, let assetID = mainEventMediaAssetID,
-           assetID == local.mainEventMediaAssetID {
-            mainEventImageData = local.mainEventImageData
-        }
-        for index in ideas.indices {
-            guard ideas[index].imageData == nil, let assetID = ideas[index].mediaAssetID,
-                  let cached = local.ideas.first(where: { $0.id == ideas[index].id && $0.mediaAssetID == assetID }) else { continue }
-            ideas[index].imageData = cached.imageData
-        }
-        for index in timeline.indices {
-            guard timeline[index].imageData == nil, let assetID = timeline[index].mediaAssetID,
-                  let cached = local.timeline.first(where: { $0.id == timeline[index].id && $0.mediaAssetID == assetID }) else { continue }
-            timeline[index].imageData = cached.imageData
-        }
-        for index in registry.indices {
-            guard registry[index].imageData == nil, let assetID = registry[index].mediaAssetID,
-                  let cached = local.registry.first(where: { $0.id == registry[index].id && $0.mediaAssetID == assetID }) else { continue }
-            registry[index].imageData = cached.imageData
-        }
-        for index in eventMoments.indices {
-            guard eventMoments[index].imageData.isEmpty, let assetID = eventMoments[index].mediaAssetID,
-                  let cached = local.eventMoments.first(where: { $0.id == eventMoments[index].id && $0.mediaAssetID == assetID }) else { continue }
-            eventMoments[index].imageData = cached.imageData
-        }
-    }
-
-    mutating func applyEntity(
-        type: SyncEntityType,
-        id: UUID,
-        operation: SyncMutationOperation,
-        payload: Data,
-        decoder: JSONDecoder
-    ) throws {
-        switch type {
-        case .participant:
-            try applyRecord(WorkspaceMember.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &members)
-        case .eventParticipation:
-            var records = eventParticipations ?? []
-            try applyRecord(EventParticipation.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &records)
-            eventParticipations = records
-        case .idea:
-            try applyMediaRecord(PlanningIdea.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &ideas) { remote, local in
-                var remote = remote
-                if remote.imageData == nil, remote.mediaAssetID == local.mediaAssetID {
-                    remote.imageData = local.imageData
-                }
-                return remote
-            }
-        case .event:
-            try applyMediaRecord(TimelineItem.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &timeline) { remote, local in
-                var remote = remote
-                if remote.imageData == nil, remote.mediaAssetID == local.mediaAssetID {
-                    remote.imageData = local.imageData
-                }
-                return remote
-            }
-        case .expense:
-            try applyRecord(EventExpense.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &eventExpenses)
-        case .note:
-            try applyRecord(EventNote.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &notes)
-        case .ideaResponse:
-            var responses = ideaResponses ?? []
-            try applyRecord(IdeaResponse.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &responses)
-            ideaResponses = responses
-        case .moment:
-            try applyMediaRecord(EventMoment.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &eventMoments) { remote, local in
-                var remote = remote
-                if remote.imageData.isEmpty, remote.mediaAssetID == local.mediaAssetID {
-                    remote.imageData = local.imageData
-                }
-                return remote
-            }
-        case .registryItem:
-            try applyMediaRecord(RegistryItem.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &registry) { remote, local in
-                var remote = remote
-                if remote.imageData == nil, remote.mediaAssetID == local.mediaAssetID {
-                    remote.imageData = local.imageData
-                }
-                return remote
-            }
-        case .workspace, .attendance:
-            break
-        default:
-            break
-        }
-    }
-}
-
-private func applyMediaRecord<Record: Identifiable & Decodable>(
-    _ recordType: Record.Type,
-    id: Record.ID,
-    operation: SyncMutationOperation,
-    payload: Data,
-    decoder: JSONDecoder,
-    to records: inout [Record],
-    merging: (Record, Record) -> Record
-) throws where Record.ID: Equatable {
-    guard operation != .delete else {
-        records.removeAll { $0.id == id }
-        return
-    }
-    let remote = try decoder.decode(recordType, from: payload)
-    if let index = records.firstIndex(where: { $0.id == id }) {
-        records[index] = merging(remote, records[index])
-    } else {
-        records.append(remote)
-    }
-}
-
-private func applyRecord<Record: Identifiable & Decodable>(
-    _ recordType: Record.Type,
-    id: UUID,
-    operation: SyncMutationOperation,
-    payload: Data,
-    decoder: JSONDecoder,
-    to records: inout [Record]
-) throws where Record.ID == UUID {
-    if operation == .delete {
-        records.removeAll { $0.id == id }
-        return
-    }
-
-    let record = try decoder.decode(recordType, from: payload)
-    if let index = records.firstIndex(where: { $0.id == id }) {
-        records[index] = record
-    } else {
-        records.append(record)
-    }
-}
-
 @Model
 final class WorkspaceRecord {
     /// A remote workspace can legitimately be cached for more than one signed-in
@@ -397,8 +46,7 @@ final class WorkspacePersistenceController {
     private(set) var lastError: Error?
 
     @ObservationIgnored private let context: ModelContext
-    @ObservationIgnored private let encoder: JSONEncoder
-    @ObservationIgnored private let decoder: JSONDecoder
+    @ObservationIgnored private let codec: WorkspaceArchiveCodec
     @ObservationIgnored private weak var observedLibrary: WorkspaceLibrary?
     @ObservationIgnored private var pendingSaveTask: Task<Void, Never>?
     @ObservationIgnored private var isObserving = false
@@ -438,9 +86,7 @@ final class WorkspacePersistenceController {
         context = ModelContext(container)
         context.autosaveEnabled = false
 
-        encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        decoder = JSONDecoder()
+        codec = WorkspaceArchiveCodec()
     }
 
     static func bootstrap(
@@ -485,7 +131,7 @@ final class WorkspacePersistenceController {
                             record.payloadSchemaVersion
                         )
                     }
-                    return try decoder.decode(WorkspaceArchiveV1.self, from: record.payload)
+                    return try codec.decode(WorkspaceArchiveV1.self, from: record.payload)
                         .makeWorkspace()
                 }
                 return WorkspaceLibrary(workspaces: workspaces)
@@ -565,10 +211,7 @@ final class WorkspacePersistenceController {
             mutation.nextAttemptAt = nil
             mutation.leaseExpiresAt = nil
         }
-        for transfer in try context.fetch(FetchDescriptor<PendingMediaTransfer>())
-        where transfer.ownerUserID == activeUserID && transfer.state == .pending {
-            transfer.nextAttemptAt = nil
-        }
+        try mediaBookkeeper.stageFinalRetry()
         try context.save()
     }
 
@@ -580,12 +223,7 @@ final class WorkspacePersistenceController {
         pendingSaveTask = nil
 
         let userID = activeUserID
-        let transfers = try context.fetch(FetchDescriptor<PendingMediaTransfer>())
-            .filter { $0.ownerUserID == userID }
-        for transfer in transfers {
-            try? FileManager.default.removeItem(atPath: transfer.localFilePath)
-            context.delete(transfer)
-        }
+        try mediaBookkeeper.stageRemoval()
 
         for record in try context.fetch(FetchDescriptor<WorkspaceRecord>())
         where record.ownerUserID == userID {
@@ -654,11 +292,12 @@ final class WorkspacePersistenceController {
                 .filter { $0.ownerUserID == activeUserID }
             : []
         let persistedIDs = Set(archives.map(\.mainEventID))
+        let outbox = WorkspaceOutboxWriter(context: context, codec: codec, ownerUserID: activeUserID)
 
         for record in existingRecords where !persistedIDs.contains(record.id) {
             context.delete(record)
             guard enqueuesMutations else { continue }
-            coalesceDeletion(
+            outbox.coalesceDeletion(
                 scopeID: record.id,
                 baseVersion: record.serverVersion,
                 pendingMutations: pendingMutations
@@ -666,15 +305,15 @@ final class WorkspacePersistenceController {
         }
 
         for (sortOrder, archive) in archives.enumerated() {
-            let payload = try encoder.encode(archive)
-            let syncPayload = try archive.syncPayload(using: encoder)
+            let payload = try codec.encode(archive)
+            let syncPayload = try archive.syncPayload(using: codec)
             let existingRecord = recordsByID[archive.mainEventID]
             let previousArchive = try existingRecord.map {
-                try decoder.decode(WorkspaceArchiveV1.self, from: $0.payload)
+                try codec.decode(WorkspaceArchiveV1.self, from: $0.payload)
             }
             let payloadChanged = existingRecord?.payload != payload
             let syncPayloadChanged = try previousArchive.map {
-                try $0.syncPayload(using: encoder) != syncPayload
+                try $0.syncPayload(using: codec) != syncPayload
             } ?? true
             let orderChanged = existingRecord?.sortOrder != sortOrder
 
@@ -698,19 +337,19 @@ final class WorkspacePersistenceController {
 
             guard enqueuesMutations else { continue }
             if syncPayloadChanged || existingRecord == nil {
-                coalesceMutation(
-                scopeID: archive.mainEventID,
-                entityType: .workspace,
-                entityID: archive.mainEventID,
-                payload: syncPayload,
-                operation: existingRecord == nil ? .create : .update,
-                // Workspace snapshots are the compatibility/materialized view.
-                // Independently versioned child records are the collaboration boundary.
-                baseVersion: nil,
-                pendingMutations: pendingMutations
+                outbox.coalesceMutation(
+                    scopeID: archive.mainEventID,
+                    entityType: .workspace,
+                    entityID: archive.mainEventID,
+                    payload: syncPayload,
+                    operation: existingRecord == nil ? .create : .update,
+                    // Workspace snapshots are the compatibility/materialized view.
+                    // Independently versioned child records are the collaboration boundary.
+                    baseVersion: nil,
+                    pendingMutations: pendingMutations
                 )
             }
-            try coalesceEntityMutations(
+            try outbox.coalesceEntityMutations(
                 scopeID: archive.mainEventID,
                 previousArchive: previousArchive,
                 archive: archive,
@@ -724,167 +363,6 @@ final class WorkspacePersistenceController {
                 onPendingMutations?()
             }
         }
-    }
-
-    private func coalesceDeletion(
-        scopeID: UUID,
-        baseVersion: Int,
-        pendingMutations: [PendingMutation]
-    ) {
-        if let pending = pendingMutations
-            .filter({ mutation in
-                mutation.scopeID == scopeID
-                    && mutation.entityType == .workspace
-                    && mutation.entityID == scopeID
-                    && mutation.state == .pending
-            })
-            .max(by: { $0.createdAt < $1.createdAt }) {
-            // If a local create never reached the server, deleting the create is
-            // the complete operation. Otherwise the existing mutation becomes a
-            // durable tombstone for the backend to acknowledge later.
-            if pending.operation == .create {
-                context.delete(pending)
-            } else {
-                pending.operation = .delete
-                pending.payload = Data()
-                pending.attemptCount = 0
-                pending.nextAttemptAt = nil
-                pending.lastFailureCode = nil
-                pending.baseVersion = baseVersion
-            }
-            return
-        }
-
-        SyncOutbox.enqueue(
-            SyncMutationDraft(
-                scopeID: scopeID,
-                entityType: .workspace,
-                entityID: scopeID,
-                operation: .delete,
-                payload: Data(),
-                baseVersion: baseVersion
-            ),
-            ownerUserID: activeUserID,
-            in: context
-        )
-    }
-
-    /// Repeated local edits should update one unsent outbox entry rather than
-    /// create an unbounded mutation stream. Once an entry is leased or needs
-    /// attention, a fresh update is inserted and the earlier identity remains
-    /// stable for safe retries.
-    private func coalesceMutation(
-        scopeID: UUID,
-        entityType: SyncEntityType,
-        entityID: UUID,
-        payload: Data,
-        operation: SyncMutationOperation,
-        baseVersion: Int?,
-        pendingMutations: [PendingMutation]
-    ) {
-        if let pending = pendingMutations
-            .filter({ mutation in
-                mutation.scopeID == scopeID
-                    && mutation.entityType == entityType
-                    && mutation.entityID == entityID
-                    && mutation.state == .pending
-            })
-            .max(by: { $0.createdAt < $1.createdAt }) {
-            pending.payload = payload
-            if pending.operation != .create {
-                pending.operation = operation
-            }
-            pending.attemptCount = 0
-            pending.nextAttemptAt = nil
-            pending.lastFailureCode = nil
-            pending.baseVersion = baseVersion
-            return
-        }
-
-        SyncOutbox.enqueue(
-            SyncMutationDraft(
-                scopeID: scopeID,
-                entityType: entityType,
-                entityID: entityID,
-                operation: operation,
-                payload: payload,
-                baseVersion: baseVersion
-            ),
-            ownerUserID: activeUserID,
-            in: context
-        )
-    }
-
-    private func coalesceEntityMutations(
-        scopeID: UUID,
-        previousArchive: WorkspaceArchiveV1?,
-        archive: WorkspaceArchiveV1,
-        pendingMutations: [PendingMutation]
-    ) throws {
-        let previousEntities = try previousArchive?.syncEntities(using: encoder) ?? [:]
-        let entities = try archive.syncEntities(using: encoder)
-
-        for (key, payload) in entities {
-            let previousPayload = previousEntities[key]
-            guard previousPayload != payload else { continue }
-            coalesceMutation(
-                scopeID: scopeID,
-                entityType: key.type,
-                entityID: key.id,
-                payload: payload,
-                operation: previousPayload == nil ? .create : .update,
-                baseVersion: nil,
-                pendingMutations: pendingMutations
-            )
-        }
-
-        for key in previousEntities.keys where entities[key] == nil {
-            coalesceEntityDeletion(
-                scopeID: scopeID,
-                key: key,
-                pendingMutations: pendingMutations
-            )
-        }
-    }
-
-    private func coalesceEntityDeletion(
-        scopeID: UUID,
-        key: WorkspaceSyncEntityKey,
-        pendingMutations: [PendingMutation]
-    ) {
-        if let pending = pendingMutations
-            .filter({ mutation in
-                mutation.scopeID == scopeID
-                    && mutation.entityType == key.type
-                    && mutation.entityID == key.id
-                    && mutation.state == .pending
-            })
-            .max(by: { $0.createdAt < $1.createdAt }) {
-            if pending.operation == .create {
-                context.delete(pending)
-            } else {
-                pending.operation = .delete
-                pending.payload = Data()
-                pending.attemptCount = 0
-                pending.nextAttemptAt = nil
-                pending.lastFailureCode = nil
-                pending.baseVersion = nil
-            }
-            return
-        }
-
-        SyncOutbox.enqueue(
-            SyncMutationDraft(
-                scopeID: scopeID,
-                entityType: key.type,
-                entityID: key.id,
-                operation: .delete,
-                payload: Data(),
-                baseVersion: nil
-            ),
-            ownerUserID: activeUserID,
-            in: context
-        )
     }
 
     func pendingScopeIDs() throws -> Set<UUID> {
@@ -930,7 +408,7 @@ final class WorkspacePersistenceController {
 
         for mutation in mutations
         where mutation.entityType == .workspace && mutation.operation != .delete {
-            let archive = try decoder.decode(WorkspaceArchiveV1.self, from: mutation.payload)
+            let archive = try codec.decode(WorkspaceArchiveV1.self, from: mutation.payload)
             let intendedScopeID = archive.mainEventID
             guard mutation.scopeID != intendedScopeID || mutation.entityID != intendedScopeID,
                   let workspace = workspacesByID[intendedScopeID]
@@ -960,11 +438,7 @@ final class WorkspacePersistenceController {
                 context.delete(affectedMutation)
             }
 
-            for transfer in try context.fetch(FetchDescriptor<PendingMediaTransfer>())
-            where transfer.ownerUserID == activeUserID && transfer.scopeID == corruptScopeID {
-                try? FileManager.default.removeItem(atPath: transfer.localFilePath)
-                context.delete(transfer)
-            }
+            try mediaBookkeeper.stageRemoval(scopeID: corruptScopeID)
 
             for checkpoint in try context.fetch(FetchDescriptor<SyncCheckpoint>())
             where checkpoint.ownerUserID == activeUserID && checkpoint.scopeID == corruptScopeID {
@@ -978,13 +452,13 @@ final class WorkspacePersistenceController {
                     entityType: .workspace,
                     entityID: intendedScopeID,
                     operation: .create,
-                    payload: try repairedArchive.syncPayload(using: encoder),
+                    payload: try repairedArchive.syncPayload(using: codec),
                     baseVersion: nil
                 ),
                 ownerUserID: activeUserID,
                 in: context
             )
-            for (key, payload) in try repairedArchive.syncEntities(using: encoder) {
+            for (key, payload) in try repairedArchive.syncEntities(using: codec) {
                 SyncOutbox.enqueue(
                     SyncMutationDraft(
                         scopeID: intendedScopeID,
@@ -1007,55 +481,13 @@ final class WorkspacePersistenceController {
         return repairedScopes.count
     }
 
+    // Build for each operation so account switches never leave a stale owner.
+    private var mediaBookkeeper: WorkspaceMediaBookkeeper {
+        WorkspaceMediaBookkeeper(context: context, codec: codec, ownerUserID: activeUserID)
+    }
+
     func prepareMediaTransfers(from library: WorkspaceLibrary) throws {
-        let existing = try context.fetch(FetchDescriptor<PendingMediaTransfer>())
-            .filter { $0.ownerUserID == activeUserID }
-        let existingByEntity = Dictionary(
-            existing.map { (($0.scopeID.uuidString + $0.entityID.uuidString), $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        var activeKeys = Set<String>()
-
-        for workspace in library.workspaces {
-            for attachment in workspace.mediaAttachments
-            where attachment.mediaAssetID == nil {
-                guard let data = attachment.imageData, !data.isEmpty else { continue }
-                let key = workspace.mainEventID.uuidString + attachment.entityID.uuidString
-                activeKeys.insert(key)
-                if let transfer = existingByEntity[key] {
-                    try data.write(to: URL(fileURLWithPath: transfer.localFilePath), options: .atomic)
-                    if transfer.state == .requiresAttention {
-                        transfer.state = .pending
-                        transfer.nextAttemptAt = nil
-                    }
-                    continue
-                }
-
-                let contentType = Self.imageContentType(for: data)
-                let id = UUID()
-                let fileURL = try mediaOutboxURL(
-                    transferID: id,
-                    fileExtension: Self.fileExtension(for: contentType)
-                )
-                try data.write(to: fileURL, options: .atomic)
-                context.insert(
-                    PendingMediaTransfer(
-                        id: id,
-                        scopeID: workspace.mainEventID,
-                        entityID: attachment.entityID,
-                        localFileURL: fileURL,
-                        contentType: contentType,
-                        ownerUserID: activeUserID
-                    )
-                )
-            }
-        }
-
-        for transfer in existing
-        where !activeKeys.contains(transfer.scopeID.uuidString + transfer.entityID.uuidString) {
-            try? FileManager.default.removeItem(atPath: transfer.localFilePath)
-            context.delete(transfer)
-        }
+        try mediaBookkeeper.stagePreparation(from: library)
         if context.hasChanges { try context.save() }
     }
 
@@ -1063,138 +495,35 @@ final class WorkspacePersistenceController {
     /// R2 outbox. This runs before the first push so a legacy base64 payload
     /// cannot fail with HTTP 413 and block the media worker behind it.
     func sanitizePendingMediaMutations() throws {
-        let mutations = try context.fetch(FetchDescriptor<PendingMutation>())
-            .filter { $0.ownerUserID == activeUserID && $0.operation != .delete }
-        for mutation in mutations {
-            let sanitized: Data?
-            switch mutation.entityType {
-            case .workspace:
-                sanitized = try decoder.decode(WorkspaceArchiveV1.self, from: mutation.payload)
-                    .syncPayload(using: encoder)
-            case .idea:
-                var record = try decoder.decode(PlanningIdea.self, from: mutation.payload)
-                record.imageData = nil
-                sanitized = try encoder.encode(record)
-            case .event:
-                var record = try decoder.decode(TimelineItem.self, from: mutation.payload)
-                record.imageData = nil
-                sanitized = try encoder.encode(record)
-            case .moment:
-                var record = try decoder.decode(EventMoment.self, from: mutation.payload)
-                record.imageData = Data()
-                sanitized = try encoder.encode(record)
-            case .registryItem:
-                var record = try decoder.decode(RegistryItem.self, from: mutation.payload)
-                record.imageData = nil
-                sanitized = try encoder.encode(record)
-            default:
-                sanitized = nil
-            }
-            if let sanitized, mutation.payload != sanitized {
-                mutation.payload = sanitized
-                mutation.state = .pending
-                mutation.leaseExpiresAt = nil
-                mutation.nextAttemptAt = nil
-                mutation.lastFailureCode = nil
-            }
-        }
+        try mediaBookkeeper.stageSanitization()
         if context.hasChanges { try context.save() }
     }
 
     func pendingMediaTransfers(scopeID: UUID? = nil) throws -> [PendingMediaTransferSnapshot] {
-        try context.fetch(FetchDescriptor<PendingMediaTransfer>())
-            .filter {
-                $0.ownerUserID == activeUserID
-                    && (scopeID == nil || $0.scopeID == scopeID)
-                    && $0.state != .uploading
-                    && ($0.nextAttemptAt == nil || $0.nextAttemptAt! <= .now)
-            }
-            .sorted { $0.createdAt < $1.createdAt }
-            .map {
-                PendingMediaTransferSnapshot(
-                    id: $0.id,
-                    scopeID: $0.scopeID,
-                    entityID: $0.entityID,
-                    localFileURL: URL(fileURLWithPath: $0.localFilePath),
-                    contentType: $0.contentType,
-                    attemptCount: $0.attemptCount
-                )
-            }
+        try mediaBookkeeper.pendingMediaTransfers(scopeID: scopeID)
     }
 
     func hasPendingMediaTransfers() throws -> Bool {
-        try context.fetch(FetchDescriptor<PendingMediaTransfer>())
-            .contains { $0.ownerUserID == activeUserID }
+        try mediaBookkeeper.hasPendingMediaTransfers()
     }
 
     func pendingMediaScopeIDs() throws -> Set<UUID> {
-        Set(try context.fetch(FetchDescriptor<PendingMediaTransfer>())
-            .filter { $0.ownerUserID == activeUserID }.map(\.scopeID))
+        try mediaBookkeeper.pendingMediaScopeIDs()
     }
 
     func markMediaTransferUploading(_ id: UUID) throws {
-        guard let transfer = try mediaTransfer(id) else { return }
-        transfer.state = .uploading
+        guard try mediaBookkeeper.stageUploading(id) else { return }
         try context.save()
     }
 
     func completeMediaTransfer(_ id: UUID) throws {
-        guard let transfer = try mediaTransfer(id) else { return }
-        try? FileManager.default.removeItem(atPath: transfer.localFilePath)
-        context.delete(transfer)
+        guard try mediaBookkeeper.stageCompletion(id) else { return }
         try context.save()
     }
 
     func failMediaTransfer(_ id: UUID) throws {
-        guard let transfer = try mediaTransfer(id) else { return }
-        transfer.attemptCount += 1
-        transfer.state = transfer.attemptCount >= 5 ? .requiresAttention : .pending
-        transfer.nextAttemptAt = transfer.state == .pending
-            ? Date.now.addingTimeInterval(min(pow(2, Double(transfer.attemptCount)), 60))
-            : nil
+        guard try mediaBookkeeper.stageFailure(id) else { return }
         try context.save()
-    }
-
-    private func mediaTransfer(_ id: UUID) throws -> PendingMediaTransfer? {
-        try context.fetch(FetchDescriptor<PendingMediaTransfer>())
-            .first { $0.id == id && $0.ownerUserID == activeUserID }
-    }
-
-    private func mediaOutboxURL(transferID: UUID, fileExtension: String) throws -> URL {
-        let root = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let directory = root.appending(path: "GatheroryMediaOutbox", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory.appending(path: "\(transferID.uuidString).\(fileExtension)")
-    }
-
-    private static func imageContentType(for data: Data) -> String {
-        let bytes = [UInt8](data.prefix(12))
-        if bytes.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return "image/png" }
-        if bytes.starts(with: [0x52, 0x49, 0x46, 0x46]) { return "image/webp" }
-        if bytes.count >= 12,
-           String(bytes: bytes[4..<12], encoding: .ascii)?.contains("ftypheic") == true {
-            return "image/heic"
-        }
-        if bytes.count >= 12,
-           String(bytes: bytes[4..<12], encoding: .ascii)?.contains("ftypheif") == true {
-            return "image/heif"
-        }
-        return "image/jpeg"
-    }
-
-    private static func fileExtension(for contentType: String) -> String {
-        switch contentType {
-        case "image/png": "png"
-        case "image/webp": "webp"
-        case "image/heic": "heic"
-        case "image/heif": "heif"
-        default: "jpg"
-        }
     }
 
     func currentCursor(for scopeID: UUID) throws -> String? {
@@ -1210,60 +539,13 @@ final class WorkspacePersistenceController {
         entities: [RemoteEntitySnapshot] = [],
         to library: WorkspaceLibrary
     ) throws {
-        let pendingScopes = try pendingScopeIDs()
-        var remoteWorkspaces: [PlanningWorkspace] = []
-        let entitiesByScope = Dictionary(grouping: entities, by: \.scopeID)
-
-        for snapshot in snapshots where !pendingScopes.contains(snapshot.scopeID) {
-            guard snapshot.effectivePayloadSchemaVersion == SyncPayloadContract.currentVersion else {
-                throw WorkspacePersistenceError.unsupportedSyncPayloadVersion(
-                    snapshot.effectivePayloadSchemaVersion
-                )
-            }
-            var archive = try decoder.decode(WorkspaceArchiveV1.self, from: snapshot.payload)
-            for entity in entitiesByScope[snapshot.scopeID] ?? [] {
-                guard entity.effectivePayloadSchemaVersion == SyncPayloadContract.currentVersion else {
-                    throw WorkspacePersistenceError.unsupportedSyncPayloadVersion(
-                        entity.effectivePayloadSchemaVersion
-                    )
-                }
-                try archive.applyEntity(
-                    type: entity.entityType,
-                    id: entity.entityID,
-                    operation: .update,
-                    payload: entity.payload,
-                    decoder: decoder
-                )
-            }
-            let record = try context.fetch(FetchDescriptor<WorkspaceRecord>())
-                .first(where: {
-                    $0.id == snapshot.scopeID && $0.ownerUserID == activeUserID
-                })
-
-            if let record, let cached = try? decoder.decode(WorkspaceArchiveV1.self, from: record.payload) {
-                archive.preserveDownloadedMedia(from: cached)
-            }
-            let payload = try encoder.encode(archive)
-
-            if let record {
-                record.payload = payload
-                record.payloadSchemaVersion = WorkspaceArchiveV1.schemaVersion
-                record.serverVersion = snapshot.serverVersion
-                record.updatedAt = snapshot.updatedAt
-            } else {
-                context.insert(
-                    WorkspaceRecord(
-                        id: snapshot.scopeID,
-                        payload: payload,
-                        sortOrder: library.workspaces.count + remoteWorkspaces.count,
-                        updatedAt: snapshot.updatedAt,
-                        ownerUserID: activeUserID,
-                        serverVersion: snapshot.serverVersion
-                    )
-                )
-            }
-            remoteWorkspaces.append(archive.makeWorkspace())
-        }
+        let merger = WorkspaceRemoteMerger(context: context, codec: codec, ownerUserID: activeUserID)
+        let remoteWorkspaces = try merger.stageBootstrap(
+            snapshots,
+            entities: entities,
+            pendingScopes: pendingScopeIDs(),
+            existingWorkspaceCount: library.workspaces.count
+        )
 
         if context.hasChanges { try context.save() }
         guard !remoteWorkspaces.isEmpty else { return }
@@ -1276,107 +558,27 @@ final class WorkspacePersistenceController {
         scopeID: UUID,
         to library: WorkspaceLibrary
     ) throws {
-        // Most passive pulls are empty. Advance only the cursor, without
-        // decoding/re-encoding image-bearing archives or touching the UI graph.
-        if page.changes.isEmpty {
-            try saveRemoteCheckpoint(page.nextCursor, scopeID: scopeID)
-            return
-        }
-        let appliedIDs = Set(
-            try context.fetch(FetchDescriptor<AppliedSyncEnvelope>())
-                .filter { $0.ownerUserID == activeUserID }
-                .map(\.id)
+        let merger = WorkspaceRemoteMerger(context: context, codec: codec, ownerUserID: activeUserID)
+        let result = try merger.stagePage(
+            page,
+            scopeID: scopeID,
+            existingWorkspaceCount: library.workspaces.count
         )
-        let newChanges = page.changes.filter { !appliedIDs.contains($0.id) }
-        guard !newChanges.isEmpty else {
-            try saveRemoteCheckpoint(page.nextCursor, scopeID: scopeID)
-            return
-        }
-        let record = try context.fetch(FetchDescriptor<WorkspaceRecord>())
-            .first(where: {
-                $0.id == scopeID && $0.ownerUserID == activeUserID
-            })
-        var archive = try record.map {
-            try decoder.decode(WorkspaceArchiveV1.self, from: $0.payload)
-        }
-        var workspaceServerVersion = record?.serverVersion ?? 0
-        var latestUpdatedAt = record?.updatedAt ?? .distantPast
-        var shouldDeleteWorkspace = false
 
-        for change in newChanges {
-            guard change.effectivePayloadSchemaVersion == SyncPayloadContract.currentVersion else {
-                throw WorkspacePersistenceError.unsupportedSyncPayloadVersion(
-                    change.effectivePayloadSchemaVersion
-                )
-            }
-            if change.entityType == .workspace {
-                switch change.operation {
-                case .delete:
-                    archive = nil
-                    shouldDeleteWorkspace = true
-                case .create, .update:
-                    var remoteArchive = try decoder.decode(
-                        WorkspaceArchiveV1.self,
-                        from: change.payload
-                    )
-                    if let archive {
-                        remoteArchive.preserveCollaborativeEntities(from: archive)
-                    }
-                    archive = remoteArchive
-                    workspaceServerVersion = change.serverVersion
-                    shouldDeleteWorkspace = false
-                }
-            } else if var currentArchive = archive {
-                try currentArchive.applyEntity(
-                    type: change.entityType,
-                    id: change.entityID,
-                    operation: change.operation,
-                    payload: change.payload,
-                    decoder: decoder
-                )
-                archive = currentArchive
-            }
-            latestUpdatedAt = max(latestUpdatedAt, change.occurredAt)
-
-            context.insert(
-                AppliedSyncEnvelope(
-                    id: change.id,
-                    scopeID: scopeID,
-                    ownerUserID: activeUserID
-                )
-            )
-        }
-
-        if shouldDeleteWorkspace {
-            if let record { context.delete(record) }
-        } else if let archive {
-            let payload = try encoder.encode(archive)
-            if let record {
-                record.payload = payload
-                record.payloadSchemaVersion = WorkspaceArchiveV1.schemaVersion
-                record.serverVersion = workspaceServerVersion
-                record.updatedAt = latestUpdatedAt
-            } else {
-                context.insert(
-                    WorkspaceRecord(
-                        id: scopeID,
-                        payload: payload,
-                        sortOrder: library.workspaces.count,
-                        updatedAt: latestUpdatedAt,
-                        ownerUserID: activeUserID,
-                        serverVersion: workspaceServerVersion
-                    )
-                )
-            }
-        }
-
+        // Commit staged records and receipts with the cursor, before publishing.
         try saveRemoteCheckpoint(page.nextCursor, scopeID: scopeID)
 
-        suppressNextObservedChange = true
-        if shouldDeleteWorkspace {
-            library.remove(workspaceID: scopeID)
-        } else if let archive {
-            library.upsert(archive.makeWorkspace())
+        switch result {
+        case .checkpointOnly:
+            // Empty/duplicate pages must not replace the graph or suppress edits.
+            return
+        case let .merged(archive, shouldDeleteWorkspace):
+            suppressNextObservedChange = true
+            if shouldDeleteWorkspace {
+                library.remove(workspaceID: scopeID)
+            } else if let archive {
+                library.upsert(archive.makeWorkspace())
+            }
         }
     }
 

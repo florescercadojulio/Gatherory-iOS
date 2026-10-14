@@ -187,16 +187,12 @@ final class PlanningWorkspace {
         self.eventParticipations = normalizedParticipations
         self.eventExpenses = eventExpenses
         self.workspaceBudgetCap = workspaceBudgetCap
-        let normalizedCurrencyCode = currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        self.currencyCode = normalizedCurrencyCode.count == 3 ? normalizedCurrencyCode : "USD"
-        let delegatedBudget = scopedTimeline.compactMap(\.budgetCap).reduce(Decimal.zero, +)
-        if let mainEventBudgetCap {
-            self.mainEventBudgetCap = mainEventBudgetCap
-        } else if let workspaceBudgetCap {
-            self.mainEventBudgetCap = max(.zero, workspaceBudgetCap - delegatedBudget)
-        } else {
-            self.mainEventBudgetCap = nil
-        }
+        self.currencyCode = WorkspaceBudgetRules.normalizedCurrencyCode(currencyCode)
+        self.mainEventBudgetCap = WorkspaceBudgetRules.initialMainAllocation(
+            explicitAllocation: mainEventBudgetCap,
+            workspaceCap: workspaceBudgetCap,
+            childAllocations: scopedTimeline.map(\.budgetCap)
+        )
         self.ideaResponses = ideaResponses
         self.notes = notes.map { note in
             guard note.eventID == nil else { return note }
@@ -458,17 +454,21 @@ final class PlanningWorkspace {
     }
 
     var workspaceBudgetRemaining: Decimal? {
-        workspaceBudgetCap.map { $0 - workspaceCostTotal }
+        workspaceBudgetCap.flatMap {
+            WorkspaceBudgetRules.remaining(cap: $0, cost: workspaceCostTotal)
+        }
     }
 
     var allocatedBudgetTotal: Decimal {
-        (mainEventBudgetCap ?? .zero)
-            + timeline.compactMap(\.budgetCap).reduce(Decimal.zero, +)
+        WorkspaceBudgetRules.allocatedTotal(
+            mainAllocation: mainEventBudgetCap,
+            childAllocations: timeline.map(\.budgetCap)
+        )
     }
 
     var freeBudgetPool: Decimal {
         guard let workspaceBudgetCap else { return .zero }
-        return max(.zero, workspaceBudgetCap - allocatedBudgetTotal)
+        return WorkspaceBudgetRules.freePool(workspaceCap: workspaceBudgetCap, allocatedTotal: allocatedBudgetTotal)
     }
 
     func budgetCap(for reference: EventReference) -> Decimal? {
@@ -483,28 +483,33 @@ final class PlanningWorkspace {
     }
 
     func budgetRemaining(for reference: EventReference) -> Decimal? {
-        budgetCap(for: reference).map { $0 - costTotal(for: reference) }
+        budgetCap(for: reference).flatMap {
+            WorkspaceBudgetRules.remaining(cap: $0, cost: costTotal(for: reference))
+        }
     }
 
     /// Changes the workspace cap while preserving every existing allocation.
     /// Increasing the cap adds to the free pool; a new cap starts on the main event.
     @discardableResult
     func updateWorkspaceBudgetCap(_ newCap: Decimal?) -> Bool {
-        guard let newCap else {
+        guard let change = WorkspaceBudgetRules.capChange(
+            to: newCap,
+            currentCap: workspaceBudgetCap,
+            allocatedTotal: allocatedBudgetTotal
+        ) else { return false }
+
+        switch change {
+        case .disable:
             workspaceBudgetCap = nil
             mainEventBudgetCap = nil
             for index in timeline.indices {
                 timeline[index].budgetCap = nil
             }
-            return true
-        }
-
-        guard newCap >= .zero else { return false }
-        let hadBudget = workspaceBudgetCap != nil
-        guard !hadBudget || newCap >= allocatedBudgetTotal else { return false }
-        workspaceBudgetCap = newCap
-        if !hadBudget {
-            mainEventBudgetCap = newCap
+        case .start(let cap):
+            workspaceBudgetCap = cap
+            mainEventBudgetCap = cap
+        case .resize(let cap):
+            workspaceBudgetCap = cap
         }
         return true
     }
@@ -531,24 +536,24 @@ final class PlanningWorkspace {
     /// remainder. The workspace cap never changes.
     @discardableResult
     func allocateInitialBudget(_ amount: Decimal?, to eventID: UUID) -> Bool {
-        guard let amount, amount > .zero,
-              workspaceBudgetCap != nil,
-              budgetCap(for: .subevent(eventID)) != nil else {
+        guard workspaceBudgetCap != nil,
+              budgetCap(for: .subevent(eventID)) != nil,
+              let funding = WorkspaceBudgetRules.initialFunding(
+                amount: amount,
+                freePool: freeBudgetPool,
+                mainAllocation: mainEventBudgetCap
+              ) else {
             return false
         }
-
-        let poolContribution = min(freeBudgetPool, amount)
-        let mainContribution = amount - poolContribution
-        guard (mainEventBudgetCap ?? .zero) >= mainContribution else { return false }
 
         let destination = BudgetAccount.event(.subevent(eventID))
-        if poolContribution > .zero,
-           !transferBudget(poolContribution, from: .freePool, to: destination) {
+        if funding.poolContribution > .zero,
+           !transferBudget(funding.poolContribution, from: .freePool, to: destination) {
             return false
         }
 
-        if mainContribution > .zero,
-           !transferBudget(mainContribution, from: .event(.main), to: destination) {
+        if funding.mainContribution > .zero,
+           !transferBudget(funding.mainContribution, from: .event(.main), to: destination) {
             return false
         }
 
@@ -574,29 +579,26 @@ final class PlanningWorkspace {
     ) -> Bool {
         guard workspaceBudgetCap != nil,
               source != destination,
-              amount > .zero,
-              let sourceBalance = budgetBalance(for: source),
-              sourceBalance >= amount,
-              budgetBalance(for: destination) != nil else {
+              let transfer = WorkspaceBudgetRules.transfer(
+                amount: amount,
+                sourceBalance: budgetBalance(for: source),
+                destinationBalance: budgetBalance(for: destination)
+              ) else {
             return false
         }
 
         switch (source, destination) {
         case (.freePool, .event(let destinationEvent)):
-            guard let destinationCap = budgetCap(for: destinationEvent) else { return false }
-            return setBudgetCap(destinationCap + amount, for: destinationEvent)
+            return setBudgetCap(transfer.destinationBalance, for: destinationEvent)
 
         case (.event(let sourceEvent), .freePool):
-            guard let sourceCap = budgetCap(for: sourceEvent) else { return false }
-            return setBudgetCap(sourceCap - amount, for: sourceEvent)
+            return setBudgetCap(transfer.sourceBalance, for: sourceEvent)
 
         case (.event(let sourceEvent), .event(let destinationEvent)):
-            guard let sourceCap = budgetCap(for: sourceEvent),
-                  let destinationCap = budgetCap(for: destinationEvent),
-                  setBudgetCap(sourceCap - amount, for: sourceEvent) else {
+            guard setBudgetCap(transfer.sourceBalance, for: sourceEvent) else {
                 return false
             }
-            return setBudgetCap(destinationCap + amount, for: destinationEvent)
+            return setBudgetCap(transfer.destinationBalance, for: destinationEvent)
 
         case (.freePool, .freePool):
             return false
@@ -1173,11 +1175,11 @@ final class PlanningWorkspace {
         guard canAddChildEvent(to: item.parentEventID ?? mainEventID) else { return }
         var childEvent = item
         childEvent.parentEventID = mainEventID
-        if workspaceBudgetCap == nil {
-            childEvent.budgetCap = nil
-        } else if childEvent.budgetCap != nil {
-            childEvent.budgetCap = .zero
-        }
+        childEvent.budgetCap = WorkspaceBudgetRules.childAllocation(
+            workspaceCap: workspaceBudgetCap,
+            previousAllocation: nil,
+            requestedAllocation: childEvent.budgetCap
+        )
         if childEvent.participantIDs.isEmpty {
             childEvent.participantIDs = mainEventParticipantIDs
         }
@@ -1198,24 +1200,11 @@ final class PlanningWorkspace {
            selectedEventReference == .subevent(childEvent.id) {
             selectedEventReference = .main
         }
-        guard workspaceBudgetCap != nil else {
-            childEvent.budgetCap = nil
-            timeline[index] = childEvent
-            reconcileParticipations(for: childEvent.id, participantIDs: childEvent.participantIDs)
-            return
-        }
-        switch (previousAllocation, childEvent.budgetCap) {
-        case (.some, .none):
-            break
-        case (.none, .some):
-            childEvent.budgetCap = .zero
-        case (.some(let allocation), .some):
-            // Allocation changes go through `transferBudget` so this editor
-            // can't accidentally create or discard budget.
-            childEvent.budgetCap = allocation
-        case (.none, .none):
-            break
-        }
+        childEvent.budgetCap = WorkspaceBudgetRules.childAllocation(
+            workspaceCap: workspaceBudgetCap,
+            previousAllocation: previousAllocation,
+            requestedAllocation: childEvent.budgetCap
+        )
         timeline[index] = childEvent
         reconcileParticipations(for: childEvent.id, participantIDs: childEvent.participantIDs)
     }

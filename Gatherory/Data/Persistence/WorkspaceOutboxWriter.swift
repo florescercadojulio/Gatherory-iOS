@@ -1,0 +1,179 @@
+import Foundation
+import SwiftData
+
+/// Stages outbox changes in the controller's transaction.
+/// The caller supplies mutations already filtered to this account and owns
+/// saving, rollback, and notification after the transaction succeeds.
+@MainActor
+struct WorkspaceOutboxWriter {
+    private let context: ModelContext
+    private let codec: WorkspaceArchiveCodec
+    private let ownerUserID: String?
+
+    init(context: ModelContext, codec: WorkspaceArchiveCodec, ownerUserID: String?) {
+        self.context = context
+        self.codec = codec
+        self.ownerUserID = ownerUserID
+    }
+
+    func coalesceDeletion(
+        scopeID: UUID,
+        baseVersion: Int,
+        pendingMutations: [PendingMutation]
+    ) {
+        if let pending = pendingMutations
+            .filter({ mutation in
+                mutation.scopeID == scopeID
+                    && mutation.entityType == .workspace
+                    && mutation.entityID == scopeID
+                    && mutation.state == .pending
+            })
+            .max(by: { $0.createdAt < $1.createdAt }) {
+            // If a local create never reached the server, deleting the create is
+            // the complete operation. Otherwise the existing mutation becomes a
+            // durable tombstone for the backend to acknowledge later.
+            if pending.operation == .create {
+                context.delete(pending)
+            } else {
+                pending.operation = .delete
+                pending.payload = Data()
+                pending.attemptCount = 0
+                pending.nextAttemptAt = nil
+                pending.lastFailureCode = nil
+                pending.baseVersion = baseVersion
+            }
+            return
+        }
+
+        SyncOutbox.enqueue(
+            SyncMutationDraft(
+                scopeID: scopeID,
+                entityType: .workspace,
+                entityID: scopeID,
+                operation: .delete,
+                payload: Data(),
+                baseVersion: baseVersion
+            ),
+            ownerUserID: ownerUserID,
+            in: context
+        )
+    }
+
+    /// Repeated local edits should update one unsent outbox entry rather than
+    /// create an unbounded mutation stream. Once an entry is leased or needs
+    /// attention, a fresh update is inserted and the earlier identity remains
+    /// stable for safe retries.
+    func coalesceMutation(
+        scopeID: UUID,
+        entityType: SyncEntityType,
+        entityID: UUID,
+        payload: Data,
+        operation: SyncMutationOperation,
+        baseVersion: Int?,
+        pendingMutations: [PendingMutation]
+    ) {
+        if let pending = pendingMutations
+            .filter({ mutation in
+                mutation.scopeID == scopeID
+                    && mutation.entityType == entityType
+                    && mutation.entityID == entityID
+                    && mutation.state == .pending
+            })
+            .max(by: { $0.createdAt < $1.createdAt }) {
+            pending.payload = payload
+            if pending.operation != .create {
+                pending.operation = operation
+            }
+            pending.attemptCount = 0
+            pending.nextAttemptAt = nil
+            pending.lastFailureCode = nil
+            pending.baseVersion = baseVersion
+            return
+        }
+
+        SyncOutbox.enqueue(
+            SyncMutationDraft(
+                scopeID: scopeID,
+                entityType: entityType,
+                entityID: entityID,
+                operation: operation,
+                payload: payload,
+                baseVersion: baseVersion
+            ),
+            ownerUserID: ownerUserID,
+            in: context
+        )
+    }
+
+    func coalesceEntityMutations(
+        scopeID: UUID,
+        previousArchive: WorkspaceArchiveV1?,
+        archive: WorkspaceArchiveV1,
+        pendingMutations: [PendingMutation]
+    ) throws {
+        let previousEntities = try previousArchive?.syncEntities(using: codec) ?? [:]
+        let entities = try archive.syncEntities(using: codec)
+
+        for (key, payload) in entities {
+            let previousPayload = previousEntities[key]
+            guard previousPayload != payload else { continue }
+            coalesceMutation(
+                scopeID: scopeID,
+                entityType: key.type,
+                entityID: key.id,
+                payload: payload,
+                operation: previousPayload == nil ? .create : .update,
+                baseVersion: nil,
+                pendingMutations: pendingMutations
+            )
+        }
+
+        for key in previousEntities.keys where entities[key] == nil {
+            coalesceEntityDeletion(
+                scopeID: scopeID,
+                key: key,
+                pendingMutations: pendingMutations
+            )
+        }
+    }
+
+    private func coalesceEntityDeletion(
+        scopeID: UUID,
+        key: WorkspaceSyncEntityKey,
+        pendingMutations: [PendingMutation]
+    ) {
+        if let pending = pendingMutations
+            .filter({ mutation in
+                mutation.scopeID == scopeID
+                    && mutation.entityType == key.type
+                    && mutation.entityID == key.id
+                    && mutation.state == .pending
+            })
+            .max(by: { $0.createdAt < $1.createdAt }) {
+            if pending.operation == .create {
+                context.delete(pending)
+            } else {
+                pending.operation = .delete
+                pending.payload = Data()
+                pending.attemptCount = 0
+                pending.nextAttemptAt = nil
+                pending.lastFailureCode = nil
+                pending.baseVersion = nil
+            }
+            return
+        }
+
+        SyncOutbox.enqueue(
+            SyncMutationDraft(
+                scopeID: scopeID,
+                entityType: key.type,
+                entityID: key.id,
+                operation: .delete,
+                payload: Data(),
+                baseVersion: nil
+            ),
+            ownerUserID: ownerUserID,
+            in: context
+        )
+    }
+}

@@ -91,6 +91,48 @@ dark, accessibility-large-text, and Spanish configurations. The complete 219-tes
 unit suite also passed again in that final run (220 tests including the primer).
 No production app code or permission policy changed.
 
+### Subsequent archive/codec and budget-rule extraction
+
+The same day's refactor expanded the native suite to **241 passing tests**.
+Seven functional UI tests passed; the Decide primer's upward-swipe assertion
+failed both with the extraction and on the untouched baseline commit `09eaf9f`.
+The earlier successful UI run above remains a historical result, not a claim
+that the UI suite is consistently green. See
+[workspace extraction results](workspace-boundaries.md#verification-results)
+for the exact scope, regression coverage, and remaining gesture-test issue.
+
+### Subsequent outbox and remote-merge extraction
+
+The native baseline passed all 241 tests before this stage. After extracting
+`WorkspaceOutboxWriter` and `WorkspaceRemoteMerger`, the full `GatheroryTests`
+target passed **265 tests** (306 executions including parameterized cases), with
+zero failures or skipped native tests. The 24 new tests cover staging without
+premature commits, caller-owned rollback, coalescing/retry/deletion semantics,
+account isolation, ordered remote merges, failed remote batches, and local-save
+rollback without premature notification. Existing debounce/no-echo tests also
+passed.
+
+Final result bundle: `Test-Gatherory-2026.10.14_12-58-58--0400.xcresult` in the
+project's DerivedData `Logs/Test` directory. The same Xcode/simulator environment
+and native-only command above were used. **UI tests were not run**, at the user's
+request; the earlier UI results remain historical. No web/server code changed,
+and no web, live-backend, or physical-device checks were run in this stage.
+
+### Subsequent media-bookkeeping extraction
+
+The 265-test native baseline passed. After extracting `WorkspaceMediaBookkeeper`,
+the full `GatheroryTests` target passed **276 tests** (321 executions including
+parameterized cases), with zero failures or skipped native tests. Eleven new
+tests cover transfer/file reuse and cleanup, format detection, account isolation,
+durable transitions, retry filtering/backoff, sanitization, and stage-only writes.
+Failure tests explicitly preserve the existing limitation that database rollback
+does not undo file writes or deletions.
+
+Final result bundle: `Test-Gatherory-2026.10.14_13-04-20--0400.xcresult` in the
+project's DerivedData `Logs/Test` directory. The same native-only command and
+Xcode/simulator environment were used. **UI tests were not run**, as requested.
+No live backend, web/server, or physical-device checks were performed.
+
 ## Checks still needed before release
 
 These local tests are not a release sign-off. With disposable accounts and an
