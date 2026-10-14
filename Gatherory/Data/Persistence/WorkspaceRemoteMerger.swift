@@ -50,6 +50,7 @@ struct WorkspaceRemoteMerger {
                     codec: codec
                 )
             }
+            archive.enforceScopedIsolation()
             let record = try context.fetch(FetchDescriptor<WorkspaceRecord>())
                 .first(where: {
                     $0.id == snapshot.scopeID && $0.ownerUserID == ownerUserID
@@ -129,7 +130,11 @@ struct WorkspaceRemoteMerger {
                         from: change.payload
                     )
                     if let archive {
-                        remoteArchive.preserveCollaborativeEntities(from: archive)
+                        if remoteArchive.isScopedEvent == true {
+                            remoteArchive.preserveDownloadedMedia(from: archive)
+                        } else {
+                            remoteArchive.preserveCollaborativeEntities(from: archive)
+                        }
                     }
                     archive = remoteArchive
                     workspaceServerVersion = change.serverVersion
@@ -156,6 +161,63 @@ struct WorkspaceRemoteMerger {
             )
         }
 
+        if archive?.isScopedEvent == true, var authoritativeArchive = archive {
+            authoritativeArchive.enforceScopedIsolation()
+            try discardWorkspaceMutations(scopeID: scopeID)
+            let pendingEntityMutations = try context.fetch(FetchDescriptor<PendingMutation>())
+                .filter {
+                    $0.ownerUserID == ownerUserID
+                        && $0.scopeID == scopeID
+                        && $0.entityType != .workspace
+                }
+                .sorted { $0.createdAt < $1.createdAt }
+            for mutation in pendingEntityMutations {
+                if mutation.entityType == .eventParticipation { continue }
+                if mutation.entityType == .participant {
+                    guard mutation.operation != .delete,
+                          let pendingMember = try? codec.decode(WorkspaceMember.self, from: mutation.payload)
+                    else { continue }
+                    let authoritativeMember = authoritativeArchive.members.first { $0.id == mutation.entityID }
+                    var overlayMember = pendingMember
+                    if let authoritativeMember {
+                        guard authoritativeMember.userID == ownerUserID,
+                              pendingMember.userID == ownerUserID else { continue }
+                    }
+                    if let authoritativeMember {
+                        // The snapshot owns identity links, role, permission,
+                        // attendance, and invitation state. Only the signed-in
+                        // user's profile edits can overlay it while pending.
+                        overlayMember.userID = authoritativeMember.userID
+                        overlayMember.participantRole = authoritativeMember.participantRole
+                        overlayMember.attendance = authoritativeMember.attendance
+                        overlayMember.planningPermission = authoritativeMember.planningPermission
+                        overlayMember.invitationStatus = authoritativeMember.invitationStatus
+                    }
+                    let payload = try codec.encode(overlayMember)
+                    try authoritativeArchive.applyEntity(
+                        type: mutation.entityType,
+                        id: mutation.entityID,
+                        operation: mutation.operation,
+                        payload: payload,
+                        codec: codec
+                    )
+                    continue
+                }
+                if mutation.entityType == .event, mutation.entityID != authoritativeArchive.mainEventID {
+                    continue
+                }
+                try authoritativeArchive.applyEntity(
+                    type: mutation.entityType,
+                    id: mutation.entityID,
+                    operation: mutation.operation,
+                    payload: mutation.payload,
+                    codec: codec
+                )
+            }
+            authoritativeArchive.enforceScopedIsolation()
+            archive = authoritativeArchive
+        }
+
         if shouldDeleteWorkspace {
             if let record { context.delete(record) }
         } else if let archive {
@@ -180,5 +242,14 @@ struct WorkspaceRemoteMerger {
         }
 
         return .merged(archive: archive, shouldDeleteWorkspace: shouldDeleteWorkspace)
+    }
+
+    private func discardWorkspaceMutations(scopeID: UUID) throws {
+        for mutation in try context.fetch(FetchDescriptor<PendingMutation>())
+        where mutation.ownerUserID == ownerUserID
+            && mutation.scopeID == scopeID
+            && mutation.entityType == .workspace {
+            context.delete(mutation)
+        }
     }
 }

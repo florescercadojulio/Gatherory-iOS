@@ -334,7 +334,9 @@ private struct WorkspacePreviewCard: View {
                     .font(AppTheme.Typography.sectionTitle)
                     .lineLimit(2)
 
-                Text(workspace.invitationDateIsUndecided ? String(localized: "Date to be decided") : workspace.mainEventStartsAt.formatted(date: .long, time: .omitted))
+                Text(workspace.invitationDateIsUndecided || (workspace.isScopedEvent && !workspace.mainEventHasScheduledDate)
+                    ? String(localized: "Date to be decided")
+                    : workspace.mainEventStartsAt.formatted(date: .long, time: .omitted))
                     .font(.headline)
 
                 if let locationText {
@@ -372,7 +374,9 @@ private struct WorkspacePreviewCard: View {
     }
 
     private var accessibilitySummary: String {
-        let date = workspace.invitationDateIsUndecided ? String(localized: "Date to be decided") : workspace.mainEventStartsAt.formatted(date: .long, time: .omitted)
+        let date = workspace.invitationDateIsUndecided || (workspace.isScopedEvent && !workspace.mainEventHasScheduledDate)
+            ? String(localized: "Date to be decided")
+            : workspace.mainEventStartsAt.formatted(date: .long, time: .omitted)
         let location = locationText.map { ", \($0)" } ?? ""
         return "\(workspace.title), \(date)\(location), \(workspace.currentMainEventStatus.title)"
     }

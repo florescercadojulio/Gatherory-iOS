@@ -54,6 +54,12 @@ final class PlanningWorkspace {
     var isCollaboratorLinkEnabled: Bool
     var requiresCollaboratorApproval: Bool
     var defaultCollaboratorPermission: PlanningPermission
+    /// A child event projected by the server as its own isolated planning scope.
+    var isScopedEvent = false
+    /// Full event record supplied by the scope entity snapshot. Workspace-level
+    /// metadata edits preserve scheduling and classification fields not shown in
+    /// the isolated editor.
+    var scopedMainEventDetails: TimelineItem?
     /// The event currently being planned across Home, Ideas, and Decide.
     /// It is always either the root event or one of its direct children.
     var selectedEventReference: EventReference = .main
@@ -73,6 +79,7 @@ final class PlanningWorkspace {
 
     init(
         mainEventID: UUID = UUID(),
+        isScopedEvent: Bool = false,
         title: String,
         mainEventStartsAt: Date,
         mainEventEndsAt: Date? = nil,
@@ -108,6 +115,7 @@ final class PlanningWorkspace {
         defaultCollaboratorPermission: PlanningPermission = .contribute
     ) {
         self.mainEventID = mainEventID
+        self.isScopedEvent = isScopedEvent
         self.title = title
         self.mainEventStartsAt = mainEventStartsAt
         self.mainEventEndsAt = mainEventEndsAt
@@ -492,6 +500,7 @@ final class PlanningWorkspace {
     /// Increasing the cap adds to the free pool; a new cap starts on the main event.
     @discardableResult
     func updateWorkspaceBudgetCap(_ newCap: Decimal?) -> Bool {
+        guard !isScopedEvent else { return false }
         guard let change = WorkspaceBudgetRules.capChange(
             to: newCap,
             currentCap: workspaceBudgetCap,
@@ -932,7 +941,7 @@ final class PlanningWorkspace {
     }
 
     func canAddChildEvent(to parentID: UUID) -> Bool {
-        parentID == mainEventID
+        !isScopedEvent && parentID == mainEventID
     }
 
     var planningMembers: [WorkspaceMember] {
@@ -940,11 +949,16 @@ final class PlanningWorkspace {
     }
 
     var canManageMainEvent: Bool {
-        canManageEvent(.main)
+        guard canManageEvent(.main) else { return false }
+        return !isScopedEvent || canManageInvitations(for: .main)
+    }
+
+    var mainEventHasScheduledDate: Bool {
+        !isScopedEvent || scopedMainEventDetails?.schedulingState != .unscheduled
     }
 
     var canDeleteMainEvent: Bool {
-        !isMainEventDeleted && showsPlanningInterface && mainEventStatus == .draft
+        !isScopedEvent && !isMainEventDeleted && showsPlanningInterface && mainEventStatus == .draft
             && currentViewerMember(for: .main)?.planningPermission != .viewOnly
     }
 
@@ -993,6 +1007,10 @@ final class PlanningWorkspace {
         return viewer.participantRole == .host || (viewer.participantRole == .collaborator && viewer.planningPermission == .manage)
     }
 
+    var canManageRegistry: Bool {
+        !isScopedEvent || canManageInvitations(for: .main)
+    }
+
     func canManageEvent(_ reference: EventReference) -> Bool {
         guard !isInvitationProjection else { return false }
         guard showsPlanningInterface else { return false }
@@ -1034,6 +1052,9 @@ final class PlanningWorkspace {
 
     func canAddEventMoments(to reference: EventReference) -> Bool {
         guard !isInvitationProjection, !isMainEventDeleted, !currentMainEventStatus.isReadOnly else { return false }
+        if isScopedEvent, currentViewerMember(for: .main)?.planningPermission == .viewOnly {
+            return false
+        }
         return switch reference {
         case .main:
             !isMainEventDeleted && !currentMainEventStatus.isReadOnly
@@ -1061,6 +1082,11 @@ final class PlanningWorkspace {
     }
 
     var currentMainEventStatus: MainEventStatus {
+        if isScopedEvent, let scopedMainEventDetails {
+            if scopedMainEventDetails.status == .cancelled { return .cancelled }
+            if scopedMainEventDetails.status == .archived
+                || scopedMainEventDetails.completionStatus == .complete { return .finished }
+        }
         guard mainEventStatus != .draft, !mainEventStatus.isReadOnly else {
             return mainEventStatus
         }
@@ -1439,6 +1465,7 @@ final class PlanningWorkspace {
 
     func updateIdea(_ idea: PlanningIdea, status: IdeaStatus) {
         guard let index = ideas.firstIndex(where: { $0.id == idea.id }), canDecide(on: ideas[index]) else { return }
+        guard !(isScopedEvent && ideas[index].category == .event && status == .chosen) else { return }
         var updatedIdea = ideas[index]
         updatedIdea.status = updatedIdea.category == .music ? .chosen : status
         replaceIdea(at: index, with: updatedIdea)
@@ -1450,11 +1477,16 @@ final class PlanningWorkspace {
             return
         }
         guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
+        guard !(isScopedEvent && ideas[index].category == .event
+                && ideas[index].status != .chosen && idea.status == .chosen) else { return }
         replaceIdea(at: index, with: idea)
     }
 
     func addIdea(_ idea: PlanningIdea) {
         var scopedIdea = idea
+        if isScopedEvent, scopedIdea.category == .event, scopedIdea.status == .chosen {
+            scopedIdea.status = .new
+        }
         if scopedIdea.category == .event {
             // Event ideas become first-level sub-events when approved. Never
             // attach one to an existing child event, because the event tree
@@ -1476,6 +1508,7 @@ final class PlanningWorkspace {
     /// duplicating it. Undated approvals remain in Ideas until a date is set.
     @discardableResult
     func scheduleEventIdea(_ idea: PlanningIdea) -> UUID? {
+        guard !isScopedEvent else { return nil }
         guard idea.status == .chosen,
               let configuration = idea.eventConfiguration,
               let proposedDate = configuration.proposedDate else {
@@ -1681,12 +1714,14 @@ final class PlanningWorkspace {
     }
 
     func addRegistryItem(_ item: RegistryItem) {
+        guard canManageRegistry else { return }
         var scopedItem = item
         scopedItem.eventID = scopedItem.eventID ?? selectedEventID
         registry.append(scopedItem)
     }
 
     func updateRegistryItem(_ item: RegistryItem) {
+        guard canManageRegistry else { return }
         guard let index = registry.firstIndex(where: { $0.id == item.id }) else { return }
         var updated = item
         if registry[index].imageData != updated.imageData {

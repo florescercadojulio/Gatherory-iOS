@@ -8,6 +8,7 @@ struct WorkspaceSyncEntityKey: Hashable {
 extension WorkspaceArchiveV1 {
     func syncPayload(using codec: WorkspaceArchiveCodec) throws -> Data {
         var remote = self
+        remote.scopedEvent = nil
         // Responses have independent versions; a workspace snapshot must not
         // overwrite a teammate's input or resend it under another account.
         remote.ideaResponses = nil
@@ -38,6 +39,10 @@ extension WorkspaceArchiveV1 {
     func syncEntities(using codec: WorkspaceArchiveCodec) throws -> [WorkspaceSyncEntityKey: Data] {
         var entities: [WorkspaceSyncEntityKey: Data] = [:]
 
+        if isScopedEvent == true {
+            entities[.init(type: .event, id: mainEventID)] = try codec.encode(scopedMainEvent)
+        }
+
         for member in members {
             entities[.init(type: .participant, id: member.id)] = try codec.encode(member)
         }
@@ -49,10 +54,12 @@ extension WorkspaceArchiveV1 {
             remote.imageData = nil
             entities[.init(type: .idea, id: idea.id)] = try codec.encode(remote)
         }
-        for event in timeline {
-            var remote = event
-            remote.imageData = nil
-            entities[.init(type: .event, id: event.id)] = try codec.encode(remote)
+        if isScopedEvent != true {
+            for event in timeline {
+                var remote = event
+                remote.imageData = nil
+                entities[.init(type: .event, id: event.id)] = try codec.encode(remote)
+            }
         }
         for expense in eventExpenses {
             entities[.init(type: .expense, id: expense.id)] = try codec.encode(expense)
@@ -146,6 +153,12 @@ extension WorkspaceArchiveV1 {
                 return remote
             }
         case .event:
+            if isScopedEvent == true, id == mainEventID, operation != .delete {
+                let event = try codec.decode(TimelineItem.self, from: payload)
+                applyScopedMainEvent(event)
+                return
+            }
+            if isScopedEvent == true { return }
             try applyMediaRecord(TimelineItem.self, id: id, operation: operation, payload: payload, codec: codec, to: &timeline) { remote, local in
                 var remote = remote
                 if remote.imageData == nil, remote.mediaAssetID == local.mediaAssetID {
@@ -181,6 +194,97 @@ extension WorkspaceArchiveV1 {
             break
         default:
             break
+        }
+    }
+}
+
+extension WorkspaceArchiveV1 {
+    fileprivate var scopedMainEvent: TimelineItem {
+        let projectedStatus: MainEventStatus? = scopedEvent.map(Self.projectedMainStatus)
+        let status: EventStatus = if let scopedEvent,
+                                    projectedStatus == mainEventStatus {
+            scopedEvent.status
+        } else {
+            switch mainEventStatus {
+            case .draft: .draft
+            case .ongoing, .finished: .approved
+            case .cancelled: .cancelled
+            }
+        }
+        var event = scopedEvent ?? TimelineItem(
+            id: mainEventID, title: title, category: .other, purpose: .eventExperience,
+            scheduledAt: mainEventStartsAt,
+            eventLocation: mainEventLocation,
+            endsAt: mainEventEndsAt,
+            isAllDay: mainEventIsAllDay, timeZoneIdentifier: mainEventTimeZoneIdentifier,
+            participantIDs: mainEventParticipantIDs,
+            status: status, completionStatus: mainEventStatus == .finished ? .complete : .upcoming
+        )
+        let schedulingChanged = event.scheduledAt != mainEventStartsAt
+            || event.endsAt != mainEventEndsAt
+            || event.isAllDay != mainEventIsAllDay
+            || event.timeZoneIdentifier != mainEventTimeZoneIdentifier
+        if schedulingChanged { event.schedulingState = .scheduled }
+        event.title = title
+        event.scheduledAt = mainEventStartsAt
+        event.endsAt = mainEventEndsAt
+        event.isAllDay = mainEventIsAllDay
+        event.timeZoneIdentifier = mainEventTimeZoneIdentifier
+        event.eventLocation = mainEventLocation
+        event.participantIDs = mainEventParticipantIDs
+        event.status = status
+        if projectedStatus != mainEventStatus {
+            event.completionStatus = mainEventStatus == .finished ? .complete : .upcoming
+        }
+        event.parentEventID = nil
+        event.linkedIdeaID = nil
+        event.imageData = nil
+        event.mediaAssetID = mainEventMediaAssetID
+        event.eventDescription = eventMessage
+        event.dressCode = dressCode
+        event.budgetCap = mainEventBudgetCap
+        return event
+    }
+
+    static func projectedMainStatus(_ event: TimelineItem) -> MainEventStatus {
+        if event.status == .cancelled { return .cancelled }
+        if event.completionStatus == .complete { return .finished }
+        return event.status == .draft ? .draft : .ongoing
+    }
+
+    mutating func applyScopedMainEvent(_ event: TimelineItem) {
+        var isolatedEvent = event
+        isolatedEvent.parentEventID = nil
+        isolatedEvent.linkedIdeaID = nil
+        scopedEvent = isolatedEvent
+        title = event.title
+        mainEventStartsAt = event.scheduledAt
+        mainEventEndsAt = event.endsAt
+        mainEventIsAllDay = event.isAllDay
+        mainEventTimeZoneIdentifier = event.timeZoneIdentifier
+        mainEventLocation = event.eventLocation
+        mainEventParticipantIDs = event.participantIDs
+        mainEventStatus = event.status == .cancelled ? .cancelled
+            : event.completionStatus == .complete ? .finished
+            : event.status == .draft ? .draft : .ongoing
+        mainEventMediaAssetID = event.mediaAssetID
+        eventMessage = event.eventDescription
+        dressCode = event.dressCode
+        mainEventBudgetCap = event.budgetCap
+        if event.imageData != nil { mainEventImageData = event.imageData }
+    }
+
+    mutating func enforceScopedIsolation() {
+        guard isScopedEvent == true else { return }
+        timeline = []
+        workspaceBudgetCap = nil
+        if let eventParticipations {
+            self.eventParticipations = eventParticipations.filter { $0.eventID == mainEventID }
+        }
+        if var scopedEvent {
+            scopedEvent.parentEventID = nil
+            scopedEvent.linkedIdeaID = nil
+            self.scopedEvent = scopedEvent
         }
     }
 }

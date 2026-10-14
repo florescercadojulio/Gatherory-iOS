@@ -62,7 +62,10 @@ struct HomeView: View {
     }
 
     private var mainEventTimingLabel: String {
-        switch workspace.currentMainEventStatus {
+        if workspace.isScopedEvent, !workspace.mainEventHasScheduledDate {
+            return String(localized: "Date to be decided")
+        }
+        return switch workspace.currentMainEventStatus {
         case .draft:
             "\(daysRemaining) days away"
         case .ongoing:
@@ -544,6 +547,7 @@ struct HomeView: View {
             previewIndex: scrubbedEventIndex,
             title: title(for:),
             date: date(for:),
+            mainEventHasScheduledDate: workspace.mainEventHasScheduledDate,
             onPreview: previewEvent(at:),
             onCommit: commitScrubbedEvent(at:)
         )
@@ -909,6 +913,7 @@ private struct EventContextSwitcher: View {
     let previewIndex: Int?
     let title: (EventReference) -> String
     let date: (EventReference) -> Date
+    let mainEventHasScheduledDate: Bool
     let onPreview: (Int) -> Void
     let onCommit: (Int) -> Void
 
@@ -1017,24 +1022,27 @@ private struct EventContextSwitcher: View {
         return "\(title(reference)), \(currentIndex + 1) of \(references.count)"
     }
 
+    @ViewBuilder
     private func eventDateBubble(for reference: EventReference) -> some View {
-        Text(date(reference), format: .dateTime.month(.abbreviated).day().year())
-            .font(.caption.weight(.semibold))
-            .monospacedDigit()
-            .lineLimit(1)
-            .minimumScaleFactor(0.9)
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 10)
-            .frame(width: 164)
-            .frame(minHeight: 32)
-            .background(.regularMaterial, in: Capsule())
-            .overlay {
-                Capsule()
-                    .stroke(Color.primary.opacity(0.18), lineWidth: 0.5)
-            }
-            .offset(x: -AppTheme.Layout.minimumTouchTarget)
-            .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .trailing)))
-            .allowsHitTesting(false)
+        if reference != .main || mainEventHasScheduledDate {
+            Text(date(reference), format: .dateTime.month(.abbreviated).day().year())
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 10)
+                .frame(width: 164)
+                .frame(minHeight: 32)
+                .background(.regularMaterial, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(Color.primary.opacity(0.18), lineWidth: 0.5)
+                }
+                .offset(x: -AppTheme.Layout.minimumTouchTarget)
+                .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .trailing)))
+                .allowsHitTesting(false)
+        }
     }
 
     private func candleWidth(at index: Int) -> CGFloat {

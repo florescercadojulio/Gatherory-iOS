@@ -7,6 +7,9 @@ struct WorkspaceSettingsView: View {
     @State private var isEditingMainEvent = false
 
     private var eventDateText: String {
+        if workspace.isScopedEvent, !workspace.mainEventHasScheduledDate {
+            return String(localized: "Date to be decided")
+        }
         if workspace.mainEventIsAllDay {
             return workspace.mainEventStartsAt.formatted(date: .abbreviated, time: .omitted)
         }
@@ -55,7 +58,7 @@ struct WorkspaceSettingsView: View {
                             .foregroundStyle(AppTheme.ColorToken.textPrimary)
                             .lineLimit(2)
 
-                        Text("Main event · \(eventCountText)")
+                        Text(workspace.isScopedEvent ? AppCopy.Planning.eventScope : "Main event · \(eventCountText)")
                             .font(.footnote)
                             .foregroundStyle(AppTheme.ColorToken.textSecondary)
                             .lineLimit(1)
@@ -66,7 +69,7 @@ struct WorkspaceSettingsView: View {
             }
             .listRowBackground(AppTheme.ColorToken.surface)
 
-            Section("Main Event") {
+            Section(workspace.isScopedEvent ? "Event" : "Main Event") {
                 WorkspaceSettingDetailRow(
                     title: "Status",
                     symbol: "checklist",
@@ -135,7 +138,8 @@ struct WorkspaceSettingsView: View {
                 Text("Manage the people, roles, and invitation access for this workspace.")
             }
             .listRowBackground(AppTheme.ColorToken.surface)
-            Section("History") {
+            if !workspace.isScopedEvent {
+                Section("History") {
                 NavigationLink {
                     ArchivedEventsView()
                 } label: {
@@ -146,8 +150,9 @@ struct WorkspaceSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                }
+                .listRowBackground(AppTheme.ColorToken.surface)
             }
-            .listRowBackground(AppTheme.ColorToken.surface)
         }
         .formStyle(.grouped)
         .contentMargins(.top, AppTheme.Spacing.compact, for: .scrollContent)

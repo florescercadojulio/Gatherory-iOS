@@ -28,6 +28,25 @@ app becomes active or another local edit is made.
 11. Local workspace records, cursors, receipts, and leases are account scoped.
     The same shared workspace may be cached independently for two accounts on
     one device.
+12. A child-event planning workspace is an isolated projection keyed by the
+    child event UUID. Its archive's optional `isScopedEvent` marker defaults to
+    false for older archives; scoped projections contain only that child's
+    planning data and never its parent or sibling identifiers.
+13. Scoped edits enqueue entity mutations only. They never write the root
+    workspace snapshot; the child event's metadata is represented by the event
+    entity at the scope UUID, without parent or linked-idea references. Root
+    workspace transaction behavior is unchanged.
+14. A full scoped pull replaces collaborative arrays from the authoritative
+    projection while retaining downloaded media. Pending entity edits are
+    overlaid for display after the pull, but server-owned participant roles,
+    permissions, invitation state, and RSVP remain authoritative. Bootstrap
+    omissions do not discard an offline scoped workspace.
+15. `SCOPE_READ_ONLY` triggers that authorized pull even when a draft is marked
+    attention; the draft remains queued while refreshed roles lock editing.
+    Only a scoped `SYNC_SCOPE_NOT_FOUND`/`SCOPE_WRITE_FORBIDDEN` response or an
+    authoritative scoped workspace delete clears the cached projection and
+    its pending work. Generic authorization failures and network errors never
+    purge it.
 
 ## Runtime flow
 
@@ -94,5 +113,6 @@ Release verification and the physical-device persistence checklist live in
 - Exercise organization membership and event-scoped participant authorization
   with two real production accounts before advertising collaboration broadly.
 - Keep workspace-wide sync membership limited to explicit planning roles;
-  never infer it from a guest or child-event invitation.
+  a child-event planning invitation resolves to its own scoped workspace,
+  while guest invitations remain guest-only.
 - Expose a small sync-status surface for retryable and attention states.

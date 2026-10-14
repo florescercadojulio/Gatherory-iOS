@@ -55,6 +55,15 @@ struct EventInvitationTransportTests {
         #expect(progress.acceptedResponse(for: "invitee") == nil)
     }
 
+    @Test("Accepted collaborators without a returned scope bootstrap their event; guests stay guests")
+    func acceptedRoleRoutingWithoutScope() {
+        let id = UUID()
+        let collaborator = InvitationAcceptance(eventId: id, role: "collaborator", planningScopeId: nil, status: "accepted")
+        let guest = InvitationAcceptance(eventId: id, role: "guest", planningScopeId: id, status: "accepted")
+        #expect(collaborator.destination == .planning(id))
+        #expect(guest.destination == .guest(id))
+    }
+
     @Test("Invitation decoding failures provide safe diagnostics and a localized retry message",
           arguments: ["missing", "null", "type", "malformed", "payload"])
     @MainActor

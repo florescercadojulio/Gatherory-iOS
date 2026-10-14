@@ -614,6 +614,16 @@
         }
       }
     },
+    "account.eventAccessUnavailable" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gatherory ya no puede acceder a este evento."
+          }
+        }
+      }
+    },
     "account.provider.apple" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2452,6 +2462,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Costos"
+          }
+        }
+      }
+    },
+    "Costs stay with this event." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los costos pertenecen a este evento."
           }
         }
       }
@@ -5119,16 +5139,6 @@
         }
       }
     },
-    "No Join Requests" : {
-      "localizations" : {
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay solicitudes de acceso" } }
-      }
-    },
-    "People waiting for approval will appear here." : {
-      "localizations" : {
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Las personas que esperan aprobación aparecerán aquí." } }
-      }
-    },
     "Join Requests" : {
       "localizations" : {
         "es" : {
@@ -5375,6 +5385,7 @@
       }
     },
     "Main event · %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5690,6 +5701,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aún no hay costos"
+          }
+        }
+      }
+    },
+    "No Join Requests" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay solicitudes de acceso"
           }
         }
       }
@@ -6379,6 +6400,16 @@
         }
       }
     },
+    "People waiting for approval will appear here." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las personas que esperan aprobación aparecerán aquí."
+          }
+        }
+      }
+    },
     "People who use the link will ask to join before they can see or change plans." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6558,6 +6589,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Actualización del plan"
+          }
+        }
+      }
+    },
+    "planning.eventScope" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Evento de planificación"
           }
         }
       }

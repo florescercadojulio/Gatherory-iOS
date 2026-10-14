@@ -295,8 +295,13 @@ final class WorkspacePersistenceController {
         let outbox = WorkspaceOutboxWriter(context: context, codec: codec, ownerUserID: activeUserID)
 
         for record in existingRecords where !persistedIDs.contains(record.id) {
+            let wasScopedEvent = (try? codec.decode(WorkspaceArchiveV1.self, from: record.payload).isScopedEvent) == true
             context.delete(record)
             guard enqueuesMutations else { continue }
+            if wasScopedEvent {
+                try discardPendingMutations(scopeID: record.id)
+                continue
+            }
             outbox.coalesceDeletion(
                 scopeID: record.id,
                 baseVersion: record.serverVersion,
@@ -305,6 +310,12 @@ final class WorkspacePersistenceController {
         }
 
         for (sortOrder, archive) in archives.enumerated() {
+            if enqueuesMutations, archive.isScopedEvent == true {
+                // Scoped workspaces never have a workspace-level mutation.
+                // Keep this cleanup within the save transaction, not in the
+                // read-only pending-scope query used by UI state.
+                try discardWorkspaceMutations(scopeID: archive.mainEventID)
+            }
             let payload = try codec.encode(archive)
             let syncPayload = try archive.syncPayload(using: codec)
             let existingRecord = recordsByID[archive.mainEventID]
@@ -336,7 +347,7 @@ final class WorkspacePersistenceController {
             }
 
             guard enqueuesMutations else { continue }
-            if syncPayloadChanged || existingRecord == nil {
+            if archive.isScopedEvent != true && (syncPayloadChanged || existingRecord == nil) {
                 outbox.coalesceMutation(
                     scopeID: archive.mainEventID,
                     entityType: .workspace,
@@ -366,11 +377,9 @@ final class WorkspacePersistenceController {
     }
 
     func pendingScopeIDs() throws -> Set<UUID> {
-        Set(
-            try context.fetch(FetchDescriptor<PendingMutation>())
-                .filter { $0.ownerUserID == activeUserID }
-                .map(\.scopeID)
-        )
+        return Set(try context.fetch(FetchDescriptor<PendingMutation>())
+            .filter { $0.ownerUserID == activeUserID }
+            .map(\.scopeID))
     }
 
     /// A rejection is durable state, not a connectivity problem. Surface its
@@ -539,6 +548,9 @@ final class WorkspacePersistenceController {
         entities: [RemoteEntitySnapshot] = [],
         to library: WorkspaceLibrary
     ) throws {
+        for workspace in library.workspaces where workspace.isScopedEvent {
+            try discardWorkspaceMutations(scopeID: workspace.mainEventID)
+        }
         let merger = WorkspaceRemoteMerger(context: context, codec: codec, ownerUserID: activeUserID)
         let remoteWorkspaces = try merger.stageBootstrap(
             snapshots,
@@ -558,7 +570,15 @@ final class WorkspacePersistenceController {
         scopeID: UUID,
         to library: WorkspaceLibrary
     ) throws {
+        if library.workspaces.first(where: { $0.mainEventID == scopeID })?.isScopedEvent == true {
+            // Capture edits made while the request was in flight into the same
+            // archive/outbox transaction before applying the authoritative page.
+            try saveChanges(in: library)
+        }
         let merger = WorkspaceRemoteMerger(context: context, codec: codec, ownerUserID: activeUserID)
+        let cachedScopedArchive = try context.fetch(FetchDescriptor<WorkspaceRecord>())
+            .first(where: { $0.id == scopeID && $0.ownerUserID == activeUserID })
+            .flatMap { try? codec.decode(WorkspaceArchiveV1.self, from: $0.payload) }
         let result = try merger.stagePage(
             page,
             scopeID: scopeID,
@@ -566,6 +586,11 @@ final class WorkspacePersistenceController {
         )
 
         // Commit staged records and receipts with the cursor, before publishing.
+        if case let .merged(_, shouldDeleteWorkspace) = result,
+           shouldDeleteWorkspace, cachedScopedArchive?.isScopedEvent == true {
+            try discardPendingMutations(scopeID: scopeID)
+            try mediaBookkeeper.stageRemoval(scopeID: scopeID)
+        }
         try saveRemoteCheckpoint(page.nextCursor, scopeID: scopeID)
 
         switch result {
@@ -602,6 +627,53 @@ final class WorkspacePersistenceController {
         }
         try context.save()
     }
+
+    private func discardPendingMutations(scopeID: UUID) throws {
+        for mutation in try context.fetch(FetchDescriptor<PendingMutation>())
+        where mutation.ownerUserID == activeUserID && mutation.scopeID == scopeID {
+            context.delete(mutation)
+        }
+    }
+
+    private func discardWorkspaceMutations(scopeID: UUID) throws {
+        for mutation in try context.fetch(FetchDescriptor<PendingMutation>())
+        where mutation.ownerUserID == activeUserID
+            && mutation.scopeID == scopeID
+            && mutation.entityType == .workspace {
+            context.delete(mutation)
+        }
+    }
+
+    /// A scoped write rejection is authoritative evidence that this account no
+    /// longer has access. Clear only a locally identified scoped projection;
+    /// bootstrap omission alone never discards offline work.
+    @discardableResult
+    func clearScopedWorkspaceAfterWriteForbidden(
+        scopeID: UUID,
+        from library: WorkspaceLibrary
+    ) throws -> Bool {
+        guard let record = try context.fetch(FetchDescriptor<WorkspaceRecord>())
+            .first(where: { $0.id == scopeID && $0.ownerUserID == activeUserID }),
+              (try? codec.decode(WorkspaceArchiveV1.self, from: record.payload).isScopedEvent) == true
+        else { return false }
+
+        context.delete(record)
+        try discardPendingMutations(scopeID: scopeID)
+        try mediaBookkeeper.stageRemoval(scopeID: scopeID)
+        for receipt in try context.fetch(FetchDescriptor<AppliedSyncEnvelope>())
+        where receipt.ownerUserID == activeUserID && receipt.scopeID == scopeID {
+            context.delete(receipt)
+        }
+        for checkpoint in try context.fetch(FetchDescriptor<SyncCheckpoint>())
+        where checkpoint.ownerUserID == activeUserID && checkpoint.scopeID == scopeID {
+            context.delete(checkpoint)
+        }
+        try context.save()
+        suppressNextObservedChange = true
+        library.remove(workspaceID: scopeID)
+        return true
+    }
+
 }
 
 enum WorkspacePersistenceError: Error {

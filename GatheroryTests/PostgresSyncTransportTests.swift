@@ -117,7 +117,7 @@ struct PostgresSyncTransportTests {
             case ("unauthorized", CloudSyncFailure.invalidSession),
                  ("too-large", CloudSyncFailure.payloadTooLarge),
                  ("malformed", CloudSyncFailure.invalidResponse): return true
-            case ("forbidden", CloudSyncFailure.server(let code)): return code == "EVENT_PERMISSION_REQUIRED"
+            case ("forbidden", CloudSyncFailure.forbidden(let code)): return code == "EVENT_PERMISSION_REQUIRED"
             case ("legacy-error", CloudSyncFailure.server(let code)): return code == "SYNC_SCOPE_NOT_FOUND"
             case ("server-error", CloudSyncFailure.server(let code)): return code == "HTTP_500"
             case ("network", let error as URLError): return error.code == .notConnectedToInternet

@@ -26,8 +26,10 @@ struct RegistryView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    Toggle("Open to guests", isOn: $workspace.isRegistryShared)
-                        .tint(AppTheme.ColorToken.accent)
+                    if !workspace.isScopedEvent {
+                        Toggle("Open to guests", isOn: $workspace.isRegistryShared)
+                            .tint(AppTheme.ColorToken.accent)
+                    }
                 }
                 .padding(.vertical, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -95,10 +97,12 @@ struct RegistryView: View {
         .appClearNavigationBar()
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Add gift", systemImage: "plus") {
-                    isAddingItem = true
+                if workspace.canManageRegistry {
+                    Button("Add gift", systemImage: "plus") {
+                        isAddingItem = true
+                    }
+                    .labelStyle(.iconOnly)
                 }
-                .labelStyle(.iconOnly)
 
                 AccountToolbarButton()
             }
@@ -256,10 +260,12 @@ private struct RegistryItemDetailView: View {
         .toolbar {
             if let item {
                 ToolbarItemGroup(placement: .primaryAction) {
-                    Button("Edit gift", systemImage: "pencil") {
-                        isEditingItem = true
+                    if workspace.canManageRegistry {
+                        Button("Edit gift", systemImage: "pencil") {
+                            isEditingItem = true
+                        }
+                        .labelStyle(.iconOnly)
                     }
-                    .labelStyle(.iconOnly)
 
                     Button {
                         withAnimation(.snappy) {

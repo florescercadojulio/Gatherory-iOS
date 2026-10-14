@@ -11,33 +11,33 @@ struct WorkspaceArchiveV1: Codable {
     static let schemaVersion = 1
 
     let mainEventID: UUID
-    let title: String
-    let mainEventStartsAt: Date
-    let mainEventEndsAt: Date?
-    let mainEventIsAllDay: Bool
-    let mainEventTimeZoneIdentifier: String
-    let mainEventLocation: EventLocation?
+    var title: String
+    var mainEventStartsAt: Date
+    var mainEventEndsAt: Date?
+    var mainEventIsAllDay: Bool
+    var mainEventTimeZoneIdentifier: String
+    var mainEventLocation: EventLocation?
     var mainEventImageData: Data?
-    let mainEventMediaAssetID: UUID?
+    var mainEventMediaAssetID: UUID?
     let venueName: String
     let location: String
-    let dressCode: String
-    let eventMessage: String
+    var dressCode: String
+    var eventMessage: String
     let planningMode: PlanningMode
     var members: [WorkspaceMember]
     /// Optional so archives written before relationship normalization migrate.
     var eventParticipations: [EventParticipation]?
-    let mainEventParticipantIDs: [UUID]
+    var mainEventParticipantIDs: [UUID]
     var ideas: [PlanningIdea]
     var timeline: [TimelineItem]
     var eventExpenses: [EventExpense]
-    let workspaceBudgetCap: Decimal?
+    var workspaceBudgetCap: Decimal?
     /// Optional for archives written before currency was workspace-scoped.
     let currencyCode: String?
-    let mainEventBudgetCap: Decimal?
+    var mainEventBudgetCap: Decimal?
     var notes: [EventNote]
     var ideaResponses: [IdeaResponse]?
-    let mainEventStatus: MainEventStatus
+    var mainEventStatus: MainEventStatus
     let mainEventResponse: EventResponse?
     var eventMoments: [EventMoment]
     let isMainEventDeleted: Bool
@@ -46,6 +46,11 @@ struct WorkspaceArchiveV1: Codable {
     let isCollaboratorLinkEnabled: Bool
     let requiresCollaboratorApproval: Bool
     let defaultCollaboratorPermission: PlanningPermission
+    /// Absent in archives written before child events became independent scopes.
+    var isScopedEvent: Bool?
+    /// Optional server projection retaining fields not represented by the
+    /// workspace's main-event editor, such as purpose and scheduling state.
+    var scopedEvent: TimelineItem?
 
     init(workspace: PlanningWorkspace) {
         mainEventID = workspace.mainEventID
@@ -82,11 +87,14 @@ struct WorkspaceArchiveV1: Codable {
         isCollaboratorLinkEnabled = workspace.isCollaboratorLinkEnabled
         requiresCollaboratorApproval = workspace.requiresCollaboratorApproval
         defaultCollaboratorPermission = workspace.defaultCollaboratorPermission
+        isScopedEvent = workspace.isScopedEvent
+        scopedEvent = workspace.scopedMainEventDetails
     }
 
     func makeWorkspace() -> PlanningWorkspace {
-        PlanningWorkspace(
+        let workspace = PlanningWorkspace(
             mainEventID: mainEventID,
+            isScopedEvent: isScopedEvent == true,
             title: title,
             mainEventStartsAt: mainEventStartsAt,
             mainEventEndsAt: mainEventEndsAt,
@@ -104,7 +112,7 @@ struct WorkspaceArchiveV1: Codable {
             eventParticipations: eventParticipations,
             mainEventParticipantIDs: mainEventParticipantIDs,
             ideas: ideas,
-            timeline: timeline,
+            timeline: isScopedEvent == true ? [] : timeline,
             eventExpenses: eventExpenses,
             workspaceBudgetCap: workspaceBudgetCap,
             currencyCode: currencyCode ?? Locale.current.currency?.identifier ?? "USD",
@@ -121,5 +129,13 @@ struct WorkspaceArchiveV1: Codable {
             requiresCollaboratorApproval: requiresCollaboratorApproval,
             defaultCollaboratorPermission: defaultCollaboratorPermission
         )
+        if var scopedEvent, isScopedEvent == true {
+            scopedEvent.parentEventID = nil
+            scopedEvent.linkedIdeaID = nil
+            workspace.scopedMainEventDetails = scopedEvent
+        } else {
+            workspace.scopedMainEventDetails = scopedEvent
+        }
+        return workspace
     }
 }

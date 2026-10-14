@@ -101,6 +101,11 @@ protocol WorkspaceSnapshotTransport: SyncTransport {
 protocol RemoteChangeApplying: Sendable {
     func currentCursor(for scopeID: UUID) async throws -> String?
     func apply(_ page: SyncPullPage, to scopeID: UUID) async throws
+    func clearForbiddenScope(_ scopeID: UUID) async throws -> Bool
+}
+
+extension RemoteChangeApplying {
+    func clearForbiddenScope(_ scopeID: UUID) async throws -> Bool { false }
 }
 
 nonisolated enum SyncTrigger: String, Sendable {
@@ -119,6 +124,7 @@ nonisolated struct SyncRunSummary: Sendable {
     /// summary lets the presentation layer distinguish a rejected mutation
     /// from a transient transport failure without exposing mutation payloads.
     var attentionFailureCode: String?
+    var scopeWasRevoked = false
     var pulled = 0
     var completedAt: Date?
 }

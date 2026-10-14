@@ -84,6 +84,9 @@ enum AppCopy {
     }
 
     enum Account {
+        static var eventAccessUnavailable: String {
+            String(localized: "account.eventAccessUnavailable", defaultValue: "Gatherory can no longer access this event.")
+        }
         static var planner: String { localized("account.role.planner", default: "Planner") }
         static var member: String { localized("account.role.member", default: "Member") }
         static var apple: String { localized("account.provider.apple", default: "Apple") }
@@ -100,6 +103,7 @@ enum AppCopy {
     }
 
     enum Planning {
+        static var eventScope: String { String(localized: "planning.eventScope", defaultValue: "Planning event") }
         static var openToIdeas: String {
             localized("planning.mode.openToIdeas", default: "Open to Ideas")
         }

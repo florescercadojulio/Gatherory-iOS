@@ -87,10 +87,10 @@ actor OfflineSyncCoordinator {
                     )
                 }
 
-                // Preserve the local version for conflict resolution. Pulling
-                // the server snapshot now would make the user's pending edit
-                // disappear while its outbox entry still requires attention.
-                if !attentionIDs.isEmpty {
+                // Preserve local versions for ordinary conflicts. A scoped
+                // read-only rejection is different: pull authorized state so
+                // current roles arrive while the draft remains queued.
+                if !attentionIDs.isEmpty, summary.attentionFailureCode != "SCOPE_READ_ONLY" {
                     summary.completedAt = .now
                     return summary
                 }
@@ -112,7 +112,27 @@ actor OfflineSyncCoordinator {
         var cursor = try await remoteApplier.currentCursor(for: scopeID)
         repeat {
             try Task.checkCancellation()
-            let page = try await transport.pull(scopeID: scopeID, after: cursor)
+            let page: SyncPullPage
+            do {
+                page = try await transport.pull(scopeID: scopeID, after: cursor)
+            } catch let CloudSyncFailure.forbidden(code) {
+                guard Self.isAuthoritativeScopeRevocation(code) else {
+                    throw CloudSyncFailure.forbidden(code)
+                }
+                guard try await remoteApplier.clearForbiddenScope(scopeID) else {
+                    throw CloudSyncFailure.forbidden(code)
+                }
+                summary.scopeWasRevoked = true
+                summary.completedAt = .now
+                return summary
+            } catch let CloudSyncFailure.server(code) where Self.isAuthoritativeScopeRevocation(code) {
+                guard try await remoteApplier.clearForbiddenScope(scopeID) else {
+                    throw CloudSyncFailure.server(code)
+                }
+                summary.scopeWasRevoked = true
+                summary.completedAt = .now
+                return summary
+            }
             try Task.checkCancellation()
             try await remoteApplier.apply(page, to: scopeID)
             summary.pulled += page.changes.count
@@ -122,5 +142,9 @@ actor OfflineSyncCoordinator {
 
         summary.completedAt = .now
         return summary
+    }
+
+    private static func isAuthoritativeScopeRevocation(_ code: String?) -> Bool {
+        code == "SYNC_SCOPE_NOT_FOUND" || code == "SCOPE_WRITE_FORBIDDEN"
     }
 }

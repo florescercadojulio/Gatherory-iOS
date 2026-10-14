@@ -56,6 +56,11 @@ final class WorkspaceRemoteChangeApplier: RemoteChangeApplying {
         guard persistence.activeUserID == ownerUserID else { throw CancellationError() }
         try persistence.applyRemotePage(page, scopeID: scopeID, to: library)
     }
+
+    func clearForbiddenScope(_ scopeID: UUID) async throws -> Bool {
+        guard persistence.activeUserID == ownerUserID else { throw CancellationError() }
+        return try persistence.clearScopedWorkspaceAfterWriteForbidden(scopeID: scopeID, from: library)
+    }
 }
 
 @MainActor
@@ -365,7 +370,15 @@ final class WorkspaceCloudSyncController {
                         trigger: trigger,
                         pullRemoteChanges: !isPreparingSignOut
                     )
+                    if syncSummary.scopeWasRevoked { continue }
                     if let failureCode = syncSummary.attentionFailureCode {
+                        if failureCode == "SCOPE_WRITE_FORBIDDEN",
+                           try persistence.clearScopedWorkspaceAfterWriteForbidden(
+                            scopeID: scopeID,
+                            from: library
+                           ) {
+                            continue
+                        }
                         // A malformed legacy workspace mutation leaves the
                         // server without a scope, so its children are also
                         // rejected. The coordinator has now durably recorded

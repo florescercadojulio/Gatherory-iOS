@@ -666,6 +666,47 @@ struct OfflineSyncTests {
         #expect(store.attentionCode == "SCOPE_WRITE_FORBIDDEN")
     }
 
+    @Test("A scoped read-only rejection refreshes authority while retaining attention")
+    @MainActor
+    func scopedReadOnlyPullsWithoutDiscardingDraft() async throws {
+        let scopeID = UUID()
+        let mutation = PendingMutationSnapshot(PendingMutation(
+            scopeID: scopeID, entityType: .idea, entityID: UUID(),
+            operation: .update, payload: Data("{}".utf8), ownerUserID: "sync-user"
+        ))
+        let store = AttentionOutboxStore(mutation: mutation)
+        let transport = ScopedAccessFailureTransport(mutationID: mutation.id, failureCode: "SCOPE_READ_ONLY")
+        let applier = RevocationTrackingApplier()
+        let coordinator = OfflineSyncCoordinator(
+            store: store, transport: transport, remoteApplier: applier, ownerUserID: "sync-user"
+        )
+
+        let summary = try await coordinator.synchronize(scopeID: scopeID)
+
+        #expect(summary.attentionFailureCode == "SCOPE_READ_ONLY")
+        #expect(store.attentionCode == "SCOPE_READ_ONLY")
+        #expect(transport.pullCount == 1)
+        #expect(applier.appliedPages == 1)
+        #expect(applier.clearCount == 0)
+    }
+
+    @Test("A generic pull 403 never clears a cached scope")
+    @MainActor
+    func genericForbiddenPullPreservesScope() async throws {
+        let transport = ScopedAccessFailureTransport(pullFailure: .forbidden("EVENT_PERMISSION_REQUIRED"))
+        let applier = RevocationTrackingApplier()
+        let coordinator = OfflineSyncCoordinator(
+            store: BatchOutboxStore(mutations: []), transport: transport,
+            remoteApplier: applier, ownerUserID: "sync-user"
+        )
+
+        await #expect(throws: CloudSyncFailure.self) {
+            try await coordinator.synchronize(scopeID: UUID())
+        }
+        #expect(applier.clearCount == 0)
+        #expect(applier.appliedPages == 0)
+    }
+
     @Test("A legacy mismatched workspace outbox batch is regenerated with fresh IDs")
     @MainActor
     func repairsWorkspaceScopeMismatchBeforeSync() throws {
@@ -1077,6 +1118,48 @@ private final class EmptyRemoteChangeApplier: RemoteChangeApplying {
     var appliedPages = 0
     func currentCursor(for scopeID: UUID) -> String? { nil }
     func apply(_ page: SyncPullPage, to scopeID: UUID) { appliedPages += 1 }
+}
+
+@MainActor
+private final class ScopedAccessFailureTransport: SyncTransport {
+    private let mutationID: UUID?
+    private let failureCode: String?
+    private let pullFailure: CloudSyncFailure?
+    private(set) var pullCount = 0
+
+    init(mutationID: UUID? = nil, failureCode: String? = nil, pullFailure: CloudSyncFailure? = nil) {
+        self.mutationID = mutationID
+        self.failureCode = failureCode
+        self.pullFailure = pullFailure
+    }
+
+    func push(_ mutations: [PendingMutationSnapshot]) -> SyncPushResponse {
+        SyncPushResponse(results: mutations.map {
+            SyncPushResult(
+                mutationID: $0.id, disposition: .rejected,
+                serverVersion: nil, failureCode: failureCode
+            )
+        })
+    }
+
+    func pull(scopeID: UUID, after cursor: String?) async throws -> SyncPullPage {
+        pullCount += 1
+        if let pullFailure { throw pullFailure }
+        return SyncPullPage(changes: [], nextCursor: cursor, hasMore: false)
+    }
+}
+
+@MainActor
+private final class RevocationTrackingApplier: RemoteChangeApplying {
+    var appliedPages = 0
+    private(set) var clearCount = 0
+
+    func currentCursor(for scopeID: UUID) -> String? { nil }
+    func apply(_ page: SyncPullPage, to scopeID: UUID) { appliedPages += 1 }
+    func clearForbiddenScope(_ scopeID: UUID) -> Bool {
+        clearCount += 1
+        return false
+    }
 }
 
 @MainActor

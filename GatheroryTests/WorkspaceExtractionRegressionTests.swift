@@ -142,6 +142,110 @@ struct WorkspaceExtractionRegressionTests {
         #expect(try mutations(in: persistence).contains { $0.entityType == .workspace })
     }
 
+    @Test("Scoped offline edits queue stable event entities and never workspace mutations")
+    func scopedOfflineEditsUseEntityOutboxOnly() async throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false, ownerUserID: "scoped-owner")
+        persistence.startObserving(library)
+        let workspace = makeWorkspace()
+        workspace.isScopedEvent = true
+        var archive = WorkspaceArchiveV1(workspace: workspace)
+        var mainEvent = TimelineItem(
+            id: workspace.mainEventID, title: workspace.title, category: .rehearsal,
+            purpose: .planning, scheduledAt: workspace.mainEventStartsAt,
+            schedulingState: .unscheduled, location: "", participantIDs: [],
+            parentEventID: nil
+        )
+        mainEvent.linkedIdeaID = nil
+        archive.scopedEvent = mainEvent
+        try persistence.applyBootstrap([
+            RemoteWorkspaceSnapshot(scopeID: archive.mainEventID,
+                payload: try WorkspaceArchiveCodec().encode(archive), serverVersion: 1, updatedAt: .now)
+        ], to: library)
+        await Task.yield()
+        let scoped = try #require(library.workspaces.first)
+        var notifications = 0
+        persistence.onPendingMutations = { notifications += 1 }
+
+        scoped.title = "Offline title one"
+        try persistence.saveChanges(in: library)
+        #expect(notifications == 1)
+        let first = try #require(try mutations(in: persistence).first)
+        #expect(first.entityType == .event)
+        #expect(first.entityID == scoped.mainEventID)
+        #expect(first.scopeID == scoped.mainEventID)
+        #expect(try mutations(in: persistence).allSatisfy { $0.entityType != .workspace })
+        let firstPayload = try WorkspaceArchiveCodec().decode(TimelineItem.self, from: first.payload)
+        #expect(firstPayload.title == "Offline title one")
+        #expect(firstPayload.category == .rehearsal)
+        #expect(firstPayload.schedulingState == .unscheduled)
+        #expect(firstPayload.parentEventID == nil)
+        #expect(firstPayload.linkedIdeaID == nil)
+
+        scoped.title = "Offline title two"
+        try persistence.saveChanges(in: library)
+        #expect(notifications == 2)
+        let coalesced = try #require(try mutations(in: persistence).first)
+        #expect(coalesced.id == first.id)
+        #expect(try WorkspaceArchiveCodec().decode(TimelineItem.self, from: coalesced.payload).title == "Offline title two")
+    }
+
+    @Test("Bootstrap omission retains offline scope work, but an authoritative delete clears it")
+    func scopedRevocationBoundary() throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false, ownerUserID: "scoped-owner")
+        let workspace = makeWorkspace()
+        workspace.isScopedEvent = true
+        let archive = WorkspaceArchiveV1(workspace: workspace)
+        try persistence.applyBootstrap([
+            RemoteWorkspaceSnapshot(scopeID: archive.mainEventID,
+                payload: try WorkspaceArchiveCodec().encode(archive), serverVersion: 1, updatedAt: .now)
+        ], to: library)
+        let scoped = try #require(library.workspaces.first)
+        scoped.title = "Pending while offline"
+        try persistence.saveChanges(in: library)
+        #expect(try mutations(in: persistence).contains { $0.scopeID == scoped.mainEventID })
+
+        try persistence.applyBootstrap([], to: library)
+        #expect(library.workspaces.contains { $0.mainEventID == scoped.mainEventID })
+        #expect(try mutations(in: persistence).contains { $0.scopeID == scoped.mainEventID })
+
+        let deletion = RemoteChangeEnvelope(
+            id: UUID(), scopeID: scoped.mainEventID, entityType: .workspace,
+            entityID: scoped.mainEventID, operation: .delete, payload: Data(),
+            serverVersion: 2, occurredAt: .now
+        )
+        try persistence.applyRemotePage(
+            .init(changes: [deletion], nextCursor: "delete-high-water", hasMore: false),
+            scopeID: scoped.mainEventID, to: library
+        )
+        #expect(!library.workspaces.contains { $0.mainEventID == scoped.mainEventID })
+        #expect(try mutations(in: persistence).allSatisfy { $0.scopeID != scoped.mainEventID })
+        #expect(try persistence.currentCursor(for: scoped.mainEventID) == "delete-high-water")
+    }
+
+    @Test("Forbidden write cleanup is limited to a cached scoped event")
+    func forbiddenScopedCleanup() throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false, ownerUserID: "scoped-owner")
+        let workspace = makeWorkspace()
+        workspace.isScopedEvent = true
+        let archive = WorkspaceArchiveV1(workspace: workspace)
+        try persistence.applyBootstrap([
+            RemoteWorkspaceSnapshot(scopeID: archive.mainEventID,
+                payload: try WorkspaceArchiveCodec().encode(archive), serverVersion: 1, updatedAt: .now)
+        ], to: library)
+        let scoped = try #require(library.workspaces.first)
+        scoped.title = "Queued edit"
+        try persistence.saveChanges(in: library)
+
+        #expect(try persistence.clearScopedWorkspaceAfterWriteForbidden(
+            scopeID: scoped.mainEventID, from: library
+        ))
+        #expect(!library.workspaces.contains { $0.mainEventID == scoped.mainEventID })
+        #expect(try mutations(in: persistence).allSatisfy { $0.scopeID != scoped.mainEventID })
+    }
+
     private func makeWorkspace() -> PlanningWorkspace {
         let workspace = PlanningWorkspace.newWorkspace(
             title: "Budget regression", startsAt: Date(timeIntervalSinceReferenceDate: 900_000_000),

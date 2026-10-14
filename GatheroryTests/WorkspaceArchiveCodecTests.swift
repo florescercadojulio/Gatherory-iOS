@@ -44,12 +44,45 @@ struct WorkspaceArchiveCodecTests {
         #expect(archive.currencyCode == nil)
         #expect(archive.eventParticipations == nil)
         #expect(archive.ideaResponses == nil)
+        #expect(archive.isScopedEvent == nil)
         #expect(archive.mainEventImageData == nil)
         #expect(archive.workspaceBudgetCap == nil)
         let workspace = archive.makeWorkspace()
         #expect(workspace.currencyCode == Locale.current.currency?.identifier ?? "USD")
         #expect(workspace.eventParticipations.isEmpty)
         #expect(workspace.ideaResponses.isEmpty)
+        #expect(!workspace.isScopedEvent)
+    }
+
+    @Test("Scoped event archives round trip while older archives default to a root workspace")
+    func scopedEventRoundTrip() throws {
+        let workspace = makeArchive().makeWorkspace()
+        workspace.isScopedEvent = true
+        let location = EventLocation(
+            address: "123 Garden Lane", shortAddress: "Garden Lane",
+            placeName: "The Glasshouse", locationName: "Garden Hall",
+            addressLine2: "Suite 2", latitude: 42.1, longitude: -83.2,
+            mapItemIdentifier: "server-place-123"
+        )
+        workspace.scopedMainEventDetails = TimelineItem(
+            id: workspace.mainEventID, title: workspace.title,
+            category: .rehearsal, purpose: .eventExperience,
+            scheduledAt: Date(timeIntervalSince1970: 0),
+            schedulingState: .unscheduled, eventLocation: location,
+            participantIDs: [], status: .notSure
+        )
+        let codec = WorkspaceArchiveCodec()
+        let encoded = try codec.encode(WorkspaceArchiveV1(workspace: workspace))
+        let decoded = try codec.decode(WorkspaceArchiveV1.self, from: encoded)
+        #expect(decoded.isScopedEvent == true)
+        #expect(decoded.makeWorkspace().isScopedEvent)
+        #expect(decoded.scopedEvent?.eventLocation == location)
+        #expect(decoded.scopedEvent?.schedulingState == .unscheduled)
+        #expect(decoded.scopedEvent?.status == .notSure)
+        #expect(!decoded.makeWorkspace().mainEventHasScheduledDate)
+
+        let legacy = try codec.decode(WorkspaceArchiveV1.self, from: legacyPayload)
+        #expect(!legacy.makeWorkspace().isScopedEvent)
     }
 
     @Test("Every required V1 key remains required when decoding")
@@ -149,6 +182,24 @@ struct WorkspaceArchiveCodecTests {
         #expect(try codec.decode(RegistryItem.self, from: registryPayload).imageData == nil)
         #expect(try codec.decode(EventMoment.self, from: momentPayload).imageData.isEmpty)
         #expect(try codec.encode(archive) == originalPayload)
+    }
+
+    @Test("Scoped main event metadata is emitted as an event entity without parent links")
+    func scopedMainEventEntity() throws {
+        let workspace = makeArchive().makeWorkspace()
+        workspace.isScopedEvent = true
+        workspace.title = "Welcome dinner"
+        workspace.eventMessage = "A family dinner"
+        let archive = WorkspaceArchiveV1(workspace: workspace)
+        let payload = try #require(archive.syncEntities(using: WorkspaceArchiveCodec())[
+            .init(type: .event, id: workspace.mainEventID)
+        ])
+        let event = try WorkspaceArchiveCodec().decode(TimelineItem.self, from: payload)
+        #expect(event.id == workspace.mainEventID)
+        #expect(event.title == "Welcome dinner")
+        #expect(event.eventDescription == "A family dinner")
+        #expect(event.parentEventID == nil)
+        #expect(event.linkedIdeaID == nil)
     }
 
     @Test("Entity merges retain matching cached media and deletes require no payload")

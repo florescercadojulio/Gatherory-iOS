@@ -72,6 +72,8 @@ struct AccountView: View {
                 return "A photo is waiting for a separate upload. Your other changes remain saved on this device."
             case .invalidResponse:
                 return "Gatherory received an unexpected response. Try again shortly."
+            case .forbidden:
+                return AppCopy.Account.eventAccessUnavailable
             case .server(let code):
                 return "Cloud sync needs attention (\(code)). Your changes remain on this device."
             }

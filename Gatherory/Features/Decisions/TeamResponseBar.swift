@@ -49,7 +49,7 @@ struct TeamResponseBar: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Team input")
-        .accessibilityValue("\(summary.love) love it, \(summary.maybe) maybe, \(summary.pass) pass, \(summary.unanswered) unanswered")
+        .accessibilityValue("\(summary.love, specifier: "%lld") love it, \(summary.maybe, specifier: "%lld") maybe, \(summary.pass, specifier: "%lld") pass, \(summary.unanswered, specifier: "%lld") unanswered")
         .task {
             guard !reduceMotion else { hasAppeared = true; return }
             // Allow the initial layout to settle before the one-shot entrance.

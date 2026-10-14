@@ -35,7 +35,9 @@ struct InvitationAcceptance: Decodable {
     var destination: Destination {
         // Approval always wins, even if a response also contains a scope ID.
         if awaitsApproval { return .awaitingApproval }
+        if role == "guest" { return .guest(eventId) }
         if let planningScopeId { return .planning(planningScopeId) }
+        if role == "collaborator" { return .planning(eventId) }
         return .guest(eventId)
     }
 }

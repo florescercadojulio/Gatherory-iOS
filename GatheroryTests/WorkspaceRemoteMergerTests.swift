@@ -145,6 +145,96 @@ struct WorkspaceRemoteMergerTests {
         #expect(!context.hasChanges)
     }
 
+    @Test("Scoped full workspace pulls replace collaborative arrays and retain matching media")
+    func scopedProjectionIsAuthoritative() throws {
+        let context = try makeContext()
+        var local = makeArchive()
+        local.isScopedEvent = true
+        let sourceIdea = local.ideas[0]
+        let stale = PlanningIdea(
+            id: UUID(), eventID: sourceIdea.eventID, title: "Removed remotely",
+            note: sourceIdea.note, category: sourceIdea.category,
+            submittedBy: sourceIdea.submittedBy, submittedByUserID: sourceIdea.submittedByUserID,
+            estimatedCost: sourceIdea.estimatedCost, status: sourceIdea.status,
+            submittedAt: sourceIdea.submittedAt, imageData: sourceIdea.imageData,
+            mediaAssetID: sourceIdea.mediaAssetID, configuration: sourceIdea.configuration,
+            invitationVisibility: sourceIdea.invitationVisibility
+        )
+        local.ideas.append(stale)
+        let record = makeRecord(local, payload: try codec.encode(local), owner: "owner")
+        context.insert(record)
+        try context.save()
+
+        var remote = local
+        remote.title = "Remote scoped title"
+        remote.ideas = [local.ideas[0]]
+        remote.ideas[0].title = "Authoritative idea"
+        remote.ideas[0].imageData = nil
+        remote.timeline = []
+        remote.eventExpenses = []
+        remote.notes = []
+        remote.eventMoments = []
+        remote.registry = []
+        remote.ideaResponses = []
+        let workspaceChange = try change(remote, occurredAt: date.addingTimeInterval(10))
+        let result = try WorkspaceRemoteMerger(context: context, codec: codec, ownerUserID: "owner")
+            .stagePage(.init(changes: [workspaceChange], nextCursor: "scoped", hasMore: false),
+                scopeID: local.mainEventID, existingWorkspaceCount: 1)
+
+        guard case let .merged(merged, shouldDelete) = result, let merged else {
+            Issue.record("Expected the scoped projection to merge")
+            return
+        }
+        #expect(!shouldDelete)
+        #expect(merged.isScopedEvent == true)
+        #expect(merged.title == "Remote scoped title")
+        #expect(merged.ideas.map(\.title) == ["Authoritative idea"])
+        #expect(merged.ideas[0].imageData == local.ideas[0].imageData)
+        #expect(merged.timeline.isEmpty)
+        #expect(merged.notes.isEmpty)
+        try expectNoSyncSideEffects(in: context)
+    }
+
+    @Test("Scoped pulls overlay pending edits queued while the authoritative page was in flight")
+    func scopedPullPreservesPendingEntityEdit() throws {
+        let context = try makeContext()
+        var local = makeArchive()
+        local.isScopedEvent = true
+        let record = makeRecord(local, payload: try codec.encode(local), owner: "owner")
+        context.insert(record)
+        let pendingID = UUID()
+        let eventPayload = try #require(local.syncEntities(using: codec)[
+            .init(type: .event, id: local.mainEventID)
+        ])
+        var pendingEvent = try codec.decode(TimelineItem.self, from: eventPayload)
+        pendingEvent.title = "Offline edit during pull"
+        context.insert(PendingMutation(
+            id: pendingID,
+            scopeID: local.mainEventID,
+            entityType: .event,
+            entityID: local.mainEventID,
+            operation: .update,
+            payload: try codec.encode(pendingEvent),
+            ownerUserID: "owner"
+        ))
+        try context.save()
+
+        var remote = local
+        remote.title = "Older server title"
+        remote.ideas = []
+        let result = try WorkspaceRemoteMerger(context: context, codec: codec, ownerUserID: "owner")
+            .stagePage(.init(changes: [try change(remote)], nextCursor: "in-flight", hasMore: false),
+                scopeID: local.mainEventID, existingWorkspaceCount: 1)
+        guard case let .merged(merged, _) = result, let merged else {
+            Issue.record("Expected the authoritative page to merge")
+            return
+        }
+        #expect(merged.title == "Offline edit during pull")
+        #expect(merged.ideas.isEmpty)
+        #expect(try context.fetch(FetchDescriptor<PendingMutation>()).map(\.id) == [pendingID])
+        #expect(try context.fetch(FetchDescriptor<PendingMutation>()).allSatisfy { $0.entityType != .workspace })
+    }
+
     @Test("Receipt deduplication and workspace writes are isolated by account", arguments: ["owner", nil] as [String?])
     func receiptAccountIsolation(owner: String?) throws {
         let context = try makeContext()

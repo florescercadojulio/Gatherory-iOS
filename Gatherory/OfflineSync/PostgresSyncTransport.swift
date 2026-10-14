@@ -4,6 +4,7 @@ enum CloudSyncFailure: LocalizedError {
     case invalidSession
     case invalidResponse
     case payloadTooLarge
+    case forbidden(String?)
     case server(String)
 
     var errorDescription: String? {
@@ -14,6 +15,8 @@ enum CloudSyncFailure: LocalizedError {
             "Gatherory received an unexpected synchronization response."
         case .payloadTooLarge:
             "This workspace contains media that must upload separately before it can synchronize."
+        case .forbidden:
+            "Gatherory can no longer synchronize this workspace."
         case .server(let code):
             "Gatherory couldn’t synchronize this workspace (\(code))."
         }
@@ -123,6 +126,7 @@ struct PostgresSyncTransport: WorkspaceSnapshotTransport {
             SyncDiagnostics.record("sync_request_failed", fields: fields, error: CloudSyncFailure.server(failure.code ?? "HTTP_\(response.statusCode)"))
             if response.statusCode == 401 { throw CloudSyncFailure.invalidSession }
             if response.statusCode == 413 { throw CloudSyncFailure.payloadTooLarge }
+            if response.statusCode == 403 { throw CloudSyncFailure.forbidden(failure.code) }
             throw CloudSyncFailure.server(failure.code ?? "HTTP_\(response.statusCode)")
         }
         do {

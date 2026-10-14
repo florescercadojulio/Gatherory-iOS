@@ -585,7 +585,7 @@ struct EventEditorView: View {
             }
 
             Section {
-                if isMainEvent || workspace.workspaceBudgetCap != nil {
+                if !workspace.isScopedEvent && (isMainEvent || workspace.workspaceBudgetCap != nil) {
                     Button {
                         isEditingBudget = true
                     } label: {
@@ -596,7 +596,7 @@ struct EventEditorView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                } else {
+                } else if !workspace.isScopedEvent {
                     planningRow(
                         symbol: "chart.pie.fill",
                         title: "Budget",
@@ -618,7 +618,9 @@ struct EventEditorView: View {
             } header: {
                 Text("Planning")
             } footer: {
-                if isMainEvent || workspace.workspaceBudgetCap != nil {
+                if workspace.isScopedEvent {
+                    Text("Costs stay with this event.")
+                } else if isMainEvent || workspace.workspaceBudgetCap != nil {
                     Text("Budget is the spending limit. Cost is what you expect to spend.")
                 } else {
                     Text("Set a workspace budget on the main event first, then allocate part of it here. You can still track this event’s expected cost now.")
@@ -885,7 +887,9 @@ struct EventEditorView: View {
 
     private func save() {
         if isMainEvent {
-            _ = workspace.updateWorkspaceBudgetCap(parsedMainBudget)
+            if !workspace.isScopedEvent {
+                _ = workspace.updateWorkspaceBudgetCap(parsedMainBudget)
+            }
             workspace.updateMainEvent(
                 title: trimmedTitle,
                 status: mainStatus,

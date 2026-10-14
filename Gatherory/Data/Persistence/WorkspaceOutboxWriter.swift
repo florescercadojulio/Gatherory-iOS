@@ -117,6 +117,15 @@ struct WorkspaceOutboxWriter {
         for (key, payload) in entities {
             let previousPayload = previousEntities[key]
             guard previousPayload != payload else { continue }
+            if archive.isScopedEvent == true,
+               !isAllowedScopedMutation(
+                key: key,
+                previousPayload: previousPayload,
+                payload: payload,
+                archive: archive
+               ) {
+                continue
+            }
             coalesceMutation(
                 scopeID: scopeID,
                 entityType: key.type,
@@ -129,11 +138,46 @@ struct WorkspaceOutboxWriter {
         }
 
         for key in previousEntities.keys where entities[key] == nil {
+            if archive.isScopedEvent == true,
+               key.type == .participant || key.type == .eventParticipation
+                || (key.type == .event && key.id != archive.mainEventID) {
+                continue
+            }
             coalesceEntityDeletion(
                 scopeID: scopeID,
                 key: key,
                 pendingMutations: pendingMutations
             )
+        }
+    }
+
+    private func isAllowedScopedMutation(
+        key: WorkspaceSyncEntityKey,
+        previousPayload: Data?,
+        payload: Data,
+        archive: WorkspaceArchiveV1
+    ) -> Bool {
+        switch key.type {
+        case .participant:
+            guard let member = try? codec.decode(WorkspaceMember.self, from: payload) else { return false }
+            // New people are authorized by the server's manager check. Existing
+            // shared profiles may only be edited by their own account.
+            return previousPayload == nil || member.userID == ownerUserID
+        case .eventParticipation:
+            guard let previousPayload,
+                  let previous = try? codec.decode(EventParticipation.self, from: previousPayload),
+                  let current = try? codec.decode(EventParticipation.self, from: payload),
+                  previous.memberID == current.memberID,
+                  let member = archive.members.first(where: { $0.id == current.memberID }),
+                  member.userID == ownerUserID else { return false }
+            // Planning permissions and invitation roles are canonical server
+            // state. Native sync may carry only this account's RSVP change.
+            return previous.role == current.role
+                && previous.planningPermission == current.planningPermission
+                && previous.invitationStatus == current.invitationStatus
+                && previous.attendance != current.attendance
+        default:
+            return true
         }
     }
 
