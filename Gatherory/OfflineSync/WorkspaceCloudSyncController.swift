@@ -173,6 +173,26 @@ final class WorkspaceCloudSyncController {
         await runJoinedSync(trigger: trigger)
     }
 
+    /// Refresh the shared roster and responses without racing debounced local edits.
+    func refreshCollaboration(passively: Bool = false) async {
+        guard activeUserID != nil, usesRemoteAccountState, !isPreparingSignOut,
+              !isSynchronizing, !Task.isCancelled else { return }
+        if passively {
+            // Let the debounced local save and its mutation-triggered sync run.
+            // A timer must not force whole-library serialization on the UI actor.
+            guard !persistence.hasUnsavedLocalChanges else { return }
+        } else {
+            do {
+                try persistence.saveChanges(in: library)
+            } catch {
+                lastError = error
+                SyncDiagnostics.record("collaboration_refresh_save_failed", error: error)
+                return
+            }
+        }
+        await synchronize(trigger: .backgroundRefresh)
+    }
+
     private func runJoinedSync(trigger: SyncTrigger) async {
         if let syncTask {
             needsAnotherSync = true

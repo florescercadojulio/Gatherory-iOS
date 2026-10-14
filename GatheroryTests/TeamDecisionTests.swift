@@ -109,4 +109,90 @@ struct TeamDecisionTests {
         #expect(first == IdeaResponse.identifier(ideaID: ideaID, userID: "host"))
         #expect(first != IdeaResponse.identifier(ideaID: ideaID, userID: "collaborator"))
     }
+
+    @Test("A synced late joiner expands existing bars and gets an independent queue")
+    func lateJoinerRefreshesExistingResponses() throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false)
+        let workspace = makeWorkspace()
+        let idea = try #require(workspace.ideas.first)
+        for id in ["host", "collaborator"] {
+            workspace.configureViewer(account(id))
+            workspace.decide(.love, on: idea)
+        }
+        library.add(workspace)
+        library.configureViewer(account("host"))
+        try persistence.saveChanges(in: library)
+        #expect(workspace.teamResponseSummary(for: idea) == .init(love: 2))
+
+        let newcomer = WorkspaceMember(userID: "newcomer", name: "New Teammate",
+            participantRole: .collaborator, initials: "NT")
+        var participation = EventParticipation(eventID: workspace.mainEventID, memberID: newcomer.id,
+            role: .collaborator, planningPermission: .contribute, attendance: .invited, invitationStatus: .active)
+        func envelope<T: Encodable>(_ type: SyncEntityType, _ id: UUID, _ value: T) throws -> RemoteChangeEnvelope {
+            RemoteChangeEnvelope(id: UUID(), scopeID: workspace.mainEventID, entityType: type,
+                entityID: id, operation: .update, payload: try JSONEncoder().encode(value),
+                serverVersion: 1, occurredAt: .now)
+        }
+        // The server publishes the person and event membership as separate entities.
+        let joinChanges = try [envelope(.participant, newcomer.id, newcomer),
+                              envelope(.eventParticipation, participation.id, participation)]
+        try persistence.applyRemotePage(.init(changes: joinChanges, nextCursor: "2", hasMore: false),
+            scopeID: workspace.mainEventID, to: library)
+        let updated = try #require(library.selectedWorkspace)
+        #expect(updated.teamResponseSummary(for: idea) == .init(love: 2, unanswered: 1))
+        #expect(updated.decisionQueue.isEmpty) // Host has already responded.
+        library.configureViewer(account("newcomer"))
+        #expect(updated.decisionQueue.map(\.id) == [idea.id])
+
+        let response = IdeaResponse(ideaID: idea.id, userID: "newcomer", choice: .maybe)
+        try persistence.applyRemotePage(.init(changes: [try envelope(.ideaResponse, response.id, response)],
+            nextCursor: "3", hasMore: false), scopeID: workspace.mainEventID, to: library)
+        let voted = try #require(library.selectedWorkspace)
+        #expect(voted.teamResponseSummary(for: idea) == .init(love: 2, maybe: 1))
+        #expect(voted.decisionQueue.isEmpty)
+        #expect(voted.ideas.first?.status == .new)
+
+        // A role refresh also removes no-longer-eligible input from the denominator.
+        participation.planningPermission = .viewOnly
+        try persistence.applyRemotePage(.init(changes: [try envelope(.eventParticipation, participation.id, participation)],
+            nextCursor: "4", hasMore: false), scopeID: workspace.mainEventID, to: library)
+        #expect(library.selectedWorkspace?.teamResponseSummary(for: idea) == .init(love: 2))
+    }
+
+    @Test("An unchanged refresh preserves the live workspace and undo state")
+    func unchangedRefreshPreservesLiveState() throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false)
+        let workspace = makeWorkspace()
+        library.configureViewer(account("host"))
+        library.add(workspace)
+        workspace.decide(.love, on: try #require(workspace.ideas.first))
+        try persistence.saveChanges(in: library)
+        try persistence.applyRemotePage(.init(changes: [], nextCursor: "5", hasMore: false),
+            scopeID: workspace.mainEventID, to: library)
+        #expect(library.selectedWorkspace === workspace)
+        #expect(workspace.canUndoDecision)
+        #expect(try persistence.currentCursor(for: workspace.mainEventID) == "5")
+    }
+
+    @Test("Empty pulls advance the checkpoint without decoding stored artwork archives")
+    func emptyRefreshDoesNotDecodeArchive() throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false)
+        let workspace = makeWorkspace()
+        library.add(workspace)
+        let context = ModelContext(persistence.container)
+        // An intentionally opaque payload proves this path never decodes the
+        // archive; it only needs the scope's checkpoint when nothing changed.
+        let record = WorkspaceRecord(id: workspace.mainEventID,
+            payload: Data("opaque archive".utf8), sortOrder: 0)
+        context.insert(record)
+        try context.save()
+        try persistence.applyRemotePage(.init(changes: [], nextCursor: "9", hasMore: false),
+            scopeID: workspace.mainEventID, to: library)
+        #expect(library.selectedWorkspace === workspace)
+        #expect(try persistence.currentCursor(for: workspace.mainEventID) == "9")
+        #expect(record.payload == Data("opaque archive".utf8))
+    }
 }

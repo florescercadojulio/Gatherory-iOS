@@ -8,12 +8,72 @@ struct InvitationPreview: Decodable {
     let startsAt: String?
     let status: String?
     let coverURL: URL?
+    let requiresApproval: Bool?
+    let planningPermission: String?
+
+    func shouldOpenExistingEvent(isAuthenticated: Bool) -> Bool {
+        // Only a fresh, account-specific server preview can establish access.
+        // A role alone also appears on invitations that still require consent.
+        isAuthenticated && !requiresSignIn && status == "accepted"
+    }
 }
 
 struct InvitationAcceptance: Decodable {
     let eventId: UUID
     let role: String
     let planningScopeId: UUID?
+    let status: String?
+
+    var awaitsApproval: Bool { status == "awaiting_approval" }
+
+    enum Destination: Equatable {
+        case awaitingApproval
+        case planning(UUID)
+        case guest(UUID)
+    }
+
+    var destination: Destination {
+        // Approval always wins, even if a response also contains a scope ID.
+        if awaitsApproval { return .awaitingApproval }
+        if let planningScopeId { return .planning(planningScopeId) }
+        return .guest(eventId)
+    }
+}
+
+/// Keeps a successful join separate from loading its destination. A retry can
+/// resume that load without issuing another join, but never for another account.
+struct InvitationJoinProgress {
+    private var accountID: String?
+    private var response: InvitationAcceptance?
+
+    mutating func record(_ response: InvitationAcceptance, accountID: String) {
+        self.accountID = accountID
+        self.response = response
+    }
+
+    func acceptedResponse(for accountID: String?) -> InvitationAcceptance? {
+        guard self.accountID == accountID, let response, !response.awaitsApproval else { return nil }
+        return response
+    }
+}
+
+struct EventJoinRequests: Decodable {
+    let requests: [EventJoinRequest]
+}
+
+struct EventJoinRequest: Decodable, Identifiable {
+    let id: UUID
+    let name: String
+    let email: String
+    let planningPermission: String
+
+    var permission: PlanningPermission {
+        planningPermission == "view_only" ? .viewOnly : PlanningPermission(rawValue: planningPermission) ?? .contribute
+    }
+}
+
+struct EventJoinReview: Decodable {
+    let status: String
 }
 
 struct GuestInvitationFeed: Codable {
@@ -157,7 +217,7 @@ struct InvitationAPIClient {
         let requestID = UUID().uuidString.lowercased()
         request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
         // Only static endpoint names are diagnostic data; never log query tokens or URLs.
-        let endpoint = ["api/events/invitations", "api/invitations/preview", "api/invitations/accept"].contains(path)
+        let endpoint = ["api/events/invitations", "api/invitations", "api/invitations/preview", "api/invitations/accept"].contains(path)
             ? path : "other"
         var fields = ["endpoint": endpoint, "method": method, "request_id": requestID]
         if let token = try tokenStore.read(), !token.isEmpty {

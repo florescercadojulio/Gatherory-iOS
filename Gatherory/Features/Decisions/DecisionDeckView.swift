@@ -300,19 +300,44 @@ private struct DecisionCard: View {
                 tracks: idea.musicTracks,
                 symbol: idea.category.symbol,
                 colors: idea.category.artworkColors,
-                accent: idea.category.artworkAccent
+                accent: idea.category.artworkAccent,
+                blurStart: 0.46
             )
         } else {
             MediaArtwork(
                 imageData: imageSafety.visibleImageData(idea.imageData, assetID: idea.mediaAssetID),
                 symbol: idea.category.symbol,
                 colors: idea.category.artworkColors,
-                accent: idea.category.artworkAccent
+                accent: idea.category.artworkAccent,
+                blurStart: 0.46
             )
         }
     }
 
     private var ideaDetails: some View {
+        IdeaSummaryCard(idea: idea, currencyCode: currencyCode, teamSummary: teamSummary)
+    }
+
+    @ViewBuilder
+    private var swipeFeedback: some View {
+        if dragOffset.width > 35 {
+            SwipeLabel(title: "Love it", symbol: "heart.fill")
+        } else if dragOffset.width < -35 {
+            SwipeLabel(title: "Pass", symbol: "xmark")
+        } else if dragOffset.height < -35 {
+            SwipeLabel(title: "Maybe", symbol: "bookmark.fill")
+        }
+    }
+}
+
+/// The same summary surface in the deck and its expanded detail destination.
+struct IdeaSummaryCard<Footer: View>: View {
+    let idea: PlanningIdea
+    let currencyCode: String
+    let teamSummary: TeamResponseSummary
+    @ViewBuilder var footer: () -> Footer
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: AppTheme.Spacing.compact) {
                 Label(idea.category.title, systemImage: idea.category.symbol)
@@ -346,20 +371,18 @@ private struct DecisionCard: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel("Suggested by \(idea.submittedBy)")
+
+            footer()
         }
         .padding(AppTheme.Spacing.standard)
         .ideaContentSurface()
     }
 
-    @ViewBuilder
-    private var swipeFeedback: some View {
-        if dragOffset.width > 35 {
-            SwipeLabel(title: "Love it", symbol: "heart.fill")
-        } else if dragOffset.width < -35 {
-            SwipeLabel(title: "Pass", symbol: "xmark")
-        } else if dragOffset.height < -35 {
-            SwipeLabel(title: "Maybe", symbol: "bookmark.fill")
-        }
+}
+
+extension IdeaSummaryCard where Footer == EmptyView {
+    init(idea: PlanningIdea, currencyCode: String, teamSummary: TeamResponseSummary) {
+        self.init(idea: idea, currencyCode: currencyCode, teamSummary: teamSummary) { EmptyView() }
     }
 }
 

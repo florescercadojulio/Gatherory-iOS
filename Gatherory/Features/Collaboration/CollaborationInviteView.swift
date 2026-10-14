@@ -15,6 +15,7 @@ struct CollaborationInviteView: View {
 private struct CollaborationInviteScreen: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
+    @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -26,10 +27,22 @@ private struct CollaborationInviteScreen: View {
     @State private var generatedInvitation: GeneratedEventInvitation?
     @State private var isGenerating = false
     @State private var invitationError: String?
+    @State private var isShowingSharingSettings = false
 
     private var inviteURL: URL? {
         generatedInvitation?.eventId == workspace.selectedEventID ? generatedInvitation?.url : nil
     }
+
+    private var canManageInvitations: Bool {
+        workspace.canManageInvitations(for: workspace.selectedEventReference)
+    }
+
+    private var joinRequests: [EventJoinRequest] {
+        guard canManageInvitations else { return [] }
+        return workspace.joinRequestStore.requests(eventID: workspace.selectedEventID, accountID: authentication.currentUser?.id)
+    }
+
+    private var reviewingRequestID: UUID? { workspace.joinRequestStore.reviewingRequestID }
 
     private var selectedTimelineEvent: TimelineItem? {
         guard case .subevent(let id) = workspace.selectedEventReference else { return nil }
@@ -83,7 +96,9 @@ private struct CollaborationInviteScreen: View {
                     eventPreview
                         .frame(maxWidth: .infinity)
 
-                    linkSharingCard
+                    if !joinRequests.isEmpty { pendingRequests }
+
+                    if canManageInvitations { linkSharingCard }
 
                     workspacePeople
                 }
@@ -94,6 +109,7 @@ private struct CollaborationInviteScreen: View {
             }
             .appSoftScrollEdges()
             .scrollIndicators(.hidden)
+            .refreshable { await loadJoinRequests() }
         }
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
@@ -107,6 +123,19 @@ private struct CollaborationInviteScreen: View {
             }
         }
         .navigationTitle("Invite")
+        .task(id: workspace.selectedEventID) {
+            await loadJoinRequests()
+        }
+        .sheet(isPresented: $isShowingSharingSettings, onDismiss: {
+            clearInvitation()
+            Task { await loadJoinRequests() }
+        }) {
+            NavigationStack { CollaboratorSharingSettingsView() }
+                .environment(workspace)
+                .environment(cloudSync)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .onChange(of: workspace.selectedEventID) { _, _ in clearInvitation() }
         .onChange(of: invitedRole) { _, _ in clearInvitation() }
         .confirmationDialog("Disable this invitation link?", isPresented: $isConfirmingDisable, titleVisibility: .visible) {
@@ -192,10 +221,25 @@ private struct CollaborationInviteScreen: View {
 
             Text(invitedRole == .guest
                  ? String(localized: "Guests can view the invitation and RSVP. Planning stays private.")
-                 : String(localized: "Anyone with this link will have planning controls. Share it only with people you trust."))
+                 : workspace.requiresCollaboratorApproval
+                    ? String(localized: "The host will review your request before you can see or change plans.")
+                    : String(localized: "People with this link join with the access selected in Sharing Settings."))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if invitedRole == .collaborator {
+                Button { isShowingSharingSettings = true } label: {
+                    Label("Sharing Settings", systemImage: "slider.horizontal.3")
+                        .frame(minHeight: 44)
+                }
+                Text(LocalizedStringKey(workspace.defaultCollaboratorPermission.title))
+                    .font(.footnote).foregroundStyle(.secondary)
+                if !workspace.isCollaboratorLinkEnabled {
+                    Text("Collaborator links are disabled.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
 
             if let inviteURL {
                 InvitationDeliveryActions(
@@ -204,7 +248,7 @@ private struct CollaborationInviteScreen: View {
                     previewImage: invitationPreviewImage
                 )
                 .id(inviteURL)
-                .disabled(isGenerating)
+                .disabled(isGenerating || (invitedRole == .collaborator && !workspace.isCollaboratorLinkEnabled))
 
                 HStack {
                     Button {
@@ -241,7 +285,7 @@ private struct CollaborationInviteScreen: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isGenerating)
+                .disabled(isGenerating || (invitedRole == .collaborator && !workspace.isCollaboratorLinkEnabled))
             }
 
             if let invitationError {
@@ -282,6 +326,38 @@ private struct CollaborationInviteScreen: View {
             Text("Collaborator").tag(WorkspaceRole.collaborator)
         }
         .disabled(isGenerating)
+    }
+
+    private var pendingRequests: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+            Text("Join Requests").font(.title2.bold())
+            ForEach(joinRequests) { request in
+                EventJoinRequestRow(request: request, isReviewing: reviewingRequestID == request.id,
+                                    isDisabled: reviewingRequestID != nil) { action in
+                    Task { await review(request, action: action) }
+                }
+                .padding(AppTheme.Spacing.standard)
+                .collaborationCard(reduceTransparency: reduceTransparency)
+            }
+        }
+    }
+
+    private func loadJoinRequests() async {
+        guard canManageInvitations, let accountID = authentication.currentUser?.id else { return }
+        let eventID = workspace.selectedEventID
+        await workspace.joinRequestStore.refresh(eventID: eventID, accountID: accountID, force: true)
+        guard workspace.selectedEventID == eventID, authentication.currentUser?.id == accountID else { return }
+        invitationError = workspace.joinRequestStore.error(eventID: eventID, accountID: accountID)
+    }
+
+    private func review(_ request: EventJoinRequest, action: JoinRequestReviewAction) async {
+        guard canManageInvitations, let accountID = authentication.currentUser?.id else { return }
+        let eventID = workspace.selectedEventID
+        if await workspace.joinRequestStore.review(request, eventID: eventID, accountID: accountID, action: action) {
+            await cloudSync.refreshCollaboration()
+        }
+        guard workspace.selectedEventID == eventID, authentication.currentUser?.id == accountID else { return }
+        invitationError = workspace.joinRequestStore.error(eventID: eventID, accountID: accountID)
     }
 
     private var workspacePeople: some View {
@@ -408,12 +484,12 @@ private struct CollaborationInviteScreen: View {
         defer { isGenerating = false }
         do {
             // A new/local event must exist canonically before an invite can reference it.
-            await cloudSync.synchronize(trigger: .manual)
+            await cloudSync.refreshCollaboration()
             if cloudSync.lastError != nil { throw EventInvitationFailure.unavailable }
             let invitation = try await EventInvitationClient(baseURL: baseURL).create(
                 eventID: eventID, name: nil,
                 email: nil, role: invitedRole,
-                permission: invitedRole == .guest ? .viewOnly : .manage
+                permission: invitedRole == .guest ? .viewOnly : workspace.defaultCollaboratorPermission
             )
             guard workspace.selectedEventID == eventID else { return }
             generatedInvitation = invitation
@@ -436,6 +512,62 @@ private struct CollaborationInviteScreen: View {
             clearInvitation()
             PostHogSDK.shared.capture("invitation_link_revoked")
         } catch { invitationError = error.localizedDescription }
+    }
+}
+
+private struct CollaboratorSharingSettingsView: View {
+    @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(WorkspaceCloudSyncController.self) private var cloudSync
+    @Environment(\.dismiss) private var dismiss
+    @State private var enabled = true
+    @State private var requiresApproval = true
+    @State private var permission: PlanningPermission = .contribute
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Invite Link", isOn: $enabled)
+                Toggle("Approve Collaborators", isOn: $requiresApproval)
+            } footer: {
+                Text("Approval keeps the planning circle private even if the link is forwarded.")
+            }
+            Section("Default access") {
+                Picker("Access", selection: $permission) {
+                    ForEach(PlanningPermission.allCases) { value in
+                        Text(LocalizedStringKey(value.title)).tag(value)
+                    }
+                }
+                Text(LocalizedStringKey(permission.detail)).foregroundStyle(.secondary)
+            }
+            if let errorMessage { Section { Text(errorMessage).foregroundStyle(.secondary) } }
+        }
+        .disabled(isSaving)
+        .navigationTitle("Sharing Settings")
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { Task { await save() } }
+                    .disabled(isSaving || cloudSync.isSynchronizing)
+            }
+        }
+        .onAppear {
+            enabled = workspace.isCollaboratorLinkEnabled
+            requiresApproval = workspace.requiresCollaboratorApproval
+            permission = workspace.defaultCollaboratorPermission
+        }
+    }
+
+    private func save() async {
+        guard !cloudSync.isSynchronizing else { return }
+        isSaving = true
+        defer { isSaving = false }
+        workspace.isCollaboratorLinkEnabled = enabled
+        workspace.requiresCollaboratorApproval = requiresApproval
+        workspace.defaultCollaboratorPermission = permission
+        await cloudSync.refreshCollaboration()
+        if let error = cloudSync.lastError { errorMessage = error.localizedDescription }
+        else { dismiss() }
     }
 }
 

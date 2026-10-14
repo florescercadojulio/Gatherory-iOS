@@ -346,6 +346,7 @@ enum IdeaFilter: String, CaseIterable, Identifiable {
 
 private struct IdeaCollectionCard: View {
     @Environment(ImageSafetyStore.self) private var imageSafety
+    @Environment(PlanningWorkspace.self) private var workspace
     let idea: PlanningIdea
     let transitionNamespace: Namespace.ID
 
@@ -410,6 +411,20 @@ private struct IdeaCollectionCard: View {
                 .stroke(.white.opacity(0.16), lineWidth: 0.5)
         }
         .matchedTransitionSource(id: idea.id, in: transitionNamespace)
+        .overlay(alignment: .bottom) {
+            TeamResponseBar(
+                summary: workspace.teamResponseSummary(for: idea),
+                showsTitle: false,
+                showsSymbols: false,
+                barHeight: 6
+            )
+            .padding(.horizontal, 24)
+            .shadow(color: .black.opacity(0.18), radius: 3, y: 2)
+            .offset(y: 4)
+            .allowsHitTesting(false)
+        }
+        // Reserve the hanging bar's footprint in the masonry measurement.
+        .padding(.bottom, 10)
         .accessibilityElement(children: .combine)
         .accessibilityValue(idea.status.title)
     }
@@ -613,6 +628,7 @@ struct IdeaDetailView: View {
 }
 
 private struct IdeaDetailScreen: View {
+    @Environment(WorkspaceCloudSyncController.self) private var cloudSync: WorkspaceCloudSyncController?
     @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(MusicPreviewPlayer.self) private var previewPlayer
@@ -626,11 +642,20 @@ private struct IdeaDetailScreen: View {
         GeometryReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                    Spacer(minLength: max(proxy.size.height * 0.42, 260))
-                    ideaIdentity
-                    if idea.category != .music {
-                        IdeaTeamResponseSection(idea: idea)
+                    VStack(spacing: 0) {
+                        Spacer(minLength: max(proxy.size.height * 0.42, 260) + 16)
+                        IdeaSummaryCard(
+                            idea: idea,
+                            currencyCode: workspace.currencyCode,
+                            teamSummary: workspace.teamResponseSummary(for: idea)
+                        ) {
+                            if idea.category != .music {
+                                IdeaResponseControls(idea: idea)
+                            }
+                        }
                     }
+                    .padding(.bottom, AppTheme.Spacing.standard)
+                    .frame(minHeight: proxy.size.height, alignment: .bottom)
                     IdeaCategoryDetailContent(idea: idea)
                     metadata
                 }
@@ -639,6 +664,7 @@ private struct IdeaDetailScreen: View {
                 .frame(minHeight: proxy.size.height, alignment: .bottom)
             }
             .scrollIndicators(.hidden)
+            .refreshable { await cloudSync?.refreshCollaboration() }
             .appSoftScrollEdges()
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 max(geometry.contentOffset.y + geometry.contentInsets.top, 0)
@@ -682,7 +708,7 @@ private struct IdeaDetailScreen: View {
                     accent: idea.category.artworkAccent,
                     ambientBlurRadius: 10,
                     progressiveBlurRadius: reduceTransparency ? 0 : 22,
-                    blurStart: 0.44
+                    blurStart: 0.40
                 )
             } else {
                 MediaArtwork(
@@ -692,7 +718,7 @@ private struct IdeaDetailScreen: View {
                     accent: idea.category.artworkAccent,
                     ambientBlurRadius: 10,
                     progressiveBlurRadius: reduceTransparency ? 0 : 22,
-                    blurStart: 0.44
+                    blurStart: 0.40
                 )
             }
         }
@@ -711,29 +737,6 @@ private struct IdeaDetailScreen: View {
         )
         .ignoresSafeArea()
         .allowsHitTesting(false)
-    }
-
-    private var ideaIdentity: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: AppTheme.Spacing.compact) {
-                Label(idea.category.title, systemImage: idea.category.symbol)
-                    .font(.caption.weight(.semibold))
-
-                Spacer(minLength: AppTheme.Spacing.compact)
-
-                Label(idea.status.title, systemImage: idea.status.symbol)
-                    .font(.caption.weight(.semibold))
-            }
-
-            Text(idea.title)
-                .font(.largeTitle.bold())
-                .tracking(-0.7)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        // Text directly on photography has its own contrast treatment; tiles
-        // below still inherit the user's system appearance.
-        .foregroundStyle(.white)
-        .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
     }
 
     private var metadata: some View {

@@ -47,7 +47,8 @@ struct DecideEventPrimer: View {
             .frame(maxWidth: .infinity)
         }
         .scrollBounceBehavior(.basedOnSize)
-        .safeAreaInset(edge: .bottom) {
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
+        .safeAreaBar(edge: .bottom, spacing: 0) {
             Button(action: continueAction) {
                 Text(AppCopy.Primer.Decide.action)
                     .font(.headline)
@@ -60,7 +61,6 @@ struct DecideEventPrimer: View {
             .padding(.horizontal, AppTheme.Spacing.spacious)
             .padding(.vertical, AppTheme.Spacing.standard)
             .frame(maxWidth: .infinity)
-            .background(.regularMaterial)
         }
         .background(AppTheme.ColorToken.background.ignoresSafeArea())
         .tint(AppTheme.ColorToken.accent)
@@ -229,6 +229,17 @@ private enum DecidePrimerChoice: String, CaseIterable {
     }
 }
 
-#Preview {
+#Preview("Light") {
     DecideEventPrimer(continueAction: {})
+        .preferredColorScheme(.light)
+}
+
+#Preview("Dark") {
+    DecideEventPrimer(continueAction: {})
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Large Text") {
+    DecideEventPrimer(continueAction: {})
+        .environment(\.dynamicTypeSize, .accessibility3)
 }

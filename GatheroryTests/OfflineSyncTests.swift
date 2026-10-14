@@ -4,6 +4,44 @@ import Testing
 @testable import Gatherory
 
 struct OfflineSyncTests {
+    @Test("Passive collaboration refresh yields to debounced edits; explicit refresh saves them")
+    @MainActor
+    func passiveRefreshYieldsToLocalEdits() async throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false)
+        let transport = SignOutSyncTransport()
+        let sync = WorkspaceCloudSyncController(persistence: persistence, library: library,
+            baseURL: URL(string: "https://example.invalid")!, transport: transport, usesRemoteAccountState: true)
+        persistence.startObserving(library)
+        await sync.activate(userID: "passive-refresh", seedData: false)
+        await Task.yield()
+        let workspace = PlanningWorkspace.newWorkspace(title: "Before", startsAt: .now, eventLocation: nil, imageData: nil)
+        library.add(workspace)
+        try persistence.saveChanges(in: library)
+        await sync.synchronize()
+        // Drain observation callbacks from setup before making the test edit.
+        await Task.yield()
+        try persistence.saveChanges(in: library)
+        workspace.title = "Unsaved local edit"
+        // Observation schedules the debounce on the next main-actor turn.
+        for _ in 0..<100 {
+            if persistence.hasUnsavedLocalChanges { break }
+            await Task.yield()
+        }
+        #expect(persistence.hasUnsavedLocalChanges)
+        let pulls = transport.pullCount
+        let pushes = transport.payloads.count
+        await sync.refreshCollaboration(passively: true)
+        #expect(transport.pullCount == pulls)
+        #expect(transport.payloads.count == pushes)
+        #expect(persistence.hasUnsavedLocalChanges)
+        #expect(library.selectedWorkspace === workspace)
+        await sync.refreshCollaboration()
+        #expect(!persistence.hasUnsavedLocalChanges)
+        #expect(transport.payloads.contains { String(data: $0, encoding: .utf8)?.contains("Unsaved local edit") == true })
+        try await sync.prepareForSignOut(keepingPendingChanges: true)
+    }
+
     @Test("Skipping event creation survives account switches without creating data or skipping another account")
     @MainActor
     func skipEventCreation() async throws {
@@ -1043,6 +1081,7 @@ private final class EmptyRemoteChangeApplier: RemoteChangeApplying {
 
 @MainActor
 private final class SignOutSyncTransport: WorkspaceSnapshotTransport {
+    var pullCount = 0
     var failPull = false
     var holdNextPull = false
     var resumePull: CheckedContinuation<Void, Never>?
@@ -1061,6 +1100,7 @@ private final class SignOutSyncTransport: WorkspaceSnapshotTransport {
         return .init(results: mutations.map { .init(mutationID: $0.id, disposition: .applied, serverVersion: 1, failureCode: nil) })
     }
     func pull(scopeID: UUID, after cursor: String?) async throws -> SyncPullPage {
+        pullCount += 1
         if failPull { throw CloudSyncFailure.server("SYNC_SCOPE_NOT_FOUND") }
         if holdNextPull {
             holdNextPull = false

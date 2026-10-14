@@ -1208,6 +1208,7 @@
       }
     },
     "Anyone with this link will have planning controls. Share it only with people you trust." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1309,7 +1310,6 @@
       }
     },
     "Approval keeps the planning circle private even if the link is forwarded." : {
-      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1330,7 +1330,6 @@
       }
     },
     "Approve Collaborators" : {
-      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1588,6 +1587,16 @@
         }
       }
     },
+    "Awaiting Approval" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pendiente de aprobación"
+          }
+        }
+      }
+    },
     "Back" : {
       "localizations" : {
         "es" : {
@@ -1766,6 +1775,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cambiar asignación"
+          }
+        }
+      }
+    },
+    "Check Status" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consultar estado"
           }
         }
       }
@@ -2049,6 +2068,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Colaborador"
+          }
+        }
+      }
+    },
+    "Collaborator links are disabled." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los enlaces para colaboradores están desactivados."
           }
         }
       }
@@ -2759,6 +2788,16 @@
         }
       }
     },
+    "Decline" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechazar"
+          }
+        }
+      }
+    },
     "Decline for Event" : {
       "localizations" : {
         "es" : {
@@ -2790,7 +2829,6 @@
       }
     },
     "Default access" : {
-      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4977,7 +5015,6 @@
       }
     },
     "Invite Link" : {
-      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5078,6 +5115,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unirse al evento"
+          }
+        }
+      }
+    },
+    "No Join Requests" : {
+      "localizations" : {
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay solicitudes de acceso" } }
+      }
+    },
+    "People waiting for approval will appear here." : {
+      "localizations" : {
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Las personas que esperan aprobación aparecerán aquí." } }
+      }
+    },
+    "Join Requests" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solicitudes de acceso"
           }
         }
       }
@@ -6333,6 +6390,16 @@
         }
       }
     },
+    "People with this link join with the access selected in Sharing Settings." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las personas con este enlace se unen con el acceso seleccionado en Configuración para compartir."
+          }
+        }
+      }
+    },
     "Person" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7434,6 +7501,16 @@
         }
       }
     },
+    "Request to Join" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solicitar acceso"
+          }
+        }
+      }
+    },
     "Required before this event appears on Home" : {
       "localizations" : {
         "es" : {
@@ -8505,7 +8582,6 @@
       }
     },
     "Sharing Settings" : {
-      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -8975,6 +9051,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El estado del evento o tu acceso cambió. Revisa el evento actualizado antes de intentarlo de nuevo."
+          }
+        }
+      }
+    },
+    "The host will review your request before you can see or change plans." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El anfitrión revisará tu solicitud antes de que puedas ver o cambiar los planes."
           }
         }
       }
@@ -9890,7 +9976,28 @@
         }
       }
     },
+    "Your request has been sent. Once approved, you can open this invitation to join the planning circle." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu solicitud se ha enviado. Una vez aprobada, puedes abrir esta invitación para unirte al círculo de planificación."
+          }
+        }
+      }
+    },
+    "Your request was declined. Contact the host if you think this was a mistake." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu solicitud fue rechazada. Contacta con el anfitrión si crees que fue un error."
+          }
+        }
+      }
+    },
     "Your response" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9901,6 +10008,7 @@
       }
     },
     "Your response helps the team. Approval is a separate decision." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {

@@ -406,6 +406,11 @@ final class WorkspacePersistenceController {
     @ObservationIgnored private(set) var activeUserID: String?
     @ObservationIgnored var onPendingMutations: (() -> Void)?
 
+    /// Passive refresh must yield to local edits, including a failed disk save.
+    var hasUnsavedLocalChanges: Bool {
+        pendingSaveTask != nil || lastError != nil
+    }
+
     init(
         isStoredInMemoryOnly: Bool = false,
         storeURL: URL? = nil
@@ -1271,11 +1276,22 @@ final class WorkspacePersistenceController {
         scopeID: UUID,
         to library: WorkspaceLibrary
     ) throws {
+        // Most passive pulls are empty. Advance only the cursor, without
+        // decoding/re-encoding image-bearing archives or touching the UI graph.
+        if page.changes.isEmpty {
+            try saveRemoteCheckpoint(page.nextCursor, scopeID: scopeID)
+            return
+        }
         let appliedIDs = Set(
             try context.fetch(FetchDescriptor<AppliedSyncEnvelope>())
                 .filter { $0.ownerUserID == activeUserID }
                 .map(\.id)
         )
+        let newChanges = page.changes.filter { !appliedIDs.contains($0.id) }
+        guard !newChanges.isEmpty else {
+            try saveRemoteCheckpoint(page.nextCursor, scopeID: scopeID)
+            return
+        }
         let record = try context.fetch(FetchDescriptor<WorkspaceRecord>())
             .first(where: {
                 $0.id == scopeID && $0.ownerUserID == activeUserID
@@ -1287,7 +1303,7 @@ final class WorkspacePersistenceController {
         var latestUpdatedAt = record?.updatedAt ?? .distantPast
         var shouldDeleteWorkspace = false
 
-        for change in page.changes where !appliedIDs.contains(change.id) {
+        for change in newChanges {
             guard change.effectivePayloadSchemaVersion == SyncPayloadContract.currentVersion else {
                 throw WorkspacePersistenceError.unsupportedSyncPayloadVersion(
                     change.effectivePayloadSchemaVersion
@@ -1354,24 +1370,7 @@ final class WorkspacePersistenceController {
             }
         }
 
-        let checkpoint = try context.fetch(FetchDescriptor<SyncCheckpoint>())
-            .first(where: {
-                $0.scopeID == scopeID && $0.ownerUserID == activeUserID
-            })
-        if let checkpoint {
-            checkpoint.cursor = page.nextCursor
-            checkpoint.lastSuccessfulSyncAt = .now
-        } else {
-            context.insert(
-                SyncCheckpoint(
-                    scopeID: scopeID,
-                    cursor: page.nextCursor,
-                    lastSuccessfulSyncAt: .now,
-                    ownerUserID: activeUserID
-                )
-            )
-        }
-        try context.save()
+        try saveRemoteCheckpoint(page.nextCursor, scopeID: scopeID)
 
         suppressNextObservedChange = true
         if shouldDeleteWorkspace {
@@ -1379,6 +1378,27 @@ final class WorkspacePersistenceController {
         } else if let archive {
             library.upsert(archive.makeWorkspace())
         }
+    }
+
+    private func saveRemoteCheckpoint(_ cursor: String?, scopeID: UUID) throws {
+        let checkpoint = try context.fetch(FetchDescriptor<SyncCheckpoint>())
+            .first(where: {
+                $0.scopeID == scopeID && $0.ownerUserID == activeUserID
+            })
+        if let checkpoint {
+            checkpoint.cursor = cursor
+            checkpoint.lastSuccessfulSyncAt = .now
+        } else {
+            context.insert(
+                SyncCheckpoint(
+                    scopeID: scopeID,
+                    cursor: cursor,
+                    lastSuccessfulSyncAt: .now,
+                    ownerUserID: activeUserID
+                )
+            )
+        }
+        try context.save()
     }
 }
 

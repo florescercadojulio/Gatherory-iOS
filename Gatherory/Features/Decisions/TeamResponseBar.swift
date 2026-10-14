@@ -6,6 +6,8 @@ struct TeamResponseBar: View {
     @State private var hasAppeared = false
     let summary: TeamResponseSummary
     var showsTitle = true
+    var showsSymbols = true
+    var barHeight: CGFloat = 18
     private var segments: [(count: Int, color: Color, symbol: String)] {
         [(summary.love, .green, "heart.fill"), (summary.maybe, .yellow, "questionmark"),
          (summary.pass, .red, "xmark"), (summary.unanswered, .gray, "ellipsis")].filter { $0.0 > 0 }
@@ -24,7 +26,7 @@ struct TeamResponseBar: View {
                             * CGFloat(segment.count) / CGFloat(max(1, summary.total))
                         Rectangle().fill(segment.color)
                             .overlay {
-                                if width >= 20 {
+                                if showsSymbols && width >= 20 {
                                     Image(systemName: segment.symbol)
                                         .font(.system(size: 10, weight: .bold)).foregroundStyle(.black)
                                 }
@@ -37,7 +39,7 @@ struct TeamResponseBar: View {
                 .clipShape(Capsule())
                 .overlay { Capsule().stroke(.primary.opacity(0.3), lineWidth: 0.5) }
             }
-            .frame(height: 18)
+            .frame(height: barHeight)
             .scaleEffect(
                 x: hasAppeared || reduceMotion ? 1 : 0.92,
                 y: hasAppeared || reduceMotion ? 1 : 0.65
@@ -68,18 +70,26 @@ struct IdeaTeamResponseSection: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
             TeamResponseBar(summary: workspace.teamResponseSummary(for: idea))
                 .id(idea.id)
+            IdeaResponseControls(idea: idea)
+        }
+        .padding(AppTheme.Spacing.standard)
+        .ideaContentSurface()
+    }
+}
+
+struct IdeaResponseControls: View {
+    @Environment(PlanningWorkspace.self) private var workspace
+    let idea: PlanningIdea
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
             if workspace.canRespond(to: idea) {
-                Text("Your response").font(.subheadline.weight(.semibold))
                 ViewThatFits(in: .horizontal) {
                     HStack { responseButtons }
                     VStack(alignment: .leading) { responseButtons }
                 }
-                Text("Your response helps the team. Approval is a separate decision.")
-                    .font(.footnote).foregroundStyle(.secondary)
             }
         }
-        .padding(AppTheme.Spacing.standard)
-        .ideaContentSurface()
     }
     private var responseButtons: some View {
         ForEach([DecisionChoice.love, .maybe, .pass], id: \.self) { choice in

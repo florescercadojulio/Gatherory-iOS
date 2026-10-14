@@ -46,6 +46,23 @@ final class GatheroryUITests: XCTestCase {
     }
 
     @MainActor
+    func testHomeShareButtonOpensInvitation() throws {
+        let app = fixtureApplication()
+        app.launchArguments += ["-UseProductionOnboarding", "-AppleLanguages", "(en)"]
+        app.launch()
+        let workspace = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Maya & Theo")).firstMatch
+        XCTAssertTrue(workspace.waitForExistence(timeout: 8))
+        workspace.tap()
+
+        let share = app.buttons["Share Invitation"]
+        XCTAssertTrue(share.waitForExistence(timeout: 5))
+        XCTAssertTrue(share.isHittable)
+        // Tap the physical center, not an accessibility activation fallback.
+        share.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.navigationBars["Invite"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testInvitationSharingLayoutAndEmailFlow() throws {
         for (appearance, largeText) in [("Dark", false), ("Light", false), ("Dark", true)] {
             let app = fixtureApplication()

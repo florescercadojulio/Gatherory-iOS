@@ -3,6 +3,7 @@ import SwiftUI
 /// Settings whose scope is the current planning workspace rather than the signed-in person.
 struct WorkspaceSettingsView: View {
     @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(AuthenticationSession.self) private var authentication
     @State private var isEditingMainEvent = false
 
     private var eventDateText: String {
@@ -113,6 +114,21 @@ struct WorkspaceSettingsView: View {
                             .monospacedDigit()
                     }
                 }
+                if workspace.canManageInvitations(for: .main) {
+                    NavigationLink {
+                        EventJoinRequestsView(eventID: workspace.mainEventID)
+                    } label: {
+                        HStack {
+                            Label("Join Requests", systemImage: "person.crop.circle.badge.clock")
+                            Spacer()
+                            let count = workspace.joinRequestStore.requests(eventID: workspace.mainEventID, accountID: authentication.currentUser?.id).count
+                            Text(count.formatted())
+                                .monospacedDigit()
+                                .foregroundStyle(count > 0 ? AppTheme.ColorToken.accent : AppTheme.ColorToken.textSecondary)
+                        }
+                    }
+                    .accessibilityIdentifier("workspace-join-requests")
+                }
             } header: {
                 Text("People & Access")
             } footer: {
@@ -141,6 +157,10 @@ struct WorkspaceSettingsView: View {
         .navigationTitle("Workspace Settings")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
+        .task(id: authentication.currentUser?.id) {
+            guard workspace.canManageInvitations(for: .main), let accountID = authentication.currentUser?.id else { return }
+            await workspace.joinRequestStore.refresh(eventID: workspace.mainEventID, accountID: accountID)
+        }
         .sheet(isPresented: $isEditingMainEvent) {
             NavigationStack {
                 EventEditorView(mode: .main)

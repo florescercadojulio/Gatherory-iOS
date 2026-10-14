@@ -71,6 +71,8 @@ private struct WorkspaceSessionView: View {
 
 struct ContentView: View {
     @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(WorkspaceCloudSyncController.self) private var cloudSync: WorkspaceCloudSyncController?
+    @Environment(\.scenePhase) private var scenePhase
     var onExitWorkspace: (() -> Void)?
     @State private var selectedTab = AppTab.home
     @State private var homeReselectionTrigger = 0
@@ -102,6 +104,17 @@ struct ContentView: View {
             }
         }
         .tint(AppTheme.ColorToken.accent)
+        .task(id: "\(workspace.mainEventID)|\(scenePhase)") {
+            guard scenePhase == .active, workspace.showsPlanningInterface,
+                  let cloudSync else { return }
+            // Navigation reads local state immediately. Foreground activation and
+            // local edits already schedule sync; passive polling waits first and
+            // is independent of tab selection.
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                await cloudSync.refreshCollaboration(passively: true)
+            }
+        }
     }
 
     private var planningTabs: some View {

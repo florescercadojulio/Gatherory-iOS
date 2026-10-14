@@ -3,7 +3,58 @@ import Testing
 import UIKit
 @testable import Gatherory
 
+@MainActor
 struct EventInvitationTransportTests {
+    @Test("Existing hosts, collaborators, and guests open directly after an authenticated preview",
+          arguments: ["host", "collaborator", "guest"])
+    func existingMemberRouting(role: String) throws {
+        let data = Data("{\"requiresSignIn\":false,\"role\":\"\(role)\",\"status\":\"accepted\"}".utf8)
+        let preview = try JSONDecoder().decode(InvitationPreview.self, from: data)
+        #expect(preview.shouldOpenExistingEvent(isAuthenticated: true))
+        #expect(!preview.shouldOpenExistingEvent(isAuthenticated: false))
+    }
+
+    @Test("Unaccepted invitations never automatically join or bypass approval",
+          arguments: ["pending", "awaiting_approval", "declined", "unknown"])
+    func newInviteeStillChoosesToJoin(status: String) throws {
+        let data = Data("{\"requiresSignIn\":false,\"role\":\"host\",\"status\":\"\(status)\"}".utf8)
+        let preview = try JSONDecoder().decode(InvitationPreview.self, from: data)
+        #expect(!preview.shouldOpenExistingEvent(isAuthenticated: true))
+    }
+
+    @Test("A sign-in-required or incomplete preview cannot open an event")
+    func incompletePreviewDoesNotRoute() throws {
+        for json in ["{\"requiresSignIn\":true,\"status\":\"accepted\"}", "{\"requiresSignIn\":false}"] {
+            let preview = try JSONDecoder().decode(InvitationPreview.self, from: Data(json.utf8))
+            #expect(!preview.shouldOpenExistingEvent(isAuthenticated: true))
+        }
+    }
+
+    @Test("Approval responses never become completed joins, even with a scope ID")
+    func approvalDoesNotOpenEvent() throws {
+        let id = UUID()
+        let response = InvitationAcceptance(eventId: id, role: "collaborator", planningScopeId: id, status: "awaiting_approval")
+        #expect(response.destination == .awaitingApproval)
+        var progress = InvitationJoinProgress()
+        progress.record(response, accountID: "invitee")
+        #expect(progress.acceptedResponse(for: "invitee") == nil)
+    }
+
+    @Test("A failed destination load retries the accepted join only for its account")
+    func acceptedJoinSurvivesLoadFailure() {
+        let id = UUID()
+        let response = InvitationAcceptance(eventId: id, role: "collaborator", planningScopeId: id, status: "accepted")
+        var progress = InvitationJoinProgress()
+        progress.record(response, accountID: "invitee")
+        #expect(progress.acceptedResponse(for: "invitee")?.destination == .planning(id))
+        #expect(progress.acceptedResponse(for: "host") == nil)
+        #expect(progress.acceptedResponse(for: nil) == nil)
+        let guest = InvitationAcceptance(eventId: id, role: "guest", planningScopeId: nil, status: "accepted")
+        progress.record(guest, accountID: "guest")
+        #expect(progress.acceptedResponse(for: "guest")?.destination == .guest(id))
+        #expect(progress.acceptedResponse(for: "invitee") == nil)
+    }
+
     @Test("Invitation decoding failures provide safe diagnostics and a localized retry message",
           arguments: ["missing", "null", "type", "malformed", "payload"])
     @MainActor
@@ -115,6 +166,23 @@ struct EventInvitationTransportTests {
         #expect(covered.coverURL?.host == "example.com")
         let missing = try decoder.decode(InvitationPreview.self, from: Data(#"{"requiresSignIn":true}"#.utf8))
         #expect(missing.coverURL == nil)
+    }
+
+    @Test("Pending invitations do not open a planning scope and configured access decodes")
+    @MainActor
+    func approvalContractDecodes() throws {
+        let decoder = JSONDecoder()
+        let id = UUID().uuidString
+        let pending = try decoder.decode(InvitationAcceptance.self, from: Data("{\"eventId\":\"\(id)\",\"role\":\"collaborator\",\"status\":\"awaiting_approval\",\"planningScopeId\":null}".utf8))
+        #expect(pending.awaitsApproval)
+        #expect(pending.planningScopeId == nil)
+        let accepted = try decoder.decode(InvitationAcceptance.self, from: Data("{\"eventId\":\"\(id)\",\"role\":\"collaborator\",\"planningScopeId\":\"\(id)\"}".utf8))
+        #expect(!accepted.awaitsApproval)
+        let preview = try decoder.decode(InvitationPreview.self, from: Data(#"{"requiresSignIn":false,"status":"awaiting_approval","requiresApproval":true,"planningPermission":"contribute"}"#.utf8))
+        #expect(preview.requiresApproval == true)
+        #expect(preview.status == "awaiting_approval")
+        let requests = try decoder.decode(EventJoinRequests.self, from: Data("{\"requests\":[{\"id\":\"\(id)\",\"name\":\"Reader\",\"email\":\"reader@example.com\",\"planningPermission\":\"view_only\"}]}".utf8))
+        #expect(requests.requests.first?.permission == .viewOnly)
     }
 
     @Test("The account-linked participant emitted by the server decodes in iOS")

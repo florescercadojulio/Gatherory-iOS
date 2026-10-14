@@ -1,3 +1,4 @@
+import Glur
 import MapKit
 import ImageIO
 import MusicKit
@@ -970,8 +971,7 @@ private struct EventInvitationBackdrop: View {
             let activeProgress = reduceMotion ? 0 : blurProgress
             ZStack {
                 Color.black
-                artwork
-                    .frame(width: proxy.size.width, height: proxy.size.height)
+                softenedArtwork(size: proxy.size)
                     .scaleEffect(1 + (0.06 * activeProgress))
                     .blur(radius: reduceTransparency ? 0 : 38 * activeProgress, opaque: true)
                     .clipped()
@@ -999,6 +999,36 @@ private struct EventInvitationBackdrop: View {
             }.value
             guard !Task.isCancelled else { return }
             displayImage = decoded
+        }
+    }
+
+    @ViewBuilder
+    private func softenedArtwork(size: CGSize) -> some View {
+        if reduceTransparency {
+            artwork
+                .frame(width: size.width, height: size.height)
+                .clipped()
+        } else {
+            // Match idea details: a fixed initial Glur mask, followed by
+            // whole-image blur driven by scrolling, never a moving mask.
+            artwork
+                .frame(width: size.width, height: size.height)
+                .clipped()
+                .glur(
+                    radius: 22,
+                    mask: .linear(
+                        stops: [
+                            .init(intensity: 0, location: 0),
+                            .init(intensity: 0, location: 0.40),
+                            .init(intensity: 0.22, location: 0.56),
+                            .init(intensity: 0.72, location: 0.74),
+                            .init(intensity: 1, location: 0.90)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    noise: 0.035
+                )
         }
     }
 

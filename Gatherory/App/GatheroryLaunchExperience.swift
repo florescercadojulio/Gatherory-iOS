@@ -41,6 +41,10 @@ struct GatheroryLaunchContainer: View {
                                     }
                                 }
                         }
+                    } else if authentication.isAuthenticated && preparedAccountID != authentication.currentUser?.id {
+                        // Invitation routing must not race the previous account's
+                        // teardown or the new account's workspace activation.
+                        AccountOnboardingLoadingView()
                     } else { NativeInvitationView(token: token).id(token) }
                 } else if !authentication.isAuthenticated {
                     AuthenticationView()

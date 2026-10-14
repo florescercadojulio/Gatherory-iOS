@@ -195,16 +195,20 @@ struct AuthenticationView: View {
             }
 
             Button(action: performPasswordAction) {
-                Group {
-                    if authentication.isProcessing {
-                        ProgressView()
-                    } else {
-                        Text(mode.primaryActionTitle)
-                            .font(.headline)
+                // Keep the localized title in layout, including at larger text
+                // sizes. The spinner must not replace the button's size anchor.
+                Text(mode.primaryActionTitle)
+                    .font(.headline)
+                    .opacity(authentication.isProcessing ? 0 : 1)
+                    .frame(maxWidth: .infinity, minHeight: 28)
+                    .overlay {
+                        if authentication.isProcessing {
+                            ProgressView()
+                                .accessibilityHidden(true)
+                        }
                     }
-                }
-                .frame(maxWidth: .infinity, minHeight: 28)
             }
+            .accessibilityLabel(mode.primaryActionTitle)
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .disabled(!canSubmitCredentials || authentication.isProcessing)

@@ -14,6 +14,7 @@ nonisolated struct WorkspaceMediaAttachment: Sendable {
 
 @Observable
 final class PlanningWorkspace {
+    @ObservationIgnored let joinRequestStore = EventJoinRequestStore()
     let mainEventID: UUID
     var title: String
     var mainEventStartsAt: Date
@@ -983,6 +984,11 @@ final class PlanningWorkspace {
             return false
         }
         return true
+    }
+
+    func canManageInvitations(for reference: EventReference) -> Bool {
+        guard canManageEvent(reference), let viewer = currentViewerMember(for: reference) else { return false }
+        return viewer.participantRole == .host || (viewer.participantRole == .collaborator && viewer.planningPermission == .manage)
     }
 
     func canManageEvent(_ reference: EventReference) -> Bool {
