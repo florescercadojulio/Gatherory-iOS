@@ -305,12 +305,6 @@ struct EventInvitationScreen: View {
     private func information(_ event: EventPresentation) -> some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
             peopleCard(event)
-            if let eventID = workspace.joinRequestReviewEventID(for: reference) {
-                EventInvitationFeatureCard(contentPadding: 0) {
-                    EventJoinRequestsLink(eventID: eventID)
-                        .padding(AppTheme.Spacing.spacious)
-                }
-            }
             timingCard(event)
 
             if case .idea(let id) = reference,

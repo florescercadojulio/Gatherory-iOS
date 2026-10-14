@@ -47,7 +47,7 @@ enum AppCopy {
         static var home: String { localized("tab.home", default: "Home") }
         static var ideas: String { localized("tab.ideas", default: "Ideas") }
         static var decide: String { localized("tab.decide", default: "Decide") }
-        static var insights: String { localized("tab.insights", default: "Insights") }
+        static var manage: String { localized("tab.manage", default: "Manage") }
     }
 
     enum Common {

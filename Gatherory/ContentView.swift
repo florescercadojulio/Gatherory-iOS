@@ -11,7 +11,7 @@ private enum AppTab: Hashable {
     case home
     case ideas
     case decide
-    case insights
+    case manage
 }
 
 struct AppRootView: View {
@@ -71,6 +71,7 @@ private struct WorkspaceSessionView: View {
 
 struct ContentView: View {
     @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(\.currentUserAccount) private var currentUserAccount
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync: WorkspaceCloudSyncController?
     @Environment(\.scenePhase) private var scenePhase
     var onExitWorkspace: (() -> Void)?
@@ -143,10 +144,11 @@ struct ContentView: View {
                 }
             }
 
-            Tab(AppCopy.Tab.insights, systemImage: "chart.bar.xaxis", value: .insights) {
+            Tab(AppCopy.Tab.manage, systemImage: "slider.horizontal.3", value: .manage) {
                 NavigationStack {
-                    InsightsView(onExitWorkspace: onExitWorkspace)
+                    ManageView(isActive: selectedTab == .manage, onExitWorkspace: onExitWorkspace)
                 }
+                .id("\(workspace.mainEventID)|\(currentUserAccount?.id ?? "")")
             }
         }
         .tabViewStyle(.sidebarAdaptable)

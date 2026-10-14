@@ -5,11 +5,8 @@ struct NoteComposerView: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(WorkspaceLibrary.self) private var library
     @Environment(WorkspacePersistenceController.self) private var persistence
-    @Environment(WorkspaceCloudSyncController.self) private var cloudSync
-    @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(\.dismiss) private var dismiss
     @State private var event: EventReference
-    @State private var eventID: UUID
     @State private var eventTitle: String
     @State private var note = ""
     @State private var saveFailed = false
@@ -18,7 +15,6 @@ struct NoteComposerView: View {
 
     init(event: EventReference, eventID: UUID, title: String) {
         _event = State(initialValue: event)
-        _eventID = State(initialValue: eventID)
         _eventTitle = State(initialValue: title)
     }
 
@@ -27,11 +23,6 @@ struct NoteComposerView: View {
         workspace.canSendNote(to: event) && !trimmedNote.isEmpty
             && trimmedNote.utf16.count <= 750
             && library.workspaces.contains { $0 === workspace }
-    }
-    private var recentNotes: [EventNote] {
-        workspace.notes.filter {
-            ($0.eventID ?? workspace.mainEventID) == eventID && !imageSafety.isBlocked($0.authorUserID)
-        }.sorted { $0.sentAt > $1.sentAt }
     }
 
     var body: some View {
@@ -70,26 +61,8 @@ struct NoteComposerView: View {
                             .foregroundStyle(trimmedNote.utf16.count > 750 ? .red : .secondary)
                             .frame(maxWidth: .infinity, alignment: .trailing)
                         if !workspace.canSendNote(to: event) {
-                            Text("This event is read-only. You can still read previous notes.")
+                            Text("You can’t send notes for this event.")
                                 .font(.footnote).foregroundStyle(.secondary)
-                        }
-                    }
-
-                    if !recentNotes.isEmpty {
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
-                            Text("Recent Notes").font(.headline)
-                            ForEach(recentNotes) { entry in
-                                VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-                                    Text(workspace.members.first { $0.userID == entry.authorUserID && entry.authorUserID != nil }?.name
-                                         ?? String(localized: "Planning team"))
-                                        .font(.subheadline.weight(.semibold))
-                                    Text(entry.body).textSelection(.enabled)
-                                    Text(entry.sentAt, format: .dateTime.month(.abbreviated).day().hour().minute())
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .accessibilityElement(children: .combine)
-                            }
                         }
                     }
                 }
@@ -97,7 +70,6 @@ struct NoteComposerView: View {
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .scrollDismissesKeyboard(.interactively)
-            .refreshable { await cloudSync.synchronize(trigger: .manual) }
             .navigationTitle("Send a Note")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -12,6 +12,44 @@ struct CollaborationInviteView: View {
     }
 }
 
+enum EventPeopleSection: Hashable {
+    case guests
+    case collaborators
+
+    func people(from participants: [WorkspaceMember]) -> [WorkspaceMember] {
+        switch self {
+        case .guests: participants
+        case .collaborators: participants.filter { $0.participantRole != .guest }
+        }
+    }
+}
+
+@MainActor
+struct EventPeopleView: View {
+    @Environment(PlanningWorkspace.self) private var workspace
+
+    let reference: EventReference
+    let section: EventPeopleSection
+
+    private var summary: ManageEventSummary? {
+        ManageEventSummary(workspace: workspace, reference: reference)
+    }
+
+    var body: some View {
+        Group {
+            if summary != nil {
+                CollaborationInviteScreen(reference: reference, peopleSection: section)
+            } else {
+                ContentUnavailableView(
+                    "Event Unavailable",
+                    systemImage: "lock",
+                    description: Text("This event is no longer available.")
+                )
+            }
+        }
+    }
+}
+
 private struct CollaborationInviteScreen: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
@@ -21,40 +59,60 @@ private struct CollaborationInviteScreen: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var didCopyLink = false
     @State private var participantEditorTarget: ParticipantEditorTarget?
-    @State private var invitedRole: WorkspaceRole = .guest
+    @State private var invitedRole: WorkspaceRole
     @State private var isShowingEmailInvite = false
     @State private var isConfirmingDisable = false
     @State private var generatedInvitation: GeneratedEventInvitation?
+    @State private var generatedInvitationAccountID: String?
     @State private var isGenerating = false
     @State private var invitationError: String?
     @State private var isShowingSharingSettings = false
 
+    private let pinnedReference: EventReference?
+    private let peopleSection: EventPeopleSection?
+
+    init(reference: EventReference? = nil, peopleSection: EventPeopleSection? = nil) {
+        pinnedReference = reference
+        self.peopleSection = peopleSection
+        _invitedRole = State(initialValue: peopleSection == .collaborators ? .collaborator : .guest)
+    }
+
+    private var eventReference: EventReference { pinnedReference ?? workspace.selectedEventReference }
+    private var eventID: UUID {
+        switch eventReference {
+        case .main: workspace.mainEventID
+        case .subevent(let id): id
+        case .idea: workspace.mainEventID
+        }
+    }
+    private var eventTitle: String { workspace.eventTitle(for: eventID) }
+    private var isPeopleDestination: Bool { peopleSection != nil }
+
     private var inviteURL: URL? {
-        generatedInvitation?.eventId == workspace.selectedEventID ? generatedInvitation?.url : nil
+        generatedInvitation?.eventId == eventID
+            && generatedInvitationAccountID == authentication.currentUser?.id
+            ? generatedInvitation?.url : nil
     }
 
     private var canManageInvitations: Bool {
-        workspace.canManageInvitations(for: workspace.selectedEventReference)
+        workspace.canManageInvitations(for: eventReference)
     }
 
-    private var joinRequests: [EventJoinRequest] {
-        guard canManageInvitations else { return [] }
-        return workspace.joinRequestStore.requests(eventID: workspace.selectedEventID, accountID: authentication.currentUser?.id)
+    private var canManageRootSharingSettings: Bool {
+        !workspace.isScopedEvent && workspace.canManageInvitations(for: .main)
     }
-
-    private var reviewingRequestID: UUID? { workspace.joinRequestStore.reviewingRequestID }
 
     private var selectedTimelineEvent: TimelineItem? {
-        guard case .subevent(let id) = workspace.selectedEventReference else { return nil }
+        guard case .subevent(let id) = eventReference else { return nil }
         return workspace.timeline.first(where: { $0.id == id })
     }
 
     private var selectedEventDate: Date {
-        workspace.eventDate(for: workspace.selectedEventReference)
+        workspace.eventDate(for: eventReference)
     }
 
     private var selectedEventLocation: String? {
-        if workspace.isMainEventContext {
+        if eventReference == .main {
             return workspace.mainEventLocation?.formatted
         }
         return selectedTimelineEvent?.eventLocation?.formatted
@@ -65,12 +123,12 @@ private struct CollaborationInviteScreen: View {
     }
 
     private var selectedEventImageData: Data? {
-        workspace.isMainEventContext ? workspace.mainEventImageData : selectedTimelineEvent?.imageData
+        eventReference == .main ? workspace.mainEventImageData : selectedTimelineEvent?.imageData
     }
 
-    private var artworkSymbol: String { workspace.isMainEventContext ? IdeaCategory.event.symbol : selectedEventCategory.symbol }
-    private var artworkColors: [Color] { workspace.isMainEventContext ? IdeaCategory.event.artworkColors : selectedEventCategory.artworkColors }
-    private var artworkAccent: Color { workspace.isMainEventContext ? IdeaCategory.event.artworkAccent : selectedEventCategory.artworkAccent }
+    private var artworkSymbol: String { eventReference == .main ? IdeaCategory.event.symbol : selectedEventCategory.symbol }
+    private var artworkColors: [Color] { eventReference == .main ? IdeaCategory.event.artworkColors : selectedEventCategory.artworkColors }
+    private var artworkAccent: Color { eventReference == .main ? IdeaCategory.event.artworkAccent : selectedEventCategory.artworkAccent }
 
     private var invitationPreviewImage: Image {
         if let selectedEventImageData, let image = UIImage(data: selectedEventImageData) {
@@ -93,14 +151,13 @@ private struct CollaborationInviteScreen: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
-                    eventPreview
-                        .frame(maxWidth: .infinity)
-
-                    if !joinRequests.isEmpty { pendingRequests }
-
-                    if canManageInvitations { linkSharingCard }
-
-                    workspacePeople
+                    if isPeopleDestination {
+                        peopleDestinationContent
+                    } else {
+                        eventPreview.frame(maxWidth: .infinity)
+                        if canManageInvitations { linkSharingCard }
+                        workspacePeople
+                    }
                 }
                 .padding(.horizontal, AppTheme.Layout.screenHorizontal)
                 .padding(.top, AppTheme.Spacing.standard)
@@ -109,22 +166,25 @@ private struct CollaborationInviteScreen: View {
             }
             .appSoftScrollEdges()
             .scrollIndicators(.hidden)
-            .refreshable { await loadJoinRequests() }
+            .refreshable { await refreshPeople() }
         }
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Close", systemImage: "xmark") {
-                    dismiss()
+            if !isPeopleDestination {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", systemImage: "xmark") {
+                        dismiss()
+                    }
+                    .labelStyle(.iconOnly)
+                    .tint(.white)
                 }
-                .labelStyle(.iconOnly)
-                .tint(.white)
             }
         }
-        .navigationTitle("Invite")
-        .task(id: workspace.selectedEventID) {
-            await loadJoinRequests()
+        .navigationTitle(peopleSection == .guests ? "Guest List" : peopleSection == .collaborators ? "Collaborators" : "Invite")
+        .task(id: "\(eventID)|\(authentication.currentUser?.id ?? "")") {
+            clearInvitation()
+            if peopleSection == .collaborators { await loadJoinRequests() }
         }
         .sheet(isPresented: $isShowingSharingSettings, onDismiss: {
             clearInvitation()
@@ -136,7 +196,8 @@ private struct CollaborationInviteScreen: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .onChange(of: workspace.selectedEventID) { _, _ in clearInvitation() }
+        .onChange(of: authentication.currentUser?.id) { _, _ in clearInvitation() }
+        .onChange(of: eventID) { _, _ in clearInvitation() }
         .onChange(of: invitedRole) { _, _ in clearInvitation() }
         .confirmationDialog("Disable this invitation link?", isPresented: $isConfirmingDisable, titleVisibility: .visible) {
             Button("Disable Link", role: .destructive) {
@@ -148,7 +209,7 @@ private struct CollaborationInviteScreen: View {
         }
         .sheet(isPresented: $isShowingEmailInvite) {
             NavigationStack {
-                EmailInvitationView(eventID: workspace.selectedEventID, eventTitle: workspace.selectedEventTitle)
+                EmailInvitationView(eventID: eventID, eventTitle: eventTitle, eventReference: eventReference)
             }
             .environment(cloudSync)
             .presentationDetents([.large])
@@ -161,6 +222,30 @@ private struct CollaborationInviteScreen: View {
             .environment(workspace)
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+    }
+
+    @ViewBuilder
+    private var peopleDestinationContent: some View {
+        eventPreview.frame(maxWidth: .infinity)
+        if peopleSection == .collaborators {
+            if canManageInvitations {
+                EventJoinRequestsLink(eventID: eventID)
+                    .padding(.horizontal, AppTheme.Spacing.standard)
+                    .collaborationCard(reduceTransparency: reduceTransparency)
+            }
+            if canManageInvitations { linkSharingCard }
+            workspacePeople
+        } else {
+            if canManageInvitations { linkSharingCard }
+            workspacePeople
+        }
+    }
+
+    private func refreshPeople() async {
+        await cloudSync.refreshCollaboration()
+        if peopleSection == .collaborators {
+            await loadJoinRequests()
         }
     }
 
@@ -182,7 +267,7 @@ private struct CollaborationInviteScreen: View {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(workspace.selectedEventTitle)
+                Text(eventTitle)
                     .font(.title2.bold())
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -229,9 +314,11 @@ private struct CollaborationInviteScreen: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if invitedRole == .collaborator {
-                Button { isShowingSharingSettings = true } label: {
-                    Label("Sharing Settings", systemImage: "slider.horizontal.3")
-                        .frame(minHeight: 44)
+                if canManageRootSharingSettings {
+                    Button { isShowingSharingSettings = true } label: {
+                        Label("Sharing Settings", systemImage: "slider.horizontal.3")
+                            .frame(minHeight: 44)
+                    }
                 }
                 Text(LocalizedStringKey(workspace.defaultCollaboratorPermission.title))
                     .font(.footnote).foregroundStyle(.secondary)
@@ -243,7 +330,7 @@ private struct CollaborationInviteScreen: View {
 
             if let inviteURL {
                 InvitationDeliveryActions(
-                    eventTitle: workspace.selectedEventTitle,
+                    eventTitle: eventTitle,
                     invitationURL: inviteURL,
                     previewImage: invitationPreviewImage
                 )
@@ -328,35 +415,12 @@ private struct CollaborationInviteScreen: View {
         .disabled(isGenerating)
     }
 
-    private var pendingRequests: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            Text("Join Requests").font(.title2.bold())
-            ForEach(joinRequests) { request in
-                EventJoinRequestRow(request: request, isReviewing: reviewingRequestID == request.id,
-                                    isDisabled: reviewingRequestID != nil) { action in
-                    Task { await review(request, action: action) }
-                }
-                .padding(AppTheme.Spacing.standard)
-                .collaborationCard(reduceTransparency: reduceTransparency)
-            }
-        }
-    }
-
     private func loadJoinRequests() async {
         guard canManageInvitations, let accountID = authentication.currentUser?.id else { return }
-        let eventID = workspace.selectedEventID
+        let eventID = self.eventID
+        let reference = eventReference
         await workspace.joinRequestStore.refresh(eventID: eventID, accountID: accountID, force: true)
-        guard workspace.selectedEventID == eventID, authentication.currentUser?.id == accountID else { return }
-        invitationError = workspace.joinRequestStore.error(eventID: eventID, accountID: accountID)
-    }
-
-    private func review(_ request: EventJoinRequest, action: JoinRequestReviewAction) async {
-        guard canManageInvitations, let accountID = authentication.currentUser?.id else { return }
-        let eventID = workspace.selectedEventID
-        if await workspace.joinRequestStore.review(request, eventID: eventID, accountID: accountID, action: action) {
-            await cloudSync.refreshCollaboration()
-        }
-        guard workspace.selectedEventID == eventID, authentication.currentUser?.id == accountID else { return }
+        guard eventReference == reference, self.eventID == eventID, authentication.currentUser?.id == accountID else { return }
         invitationError = workspace.joinRequestStore.error(eventID: eventID, accountID: accountID)
     }
 
@@ -367,17 +431,19 @@ private struct CollaborationInviteScreen: View {
                     .font(.title2.bold())
 
                 Text(
-                    workspace.isMainEventContext
+                    eventReference == .main
                         ? "Everyone connected to the main event."
-                        : "People included in \(workspace.selectedEventTitle)."
+                        : "People included in \(eventTitle)."
                 )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            let participants = workspace.participants(for: eventReference)
+            let filteredParticipants = peopleSection?.people(from: participants) ?? participants
             ForEach(WorkspaceRole.allCases) { role in
-                let people = workspace.selectedEventParticipants.filter { $0.participantRole == role }
+                let people = filteredParticipants.filter { $0.participantRole == role }
 
                 if !people.isEmpty {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
@@ -386,19 +452,20 @@ private struct CollaborationInviteScreen: View {
 
                         VStack(spacing: 0) {
                             ForEach(people) { member in
-                                let isCurrentUser = member.id == workspace.currentViewerMember?.id
+                                let isCurrentUser = member.id == workspace.currentViewerMember(for: eventReference)?.id
 
                                 Button {
                                     participantEditorTarget = ParticipantEditorTarget(
                                         member: member,
-                                        eventReference: workspace.selectedEventReference,
-                                        eventTitle: workspace.selectedEventTitle,
+                                        eventReference: eventReference,
+                                        eventTitle: eventTitle,
                                         isCurrentUser: isCurrentUser
                                     )
                                 } label: {
                                     participantRow(member, isCurrentUser: isCurrentUser)
                                 }
                                 .buttonStyle(.plain)
+                                .disabled(!workspace.canManageInvitations(for: eventReference))
                                 .accessibilityHint("Edits this participant's role and event access")
 
                                 if member.id != people.last?.id {
@@ -412,7 +479,7 @@ private struct CollaborationInviteScreen: View {
                 }
             }
 
-            if workspace.selectedEventParticipants.isEmpty {
+            if filteredParticipants.isEmpty {
                 ContentUnavailableView(
                     "No Participants",
                     systemImage: "person.2.slash",
@@ -455,7 +522,10 @@ private struct CollaborationInviteScreen: View {
     }
 
     private func participantDetail(for member: WorkspaceMember) -> String {
-        switch member.participantRole {
+        if peopleSection == .guests {
+            return member.attendance.title
+        }
+        return switch member.participantRole {
         case .host:
             member.planningPermission.title
         case .collaborator:
@@ -467,6 +537,7 @@ private struct CollaborationInviteScreen: View {
 
     private func clearInvitation() {
         generatedInvitation = nil
+        generatedInvitationAccountID = nil
         didCopyLink = false
         invitationError = nil
     }
@@ -474,44 +545,65 @@ private struct CollaborationInviteScreen: View {
     @MainActor
     private func generateInvitation() async {
         clearInvitation()
-        guard !isGenerating, !cloudSync.isSynchronizing,
+        guard !isGenerating, !cloudSync.isSynchronizing, canManageInvitations,
+              let accountID = authentication.currentUser?.id,
               let baseURL = AppRuntimeConfiguration.authenticationBaseURL else {
             invitationError = EventInvitationFailure.unavailable.localizedDescription
             return
         }
-        let eventID = workspace.selectedEventID
+        let eventID = self.eventID
+        let reference = eventReference
+        let requestedRole = invitedRole
         isGenerating = true
         defer { isGenerating = false }
         do {
             // A new/local event must exist canonically before an invite can reference it.
             await cloudSync.refreshCollaboration()
             if cloudSync.lastError != nil { throw EventInvitationFailure.unavailable }
+            guard eventReference == reference, self.eventID == eventID,
+                  authentication.currentUser?.id == accountID,
+                  invitedRole == requestedRole, canManageInvitations else { return }
             let invitation = try await EventInvitationClient(baseURL: baseURL).create(
                 eventID: eventID, name: nil,
-                email: nil, role: invitedRole,
-                permission: invitedRole == .guest ? .viewOnly : workspace.defaultCollaboratorPermission
+                email: nil, role: requestedRole,
+                permission: requestedRole == .guest ? .viewOnly : workspace.defaultCollaboratorPermission
             )
-            guard workspace.selectedEventID == eventID else { return }
+            guard eventReference == reference, self.eventID == eventID,
+                  authentication.currentUser?.id == accountID,
+                  invitedRole == requestedRole, canManageInvitations else { return }
             generatedInvitation = invitation
+            generatedInvitationAccountID = accountID
             PostHogSDK.shared.capture(
                 "invitation_link_created",
                 properties: ["role": String(describing: invitedRole)]
             )
         } catch {
+            guard eventReference == reference, self.eventID == eventID,
+                  authentication.currentUser?.id == accountID, invitedRole == requestedRole,
+                  canManageInvitations else { return }
             invitationError = error.localizedDescription
         }
     }
 
     private func revokeInvitation() async {
-        guard !isGenerating, let invitation = generatedInvitation,
+        guard canManageInvitations, !isGenerating, let invitation = generatedInvitation,
+              invitation.eventId == eventID,
+              generatedInvitationAccountID == authentication.currentUser?.id,
               invitation.email == nil, let baseURL = AppRuntimeConfiguration.authenticationBaseURL else { return }
+        guard let accountID = authentication.currentUser?.id else { return }
+        let reference = eventReference
         isGenerating = true
         defer { isGenerating = false }
         do {
             try await EventInvitationClient(baseURL: baseURL).revoke(eventID: invitation.eventId)
+            guard authentication.currentUser?.id == accountID, eventReference == reference,
+                  canManageInvitations else { return }
             clearInvitation()
             PostHogSDK.shared.capture("invitation_link_revoked")
-        } catch { invitationError = error.localizedDescription }
+        } catch {
+            guard authentication.currentUser?.id == accountID, eventReference == reference else { return }
+            invitationError = error.localizedDescription
+        }
     }
 }
 
@@ -559,7 +651,9 @@ private struct CollaboratorSharingSettingsView: View {
     }
 
     private func save() async {
-        guard !cloudSync.isSynchronizing else { return }
+        guard !workspace.isScopedEvent,
+              workspace.canManageInvitations(for: .main),
+              !cloudSync.isSynchronizing else { return }
         isSaving = true
         defer { isSaving = false }
         workspace.isCollaboratorLinkEnabled = enabled
@@ -574,18 +668,26 @@ private struct CollaboratorSharingSettingsView: View {
 /// Email-bound invitations have their own draft, so preparing one never
 /// replaces the public link or its selected access level in the parent view.
 private struct EmailInvitationView: View {
+    @Environment(PlanningWorkspace.self) private var workspace
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
+    @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var email = ""
     @State private var role: WorkspaceRole = .guest
     @State private var invitation: GeneratedEventInvitation?
+    @State private var invitationAccountID: String?
     @State private var isPreparing = false
     @State private var errorMessage: String?
     @State private var didCopyLink = false
 
     let eventID: UUID
     let eventTitle: String
+    let eventReference: EventReference
+
+    private var canManageInvitations: Bool {
+        workspace.canManageInvitations(for: eventReference)
+    }
 
     var body: some View {
         Form {
@@ -610,7 +712,7 @@ private struct EmailInvitationView: View {
             .disabled(isPreparing)
 
             Section {
-                if let invitation {
+                if let invitation, invitationAccountID == authentication.currentUser?.id {
                     InvitationDeliveryActions(eventTitle: eventTitle, invitationURL: invitation.url)
                         .id(invitation.url)
                     Button {
@@ -650,38 +752,52 @@ private struct EmailInvitationView: View {
         .onChange(of: email) { _, _ in clearDraftLink() }
         .onChange(of: name) { _, _ in clearDraftLink() }
         .onChange(of: role) { _, _ in clearDraftLink() }
+        .onChange(of: authentication.currentUser?.id) { _, _ in clearDraftLink() }
     }
 
     private func clearDraftLink() {
         invitation = nil
+        invitationAccountID = nil
         didCopyLink = false
         errorMessage = nil
     }
 
     @MainActor
     private func prepareInvitation() async {
-        guard !isPreparing, !cloudSync.isSynchronizing,
+        guard !isPreparing, !cloudSync.isSynchronizing, canManageInvitations,
+              let accountID = authentication.currentUser?.id,
               let baseURL = AppRuntimeConfiguration.authenticationBaseURL else {
             errorMessage = EventInvitationFailure.unavailable.localizedDescription
             return
         }
         isPreparing = true
         errorMessage = nil
+        let targetEventID = eventID
         defer { isPreparing = false }
         do {
             await cloudSync.synchronize(trigger: .manual)
             if cloudSync.lastError != nil { throw EventInvitationFailure.unavailable }
+            guard authentication.currentUser?.id == accountID, eventID == targetEventID,
+                  canManageInvitations else { return }
             let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-            invitation = try await EventInvitationClient(baseURL: baseURL).create(
-                eventID: eventID, name: trimmedName.isEmpty ? nil : trimmedName,
+            let generated = try await EventInvitationClient(baseURL: baseURL).create(
+                eventID: targetEventID, name: trimmedName.isEmpty ? nil : trimmedName,
                 email: email, role: role,
                 permission: role == .guest ? .viewOnly : .manage
             )
+            guard authentication.currentUser?.id == accountID, eventID == targetEventID,
+                  canManageInvitations else { return }
+            invitation = generated
+            invitationAccountID = accountID
             PostHogSDK.shared.capture(
                 "email_invitation_link_created",
                 properties: ["role": String(describing: role)]
             )
-        } catch { errorMessage = error.localizedDescription }
+        } catch {
+            guard authentication.currentUser?.id == accountID, eventID == targetEventID,
+                  canManageInvitations else { return }
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -696,6 +812,7 @@ private struct ParticipantEditorTarget: Identifiable {
 
 private struct ParticipantEditorView: View {
     @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.dismiss) private var dismiss
     @State private var role: WorkspaceRole
     @State private var planningPermission: PlanningPermission
@@ -709,19 +826,32 @@ private struct ParticipantEditorView: View {
         _planningPermission = State(initialValue: target.member.planningPermission)
     }
 
+    private var isCurrentActor: Bool {
+        guard let account = authentication.currentUser else {
+            return workspace.currentViewerMember(for: target.eventReference)?.id == target.member.id
+        }
+        if let memberUserID = target.member.userID {
+            return memberUserID == account.id
+        }
+        guard let memberEmail = target.member.email else { return false }
+        return memberEmail.caseInsensitiveCompare(account.email) == .orderedSame
+    }
+
     private var canEdit: Bool {
-        !target.isCurrentUser
+        !isCurrentActor
     }
 
     private var canRemove: Bool {
-        canEdit && workspace.canRemoveParticipant(
-            target.member.id,
-            from: target.eventReference
-        )
+        canEdit && workspace.canManageInvitations(for: target.eventReference)
+            && workspace.canRemoveParticipant(
+                target.member.id,
+                from: target.eventReference
+            )
     }
 
     private var canSave: Bool {
-        canEdit && workspace.canAssignParticipantRole(role, to: target.member.id)
+        canEdit && workspace.canManageInvitations(for: target.eventReference)
+            && workspace.canAssignParticipantRole(role, to: target.member.id, in: target.eventReference)
     }
 
     var body: some View {
@@ -749,7 +879,8 @@ private struct ParticipantEditorView: View {
                     ForEach(WorkspaceRole.allCases) { option in
                         Label(option.title, systemImage: option.symbol)
                             .tag(option)
-                            .disabled(!workspace.canAssignParticipantRole(option, to: target.member.id))
+                            .disabled(!workspace.canManageInvitations(for: target.eventReference)
+                                || !workspace.canAssignParticipantRole(option, to: target.member.id, in: target.eventReference))
                     }
                 }
                 .pickerStyle(.inline)
@@ -764,7 +895,7 @@ private struct ParticipantEditorView: View {
             } footer: {
                 if target.isCurrentUser {
                     Text("Your own role is managed from workspace settings.")
-                } else if !workspace.canAssignParticipantRole(role, to: target.member.id) {
+                } else if !workspace.canAssignParticipantRole(role, to: target.member.id, in: target.eventReference) {
                     Text("Assign another host before changing the workspace's only host.")
                 }
             }
@@ -833,10 +964,7 @@ private struct ParticipantEditorView: View {
             titleVisibility: .visible
         ) {
             Button("Remove from Event", role: .destructive) {
-                if workspace.removeParticipant(
-                    target.member.id,
-                    from: target.eventReference
-                ) {
+                if canRemove, workspace.removeParticipant(target.member.id, from: target.eventReference) {
                     dismiss()
                 }
             }
@@ -848,10 +976,12 @@ private struct ParticipantEditorView: View {
     }
 
     private func save() {
+        guard canSave else { return }
         guard workspace.updateParticipant(
             target.member.id,
             role: role,
-            planningPermission: planningPermission
+            planningPermission: planningPermission,
+            in: target.eventReference
         ) else { return }
 
         dismiss()

@@ -45,13 +45,14 @@ struct BudgetAllocationView: View {
             event.budgetCap == nil ? nil : .subevent(event.id)
         }
         let eventAccounts = eventReferences
-            .filter { $0 != target }
+            .filter { $0 != target && BudgetAllocationPermissionPolicy.canEditAllocation(in: workspace, for: $0) }
             .map(BudgetAccount.event)
         return [.freePool] + eventAccounts
     }
 
     private var canSave: Bool {
-        guard let selectedAccount else { return false }
+        guard BudgetAllocationPermissionPolicy.canEditAllocation(in: workspace, for: target),
+              let selectedAccount, transferOptions.contains(selectedAccount) else { return false }
         switch change {
         case .increase(let amount):
             return (workspace.budgetBalance(for: selectedAccount) ?? .zero) >= amount
@@ -296,7 +297,7 @@ struct BudgetAllocationView: View {
     }
 
     private func save() {
-        guard let selectedAccount else { return }
+        guard canSave, let selectedAccount else { return }
 
         let transfer: (amount: Decimal, source: BudgetAccount, destination: BudgetAccount, direction: String)? = switch change {
         case .increase(let amount):

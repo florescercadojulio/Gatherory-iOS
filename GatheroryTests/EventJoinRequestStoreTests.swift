@@ -4,6 +4,30 @@ import Testing
 
 @MainActor
 struct EventJoinRequestStoreTests {
+    @Test("Pill counts distinguish unknown from zero and never cross accounts")
+    func optionalSummaryCounts() async {
+        let client = JoinRequestsTestClient()
+        let store = EventJoinRequestStore(client: client)
+        let eventID = UUID()
+        #expect(store.requestCount(eventID: eventID, accountID: "host") == nil)
+        client.fail = true
+        await store.refresh(eventID: eventID, accountID: "host")
+        #expect(store.requestCount(eventID: eventID, accountID: "host") == nil)
+        client.fail = false
+        await store.refresh(eventID: eventID, accountID: "host", force: true)
+        #expect(store.requestCount(eventID: eventID, accountID: "host") == 0)
+        client.values = [fixture()]
+        await store.refresh(eventID: eventID, accountID: "host", force: true)
+        #expect(store.requestCount(eventID: eventID, accountID: "host") == 1)
+        #expect(store.requestCount(eventID: UUID(), accountID: "host") == nil)
+        #expect(store.requestCount(eventID: eventID, accountID: "invitee") == nil)
+        #expect(store.requestCount(eventID: eventID, accountID: nil) == nil)
+        client.values = []
+        await store.refresh(eventID: eventID, accountID: "invitee")
+        #expect(store.requestCount(eventID: eventID, accountID: "host") == nil)
+        #expect(store.requestCount(eventID: eventID, accountID: "invitee") == 0)
+    }
+
     @Test("Home and settings share counts; approval and decline update only the target event")
     func sharedCounts() async {
         let client = JoinRequestsTestClient()

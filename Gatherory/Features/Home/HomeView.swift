@@ -7,8 +7,6 @@ struct HomeView: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
-    @Environment(AuthenticationSession.self) private var authentication
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isComposingNote = false
@@ -41,17 +39,6 @@ struct HomeView: View {
     private let pullToCreateThreshold: CGFloat = 200
     private let pullToCreateItemHeight: CGFloat = 184
     private let pullToCreateRevealInset: CGFloat = 56
-
-    private var pendingJoinCount: Int {
-        guard workspace.canManageInvitations(for: workspace.selectedEventReference) else { return 0 }
-        return workspace.joinRequestStore.requests(eventID: workspace.selectedEventID, accountID: authentication.currentUser?.id).count
-    }
-
-    private func refreshJoinRequests(force: Bool = false) async {
-        guard workspace.canManageInvitations(for: workspace.selectedEventReference),
-              let accountID = authentication.currentUser?.id else { return }
-        await workspace.joinRequestStore.refresh(eventID: workspace.selectedEventID, accountID: accountID, force: force)
-    }
 
     private var daysRemaining: Int {
         max(Calendar.current.dateComponents([.day], from: .now, to: workspace.mainEventStartsAt).day ?? 0, 0)
@@ -126,7 +113,6 @@ struct HomeView: View {
         .scrollIndicators(.hidden)
         .refreshable {
             await cloudSync.synchronize(trigger: .manual)
-            await refreshJoinRequests(force: true)
         }
         .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
         .scrollPosition(id: $visibleScrollTarget, anchor: .center)
@@ -150,7 +136,7 @@ struct HomeView: View {
                 }
             }
 
-            if workspace.canManageEvent(workspace.selectedEventReference) {
+            if workspace.canManageInvitations(for: workspace.selectedEventReference) {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         isPresentingInvitationSharing = true
@@ -159,18 +145,9 @@ struct HomeView: View {
                             .labelStyle(.iconOnly)
                             .frame(minWidth: 44, minHeight: 44)
                             .contentShape(Rectangle())
-                            // Decorate the label, not the toolbar control: the
-                            // entire button remains the interactive surface.
-                            .overlay(alignment: .topTrailing) {
-                                if pendingJoinCount > 0 {
-                                    JoinRequestCountBadge(count: pendingJoinCount)
-                                        .allowsHitTesting(false)
-                                }
-                            }
                     }
                     .accessibilityHint("Invite people to the selected event")
                     .accessibilityIdentifier("home-share-invitation")
-                    .accessibilityValue(pendingJoinCount > 0 ? String(localized: "Join Requests") + ": " + pendingJoinCount.formatted() : "")
                 }
             }
 
@@ -245,9 +222,7 @@ struct HomeView: View {
                              title: workspace.selectedEventTitle)
                 .environment(workspace)
         }
-        .fullScreenCover(isPresented: $isPresentingInvitationSharing, onDismiss: {
-            Task { await refreshJoinRequests(force: true) }
-        }) {
+        .fullScreenCover(isPresented: $isPresentingInvitationSharing) {
             CollaborationInviteView()
                 .environment(workspace)
         }
@@ -270,12 +245,6 @@ struct HomeView: View {
             .environment(workspace)
             .presentationDetents([.medium, .large], selection: $addEventIdeaDetent)
             .presentationDragIndicator(.visible)
-        }
-        .task(id: "\(workspace.selectedEventID)|\(authentication.currentUser?.id ?? "")|\(scenePhase)") {
-            guard scenePhase == .active else { return }
-            // Let fast card swipes settle; navigation never waits for the network.
-            do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
-            await refreshJoinRequests()
         }
         .task {
             // ScrollPosition needs the target layout to exist before it can

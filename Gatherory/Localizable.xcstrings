@@ -43,6 +43,22 @@
         }
       }
     },
+    "%@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
     "%@ Access Is Off" : {
       "localizations" : {
         "es" : {
@@ -115,6 +131,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ gastado"
+          }
+        }
+      }
+    },
+    "%@ spent · %@ remaining" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ spent · %2$@ remaining"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ gastados · %2$@ restantes"
           }
         }
       }
@@ -309,6 +342,23 @@
         }
       }
     },
+    "%arg going · %arg awaiting RSVP" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%arg going · %arg awaiting RSVP"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%arg asistirán · %arg sin confirmar"
+          }
+        }
+      }
+    },
     "%arg people" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -331,6 +381,40 @@
         }
       }
     },
+    "%arg planners" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%arg planners"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%arg organizadores"
+          }
+        }
+      }
+    },
+    "%arg planners · %arg awaiting approval" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%arg planners · %arg awaiting approval"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%arg organizadores · %arg pendientes de aprobación"
+          }
+        }
+      }
+    },
     "%arg Playlist" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -349,6 +433,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%arg gastado"
+          }
+        }
+      }
+    },
+    "%arg spent · %arg remaining" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%arg spent · %arg remaining"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%arg gastados · %arg restantes"
           }
         }
       }
@@ -470,6 +571,23 @@
         }
       }
     },
+    "%lld going · %lld awaiting RSVP" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld going · %2$lld awaiting RSVP"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld asistirán · %2$lld sin confirmar"
+          }
+        }
+      }
+    },
     "%lld love it, %lld maybe, %lld pass, %lld unanswered" : {
       "localizations" : {
         "es" : {
@@ -512,6 +630,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld por ciento"
+          }
+        }
+      }
+    },
+    "%lld planners" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld planners"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld organizadores"
+          }
+        }
+      }
+    },
+    "%lld planners · %lld awaiting approval" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld planners · %2$lld awaiting approval"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld organizadores · %2$lld pendientes de aprobación"
           }
         }
       }
@@ -1346,6 +1498,16 @@
         }
       }
     },
+    "Approve %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aprobar a %@"
+          }
+        }
+      }
+    },
     "Approve Collaborators" : {
       "localizations" : {
         "es" : {
@@ -1604,12 +1766,32 @@
         }
       }
     },
+    "Awaiting approval" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pendientes de aprobación"
+          }
+        }
+      }
+    },
     "Awaiting Approval" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pendiente de aprobación"
+          }
+        }
+      }
+    },
+    "Awaiting RSVP" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin confirmar"
           }
         }
       }
@@ -1694,6 +1876,22 @@
         }
       }
     },
+    "Budget Unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Budget Unavailable"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Presupuesto no disponible"
+          }
+        }
+      }
+    },
     "Budget used" : {
       "localizations" : {
         "es" : {
@@ -1742,6 +1940,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Guarda una copia. Los cambios posteriores en Gatherory no actualizarán tu calendario."
+          }
+        }
+      }
+    },
+    "Can't go" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No puede asistir"
           }
         }
       }
@@ -2095,6 +2303,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Los enlaces para colaboradores están desactivados."
+          }
+        }
+      }
+    },
+    "Collaborators" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collaborators"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colaboradores"
           }
         }
       }
@@ -2825,6 +3049,16 @@
         }
       }
     },
+    "Decline %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechazar a %@"
+          }
+        }
+      }
+    },
     "Decline for Event" : {
       "localizations" : {
         "es" : {
@@ -3549,6 +3783,16 @@
       }
     },
     "Event unavailable" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Evento no disponible"
+          }
+        }
+      }
+    },
+    "Event Unavailable" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4300,6 +4544,16 @@
         }
       }
     },
+    "Going" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asistirán"
+          }
+        }
+      }
+    },
     "Google" : {
       "localizations" : {
         "es" : {
@@ -4330,12 +4584,38 @@
         }
       }
     },
+    "Guest List" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guest List"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lista de invitados"
+          }
+        }
+      }
+    },
     "Guest Visibility" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Visibilidad para invitados"
+          }
+        }
+      }
+    },
+    "Guests" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitados"
           }
         }
       }
@@ -4938,6 +5218,7 @@
       }
     },
     "Insights" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5443,6 +5724,16 @@
         }
       }
     },
+    "Manager only" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo administradores"
+          }
+        }
+      }
+    },
     "Mark Complete" : {
       "localizations" : {
         "es" : {
@@ -5692,6 +5983,16 @@
         }
       }
     },
+    "No budget set" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin presupuesto"
+          }
+        }
+      }
+    },
     "No change" : {
       "localizations" : {
         "es" : {
@@ -5708,6 +6009,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aún no hay costos"
+          }
+        }
+      }
+    },
+    "No guests yet" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no hay invitados"
           }
         }
       }
@@ -5742,6 +6054,27 @@
         }
       }
     },
+    "No notes yet" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no hay notas"
+          }
+        }
+      }
+    },
+    "No Notes Yet" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no hay notas"
+          }
+        }
+      }
+    },
     "No one invited yet" : {
       "localizations" : {
         "es" : {
@@ -5758,6 +6091,32 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No hay participantes"
+          }
+        }
+      }
+    },
+    "No planning event is available." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No planning event is available."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ningún evento disponible para planificar."
+          }
+        }
+      }
+    },
+    "No recent notes" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay notas recientes"
           }
         }
       }
@@ -5829,6 +6188,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nota"
+          }
+        }
+      }
+    },
+    "Notes" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notas"
+          }
+        }
+      }
+    },
+    "Notes Unavailable" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notas no disponibles"
           }
         }
       }
@@ -6520,6 +6899,17 @@
         }
       }
     },
+    "Planners" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Organizadores"
+          }
+        }
+      }
+    },
     "Planning" : {
       "localizations" : {
         "es" : {
@@ -6586,6 +6976,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Equipo organizador"
+          }
+        }
+      }
+    },
+    "Planning team notes will appear here." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las notas del equipo de planificación aparecerán aquí."
           }
         }
       }
@@ -7383,6 +7783,7 @@
       }
     },
     "Recent Notes" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7459,6 +7860,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Liberar para agregar idea de evento"
+          }
+        }
+      }
+    },
+    "Remaining" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restante"
           }
         }
       }
@@ -7562,6 +7973,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Solicitar acceso"
+          }
+        }
+      }
+    },
+    "Requests unavailable" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solicitudes no disponibles"
           }
         }
       }
@@ -8575,6 +8996,23 @@
         }
       }
     },
+    "Share an update with this event’s planning team." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share an update with this event’s planning team."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comparte una actualización con el equipo de planificación de este evento."
+          }
+        }
+      }
+    },
     "Share Invitation" : {
       "localizations" : {
         "es" : {
@@ -8807,6 +9245,16 @@
         }
       }
     },
+    "Spent" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gastado"
+          }
+        }
+      }
+    },
     "Start Deciding" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8985,6 +9433,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Resumen"
+          }
+        }
+      }
+    },
+    "tab.manage" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manage"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestionar"
           }
         }
       }
@@ -9262,7 +9727,18 @@
         }
       }
     },
+    "This event is no longer available." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este evento ya no está disponible."
+          }
+        }
+      }
+    },
     "This event is read-only. You can still read previous notes." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9689,6 +10165,16 @@
         }
       }
     },
+    "View note history" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ver el historial de notas"
+          }
+        }
+      }
+    },
     "Waiting for team input" : {
       "localizations" : {
         "es" : {
@@ -9905,6 +10391,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Espacios de trabajo"
+          }
+        }
+      }
+    },
+    "You can’t send notes for this event." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No puedes enviar notas para este evento."
           }
         }
       }

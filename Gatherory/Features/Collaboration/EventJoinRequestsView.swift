@@ -28,7 +28,9 @@ struct EventJoinRequestsLink: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("event-join-requests")
         .task(id: "\(eventID)|\(authentication.currentUser?.id ?? "")|\(scenePhase)") {
-            guard scenePhase == .active, let accountID = authentication.currentUser?.id else { return }
+            let reference: EventReference = eventID == workspace.mainEventID ? .main : .subevent(eventID)
+            guard scenePhase == .active, workspace.canManageInvitations(for: reference),
+                  let accountID = authentication.currentUser?.id else { return }
             await workspace.joinRequestStore.refresh(eventID: eventID, accountID: accountID)
         }
     }

@@ -48,13 +48,39 @@ app becomes active or another local edit is made.
     its pending work. Generic authorization failures and network errors never
     purge it.
 
-## Event join-request review
+## Manage and event join-request review
 
-Event details expose **Join Requests** beside **Who's Coming** for hosts and
-collaborators with manage permission on that exact event. This also applies to
-sub-events opened from a parent schedule and to child-only planning workspaces.
-The destination uses the displayed event ID, not the selected Home card or the
-parent workspace ID.
+The planning tabs are **Home**, **Ideas**, **Decide**, and **Manage**. Manage
+contains Budget, a combined Guests/Collaborators card, and Notes for an explicitly selected event.
+Its selection is view-local and never writes Home's selection or the outbox.
+Destinations capture their event reference instead of reading a later Home
+selection. Account/workspace changes reset Manage navigation.
+
+The Guests header opens Guest List and sits above a proportional RSVP bar, with
+counts available to VoiceOver rather than a visible legend. Collaborators shows
+the pending count beside its chevron and the newest pending request below it,
+with approve/decline icon buttons for exact-event managers. Quick review uses the
+existing online review store and refreshes collaboration after success; failures
+retain the request and show the error. No planner count or voting controls appear.
+
+Notes previews the latest visible event note and opens newest-first history.
+Preview and history share event scoping and blocked-author filtering. Read-only
+planners can read history without gaining send permission. Home's note shortcut
+and the Notes history toolbar open a compose-only sheet, using the existing note
+permission checks and durable save/outbox flow. Notes are in-app planning-team
+updates, not guest broadcasts, emails, or push notifications.
+
+Budget shows the selected event only. Root planners can additionally open the
+explicit Workspace Budget overview; child-only projections cannot navigate to
+parent/sibling data. Guest List shows event attendees and their RSVP independently
+of planning role. Collaborators shows the planning circle and invitation tools.
+No new RSVP, payment, or task workflows are introduced by this navigation change.
+
+**Join Requests** now lives under **Manage → Collaborators**, not beside
+**Who's Coming** in the invitation. Only hosts and collaborators with manage
+permission on that exact event can review requests or manage invitations. Other
+planners can read permitted event information without gaining those controls.
+Child-only workspaces expose only their own event and no workspace sharing settings.
 
 Requests remain transient, account-scoped state in `EventJoinRequestStore`.
 Approval and decline use the existing online invitation API and refresh

@@ -72,7 +72,7 @@ into App Store Connect.
    when the date is inside WeatherKit’s forecast range, weather.
 4. In Ideas, add an attire or food idea. In Decide, approve it and confirm the
    decision is reflected in the correct event context.
-5. In Insights, add a cost and verify it rolls up against the workspace budget.
+5. In Manage → Budget, verify event costs and the Workspace Budget rollup. Add costs through the existing event editor.
 6. Open an event’s shared album and add a photo if Photos access is available.
    Photo persistence is currently local; do not use this step to claim cross-device
    media sync until the S3 transfer path is connected.
@@ -112,7 +112,7 @@ Suggested review path
 2. Open the main event on Home to view its invitation-style details.
 3. Add or edit a sub-event from Home/Timeline.
 4. Add an idea, then approve it in Decide.
-5. Open Insights to review the budget and add a cost.
+5. Open Manage → Budget to review event spending; use the existing event editor to add a cost.
 6. Background and relaunch the app to confirm local persistence.
 
 First-run guidance

@@ -46,6 +46,13 @@ final class EventJoinRequestStore {
         return requestsByEvent[eventID] ?? []
     }
 
+    /// Unknown is distinct from a successfully loaded empty list. Read-only and
+    /// account-scoped, so summary UI never presents another account's count.
+    func requestCount(eventID: UUID, accountID: String?) -> Int? {
+        guard let accountID, self.accountID == accountID else { return nil }
+        return requestsByEvent[eventID]?.count
+    }
+
     func error(eventID: UUID, accountID: String?) -> String? {
         self.accountID == accountID ? errors[eventID] : nil
     }
