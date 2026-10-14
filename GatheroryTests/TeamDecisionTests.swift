@@ -58,6 +58,52 @@ struct TeamDecisionTests {
         }
     }
 
+    @Test("Seed-style root and child bars count only that event's eligible planners")
+    func eventScopedResponses() throws {
+        let workspace = makeWorkspace()
+        let rootIdea = try #require(workspace.ideas.first)
+        let childPlanner = WorkspaceMember(userID: "child-planner", name: "Child planner",
+            participantRole: .collaborator, initials: "CP", planningPermission: .contribute)
+        workspace.members.append(childPlanner)
+        let host = try #require(workspace.members.first { $0.userID == "host" })
+        let child = TimelineItem(title: "Reception", category: .reception,
+            scheduledAt: .now.addingTimeInterval(86400), participantIDs: [host.id, childPlanner.id],
+            parentEventID: workspace.mainEventID)
+        workspace.addTimelineItem(child)
+        let childIdea = PlanningIdea(eventID: child.id, title: "Reception decor", note: "",
+            category: .decor, submittedBy: "Host")
+        workspace.addIdea(childIdea)
+        workspace.ideaResponses = [
+            IdeaResponse(ideaID: childIdea.id, userID: "collaborator", choice: .pass),
+            IdeaResponse(ideaID: rootIdea.id, userID: "child-planner", choice: .pass)
+        ]
+        workspace.configureViewer(account("host"))
+        workspace.decide(.love, on: rootIdea)
+        workspace.decide(.maybe, on: childIdea)
+        #expect(workspace.teamResponseSummary(for: rootIdea) == .init(love: 1, unanswered: 1))
+        #expect(workspace.teamResponseSummary(for: childIdea) == .init(maybe: 1, unanswered: 1))
+
+        let scoped = PlanningWorkspace(mainEventID: child.id, isScopedEvent: true,
+            title: child.title, mainEventStartsAt: child.scheduledAt, venueName: "", location: "",
+            planningMode: .openToIdeas, members: workspace.members,
+            eventParticipations: workspace.eventParticipations,
+            mainEventParticipantIDs: child.participantIDs, ideas: [childIdea], timeline: [],
+            ideaResponses: workspace.ideaResponses, registry: [])
+        scoped.configureViewer(account("child-planner"))
+        #expect(scoped.teamResponseSummary(for: childIdea) == workspace.teamResponseSummary(for: childIdea))
+        scoped.decide(.love, on: childIdea)
+        #expect(scoped.teamResponseSummary(for: childIdea) == .init(love: 1, maybe: 1))
+
+        workspace.undoLastDecision()
+        #expect(workspace.teamResponseSummary(for: childIdea) == .init(unanswered: 2))
+        #expect(workspace.teamResponseSummary(for: rootIdea) == .init(love: 1, unanswered: 1))
+
+        // A planner who isn't on this event must neither vote nor count in its bar.
+        workspace.configureViewer(account("collaborator"))
+        #expect(!workspace.canRespond(to: childIdea))
+        #expect(!workspace.decisionQueue.contains { $0.id == childIdea.id })
+    }
+
     @Test("Even unanimous love needs explicit approval")
     func explicitApproval() throws {
         let workspace = makeWorkspace()

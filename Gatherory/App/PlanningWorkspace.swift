@@ -263,13 +263,22 @@ final class PlanningWorkspace {
     /// The decision deck is workspace-wide. Event context controls where new
     /// ideas are created and viewed, but it must not hide another event's
     /// pending decision.
-    func decisionQueue(for eventID: UUID?) -> [PlanningIdea] {
+    func decisionQueue(for eventID: UUID?, filter: DecisionQueueFilter = .unanswered) -> [PlanningIdea] {
         let answeredIDs = Set(ideaResponses.filter {
             $0.userID == responseUserID && $0.choice != nil
         }.map(\.ideaID))
+        let reviewIDs = Set(ideaResponses.filter {
+            $0.userID == responseUserID && $0.choice == filter.responseChoice
+        }.map(\.ideaID))
         return ideas
             .filter { idea in
-                guard canRespond(to: idea), !answeredIDs.contains(idea.id) else { return false }
+                guard canRespond(to: idea) else { return false }
+                switch filter {
+                case .unanswered:
+                    guard !answeredIDs.contains(idea.id) else { return false }
+                case .maybes, .passes:
+                    guard reviewIDs.contains(idea.id) else { return false }
+                }
                 guard let eventID else { return true }
                 return (idea.eventID ?? mainEventID) == eventID
             }
@@ -1128,8 +1137,17 @@ final class PlanningWorkspace {
         guard !isInvitationProjection, showsPlanningInterface, !isMainEventDeleted,
               !currentMainEventStatus.isReadOnly,
               currentViewerMember(for: .main)?.planningPermission != .viewOnly else { return false }
-        guard let eventID = idea.eventID, eventID != mainEventID else { return true }
-        return canManageEvent(.subevent(eventID))
+        let reference = decisionEventReference(for: idea)
+        guard let viewer = currentViewerMember(for: reference),
+              viewer.participantRole != .guest,
+              viewer.planningPermission != .viewOnly,
+              viewer.invitationStatus == .active else { return false }
+        return canManageEvent(reference)
+    }
+
+    private func decisionEventReference(for idea: PlanningIdea) -> EventReference {
+        let eventID = idea.eventID ?? mainEventID
+        return eventID == mainEventID ? .main : .subevent(eventID)
     }
 
     private var responseUserID: String? {
@@ -1147,7 +1165,7 @@ final class PlanningWorkspace {
     }
 
     func teamResponseSummary(for idea: PlanningIdea) -> TeamResponseSummary {
-        let eligible = Set(participants(for: .main).filter {
+        let eligible = Set(participants(for: decisionEventReference(for: idea)).filter {
             $0.participantRole != .guest && $0.planningPermission != .viewOnly && $0.invitationStatus == .active
         }.map { $0.userID ?? $0.id.uuidString })
         var choices: [String: DecisionChoice] = [:]
@@ -1191,13 +1209,15 @@ final class PlanningWorkspace {
         setResponse(choice, ideaID: idea.id, userID: userID)
     }
 
-    func undoLastDecision() {
+    @discardableResult
+    func undoLastDecision() -> UUID? {
         guard canUndoDecision, let decision = decisionHistory.popLast(),
               ideas.contains(where: { $0.id == decision.ideaID }) else {
-            return
+            return nil
         }
 
         setResponse(decision.previousChoice, ideaID: decision.ideaID, userID: decision.userID)
+        return decision.ideaID
     }
 
     private func setResponse(_ choice: DecisionChoice?, ideaID: UUID, userID: String) {

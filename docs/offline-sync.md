@@ -48,6 +48,37 @@ app becomes active or another local edit is made.
     its pending work. Generic authorization failures and network errors never
     purge it.
 
+## Decide and idea response bars
+
+Decide records an individual preference without changing the idea's shared
+approval status. Ideas, Decide, and idea details derive their response bars from
+active hosts and collaborators with write access to the idea's own event.
+Guests, invited contacts, and read-only planners do not count. Root and scoped
+child projections use the same event roster; unrelated parent/sibling responses
+are excluded. Gray represents eligible planners who have not answered, so one
+response in a four-person planning circle fills one quarter of the bar.
+Closed ideas (approved, passed, or archived) retain the bar's footprint but show
+a solid system-blue status bar instead of unanswered input. Their visible
+status and VoiceOver label identify the outcome; saved responses are unchanged.
+Active ideas retain green/yellow/red/gray response segments.
+Local decisions and undo update the bar immediately, while responses continue
+to use the existing independent entity outbox and remote-merge flow.
+
+Decide's response filter offers **Unanswered**, **My Maybes**, and **My Passes**,
+independently of the event filter. Review queues use only the current viewer's
+saved Maybe or Pass responses, not the idea's shared approval status or other
+planners' responses. All queues apply the existing event, lifecycle, and
+write-access rules; shared passed/archived/chosen ideas stay closed.
+When a queue is empty, shortcuts open the other nonempty review queues.
+
+Review is a finite, view-local pass: keeping Maybe or Pass retains the saved
+response and advances to the next card. The review-again action or switching
+filters restarts the pass; undo restores the previous response, selects its
+matching queue, and makes the card available again. Filter
+and review progress never enter the archive or outbox and reset on account
+changes. Reviewing offline uses the same response mutation/coalescing path as
+the original deck, without changing transaction or remote-merge boundaries.
+
 ## Manage and event join-request review
 
 The planning tabs are **Home**, **Ideas**, **Decide**, and **Manage**. Manage

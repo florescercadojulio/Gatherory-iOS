@@ -32,3 +32,42 @@ struct TeamResponseSummary: Equatable {
     var total: Int { love + maybe + pass + unanswered }
     var responded: Int { love + maybe + pass }
 }
+
+/// Personal response filters; independent of an idea's shared approval status.
+enum DecisionQueueFilter: CaseIterable, Hashable {
+    case unanswered
+    case maybes
+    case passes
+
+    init(restoring choice: DecisionChoice?) {
+        switch choice {
+        case .maybe: self = .maybes
+        case .pass: self = .passes
+        default: self = .unanswered
+        }
+    }
+
+    var responseChoice: DecisionChoice? {
+        switch self {
+        case .unanswered: nil
+        case .maybes: .maybe
+        case .passes: .pass
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .unanswered: String(localized: "Unanswered")
+        case .maybes: String(localized: "My Maybes")
+        case .passes: String(localized: "My Passes")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .unanswered: "tray"
+        case .maybes: "questionmark.circle"
+        case .passes: "hand.thumbsdown"
+        }
+    }
+}

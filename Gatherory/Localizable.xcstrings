@@ -1,6 +1,114 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Idea status" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Idea status" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Estado de la idea" } }
+      }
+    },
+    "My Passes" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "My Passes" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Mis descartadas" } }
+      }
+    },
+    "Passes reviewed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Passes reviewed" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Descartadas revisadas" } }
+      }
+    },
+    "No Passes" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Passes" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay ideas descartadas" } }
+      }
+    },
+    "Your Pass responses are kept. Revisit them whenever you're ready." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your Pass responses are kept. Revisit them whenever you're ready." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tus respuestas «Pasar» se conservan. Revísalas cuando quieras." } }
+      }
+    },
+    "Ideas you pass on will appear here." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ideas you pass on will appear here." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Las ideas que descartes aparecerán aquí." } }
+      }
+    },
+    "Review Passes Again" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review Passes Again" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Volver a revisar descartadas" } }
+      }
+    },
+    "Review My Passes" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review My Passes" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Revisar mis descartadas" } }
+      }
+    },
+    "Unanswered" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unanswered" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sin responder" } }
+      }
+    },
+    "My Maybes" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "My Maybes" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Mis «Tal vez»" } }
+      }
+    },
+    "Maybes reviewed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Maybes reviewed" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "«Tal vez» revisados" } }
+      }
+    },
+    "No Maybes" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Maybes" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay respuestas «Tal vez»" } }
+      }
+    },
+    "Your Maybe responses are kept. Revisit them whenever you're ready." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your Maybe responses are kept. Revisit them whenever you're ready." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tus respuestas «Tal vez» se conservan. Revísalas cuando quieras." } }
+      }
+    },
+    "Ideas you mark Maybe will appear here." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ideas you mark Maybe will appear here." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Las ideas que marques como «Tal vez» aparecerán aquí." } }
+      }
+    },
+    "Review Maybes Again" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review Maybes Again" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Volver a revisar mis «Tal vez»" } }
+      }
+    },
+    "Review Unanswered Ideas" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review Unanswered Ideas" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Revisar ideas sin responder" } }
+      }
+    },
+    "Review My Maybes" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review My Maybes" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Revisar mis «Tal vez»" } }
+      }
+    },
+    "Decision response filter" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Decision response filter" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Filtrar por respuesta" } }
+      }
+    },
     "" : {
       "localizations" : {
         "es" : {

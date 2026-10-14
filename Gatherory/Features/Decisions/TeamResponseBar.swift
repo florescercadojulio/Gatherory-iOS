@@ -1,34 +1,62 @@
 import SwiftUI
 
-/// A bounded, proportional bar: ten or ten thousand responses use the same space.
+/// Active ideas show proportional responses; closed ideas keep the same footprint
+/// with a blue status bar, without implying they are waiting for more responses.
 struct TeamResponseBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasAppeared = false
     let summary: TeamResponseSummary
+    var ideaStatus: IdeaStatus? = nil
     var showsTitle = true
     var showsSymbols = true
     var barHeight: CGFloat = 18
+
+    var closedIdeaStatus: IdeaStatus? {
+        switch ideaStatus {
+        case .chosen, .passed, .archived: ideaStatus
+        default: nil
+        }
+    }
+
+    private var barAccessibilityValue: Text {
+        if let status = closedIdeaStatus {
+            Text(status.title)
+        } else {
+            Text("\(summary.love, specifier: "%lld") love it, \(summary.maybe, specifier: "%lld") maybe, \(summary.pass, specifier: "%lld") pass, \(summary.unanswered, specifier: "%lld") unanswered")
+        }
+    }
+
     private var segments: [(count: Int, color: Color, symbol: String)] {
-        [(summary.love, .green, "heart.fill"), (summary.maybe, .yellow, "questionmark"),
-         (summary.pass, .red, "xmark"), (summary.unanswered, .gray, "ellipsis")].filter { $0.0 > 0 }
+        if let status = closedIdeaStatus {
+            [(1, .blue, status.symbol)]
+        } else {
+            [(summary.love, .green, "heart.fill"), (summary.maybe, .yellow, "questionmark"),
+             (summary.pass, .red, "xmark"), (summary.unanswered, .gray, "ellipsis")].filter { $0.0 > 0 }
+        }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if showsTitle {
-                Text(summary.responded == 0 ? "Waiting for team input" : "Team input")
-                    .font(.caption.weight(.semibold))
+                if let status = closedIdeaStatus {
+                    Label(status.title, systemImage: status.symbol)
+                        .font(.caption.weight(.semibold))
+                } else {
+                    Text(summary.responded == 0 ? "Waiting for team input" : "Team input")
+                        .font(.caption.weight(.semibold))
+                }
             }
             GeometryReader { proxy in
                 HStack(spacing: 2) {
                     ForEach(segments.indices, id: \.self) { index in
                         let segment = segments[index]
                         let width = max(0, proxy.size.width - CGFloat(max(0, segments.count - 1)) * 2)
-                            * CGFloat(segment.count) / CGFloat(max(1, summary.total))
+                            * CGFloat(segment.count) / CGFloat(closedIdeaStatus == nil ? max(1, summary.total) : 1)
                         Rectangle().fill(segment.color)
                             .overlay {
                                 if showsSymbols && width >= 20 {
                                     Image(systemName: segment.symbol)
-                                        .font(.system(size: 10, weight: .bold)).foregroundStyle(.black)
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(closedIdeaStatus == nil ? Color.black : .white)
                                 }
                             }
                             .frame(width: width)
@@ -46,10 +74,11 @@ struct TeamResponseBar: View {
             )
             .opacity(hasAppeared || reduceMotion ? 1 : 0)
             .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: summary)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: ideaStatus)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Team input")
-        .accessibilityValue("\(summary.love, specifier: "%lld") love it, \(summary.maybe, specifier: "%lld") maybe, \(summary.pass, specifier: "%lld") pass, \(summary.unanswered, specifier: "%lld") unanswered")
+        .accessibilityLabel(closedIdeaStatus == nil ? Text("Team input") : Text("Idea status"))
+        .accessibilityValue(barAccessibilityValue)
         .task {
             guard !reduceMotion else { hasAppeared = true; return }
             // Allow the initial layout to settle before the one-shot entrance.
@@ -68,7 +97,7 @@ struct IdeaTeamResponseSection: View {
     let idea: PlanningIdea
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            TeamResponseBar(summary: workspace.teamResponseSummary(for: idea))
+            TeamResponseBar(summary: workspace.teamResponseSummary(for: idea), ideaStatus: idea.status)
                 .id(idea.id)
             IdeaResponseControls(idea: idea)
         }

@@ -13,22 +13,27 @@ struct DecisionDeckView: View {
     var onExitWorkspace: (() -> Void)?
 
     @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(\.currentUserAccount) private var currentUserAccount
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("hasSeenDecideTimelinePrimer") private var hasSeenDecidePrimer = false
     @State private var dragOffset: CGSize = .zero
     @State private var selectedIdeaID: UUID?
     @State private var isShowingDecidePrimer = false
     @State private var decisionScope: DecisionScope = .queue
+    @State private var session = DecisionDeckSession()
     @Namespace private var decisionTransition
 
     private var currentIdea: PlanningIdea? {
-        workspace.decisionQueue(for: decisionScope.eventID).first { !safety.isBlocked($0.submittedByUserID) }
+        session.queue(in: workspace, eventID: decisionScope.eventID)
+            .first { !safety.isBlocked($0.submittedByUserID) }
     }
 
     private var scopeTitle: String {
         switch decisionScope {
         case .queue:
-            currentIdea.map(workspace.eventTitle(for:)) ?? "Decide"
+            session.filter != .unanswered
+                ? session.filter.title
+                : currentIdea.map(workspace.eventTitle(for:)) ?? "Decide"
         case .event(let eventID):
             workspace.eventTitle(for: eventID)
         }
@@ -36,6 +41,11 @@ struct DecisionDeckView: View {
 
     private var isFilteringToEvent: Bool {
         decisionScope.eventID != nil
+    }
+
+    private func count(for filter: DecisionQueueFilter) -> Int {
+        workspace.decisionQueue(for: decisionScope.eventID, filter: filter)
+            .filter { !safety.isBlocked($0.submittedByUserID) }.count
     }
 
     var body: some View {
@@ -71,17 +81,60 @@ struct DecisionDeckView: View {
                     .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82), value: dragOffset)
             } else {
                 ContentUnavailableView {
-                    Label(
-                        isFilteringToEvent ? "Nothing left for \(scopeTitle)" : "You're all caught up",
-                        systemImage: "checkmark.circle.fill"
-                    )
+                    if session.filter == .maybes {
+                        Label(count(for: .maybes) > 0 ? "Maybes reviewed" : "No Maybes",
+                              systemImage: "questionmark.circle")
+                    } else if session.filter == .passes {
+                        Label(count(for: .passes) > 0 ? "Passes reviewed" : "No Passes",
+                              systemImage: "hand.thumbsdown")
+                    } else {
+                        Label(
+                            isFilteringToEvent ? "Nothing left for \(scopeTitle)" : "You're all caught up",
+                            systemImage: "checkmark.circle.fill"
+                        )
+                    }
                 } description: {
-                    Text(
-                        isFilteringToEvent
-                            ? "Continue through the rest of your decision queue."
-                            : "New ideas from your support circle will appear here."
-                    )
+                    if session.filter == .maybes {
+                        Text(count(for: .maybes) > 0
+                            ? "Your Maybe responses are kept. Revisit them whenever you're ready."
+                            : "Ideas you mark Maybe will appear here.")
+                    } else if session.filter == .passes {
+                        Text(count(for: .passes) > 0
+                            ? "Your Pass responses are kept. Revisit them whenever you're ready."
+                            : "Ideas you pass on will appear here.")
+                    } else {
+                        Text(
+                            isFilteringToEvent
+                                ? "Continue through the rest of your decision queue."
+                                : "New ideas from your support circle will appear here."
+                        )
+                    }
                 } actions: {
+                    if session.filter != .unanswered {
+                        if count(for: session.filter) > 0 {
+                            Button(session.filter == .maybes ? "Review Maybes Again" : "Review Passes Again",
+                                   systemImage: "arrow.clockwise") {
+                                withAnimation(reduceMotion ? nil : .snappy) { session.restartReview() }
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        Button("Review Unanswered Ideas", systemImage: "tray") {
+                            selectFilter(.unanswered)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    if session.filter != .maybes && count(for: .maybes) > 0 {
+                        Button("Review My Maybes", systemImage: "questionmark.circle") {
+                            selectFilter(.maybes)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    if session.filter != .passes && count(for: .passes) > 0 {
+                        Button("Review My Passes", systemImage: "hand.thumbsdown") {
+                            selectFilter(.passes)
+                        }
+                        .buttonStyle(.bordered)
+                    }
                     if isFilteringToEvent {
                         Button("Continue deciding", systemImage: "arrow.triangle.branch") {
                             withAnimation(.snappy) {
@@ -104,15 +157,21 @@ struct DecisionDeckView: View {
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItemGroup(placement: .topBarLeading) {
                 decisionScopeMenu
+                decisionResponseFilterMenu
             }
 
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if workspace.canUndoDecision {
                     Button("Undo last decision", systemImage: "arrow.uturn.backward") {
                         withAnimation(reduceMotion ? nil : .snappy) {
-                            workspace.undoLastDecision()
+                            if let ideaID = workspace.undoLastDecision() {
+                                let restored = workspace.ideas.first { $0.id == ideaID }
+                                let filter = DecisionQueueFilter(restoring: restored.flatMap(workspace.response(on:)))
+                                if session.filter != filter { session.selectFilter(filter) }
+                                session.undoDecision(on: ideaID)
+                            }
                             dragOffset = .zero
                             decisionScope = .queue
                         }
@@ -147,6 +206,39 @@ struct DecisionDeckView: View {
             if wasShowing && !isShowing {
                 hasSeenDecidePrimer = true
             }
+        }
+        .onChange(of: currentUserAccount?.id) { _, _ in
+            session = DecisionDeckSession()
+            decisionScope = .queue
+            dragOffset = .zero
+        }
+    }
+
+    private var decisionResponseFilterMenu: some View {
+        Menu {
+            ForEach(DecisionQueueFilter.allCases, id: \.self) { filter in
+                Button { selectFilter(filter) } label: {
+                    Label {
+                        Text("\(filter.title) (\(count(for: filter)))")
+                    } icon: {
+                        Image(systemName: session.filter == filter ? "checkmark" : filter.symbol)
+                    }
+                }
+            }
+        } label: {
+            Label(session.filter.title, systemImage: session.filter.symbol)
+                .labelStyle(.iconOnly)
+                .frame(minWidth: AppTheme.Layout.minimumTouchTarget,
+                       minHeight: AppTheme.Layout.minimumTouchTarget)
+        }
+        .accessibilityLabel("Decision response filter")
+        .accessibilityValue(session.filter.title)
+    }
+
+    private func selectFilter(_ filter: DecisionQueueFilter) {
+        withAnimation(reduceMotion ? nil : .snappy) {
+            session.selectFilter(filter)
+            dragOffset = .zero
         }
     }
 
@@ -217,8 +309,10 @@ struct DecisionDeckView: View {
     }
 
     private func decide(_ choice: DecisionChoice, idea: PlanningIdea) {
+        guard workspace.canRespond(to: idea) else { return }
         withAnimation(reduceMotion ? nil : .snappy) {
             workspace.decide(choice, on: idea)
+            session.recordDecision(on: idea.id)
             PostHogSDK.shared.capture(
                 "idea_decided",
                 properties: ["choice": String(describing: choice)]
@@ -230,7 +324,8 @@ struct DecisionDeckView: View {
 
     private func returnToQueueIfNeeded() {
         guard case .event(let eventID) = decisionScope,
-              workspace.decisionQueue(for: eventID).allSatisfy({ safety.isBlocked($0.submittedByUserID) }) else {
+              session.queue(in: workspace, eventID: eventID)
+                .allSatisfy({ safety.isBlocked($0.submittedByUserID) }) else {
             return
         }
         decisionScope = .queue
@@ -363,7 +458,7 @@ struct IdeaSummaryCard<Footer: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            TeamResponseBar(summary: teamSummary, showsTitle: false)
+            TeamResponseBar(summary: teamSummary, ideaStatus: idea.status, showsTitle: false)
                 .id(idea.id)
 
             Label(idea.submittedBy, systemImage: "person.crop.circle.fill")

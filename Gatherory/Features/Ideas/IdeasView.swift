@@ -414,6 +414,7 @@ private struct IdeaCollectionCard: View {
         .overlay(alignment: .bottom) {
             TeamResponseBar(
                 summary: workspace.teamResponseSummary(for: idea),
+                ideaStatus: idea.status,
                 showsTitle: false,
                 showsSymbols: false,
                 barHeight: 6
