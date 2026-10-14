@@ -548,6 +548,18 @@ final class WorkspacePersistenceController {
         entities: [RemoteEntitySnapshot] = [],
         to library: WorkspaceLibrary
     ) throws {
+        let pendingScopes = try pendingScopeIDs().union(pendingMediaScopeIDs())
+        let authoritativeScopeIDs = Set(snapshots.map(\.scopeID))
+        // An empty bootstrap can mean that the request was omitted, failed
+        // before decoding, or was made during an account transition. Only a
+        // successful root snapshot is authoritative enough to reconcile stale
+        // scoped projections from this account's local cache.
+        let hasAuthoritativeRoot = try snapshots.contains { snapshot in
+            guard !pendingScopes.contains(snapshot.scopeID) else { return false }
+            let archive = try codec.decode(WorkspaceArchiveV1.self, from: snapshot.payload)
+            return archive.isScopedEvent != true
+        }
+
         for workspace in library.workspaces where workspace.isScopedEvent {
             try discardWorkspaceMutations(scopeID: workspace.mainEventID)
         }
@@ -555,13 +567,22 @@ final class WorkspacePersistenceController {
         let remoteWorkspaces = try merger.stageBootstrap(
             snapshots,
             entities: entities,
-            pendingScopes: pendingScopeIDs(),
+            pendingScopes: pendingScopes,
             existingWorkspaceCount: library.workspaces.count
         )
 
+        let staleScopedWorkspaceIDs = hasAuthoritativeRoot
+            ? try removeStaleScopedWorkspaces(
+                authoritativeScopeIDs: authoritativeScopeIDs,
+                pendingScopeIDs: pendingScopes
+            )
+            : []
+
         if context.hasChanges { try context.save() }
-        guard !remoteWorkspaces.isEmpty else { return }
         suppressNextObservedChange = true
+        for workspaceID in staleScopedWorkspaceIDs {
+            library.remove(workspaceID: workspaceID)
+        }
         remoteWorkspaces.forEach(library.upsert)
     }
 
@@ -650,6 +671,44 @@ final class WorkspacePersistenceController {
             && mutation.entityType == .workspace {
             context.delete(mutation)
         }
+    }
+
+    /// Reconciles local scoped projections after an authoritative root
+    /// bootstrap. A root snapshot is the server's complete answer for a
+    /// planner, so independently cached child projections that are absent
+    /// from that answer are stale. Pending structured or media work protects
+    /// a scope from removal so account switches and offline edits remain
+    /// recoverable.
+    private func removeStaleScopedWorkspaces(
+        authoritativeScopeIDs: Set<UUID>,
+        pendingScopeIDs: Set<UUID>
+    ) throws -> [UUID] {
+        let records = try context.fetch(FetchDescriptor<WorkspaceRecord>())
+            .filter {
+                $0.ownerUserID == activeUserID
+                    && !authoritativeScopeIDs.contains($0.id)
+                    && !pendingScopeIDs.contains($0.id)
+            }
+
+        var removedIDs: [UUID] = []
+        for record in records {
+            guard (try? codec.decode(WorkspaceArchiveV1.self, from: record.payload).isScopedEvent) == true
+            else { continue }
+
+            context.delete(record)
+            try mediaBookkeeper.stageRemoval(scopeID: record.id)
+            for receipt in try context.fetch(FetchDescriptor<AppliedSyncEnvelope>())
+            where receipt.ownerUserID == activeUserID && receipt.scopeID == record.id {
+                context.delete(receipt)
+            }
+            for checkpoint in try context.fetch(FetchDescriptor<SyncCheckpoint>())
+            where checkpoint.ownerUserID == activeUserID && checkpoint.scopeID == record.id {
+                context.delete(checkpoint)
+            }
+            removedIDs.append(record.id)
+        }
+
+        return removedIDs
     }
 
     /// A scoped write rejection is authoritative evidence that this account no

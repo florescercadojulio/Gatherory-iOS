@@ -327,6 +327,7 @@ private struct WorkspacePreviewCard: View {
                 .padding(.horizontal, 10)
                 .frame(minHeight: 30)
                 .background(.ultraThinMaterial, in: Capsule())
+                .appImageOverlayAppearance()
 
                 Spacer(minLength: AppTheme.Spacing.section)
 

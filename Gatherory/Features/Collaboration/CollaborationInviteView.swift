@@ -8,7 +8,6 @@ struct CollaborationInviteView: View {
         NavigationStack {
             CollaborationInviteScreen()
         }
-        .appImageDetailAppearance()
     }
 }
 
@@ -87,6 +86,8 @@ private struct CollaborationInviteScreen: View {
     }
     private var eventTitle: String { workspace.eventTitle(for: eventID) }
     private var isPeopleDestination: Bool { peopleSection != nil }
+    private var backdropForeground: Color { reduceTransparency ? .primary : .white }
+    private var backdropSecondary: Color { reduceTransparency ? .secondary : .white.opacity(0.9) }
 
     private var inviteURL: URL? {
         generatedInvitation?.eventId == eventID
@@ -170,6 +171,7 @@ private struct CollaborationInviteScreen: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
+        .toolbarColorScheme(reduceTransparency ? nil : .dark, for: .navigationBar)
         .toolbar {
             if !isPeopleDestination {
                 ToolbarItem(placement: .cancellationAction) {
@@ -177,7 +179,7 @@ private struct CollaborationInviteScreen: View {
                         dismiss()
                     }
                     .labelStyle(.iconOnly)
-                    .tint(.white)
+                    .tint(backdropForeground)
                 }
             }
         }
@@ -232,7 +234,7 @@ private struct CollaborationInviteScreen: View {
             if canManageInvitations {
                 EventJoinRequestsLink(eventID: eventID)
                     .padding(.horizontal, AppTheme.Spacing.standard)
-                    .collaborationCard(reduceTransparency: reduceTransparency)
+                    .collaborationCard()
             }
             if canManageInvitations { linkSharingCard }
             workspacePeople
@@ -273,18 +275,18 @@ private struct CollaborationInviteScreen: View {
 
                 Text(selectedEventDate, format: .dateTime.month(.abbreviated).day().year())
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.84))
+                    .foregroundStyle(backdropSecondary)
 
                 if let selectedEventLocation {
                     Text(selectedEventLocation)
                         .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.84))
+                        .foregroundStyle(backdropSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(backdropForeground)
         .accessibilityElement(children: .combine)
     }
 
@@ -404,7 +406,7 @@ private struct CollaborationInviteScreen: View {
             .disabled(isGenerating)
         }
         .padding(AppTheme.Spacing.standard)
-        .collaborationCard(reduceTransparency: reduceTransparency)
+        .collaborationCard()
     }
 
     private var linkAccessPicker: some View {
@@ -436,9 +438,10 @@ private struct CollaborationInviteScreen: View {
                         : "People included in \(eventTitle)."
                 )
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(backdropSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .foregroundStyle(backdropForeground)
 
             let participants = workspace.participants(for: eventReference)
             let filteredParticipants = peopleSection?.people(from: participants) ?? participants
@@ -449,6 +452,7 @@ private struct CollaborationInviteScreen: View {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
                         Label(role.pluralTitle, systemImage: role.symbol)
                             .font(.headline)
+                            .foregroundStyle(backdropForeground)
 
                         VStack(spacing: 0) {
                             ForEach(people) { member in
@@ -474,7 +478,7 @@ private struct CollaborationInviteScreen: View {
                                 }
                             }
                         }
-                        .collaborationCard(reduceTransparency: reduceTransparency)
+                        .collaborationCard()
                     }
                 }
             }
@@ -487,7 +491,7 @@ private struct CollaborationInviteScreen: View {
                 )
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, AppTheme.Spacing.standard)
-                .collaborationCard(reduceTransparency: reduceTransparency)
+                .collaborationCard()
             }
 
         }
@@ -999,9 +1003,9 @@ private struct CollaborationBackdrop: View {
 
     var body: some View {
         ZStack {
-            if reduceTransparency {
-                Color(uiColor: .systemBackground)
-            } else {
+            AppTheme.ColorToken.background
+
+            if !reduceTransparency {
                 MediaArtwork(
                     imageData: imageData,
                     symbol: symbol,
@@ -1010,19 +1014,19 @@ private struct CollaborationBackdrop: View {
                     progressiveBlurRadius: 0
                 )
                     .scaleEffect(1.16)
-                    .glur(radius: 42, noise: 0.035)
-
-                Color.black.opacity(colorScheme == .dark ? 0.48 : 0.28)
-
-                LinearGradient(
-                    colors: [
-                        Color.black.opacity(0.10),
-                        Color.black.opacity(0.32),
-                        Color.black.opacity(0.20)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                    .glur(
+                        radius: 42,
+                        mask: .linear(
+                            stops: [
+                                .init(intensity: 0.65, location: 0),
+                                .init(intensity: 1, location: 0.55)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        noise: 0.035
+                    )
+                Color.black.opacity(colorScheme == .dark ? 0.66 : 0.58)
             }
         }
         .ignoresSafeArea()
@@ -1031,24 +1035,14 @@ private struct CollaborationBackdrop: View {
 
 
 private extension View {
-    @ViewBuilder
-    func collaborationCard(reduceTransparency: Bool) -> some View {
+    func collaborationCard() -> some View {
         let shape = RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
 
-        foregroundStyle(.white)
-            .background {
-                if reduceTransparency {
-                    shape.fill(.black.opacity(0.92))
-                } else {
-                    shape
-                        .fill(.regularMaterial)
-                        .overlay(shape.fill(.black.opacity(0.42)))
-                }
-            }
+        return background(AppTheme.ColorToken.surface, in: shape)
             .overlay {
-                shape.stroke(.white.opacity(0.18), lineWidth: 0.5)
+                shape.stroke(AppTheme.ColorToken.cardBorder, lineWidth: 0.5)
+                    .allowsHitTesting(false)
             }
-            .appImageOverlayAppearance()
     }
 }
 

@@ -224,6 +224,54 @@ struct WorkspaceExtractionRegressionTests {
         #expect(try persistence.currentCursor(for: scoped.mainEventID) == "delete-high-water")
     }
 
+    @Test("Authoritative root bootstrap removes stale scoped projections but preserves pending offline work")
+    func authoritativeRootReconcilesScopedCache() throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false, ownerUserID: "planner-owner")
+
+        let root = makeWorkspace()
+        let staleScoped = makeWorkspace()
+        staleScoped.isScopedEvent = true
+        let codec = WorkspaceArchiveCodec()
+        let rootSnapshot = RemoteWorkspaceSnapshot(
+            scopeID: root.mainEventID,
+            payload: try codec.encode(WorkspaceArchiveV1(workspace: root)),
+            serverVersion: 2,
+            updatedAt: .now
+        )
+        let staleSnapshot = RemoteWorkspaceSnapshot(
+            scopeID: staleScoped.mainEventID,
+            payload: try codec.encode(WorkspaceArchiveV1(workspace: staleScoped)),
+            serverVersion: 1,
+            updatedAt: .now
+        )
+
+        try persistence.applyBootstrap([rootSnapshot, staleSnapshot], to: library)
+        #expect(library.workspaces.count == 2)
+
+        try persistence.applyBootstrap([rootSnapshot], to: library)
+        #expect(library.workspaces.map(\.mainEventID) == [root.mainEventID])
+
+        let pendingScoped = makeWorkspace()
+        pendingScoped.isScopedEvent = true
+        let pendingSnapshot = RemoteWorkspaceSnapshot(
+            scopeID: pendingScoped.mainEventID,
+            payload: try codec.encode(WorkspaceArchiveV1(workspace: pendingScoped)),
+            serverVersion: 1,
+            updatedAt: .now
+        )
+        try persistence.applyBootstrap([rootSnapshot, pendingSnapshot], to: library)
+        let restoredPendingScoped = try #require(
+            library.workspaces.first { $0.mainEventID == pendingScoped.mainEventID }
+        )
+        restoredPendingScoped.title = "Offline collaborator edit"
+        try persistence.saveChanges(in: library)
+
+        try persistence.applyBootstrap([rootSnapshot], to: library)
+        #expect(library.workspaces.contains { $0.mainEventID == pendingScoped.mainEventID })
+        #expect(try mutations(in: persistence).contains { $0.scopeID == pendingScoped.mainEventID })
+    }
+
     @Test("Forbidden write cleanup is limited to a cached scoped event")
     func forbiddenScopedCleanup() throws {
         let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
