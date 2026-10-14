@@ -302,10 +302,9 @@ private struct WorkspacePreviewCard: View {
         ZStack(alignment: .bottomLeading) {
             MediaArtwork(
                 imageData: workspace.mainEventImageData,
-                assetName: workspace.mainEventImageData == nil ? "DefaultVenueHero" : nil,
-                symbol: "sparkles",
-                colors: [AppTheme.ColorToken.accent, AppTheme.ColorToken.lilac, AppTheme.ColorToken.mint],
-                accent: .white,
+                symbol: IdeaCategory.event.symbol,
+                colors: IdeaCategory.event.artworkColors,
+                accent: IdeaCategory.event.artworkAccent,
                 // Keep the library's first frame lightweight. Full-screen event
                 // views can afford Glur; collection thumbnails already gain
                 // legibility from the gradient below.
@@ -495,8 +494,9 @@ struct NewWorkspaceView: View {
             Section("Cover") {
                 PhotoAttachmentPicker(
                     imageData: $imageData,
-                    emptySymbol: "rectangle.stack.badge.plus",
-                    fallbackAssetName: "DefaultVenueHero",
+                    emptySymbol: IdeaCategory.event.symbol,
+                    fallbackColors: IdeaCategory.event.artworkColors,
+                    fallbackAccent: IdeaCategory.event.artworkAccent,
                     suggestedConcept: "Artwork for \(trimmedTitle.isEmpty ? "our event" : trimmedTitle)"
                 )
             }

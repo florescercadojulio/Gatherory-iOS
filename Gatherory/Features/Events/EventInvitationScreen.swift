@@ -1,4 +1,5 @@
 import MapKit
+import ImageIO
 import MusicKit
 import PhotosUI
 import SwiftUI
@@ -13,7 +14,7 @@ struct EventInvitationScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var scrollOffset: CGFloat = 0
+    @State private var scrollState = InvitationScrollState()
     @State private var selectedChild: TimelineItem?
     @State private var selectedMomentPhotos: [PhotosPickerItem] = []
     @State private var isShowingAttendees = false
@@ -40,23 +41,23 @@ struct EventInvitationScreen: View {
                 title: workspace.title,
                 eyebrow: nil,
                 categoryTitle: "Main Event",
-                categorySymbol: "heart.fill",
+                categorySymbol: IdeaCategory.event.symbol,
                 startsAt: workspace.invitationDateIsUndecided ? nil : workspace.mainEventStartsAt,
                 endsAt: workspace.mainEventEndsAt,
                 isAllDay: workspace.mainEventIsAllDay,
                 timeZoneIdentifier: workspace.mainEventTimeZoneIdentifier,
                 location: workspace.mainEventLocation,
                 imageData: imageSafety.visibleImageData(workspace.mainEventImageData, assetID: workspace.mainEventMediaAssetID),
-                fallbackAssetName: "DefaultVenueHero",
-                colors: TimelineCategory.ceremony.artworkColors,
-                accent: TimelineCategory.ceremony.artworkAccent,
+                fallbackAssetName: nil,
+                colors: IdeaCategory.event.artworkColors,
+                accent: IdeaCategory.event.artworkAccent,
                 purpose: nil,
                 statusTitle: workspace.currentMainEventStatus.title,
                 statusSymbol: workspace.currentMainEventStatus.symbol,
                 peopleLabel: "Who's Coming",
                 people: attendees,
                 showsAttendeeList: true,
-                response: workspace.mainEventResponse,
+                response: workspace.currentViewerResponse(for: .main),
                 permitsResponse: !workspace.currentMainEventStatus.isReadOnly,
                 note: workspace.eventMessage,
                 dressCode: workspace.dressCode,
@@ -82,7 +83,7 @@ struct EventInvitationScreen: View {
                 timeZoneIdentifier: item.timeZoneIdentifier,
                 location: item.eventLocation,
                 imageData: imageSafety.visibleImageData(item.imageData, assetID: item.mediaAssetID),
-                fallbackAssetName: item.category == .venue ? "DefaultVenueHero" : nil,
+                fallbackAssetName: nil,
                 colors: item.category.artworkColors,
                 accent: item.category.artworkAccent,
                 purpose: item.purpose,
@@ -91,7 +92,7 @@ struct EventInvitationScreen: View {
                 peopleLabel: "Who's Coming",
                 people: attendees,
                 showsAttendeeList: true,
-                response: item.response,
+                response: workspace.currentViewerResponse(for: .subevent(id)),
                 permitsResponse: item.status != .archived && item.status != .cancelled && item.completionStatus != .complete && !workspace.currentMainEventStatus.isReadOnly,
                 note: item.eventDescription,
                 dressCode: item.dressCode,
@@ -116,7 +117,7 @@ struct EventInvitationScreen: View {
                 timeZoneIdentifier: configuration.timeZoneIdentifier,
                 location: configuration.location,
                 imageData: imageSafety.visibleImageData(idea.imageData, assetID: idea.mediaAssetID),
-                fallbackAssetName: configuration.category == .venue ? "DefaultVenueHero" : nil,
+                fallbackAssetName: nil,
                 colors: configuration.category.artworkColors,
                 accent: configuration.category.artworkAccent,
                 purpose: configuration.purpose,
@@ -164,7 +165,7 @@ struct EventInvitationScreen: View {
                     ZStack {
                         EventInvitationBackdrop(
                             presentation: presentation,
-                            blurProgress: blurProgress,
+                            scrollState: scrollState,
                             reduceMotion: reduceMotion,
                             reduceTransparency: reduceTransparency
                         )
@@ -182,9 +183,9 @@ struct EventInvitationScreen: View {
                         .scrollBounceBehavior(.basedOnSize)
                         .appSoftScrollEdges()
                         .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                            max(geometry.contentOffset.y + geometry.contentInsets.top, 0)
+                            InvitationScrollState.progress(for: geometry.contentOffset.y + geometry.contentInsets.top)
                         } action: { _, newOffset in
-                            scrollOffset = newOffset
+                            scrollState.progress = newOffset
                         }
                     }
                     .ignoresSafeArea(edges: .top)
@@ -203,7 +204,8 @@ struct EventInvitationScreen: View {
         .sheet(isPresented: $isShowingAttendees) {
             NavigationStack {
                 EventAttendeeListView(
-                    eventTitle: presentation?.title ?? "Event",
+                    eventID: attendeeEventID,
+                    isInvitationProjection: workspace.isInvitationProjection,
                     people: presentation?.people ?? []
                 )
             }
@@ -238,10 +240,6 @@ struct EventInvitationScreen: View {
         .onDisappear {
             previewPlayer.stop()
         }
-    }
-
-    private var blurProgress: CGFloat {
-        min(max(scrollOffset / 220, 0), 1)
     }
 
     private func hero(_ event: EventPresentation, height: CGFloat) -> some View {
@@ -307,6 +305,11 @@ struct EventInvitationScreen: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
             peopleCard(event)
             timingCard(event)
+
+            if case .idea(let id) = reference,
+               let idea = workspace.ideas.first(where: { $0.id == id }), workspace.showsPlanningInterface {
+                IdeaTeamResponseSection(idea: idea)
+            }
 
             if let location = event.location {
                 if event.isCancelled {
@@ -857,6 +860,13 @@ struct EventInvitationScreen: View {
             break
         }
     }
+
+    private var attendeeEventID: UUID {
+        switch reference {
+        case .main: workspace.mainEventID
+        case .subevent(let id), .idea(let id): id
+        }
+    }
 }
 
 private struct EventPersonPresentation: Identifiable {
@@ -920,14 +930,43 @@ private struct InvitationIdeaGroup: Identifiable {
     var id: IdeaCategory { category }
 }
 
+/// Only the backdrop observes scroll progress. The feature cards, map, and
+/// guest projection do not need to be rebuilt for every point of scrolling.
+@Observable
+final class InvitationScrollState {
+    var progress: CGFloat = 0
+
+    nonisolated static func progress(for offset: CGFloat) -> CGFloat {
+        min(max(offset / 220, 0), 1)
+    }
+}
+
+/// Decode once at display resolution instead of repeatedly decompressing the
+/// original upload as the scroll-driven backdrop changes. Originals stay in R2.
+enum InvitationImageDecoder {
+    nonisolated static func thumbnail(data: Data, maximumPixelSize: Int = 1600) -> UIImage? {
+        guard maximumPixelSize > 0,
+              let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: maximumPixelSize
+              ] as CFDictionary) else { return nil }
+        return UIImage(cgImage: image)
+    }
+}
+
 private struct EventInvitationBackdrop: View {
     let presentation: EventPresentation
-    let blurProgress: CGFloat
+    let scrollState: InvitationScrollState
     let reduceMotion: Bool
     let reduceTransparency: Bool
+    @State private var displayImage: UIImage?
 
     var body: some View {
         GeometryReader { proxy in
+            let blurProgress = scrollState.progress
             let activeProgress = reduceMotion ? 0 : blurProgress
             ZStack {
                 Color.black
@@ -952,11 +991,20 @@ private struct EventInvitationBackdrop: View {
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+        .task(id: presentation.imageData) {
+            displayImage = nil
+            guard let data = presentation.imageData else { return }
+            let decoded = await Task.detached(priority: .userInitiated) {
+                InvitationImageDecoder.thumbnail(data: data)
+            }.value
+            guard !Task.isCancelled else { return }
+            displayImage = decoded
+        }
     }
 
     @ViewBuilder
     private var artwork: some View {
-        if let imageData = presentation.imageData, let image = UIImage(data: imageData) {
+        if let image = displayImage {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
@@ -1141,6 +1189,8 @@ private struct EventPeopleBubbles: View {
 /// Keeps the invitation itself quiet while making each person's role and RSVP
 /// available at the point a guest chooses to see the full attendee list.
 private struct EventAttendeeListView: View {
+    @Environment(GuestInvitationStore.self) private var invitations
+    @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(ImageSafetyStore.self) private var safety
     @Environment(\.currentUserAccount) private var account
     @State private var pendingBlockID: String?
@@ -1150,15 +1200,19 @@ private struct EventAttendeeListView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.appContentColorScheme) private var appContentColorScheme
 
-    let eventTitle: String
+    let eventID: UUID
+    let isInvitationProjection: Bool
     let people: [EventPersonPresentation]
+    @State private var refreshedPeople: [EventPersonPresentation]?
+    @State private var refreshError: String?
 
     var body: some View {
         List {
             Section {
-                ForEach(people.filter { !safety.isBlocked($0.member?.userID) }) { person in
+                ForEach((refreshedPeople ?? people).filter { !safety.isBlocked($0.member?.userID) }) { person in
                     attendeeRow(person)
                         .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                        .listRowSeparator(.hidden)
                         .accessibilityElement(children: .combine)
                         .accessibilityLabel(accessibilityDescription(for: person))
                         .contextMenu {
@@ -1169,14 +1223,14 @@ private struct EventAttendeeListView: View {
                             }
                         }
                 }
-            } header: {
-                Text(eventTitle)
             } footer: {
                 Text("Attendance reflects each person's response for this event.")
                 Text(AppCopy.Safety.personActionsHint)
             }
             if let blockError { Text(blockError).foregroundStyle(AppTheme.ColorToken.warning) }
+            if let refreshError { Text(refreshError).foregroundStyle(AppTheme.ColorToken.warning) }
         }
+        .refreshable { await refreshAttendance() }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
@@ -1206,6 +1260,17 @@ private struct EventAttendeeListView: View {
                 }
             }
         }
+    }
+
+    private func refreshAttendance() async {
+        // Flush our pending RSVP before fetching everyone's canonical responses.
+        // Guests have no planning outbox and refresh only the invitation feed.
+        if !isInvitationProjection { await cloudSync.synchronize(trigger: .manual) }
+        await invitations.refresh(force: true)
+        refreshError = invitations.errorMessage
+        guard refreshError == nil else { return }
+        refreshedPeople = invitations.presentations[eventID]?.participants(for: .main)
+            .map(EventPersonPresentation.init) ?? []
     }
 
     @ViewBuilder

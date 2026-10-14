@@ -207,7 +207,9 @@ struct HomeView: View {
                 )
         }
         .sheet(isPresented: $isComposingNote) {
-            NoteComposerView()
+            NoteComposerView(event: workspace.selectedEventReference,
+                             eventID: workspace.selectedEventID,
+                             title: workspace.selectedEventTitle)
                 .environment(workspace)
         }
         .fullScreenCover(isPresented: $isPresentingInvitationSharing) {
@@ -457,11 +459,10 @@ struct HomeView: View {
         MediaArtwork(
             imageData: imageSafety.visibleImageData(reference == .main ? workspace.mainEventImageData : item?.imageData,
                 assetID: reference == .main ? workspace.mainEventMediaAssetID : item?.mediaAssetID),
-            assetName: reference == .main || category == .venue ? "DefaultVenueHero" : nil,
             remoteURL: nil,
-            symbol: category.symbol,
-            colors: category.artworkColors,
-            accent: category.artworkAccent,
+            symbol: reference == .main ? IdeaCategory.event.symbol : category.symbol,
+            colors: reference == .main ? IdeaCategory.event.artworkColors : category.artworkColors,
+            accent: reference == .main ? IdeaCategory.event.artworkAccent : category.artworkAccent,
             ambientBlurRadius: 10,
             progressiveBlurRadius: 24,
             blurStart: 0.48
@@ -1169,7 +1170,8 @@ private struct MainEventEditorView: View {
                 PhotoAttachmentPicker(
                     imageData: $imageData,
                     emptySymbol: "calendar.badge.plus",
-                    fallbackAssetName: "DefaultVenueHero",
+                    fallbackColors: IdeaCategory.event.artworkColors,
+                    fallbackAccent: IdeaCategory.event.artworkAccent,
                     suggestedConcept: "Artwork for \(trimmedTitle.isEmpty ? "our gathering" : trimmedTitle)"
                 )
             }
@@ -1337,69 +1339,6 @@ private struct MainEventEditorView: View {
             dressCode = workspace.dressCode
             message = workspace.eventMessage
             didLoad = true
-        }
-    }
-}
-
-private struct NoteComposerView: View {
-    @Environment(PlanningWorkspace.self) private var workspace
-    @Environment(\.dismiss) private var dismiss
-    @State private var note = ""
-    @FocusState private var isFocused: Bool
-
-    private let characterLimit = 750
-
-    private var trimmedNote: String {
-        note.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextEditor(text: $note)
-                        .frame(minHeight: 180, alignment: .topLeading)
-                        .focused($isFocused)
-                        .accessibilityLabel("Note")
-                        .onChange(of: note) { _, newValue in
-                            if newValue.count > characterLimit {
-                                note = String(newValue.prefix(characterLimit))
-                            }
-                        }
-                } header: {
-                    Text("Message")
-                } footer: {
-                    HStack {
-                        Text("Share an update with everyone coordinating \(workspace.selectedEventTitle).")
-
-                        Spacer(minLength: AppTheme.Spacing.compact)
-
-                        Text("\(note.count)/\(characterLimit)")
-                            .monospacedDigit()
-                            .accessibilityLabel("\(characterLimit - note.count) characters remaining")
-                    }
-                }
-            }
-            .navigationTitle("Send a Note")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Send") {
-                        workspace.sendNote(trimmedNote)
-                        dismiss()
-                    }
-                    .disabled(trimmedNote.isEmpty)
-                }
-            }
-            .task {
-                isFocused = true
-            }
         }
     }
 }

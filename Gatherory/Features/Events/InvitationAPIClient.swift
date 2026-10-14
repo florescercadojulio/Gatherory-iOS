@@ -7,6 +7,7 @@ struct InvitationPreview: Decodable {
     let locationName: String?
     let startsAt: String?
     let status: String?
+    let coverURL: URL?
 }
 
 struct InvitationAcceptance: Decodable {
@@ -140,6 +141,9 @@ struct InvitationAPIClient {
     let baseURL: URL
     var session: URLSession = .shared
     var tokenStore: any SessionTokenStore = KeychainSessionTokenStore()
+    var recordDiagnostic: (String, [String: String], Error) -> Void = { event, fields, error in
+        SyncDiagnostics.record(event, fields: fields, error: error)
+    }
 
     func request<Value: Decodable>(_ path: String, method: String = "GET", body: [String: String]? = nil,
                                    query: [URLQueryItem] = [], authenticated: Bool = true) async throws -> Value {
@@ -150,6 +154,12 @@ struct InvitationAPIClient {
         request.timeoutInterval = 30
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let requestID = UUID().uuidString.lowercased()
+        request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
+        // Only static endpoint names are diagnostic data; never log query tokens or URLs.
+        let endpoint = ["api/events/invitations", "api/invitations/preview", "api/invitations/accept"].contains(path)
+            ? path : "other"
+        var fields = ["endpoint": endpoint, "method": method, "request_id": requestID]
         if let token = try tokenStore.read(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         } else if authenticated { throw CloudSyncFailure.invalidSession }
@@ -157,16 +167,96 @@ struct InvitationAPIClient {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(body)
         }
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            recordDiagnostic("invitation_request_failed", fields, error)
+            throw error
+        }
         guard let response = response as? HTTPURLResponse else { throw EventInvitationFailure.unavailable }
-        if response.statusCode == 401 { throw CloudSyncFailure.invalidSession }
+        fields["http_status"] = String(response.statusCode)
+        fields["response_bytes"] = String(data.count)
+        if let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+           let serverError = root["error"] as? [String: Any] {
+            for (key, field) in [("traceId", "server_trace_id"), ("errorId", "server_error_id")] {
+                if let value = serverError[key] as? String, let id = UUID(uuidString: value) {
+                    fields[field] = id.uuidString.lowercased()
+                }
+            }
+        }
+        if response.statusCode == 401 {
+            recordDiagnostic("invitation_request_failed", fields, CloudSyncFailure.invalidSession)
+            throw CloudSyncFailure.invalidSession
+        }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let result = try decoder.decode(InvitationEnvelope<Value>.self, from: data)
+        let result: InvitationEnvelope<Value>
+        do {
+            result = try decoder.decode(InvitationEnvelope<Value>.self, from: data)
+        } catch {
+            fields.merge(InvitationDecodingDiagnostics.fields(for: error)) { _, new in new }
+            recordDiagnostic("invitation_response_decode_failed", fields, error)
+            throw EventInvitationFailure.invalidResponse
+        }
         guard (200..<300).contains(response.statusCode), result.ok, let value = result.data else {
-            throw EventInvitationFailure.server(result.error?.userMessage ?? String(localized: "The invitation could not be loaded. Try again."))
+            if (200..<300).contains(response.statusCode), result.ok {
+                fields["decode_kind"] = "missing_payload"
+                fields["decode_path"] = "data"
+                recordDiagnostic("invitation_response_decode_failed", fields, EventInvitationFailure.invalidResponse)
+                throw EventInvitationFailure.invalidResponse
+            }
+            let error = EventInvitationFailure.server(result.error?.userMessage ?? String(localized: "The invitation could not be loaded. Try again."))
+            recordDiagnostic("invitation_request_failed", fields, error)
+            throw error
         }
         return value
+    }
+}
+
+enum InvitationDecodingDiagnostics {
+    /// Coding keys identify the contract failure. Never include debugDescription,
+    /// underlying errors, response values, or arbitrary dictionary keys.
+    nonisolated static func fields(for error: Error) -> [String: String] {
+        let kind: String
+        let path: [any CodingKey]
+        var missingKey: String?
+        switch error {
+        case DecodingError.keyNotFound(let key, let context):
+            kind = "key_not_found"
+            path = context.codingPath + [key]
+            missingKey = safeKey(key)
+        case DecodingError.valueNotFound(_, let context):
+            kind = "null_value"
+            path = context.codingPath
+        case DecodingError.typeMismatch(_, let context):
+            kind = "type_mismatch"
+            path = context.codingPath
+        case DecodingError.dataCorrupted(let context):
+            kind = "invalid_value"
+            path = context.codingPath
+        default:
+            return ["decode_kind": "unknown"]
+        }
+        var fields = ["decode_kind": kind, "decode_path": path.isEmpty ? "$" : path.map(safeKey).joined(separator: ".")]
+        fields["missing_key"] = missingKey
+        return fields
+    }
+
+    nonisolated private static func safeKey(_ key: any CodingKey) -> String {
+        if let index = key.intValue { return "[\(index)]" }
+        let keys: Set<String> = [
+            "ok", "data", "error", "userMessage", "events", "id", "title", "startsAt", "endsAt",
+            "isAllDay", "timeZone", "locationName", "locationAddress", "locationAddressLine2",
+            "latitude", "longitude", "mapItemIdentifier", "description", "dressCode", "status", "complete",
+            "viewerPersonId", "role", "attendance", "coverURL", "coverId", "people", "ideas", "moments",
+            "name", "imageURL", "userId", "category", "note", "tracks", "linkURL", "imageId",
+            "configuration", "submittedByUserId", "addedAt", "addedBy", "addedByUserId",
+            "providerID", "rawValue", "catalogID", "artistName", "albumTitle", "artworkURL", "previewURL",
+            "externalURL", "isrc", "duration", "requiresSignIn", "eventId", "planningScopeId"
+        ]
+        return keys.contains(key.stringValue) ? key.stringValue : "<redacted-key>"
     }
 }
 

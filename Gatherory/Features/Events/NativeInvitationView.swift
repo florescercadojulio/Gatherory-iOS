@@ -16,25 +16,35 @@ struct NativeInvitationView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
-                    Image("GatheroryLaunchMark")
-                        .resizable().scaledToFit().frame(width: 72, height: 72)
-                        .accessibilityHidden(true)
+                    invitationArtwork
+                    Text("Event Invitation")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
                     Text(preview?.title ?? String(localized: "Event Invitation"))
                         .font(.largeTitle.bold())
+                        .accessibilityAddTraits(.isHeader)
                     if let value = preview?.startsAt, let date = invitationDate(value) {
                         Text(date, format: .dateTime.month(.wide).day().year()).font(.headline)
                     }
                     if let location = preview?.locationName { Text(location).foregroundStyle(.secondary) }
                     if let role = preview?.role {
-                        Text("You're invited as a \(WorkspaceRole(rawValue: role)?.title ?? role).")
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                            Text("You're invited as a \(WorkspaceRole(rawValue: role)?.title ?? role).")
+                                .font(.headline)
+                            if let resolvedRole = WorkspaceRole(rawValue: role) {
+                                Text(LocalizedStringKey(resolvedRole.detail))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                     if isLoading { ProgressView() }
                     if let errorMessage {
                         Text(errorMessage).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         Button("Try Again") { Task { await loadPreview() } }
                     }
-                    if preview != nil {
+                if preview != nil {
+                    VStack(spacing: AppTheme.Spacing.compact) {
                         Button {
                             if !authentication.isAuthenticated {
                                 invitations.requiresAuthentication = true
@@ -47,24 +57,36 @@ struct NativeInvitationView: View {
                             .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.capsule)
+                        .controlSize(.large)
                         .disabled(isLoading || isAccepting)
                         if authentication.isAuthenticated {
                             Button("Use Another Account") {
-                                authentication.signOut()
                                 invitations.requiresAuthentication = true
+                                Task { await authentication.signOut() }
                             }
+                            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
                         } else {
                             Text("Sign in or create an account to join. Your invitation will stay here.")
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                     }
+                    .frame(maxWidth: 520)
+                    .padding(.top, AppTheme.Spacing.compact)
+                    .frame(maxWidth: .infinity)
+                }
                 }
                 .frame(maxWidth: 520, alignment: .leading)
-                .padding(AppTheme.Spacing.spacious)
+                .padding(.horizontal, AppTheme.Spacing.spacious)
+                .padding(.bottom, AppTheme.Spacing.spacious)
                 .frame(maxWidth: .infinity)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .appSoftScrollEdges()
+            .ignoresSafeArea(edges: .top)
             .background(AppTheme.ColorToken.background)
             .navigationBarTitleDisplayMode(.inline)
+            .appClearNavigationBar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") { invitations.dismiss() }.labelStyle(.iconOnly)
@@ -72,6 +94,24 @@ struct NativeInvitationView: View {
             }
         }
         .task(id: "\(token)|\(authentication.currentUser?.id ?? "anonymous")") { await loadPreview() }
+    }
+
+    private var invitationArtwork: some View {
+        MediaArtwork(
+            imageData: nil, remoteURL: preview?.coverURL,
+            symbol: IdeaCategory.event.symbol,
+            colors: IdeaCategory.event.artworkColors,
+            accent: IdeaCategory.event.artworkAccent,
+            progressiveBlurRadius: 20, blurStart: 0.45
+        )
+        .frame(height: 240)
+        .mask {
+            LinearGradient(stops: [.init(color: .black, location: 0),
+                                   .init(color: .black, location: 0.65),
+                                   .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom)
+        }
+        .padding(.horizontal, -AppTheme.Spacing.spacious)
+        .accessibilityHidden(true)
     }
 
     private func loadPreview() async {

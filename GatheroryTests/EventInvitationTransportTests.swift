@@ -1,8 +1,122 @@
 import Foundation
 import Testing
+import UIKit
 @testable import Gatherory
 
 struct EventInvitationTransportTests {
+    @Test("Invitation decoding failures provide safe diagnostics and a localized retry message",
+          arguments: ["missing", "null", "type", "malformed", "payload"])
+    @MainActor
+    func decodingDiagnostics(fixture: String) async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [InvitationDiagnosticProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        var captured: [String: String] = [:]
+        var loggedEvent: String?
+        let api = InvitationAPIClient(baseURL: URL(string: "https://invitation-diagnostics.invalid")!,
+            session: session, tokenStore: InvitationDiagnosticTokens(), recordDiagnostic: { event, fields, _ in
+                loggedEvent = event
+                captured = fields
+            })
+        do {
+            let _: GuestInvitationFeed = try await api.request("api/events/invitations",
+                query: [URLQueryItem(name: "fixture", value: fixture), URLQueryItem(name: "token", value: "private-invite-token")])
+            Issue.record("Invalid response unexpectedly decoded")
+        } catch EventInvitationFailure.invalidResponse {
+            #expect(EventInvitationFailure.invalidResponse.localizedDescription == String(localized: "The invitation could not be loaded. Try again."))
+        }
+        #expect(loggedEvent == "invitation_response_decode_failed")
+        #expect(captured["endpoint"] == "api/events/invitations")
+        #expect(captured["http_status"] == "200")
+        #expect(UUID(uuidString: captured["request_id"] ?? "") != nil)
+        let expected: (String, String) = switch fixture {
+        case "missing": ("key_not_found", "data.events.[0].title")
+        case "null": ("null_value", "data.events.[0].title")
+        case "type": ("type_mismatch", "data.events.[0].title")
+        case "payload": ("missing_payload", "data")
+        default: ("invalid_value", "$")
+        }
+        #expect(captured["decode_kind"] == expected.0)
+        #expect(captured["decode_path"] == expected.1)
+        if fixture == "missing" { #expect(captured["missing_key"] == "title") }
+        let diagnostic = String(describing: captured)
+        #expect(!diagnostic.contains("private-"))
+        #expect(!diagnostic.contains("https://"))
+    }
+
+    @Test("Invitation errors retain safe server messages and correlation identifiers")
+    @MainActor
+    func serverDiagnostics() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [InvitationDiagnosticProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        var captured: [String: String] = [:]
+        let api = InvitationAPIClient(baseURL: URL(string: "https://invitation-diagnostics.invalid")!,
+            session: session, tokenStore: InvitationDiagnosticTokens(), recordDiagnostic: { _, fields, _ in captured = fields })
+        do {
+            let _: GuestInvitationFeed = try await api.request("api/events/invitations", query: [URLQueryItem(name: "fixture", value: "server")])
+            Issue.record("Forbidden response unexpectedly succeeded")
+        } catch EventInvitationFailure.server(let message) {
+            #expect(message == "Invitation unavailable")
+        }
+        #expect(captured["http_status"] == "403")
+        #expect(captured["server_trace_id"] == "11111111-1111-4111-8111-111111111111")
+        #expect(captured["server_error_id"] == "22222222-2222-4222-8222-222222222222")
+        #expect(captured["decode_kind"] == nil)
+    }
+
+    @Test("Decoding diagnostics redact arbitrary dictionary keys and debug descriptions")
+    @MainActor
+    func diagnosticPrivacy() {
+        struct Key: CodingKey {
+            let stringValue: String
+            var intValue: Int? { nil }
+            init?(stringValue: String) { self.stringValue = stringValue }
+            init?(intValue: Int) { return nil }
+        }
+        let error = DecodingError.keyNotFound(Key(stringValue: "private-email@example.com")!,
+            .init(codingPath: [], debugDescription: "private-response-body"))
+        let fields = InvitationDecodingDiagnostics.fields(for: error)
+        #expect(fields["missing_key"] == "<redacted-key>")
+        #expect(!String(describing: fields).contains("private-"))
+    }
+
+    @Test("Invitation scroll progress stops updating beyond the blur transition")
+    func boundedScrollProgress() {
+        #expect(InvitationScrollState.progress(for: -50) == 0)
+        #expect(InvitationScrollState.progress(for: 110) == 0.5)
+        #expect(InvitationScrollState.progress(for: 220) == 1)
+        #expect(InvitationScrollState.progress(for: 5000) == 1)
+    }
+
+    @Test("Invitation images decode to a bounded display size without changing the source")
+    @MainActor
+    func displayImageDownsampling() throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let original = UIGraphicsImageRenderer(size: CGSize(width: 2400, height: 1200), format: format).image { context in
+            UIColor.blue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 2400, height: 1200))
+        }
+        let data = try #require(original.pngData())
+        let decoded = try #require(InvitationImageDecoder.thumbnail(data: data, maximumPixelSize: 800))
+        #expect(decoded.cgImage?.width == 800)
+        #expect(decoded.cgImage?.height == 400)
+        #expect(UIImage(data: data)?.cgImage?.width == 2400)
+        #expect(InvitationImageDecoder.thumbnail(data: Data([0, 1, 2])) == nil)
+    }
+
+    @Test("Invitation previews decode signed cover URLs and tolerate missing covers")
+    func previewCoverDecoding() throws {
+        let decoder = JSONDecoder()
+        let covered = try decoder.decode(InvitationPreview.self, from: Data(#"{"requiresSignIn":false,"title":"Wedding","coverURL":"https://example.com/cover.png?signature=test"}"#.utf8))
+        #expect(covered.coverURL?.host == "example.com")
+        let missing = try decoder.decode(InvitationPreview.self, from: Data(#"{"requiresSignIn":true}"#.utf8))
+        #expect(missing.coverURL == nil)
+    }
+
     @Test("The account-linked participant emitted by the server decodes in iOS")
     @MainActor
     func acceptedParticipantDecodes() throws {
@@ -21,4 +135,38 @@ struct EventInvitationTransportTests {
         #expect(member.planningPermission == .manage)
         #expect(member.profileImageURL?.absoluteString == "https://example.com/avatar.jpg")
     }
+}
+
+@MainActor
+private final class InvitationDiagnosticTokens: SessionTokenStore {
+    func read() -> String? { "private-auth-token" }
+    func save(_ token: String) {}
+    func delete() {}
+}
+
+private final class InvitationDiagnosticProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard UUID(uuidString: request.value(forHTTPHeaderField: "X-Request-ID") ?? "") != nil else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        let fixture = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "fixture" }?.value
+        let body: String
+        switch fixture {
+        case "missing": body = #"{"ok":true,"data":{"events":[{"id":"11111111-1111-4111-8111-111111111111"}]}}"#
+        case "null": body = #"{"ok":true,"data":{"events":[{"id":"11111111-1111-4111-8111-111111111111","title":null}]}}"#
+        case "type": body = #"{"ok":true,"data":{"events":[{"id":"11111111-1111-4111-8111-111111111111","title":{"private-field":"private-value"}}]}}"#
+        case "payload": body = #"{"ok":true,"data":null}"#
+        case "server": body = #"{"ok":false,"error":{"userMessage":"Invitation unavailable","traceId":"11111111-1111-4111-8111-111111111111","errorId":"22222222-2222-4222-8222-222222222222"}}"#
+        default: body = "<html>private-response-body</html>"
+        }
+        let response = HTTPURLResponse(url: request.url!, statusCode: fixture == "server" ? 403 : 200,
+            httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }

@@ -28,12 +28,14 @@ actor OfflineSyncCoordinator {
     func synchronize(
         scopeID: UUID,
         trigger: SyncTrigger = .manual,
-        at date: Date = .now
+        at date: Date = .now,
+        pullRemoteChanges: Bool = true
     ) async throws -> SyncRunSummary {
         _ = trigger // Reserved for metrics and policy decisions when activated.
         var summary = SyncRunSummary()
 
         while true {
+            try Task.checkCancellation()
             let claimed = try await store.claimReadyMutations(
                 scopeID: scopeID,
                 ownerUserID: ownerUserID,
@@ -45,6 +47,7 @@ actor OfflineSyncCoordinator {
             summary.pushed += claimed.count
 
             do {
+                try Task.checkCancellation()
                 let response = try await transport.push(claimed)
                 let claimedIDs = Set(claimed.map(\.id))
                 let batchResults = response.results.filter {
@@ -102,9 +105,15 @@ actor OfflineSyncCoordinator {
             }
         }
 
+        guard pullRemoteChanges else {
+            summary.completedAt = .now
+            return summary
+        }
         var cursor = try await remoteApplier.currentCursor(for: scopeID)
         repeat {
+            try Task.checkCancellation()
             let page = try await transport.pull(scopeID: scopeID, after: cursor)
+            try Task.checkCancellation()
             try await remoteApplier.apply(page, to: scopeID)
             summary.pulled += page.changes.count
             cursor = page.nextCursor

@@ -39,14 +39,9 @@ struct WorkspaceSettingsView: View {
                 HStack(alignment: .center, spacing: AppTheme.Spacing.standard) {
                     MediaArtwork(
                         imageData: workspace.mainEventImageData,
-                        assetName: workspace.mainEventImageData == nil ? "DefaultVenueHero" : nil,
-                        symbol: "calendar",
-                        colors: [
-                            AppTheme.ColorToken.accentSecondary,
-                            AppTheme.ColorToken.accent,
-                            AppTheme.ColorToken.accentTertiary
-                        ],
-                        accent: AppTheme.ColorToken.onAccent,
+                        symbol: IdeaCategory.event.symbol,
+                        colors: IdeaCategory.event.artworkColors,
+                        accent: IdeaCategory.event.artworkAccent,
                         progressiveBlurRadius: 0
                     )
                     .frame(width: 72, height: 72)

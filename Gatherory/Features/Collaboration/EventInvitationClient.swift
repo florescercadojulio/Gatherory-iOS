@@ -20,11 +20,13 @@ struct GeneratedEventInvitation: Decodable {
 
 enum EventInvitationFailure: LocalizedError {
     case unavailable
+    case invalidResponse
     case server(String)
 
     var errorDescription: String? {
         switch self {
         case .unavailable: String(localized: "An invitation link could not be prepared. Synchronize your event and try again.")
+        case .invalidResponse: String(localized: "The invitation could not be loaded. Try again.")
         case .server(let message): NSLocalizedString(message, comment: "Safe invitation server message")
         }
     }

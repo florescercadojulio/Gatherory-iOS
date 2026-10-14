@@ -192,7 +192,7 @@ struct GatheroryTests {
         #expect(localizableStrings["tab.home"] == "Inicio")
         #expect(localizableStrings["idea.category.music"] == "Música")
         #expect(localizableStrings["primer.onboarding.welcome.title"] == "Bienvenido a Gatherory")
-        #expect(localizableStrings["primer.decide.title"] == "Decide qué sigue")
+        #expect(localizableStrings["primer.decide.title"] == "Ayuda a tu equipo a elegir")
         #expect(
             infoPlistStrings["NSCameraUsageDescription"]
                 == "Toma fotos para las ideas, los regalos y los eventos que estás organizando."
@@ -707,7 +707,7 @@ struct GatheroryTests {
         #expect(workspace.timeline.filter { $0.linkedIdeaID == idea.id }.count == 1)
     }
 
-    @Test("Loving an idea approves it")
+    @Test("Loving an idea records a preference without approving it")
     func loveIdea() throws {
         let workspace = PlanningWorkspace.sample
         let idea = try #require(workspace.decisionQueue.first)
@@ -715,11 +715,12 @@ struct GatheroryTests {
         workspace.decide(.love, on: idea)
 
         let updatedIdea = try #require(workspace.ideas.first { $0.id == idea.id })
-        #expect(updatedIdea.status == .chosen)
+        #expect(updatedIdea.status == idea.status)
+        #expect(workspace.response(on: idea) == .love)
         #expect(workspace.decisionQueue.contains { $0.id == idea.id } == false)
     }
 
-    @Test("Loving a dated event idea creates its linked event")
+    @Test("Explicit approval of a dated event idea creates its linked event")
     func loveEventIdeaCreatesEvent() throws {
         let workspace = PlanningWorkspace.sample
         let idea = PlanningIdea(
@@ -738,14 +739,14 @@ struct GatheroryTests {
         )
         workspace.addIdea(idea)
 
-        workspace.decide(.love, on: idea)
+        workspace.updateIdea(idea, status: .chosen)
 
         let updatedIdea = try #require(workspace.ideas.first { $0.id == idea.id })
         #expect(updatedIdea.status == .chosen)
         #expect(workspace.timeline.contains { $0.linkedIdeaID == idea.id })
     }
 
-    @Test("Loving an undated event idea keeps the proposal in Ideas")
+    @Test("Explicit approval of an undated event idea keeps the proposal in Ideas")
     func loveUndatedEventIdeaNeedsDate() throws {
         let workspace = PlanningWorkspace.sample
         let idea = PlanningIdea(
@@ -764,7 +765,7 @@ struct GatheroryTests {
         )
         workspace.addIdea(idea)
 
-        workspace.decide(.love, on: idea)
+        workspace.updateIdea(idea, status: .chosen)
 
         let approvedIdea = try #require(workspace.ideas.first { $0.id == idea.id })
         #expect(approvedIdea.status == .chosen)
@@ -806,7 +807,7 @@ struct GatheroryTests {
         #expect(workspace.timeline.filter { $0.linkedIdeaID == idea.id }.count == 1)
     }
 
-    @Test("Maybe saves an idea for later")
+    @Test("Maybe records uncertainty without changing the team status")
     func saveIdeaForLater() throws {
         let workspace = PlanningWorkspace.sample
         let idea = try #require(workspace.decisionQueue.first)
@@ -814,10 +815,11 @@ struct GatheroryTests {
         workspace.decide(.maybe, on: idea)
 
         let updatedIdea = try #require(workspace.ideas.first { $0.id == idea.id })
-        #expect(updatedIdea.status == .maybe)
+        #expect(updatedIdea.status == idea.status)
+        #expect(workspace.response(on: idea) == .maybe)
     }
 
-    @Test("Passing an idea archives it")
+    @Test("Passing an idea records a personal response")
     func passIdea() throws {
         let workspace = PlanningWorkspace.sample
         let idea = try #require(workspace.decisionQueue.first)
@@ -825,7 +827,8 @@ struct GatheroryTests {
         workspace.decide(.pass, on: idea)
 
         let updatedIdea = try #require(workspace.ideas.first { $0.id == idea.id })
-        #expect(updatedIdea.status == .passed)
+        #expect(updatedIdea.status == idea.status)
+        #expect(workspace.response(on: idea) == .pass)
     }
 
     @Test("The latest decision can be undone")
@@ -837,7 +840,7 @@ struct GatheroryTests {
         workspace.undoLastDecision()
 
         let restoredIdea = try #require(workspace.ideas.first { $0.id == idea.id })
-        #expect(restoredIdea.status == .new)
+        #expect(restoredIdea.status == idea.status)
         #expect(workspace.decisionQueue.contains { $0.id == idea.id })
     }
 
@@ -1057,7 +1060,7 @@ struct GatheroryTests {
     @Test("Ideas follow context while decisions stay workspace-wide")
     func ideasFollowSelectedEventContextWhileDecisionsStayWorkspaceWide() throws {
         let workspace = PlanningWorkspace.sample
-        let child = try #require(workspace.childEvents.first)
+        let child = try #require(workspace.childEvents.first { workspace.canManageEvent(.subevent($0.id)) })
         let initialDecisionIDs = Set(workspace.decisionQueue.map(\.id))
 
         workspace.selectEventContext(.subevent(child.id))
@@ -1157,7 +1160,7 @@ struct GatheroryTests {
     @Test("Notes are scoped to the selected event")
     func notesFollowSelectedEventContext() throws {
         let workspace = PlanningWorkspace.sample
-        let child = try #require(workspace.childEvents.first)
+        let child = try #require(workspace.childEvents.first { workspace.canManageEvent(.subevent($0.id)) })
 
         workspace.selectEventContext(.subevent(child.id))
         workspace.sendNote("Meet at the side entrance.")

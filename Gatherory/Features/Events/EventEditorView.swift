@@ -547,10 +547,9 @@ struct EventEditorView: View {
 
             PhotoAttachmentPicker(
                 imageData: $imageData,
-                emptySymbol: isMainEvent ? "heart.fill" : category.symbol,
-                fallbackAssetName: isMainEvent || category == .venue ? "DefaultVenueHero" : nil,
-                fallbackColors: isMainEvent ? nil : category.artworkColors,
-                fallbackAccent: isMainEvent ? AppTheme.ColorToken.accent : category.artworkAccent,
+                emptySymbol: isMainEvent ? IdeaCategory.event.symbol : category.symbol,
+                fallbackColors: isMainEvent ? IdeaCategory.event.artworkColors : category.artworkColors,
+                fallbackAccent: isMainEvent ? IdeaCategory.event.artworkAccent : category.artworkAccent,
                 suggestedConcept: "Event artwork for \(resolvedTitle)"
             )
         } header: {

@@ -14,6 +14,7 @@ enum AccountOnboardingState: Equatable, Sendable {
 final class WorkspaceRemoteChangeApplier: RemoteChangeApplying {
     private let persistence: WorkspacePersistenceController
     private let library: WorkspaceLibrary
+    private let ownerUserID: String?
 
     init(
         persistence: WorkspacePersistenceController,
@@ -21,6 +22,7 @@ final class WorkspaceRemoteChangeApplier: RemoteChangeApplying {
     ) {
         self.persistence = persistence
         self.library = library
+        self.ownerUserID = persistence.activeUserID
     }
 
     func currentCursor(for scopeID: UUID) async throws -> String? {
@@ -28,6 +30,8 @@ final class WorkspaceRemoteChangeApplier: RemoteChangeApplying {
     }
 
     func apply(_ page: SyncPullPage, to scopeID: UUID) async throws {
+        try Task.checkCancellation()
+        guard persistence.activeUserID == ownerUserID else { throw CancellationError() }
         try persistence.applyRemotePage(page, scopeID: scopeID, to: library)
     }
 }
@@ -52,19 +56,28 @@ final class WorkspaceCloudSyncController {
     @ObservationIgnored private let persistence: WorkspacePersistenceController
     @ObservationIgnored private let library: WorkspaceLibrary
     @ObservationIgnored private let baseURL: URL?
+    @ObservationIgnored private let injectedTransport: (any WorkspaceSnapshotTransport)?
+    @ObservationIgnored private let usesRemoteAccountState: Bool
+    @ObservationIgnored private var activationRevision = UUID()
     @ObservationIgnored private var activeUserID: String?
     @ObservationIgnored private var hasBootstrappedUserID: String?
     @ObservationIgnored private var scheduledTask: Task<Void, Never>?
     @ObservationIgnored private var needsAnotherSync = false
+    @ObservationIgnored private var syncTask: Task<Void, Never>?
+    @ObservationIgnored private var isPreparingSignOut = false
 
     init(
         persistence: WorkspacePersistenceController,
         library: WorkspaceLibrary,
-        baseURL: URL?
+        baseURL: URL?,
+        transport: (any WorkspaceSnapshotTransport)? = nil,
+        usesRemoteAccountState: Bool? = nil
     ) {
         self.persistence = persistence
         self.library = library
         self.baseURL = baseURL
+        self.injectedTransport = transport
+        self.usesRemoteAccountState = usesRemoteAccountState ?? AppRuntimeConfiguration.usesRemoteAccountState
 
         persistence.onPendingMutations = { [weak self] in
             self?.schedule(trigger: .mutationCreated)
@@ -72,6 +85,8 @@ final class WorkspaceCloudSyncController {
     }
 
     func activate(userID: String?, seedData: Bool) async {
+        let revision = UUID()
+        activationRevision = revision
         guard activeUserID != userID else {
             if userID != nil {
                 await synchronize(trigger: .appBecameActive)
@@ -83,6 +98,14 @@ final class WorkspaceCloudSyncController {
 
         scheduledTask?.cancel()
         scheduledTask = nil
+        // Join cancellation before replacing the graph, including A -> B -> A.
+        syncTask?.cancel()
+        await syncTask?.value
+        guard !Task.isCancelled, activationRevision == revision else { return }
+        SyncDiagnostics.record("sync_account_changed", fields: [
+            "previous_account": SyncDiagnostics.accountKey(activeUserID),
+            "next_account": SyncDiagnostics.accountKey(userID)
+        ])
         activeUserID = userID
         hasBootstrappedUserID = nil
         needsAnotherSync = false
@@ -97,11 +120,11 @@ final class WorkspaceCloudSyncController {
         failedSyncScopeID = nil
         accountOnboardingState = userID == nil
             ? .signedOut
-            : AppRuntimeConfiguration.usesRemoteAccountState ? .resolving : .needsOnboarding
+            : usesRemoteAccountState ? .resolving : .needsOnboarding
         persistence.activate(userID: userID, in: library, seedData: seedData)
 
         guard let userID else { return }
-        guard AppRuntimeConfiguration.usesRemoteAccountState else {
+        guard usesRemoteAccountState else {
             accountOnboardingState = library.workspaces.isEmpty ? .needsOnboarding : .complete
             return
         }
@@ -136,7 +159,7 @@ final class WorkspaceCloudSyncController {
 
     func schedule(trigger: SyncTrigger) {
         refreshSaveState()
-        guard activeUserID != nil else { return }
+        guard activeUserID != nil, !isPreparingSignOut else { return }
         scheduledTask?.cancel()
         scheduledTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(650))
@@ -146,6 +169,65 @@ final class WorkspaceCloudSyncController {
     }
 
     func synchronize(trigger: SyncTrigger = .manual) async {
+        guard !isPreparingSignOut else { return }
+        await runJoinedSync(trigger: trigger)
+    }
+
+    private func runJoinedSync(trigger: SyncTrigger) async {
+        if let syncTask {
+            needsAnotherSync = true
+            await syncTask.value
+            return
+        }
+        let task = Task {
+            defer { self.syncTask = nil }
+            await self.performSync(trigger: trigger)
+        }
+        syncTask = task
+        await task.value
+    }
+
+    func prepareForSignOut(keepingPendingChanges: Bool) async throws {
+        isPreparingSignOut = true
+        defer { isPreparingSignOut = false }
+        scheduledTask?.cancel()
+        scheduledTask = nil
+        // Offline connections must not trap the user on the progress screen.
+        // Capture debounced edits BEFORE an old pull can replace the graph.
+        if activeUserID != nil { try persistence.flushForAccountTransition(library) }
+        syncTask?.cancel()
+        var timedOut = false
+        let deadline = Task {
+            do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            timedOut = true
+            self.syncTask?.cancel()
+        }
+        defer { deadline.cancel() }
+        await syncTask?.value
+        if timedOut { throw URLError(.timedOut) }
+        guard activeUserID != nil else { return }
+        try persistence.flushForAccountTransition(library)
+        if !keepingPendingChanges, usesRemoteAccountState {
+            try persistence.prepareFinalSyncRetry()
+            // A clean account must not be trapped by an unrelated bootstrap or
+            // refresh failure. Read the durable outboxes, not a stale UI flag.
+            let needsUpload = try !persistence.pendingScopeIDs().isEmpty || persistence.hasPendingMediaTransfers()
+            SyncDiagnostics.record("sign_out_sync_checked", fields: ["needs_upload": String(needsUpload)])
+            if needsUpload { await runJoinedSync(trigger: .manual) }
+            if timedOut { throw URLError(.timedOut) }
+            refreshSaveState()
+            if needsUpload, let lastError { throw lastError }
+            guard !cannotReadSaveState,
+                  pendingChangeScopeIDs.isEmpty, !hasPendingMediaUploads else {
+                if let lastMediaError { throw lastMediaError }
+                throw CloudSyncFailure.server("SIGN_OUT_SYNC_PENDING")
+            }
+        }
+        // Unsent records stay account-scoped on disk when explicitly skipped.
+        await activate(userID: nil, seedData: false)
+    }
+
+    private func performSync(trigger: SyncTrigger) async {
         guard let userID = activeUserID,
               let baseURL
         else { return }
@@ -165,13 +247,24 @@ final class WorkspaceCloudSyncController {
             refreshSaveState()
         }
 
-        PostHogSDK.shared.logger?.info("workspace_sync_started trigger=\(trigger.rawValue)")
-        let transport = PostgresSyncTransport(baseURL: baseURL)
+        let runID = UUID().uuidString
+        var stage = "bootstrap"
+        var diagnosticFields: [String: String] {
+            ["run_id": runID, "account_key": SyncDiagnostics.accountKey(userID), "trigger": trigger.rawValue, "stage": stage,
+             "signing_out": String(isPreparingSignOut),
+             "scope_id": activeSyncScopeID?.uuidString ?? "none",
+             "pending_scopes": String(pendingChangeScopeIDs.count),
+             "pending_photo_scopes": String(pendingPhotoScopeIDs.count)]
+        }
+        SyncDiagnostics.record("workspace_sync_started", fields: diagnosticFields)
+        let transport: any WorkspaceSnapshotTransport = injectedTransport ?? PostgresSyncTransport(baseURL: baseURL)
         syncPass: repeat {
             needsAnotherSync = false
             do {
-                if hasBootstrappedUserID != userID {
+                if hasBootstrappedUserID != userID, !isPreparingSignOut {
+                    stage = "bootstrap"
                     let response = try await transport.bootstrap()
+                    try Task.checkCancellation()
                     guard activeUserID == userID else { return }
                     try persistence.applyBootstrap(
                         response.snapshots,
@@ -192,11 +285,14 @@ final class WorkspaceCloudSyncController {
                     hasBootstrappedUserID = userID
                 }
 
+                stage = "prepare_outbox"
                 try persistence.repairWorkspaceScopeMismatches(from: library)
                 try persistence.prepareMediaTransfers(from: library)
                 try persistence.sanitizePendingMediaMutations()
                 let pendingScopes = try persistence.pendingScopeIDs()
-                let scopes = Set(library.workspaces.map(\.mainEventID)).union(pendingScopes)
+                let scopes = isPreparingSignOut
+                    ? pendingScopes.union(try persistence.pendingMediaScopeIDs())
+                    : Set(library.workspaces.map(\.mainEventID)).union(pendingScopes)
                 let store = SwiftDataSyncStore(modelContainer: persistence.container)
                 let applier = WorkspaceRemoteChangeApplier(
                     persistence: persistence,
@@ -216,12 +312,15 @@ final class WorkspaceCloudSyncController {
                 var mediaError: Error?
 
                 for scopeID in scopes.sorted(by: { $0.uuidString < $1.uuidString }) {
+                    try Task.checkCancellation()
                     guard activeUserID == userID else { return }
                     activeSyncScopeID = scopeID
                     refreshSaveState()
+                    stage = "push_pull"
                     let syncSummary = try await coordinator.synchronize(
                         scopeID: scopeID,
-                        trigger: trigger
+                        trigger: trigger,
+                        pullRemoteChanges: !isPreparingSignOut
                     )
                     if let failureCode = syncSummary.attentionFailureCode {
                         // A malformed legacy workspace mutation leaves the
@@ -235,7 +334,11 @@ final class WorkspaceCloudSyncController {
                         }
                         throw CloudSyncFailure.server(failureCode)
                     }
+                    stage = "upload_media"
                     let mediaSummary = try await mediaCoordinator.uploadPendingMedia(scopeID: scopeID)
+                    if let error = mediaSummary.deferredError {
+                        SyncDiagnostics.record("workspace_media_failed", fields: diagnosticFields, error: error)
+                    }
                     if mediaSummary.deferredError != nil { photoAttentionScopeIDs.insert(scopeID) }
                     else { photoAttentionScopeIDs.remove(scopeID) }
                     mediaError = mediaError ?? mediaSummary.deferredError
@@ -243,12 +346,25 @@ final class WorkspaceCloudSyncController {
                         // Asset ids are tiny entity updates. Push them
                         // immediately so canonical media placements never lag
                         // behind a completed R2 upload.
-                        _ = try await coordinator.synchronize(
+                        stage = "publish_media"
+                        let published = try await coordinator.synchronize(
                             scopeID: scopeID,
-                            trigger: .mutationCreated
+                            trigger: .mutationCreated,
+                            pullRemoteChanges: !isPreparingSignOut
                         )
+                        if let code = published.attentionFailureCode { throw CloudSyncFailure.server(code) }
                     }
-                    await mediaCoordinator.downloadMissingMedia(scopeID: scopeID)
+                    // Signing out uploads local work, not a fresh offline photo
+                    // library that is about to leave the screen.
+                    stage = "download_media"
+                    let downloads = isPreparingSignOut ? MediaUploadRunSummary()
+                        : await mediaCoordinator.downloadMissingMedia(scopeID: scopeID)
+                    if let error = downloads.deferredError {
+                        SyncDiagnostics.record("workspace_media_failed", fields: diagnosticFields, error: error)
+                    }
+                    guard activeUserID == userID else { return }
+                    if downloads.deferredError != nil { photoAttentionScopeIDs.insert(scopeID) }
+                    mediaError = mediaError ?? downloads.deferredError
                     confirmedSyncScopeIDs.insert(scopeID)
                     if failedSyncScopeID == scopeID { failedSyncScopeID = nil }
                     refreshSaveState()
@@ -266,10 +382,11 @@ final class WorkspaceCloudSyncController {
                     lastMediaError = nil
                 }
                 lastSuccessfulSyncAt = .now
-                PostHogSDK.shared.logger?.info("workspace_sync_completed")
+                SyncDiagnostics.record("workspace_sync_completed", fields: diagnosticFields)
             } catch {
+                guard !Task.isCancelled else { return }
                 failedSyncScopeID = activeSyncScopeID
-                PostHogSDK.shared.logger?.error("workspace_sync_failed")
+                SyncDiagnostics.record("workspace_sync_failed", fields: diagnosticFields, error: error)
                 lastError = error
                 if hasBootstrappedUserID == nil {
                     accountOnboardingState = hasConfirmedOnboarding(for: userID) || !library.workspaces.isEmpty

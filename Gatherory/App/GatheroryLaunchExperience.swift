@@ -28,6 +28,7 @@ struct GatheroryLaunchContainer: View {
     }
 
     var body: some View {
+        @Bindable var authentication = authentication
         ZStack {
             Group {
                 if let token = invitations.pendingToken {
@@ -48,11 +49,11 @@ struct GatheroryLaunchContainer: View {
                 } else if !guestInvitations.events.isEmpty || invitations.didJoinThisSession {
                     AppRootView()
                 } else if AppRuntimeConfiguration.alwaysShowsOnboarding && !completedOnboardingThisSession {
-                    OnboardingView(onCreateWorkspace: finishOnboarding)
+                    OnboardingView(onCreateWorkspace: finishOnboarding, onSkipCreation: completeOnboarding)
                 } else if AppRuntimeConfiguration.usesRemoteAccountState {
                     remoteAccountExperience
                 } else if shouldShowLocalOnboarding {
-                    OnboardingView(onCreateWorkspace: finishOnboarding)
+                    OnboardingView(onCreateWorkspace: finishOnboarding, onSkipCreation: completeOnboarding)
                 } else {
                     AppRootView()
                 }
@@ -65,7 +66,28 @@ struct GatheroryLaunchContainer: View {
                     .zIndex(1)
             }
         }
+        .disabled(authentication.isSigningOut)
+        .overlay {
+            if authentication.isSigningOut {
+                ProgressView("Finishing sign out…")
+                    .padding(24)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+            }
+        }
+        .alert("Couldn’t Finish Syncing", isPresented: $authentication.signOutNeedsAttention) {
+            Button("Try Again") { Task { await authentication.signOut() } }
+            Button("Sign Out Anyway", role: .destructive) {
+                Task { await authentication.signOut(keepingPendingChanges: true) }
+            }
+            Button("Stay Signed In", role: .cancel) {}
+        } message: {
+            Text("Some changes may still need syncing. If you sign out now, saved changes stay on this device for this account. Sign back in to finish syncing before removing the app.")
+        }
         .task {
+            authentication.prepareForSignOut = { keepingPendingChanges in
+                try await cloudSync.prepareForSignOut(keepingPendingChanges: keepingPendingChanges)
+                await guestInvitations.activate(account: nil)
+            }
             guard isShowingSplash else { return }
 
             let milliseconds = reduceMotion
@@ -94,6 +116,7 @@ struct GatheroryLaunchContainer: View {
             // session has resolved to the canonical account identity.
             guard hasRestoredAuthentication else { return }
             invitations.resetJoinedSession()
+            completedOnboardingThisSession = false
             preparedAccountID = nil
             let account = authentication.currentUser
             await cloudSync.activate(
@@ -123,14 +146,14 @@ struct GatheroryLaunchContainer: View {
                 Text(guestInvitations.errorMessage ?? "")
             } actions: {
                 Button("Try Again") { Task { await guestInvitations.refresh(force: true); await cloudSync.retryInitialBootstrap() } }
-                Button("Sign Out", role: .destructive) { authentication.signOut() }
+                Button("Sign Out", role: .destructive) { Task { await authentication.signOut() } }
             }
         } else {
         switch cloudSync.accountOnboardingState {
         case .signedOut, .resolving:
             AccountOnboardingLoadingView()
         case .needsOnboarding:
-            OnboardingView(onCreateWorkspace: finishOnboarding)
+            OnboardingView(onCreateWorkspace: finishOnboarding, onSkipCreation: completeOnboarding)
         case .complete:
             AppRootView()
         case .unavailable:
@@ -148,7 +171,7 @@ struct GatheroryLaunchContainer: View {
                     // Bootstrap may be unavailable even though a stale local
                     // session still identifies an account. Always leave an
                     // escape hatch so the user can authenticate again.
-                    authentication.signOut()
+                    Task { await authentication.signOut() }
                 } label: {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                 }
@@ -165,6 +188,10 @@ struct GatheroryLaunchContainer: View {
         // Persisting here guarantees the local archive and durable outbox entry
         // exist before onboarding transitions to the workspace experience.
         persistence.flush(workspaceLibrary)
+        completeOnboarding()
+    }
+
+    private func completeOnboarding() {
         // Decide education belongs to the onboarding journey. Development
         // builds force onboarding, so completing that flow should make the
         // contextual primer eligible again. In production onboarding only
@@ -184,16 +211,110 @@ struct GatheroryLaunchContainer: View {
     }
 }
 
-private struct AccountOnboardingLoadingView: View {
+/// Account preparation is real work, not a timed splash or a second onboarding step.
+/// Keep the artwork local so this screen never adds network work to account loading.
+struct AccountOnboardingLoadingView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-            Text("Loading your Gatherory account…")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 24)
+
+                    artwork
+                        .frame(height: dynamicTypeSize.isAccessibilitySize ? 156 : 256)
+
+                    VStack(spacing: 16) {
+                        Text("Gatherory")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        Text(AppCopy.Primer.AccountLoading.title)
+                            .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .accessibilityAddTraits(.isHeader)
+
+                        Text(AppCopy.Primer.AccountLoading.message)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(3)
+                    }
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 360)
+                    .padding(.top, 12)
+
+                    Spacer(minLength: 48)
+                }
+                .padding(.horizontal, 28)
+                .frame(maxWidth: 520, minHeight: max(0, geometry.size.height))
+                .frame(maxWidth: .infinity)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .accessibilityElement(children: .combine)
+        .background(AppTheme.ColorToken.background.ignoresSafeArea())
     }
+
+    private var artwork: some View {
+        ZStack {
+            if reduceMotion {
+                loadingMark
+            } else {
+                loadingMark
+                    .keyframeAnimator(
+                        initialValue: LoadingMarkMotion(),
+                        repeating: scenePhase == .active
+                    ) { content, value in
+                        content
+                            .rotationEffect(.degrees(value.rotation))
+                            .offset(y: value.offsetY)
+                    } keyframes: { _ in
+                        KeyframeTrack(\.rotation) {
+                            LinearKeyframe(360, duration: 2.1)
+                        }
+                        KeyframeTrack(\.offsetY) {
+                            CubicKeyframe(-16, duration: 0.7)
+                            CubicKeyframe(0, duration: 0.55)
+                            CubicKeyframe(-5, duration: 0.3)
+                            CubicKeyframe(0, duration: 0.3)
+                            LinearKeyframe(0, duration: 0.25)
+                        }
+                    }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(AppCopy.Primer.AccountLoading.status)
+        .accessibilityIdentifier("account-loading-status")
+    }
+
+    private var loadingMark: some View {
+        Image("GatheroryLaunchMark")
+            .resizable()
+            .scaledToFit()
+            .frame(width: dynamicTypeSize.isAccessibilitySize ? 120 : 176,
+                   height: dynamicTypeSize.isAccessibilitySize ? 120 : 176)
+    }
+
+    private struct LoadingMarkMotion {
+        var rotation: Double = 0
+        var offsetY: CGFloat = 0
+    }
+}
+
+#Preview("Account loading · Light") {
+    AccountOnboardingLoadingView().preferredColorScheme(.light)
+}
+
+#Preview("Account loading · Dark") {
+    AccountOnboardingLoadingView().preferredColorScheme(.dark)
+}
+
+#Preview("Account loading · Large text") {
+    AccountOnboardingLoadingView().environment(\.dynamicTypeSize, .accessibility3)
 }
 
 private struct GatheroryAnimatedSplash: View {
@@ -328,4 +449,9 @@ private struct LaunchMarkMotion {
         glowOpacity: 0,
         shineOffset: -190
     )
+}
+
+#Preview {
+//    GatheroryAnimatedSplash(reduceMotion: false)
+    AccountOnboardingLoadingView()
 }

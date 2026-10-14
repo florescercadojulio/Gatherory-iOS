@@ -170,6 +170,12 @@ enum AppCopy {
     }
 
     enum Primer {
+        enum AccountLoading {
+            static var title: String { localized("primer.accountLoading.title", default: "Bringing it all together") }
+            static var message: String { localized("primer.accountLoading.message", default: "Getting your events and invitations ready.") }
+            static var status: String { localized("primer.accountLoading.status", default: "Preparing your account…") }
+        }
+
         enum Onboarding {
             static var welcomeTitle: String {
                 localized("primer.onboarding.welcome.title", default: "Welcome to Gatherory")
@@ -220,12 +226,12 @@ enum AppCopy {
 
         enum Decide {
             static var title: String {
-                String(localized: "primer.decide.title", defaultValue: "Decide what moves forward")
+                String(localized: "primer.decide.title", defaultValue: "Help your team choose")
             }
             static var message: String {
                 String(localized:
                     "primer.decide.message",
-                    defaultValue: "Explore ideas from every event. Pass, save one for later, or love it to move the plan forward."
+                    defaultValue: "Share your preference on each idea. Your response joins the team’s input without approving or removing the idea for anyone else."
                 )
             }
             static var datedTitle: String {
@@ -259,16 +265,16 @@ enum AppCopy {
                 String(localized: "primer.decide.practice.instruction", defaultValue: "Try a swipe or tap a choice. Your real ideas won’t change.")
             }
             static var practiceAccessibilityHint: String {
-                String(localized: "primer.decide.practice.accessibility", defaultValue: "Swipe left to pass, up to save for later, or right to approve. This is a practice idea and won’t change your plans.")
+                String(localized: "primer.decide.practice.accessibility", defaultValue: "Swipe left to pass, up for maybe, or right to love it. This practice won’t change your plans.")
             }
             static var passFeedback: String {
-                String(localized: "primer.decide.feedback.pass", defaultValue: "Passed. Keep exploring ideas.")
+                String(localized: "primer.decide.feedback.pass", defaultValue: "Not for you. Teammates can still weigh in.")
             }
             static var maybeFeedback: String {
-                String(localized: "primer.decide.feedback.maybe", defaultValue: "Saved for later in Ideas.")
+                String(localized: "primer.decide.feedback.maybe", defaultValue: "Undecided. You can change your response in Ideas.")
             }
             static var loveFeedback: String {
-                String(localized: "primer.decide.feedback.love", defaultValue: "Approved. Dated event ideas appear on Home.")
+                String(localized: "primer.decide.feedback.love", defaultValue: "You love it. Approval is still a separate team decision.")
             }
         }
 

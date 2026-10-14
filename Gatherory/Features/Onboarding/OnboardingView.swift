@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnboardingView: View {
     var onCreateWorkspace: (PlanningWorkspace) -> Void = { _ in }
+    var onSkipCreation: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -147,12 +148,18 @@ struct OnboardingView: View {
                     }
                     .padding(.horizontal, AppTheme.Spacing.spacious)
 
-                    Button(AppCopy.Primer.Onboarding.createEvent) {
-                        isCreatingWorkspace = true
+                    VStack(spacing: AppTheme.Spacing.compact) {
+                        Button(AppCopy.Primer.Onboarding.createEvent) {
+                            isCreatingWorkspace = true
+                        }
+                        .font(.headline)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+
+                        Button(AppCopy.Common.notNow, action: onSkipCreation)
+                            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                            .accessibilityIdentifier("onboarding.skipEventCreation")
                     }
-                    .font(.headline)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
                     .padding(.horizontal, AppTheme.Spacing.spacious)
                     .padding(.bottom, AppTheme.Spacing.spacious)
                 }
@@ -173,8 +180,8 @@ struct OnboardingView: View {
                 title: "Avery & Morgan",
                 date: "June 13",
                 location: "Ann Arbor, MI",
-                assetName: "DefaultVenueHero",
-                colors: [AppTheme.ColorToken.navy, AppTheme.ColorToken.lilac],
+                assetName: nil,
+                colors: IdeaCategory.event.artworkColors,
                 width: cardWidth,
                 height: cardHeight
             )
@@ -246,7 +253,7 @@ private struct OnboardingEventPreview: View {
             MediaArtwork(
                 imageData: nil,
                 assetName: assetName,
-                symbol: "sparkles",
+                symbol: IdeaCategory.event.symbol,
                 colors: colors,
                 accent: .white,
                 progressiveBlurRadius: 0

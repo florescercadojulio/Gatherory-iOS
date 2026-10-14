@@ -55,20 +55,27 @@ private struct CollaborationInviteScreen: View {
         workspace.isMainEventContext ? workspace.mainEventImageData : selectedTimelineEvent?.imageData
     }
 
+    private var artworkSymbol: String { workspace.isMainEventContext ? IdeaCategory.event.symbol : selectedEventCategory.symbol }
+    private var artworkColors: [Color] { workspace.isMainEventContext ? IdeaCategory.event.artworkColors : selectedEventCategory.artworkColors }
+    private var artworkAccent: Color { workspace.isMainEventContext ? IdeaCategory.event.artworkAccent : selectedEventCategory.artworkAccent }
+
     private var invitationPreviewImage: Image {
         if let selectedEventImageData, let image = UIImage(data: selectedEventImageData) {
-            Image(uiImage: image)
-        } else {
-            Image("DefaultVenueHero")
+            return Image(uiImage: image)
         }
+        let renderer = ImageRenderer(content: MediaArtwork(imageData: nil, symbol: artworkSymbol,
+            colors: artworkColors, accent: artworkAccent, progressiveBlurRadius: 0)
+            .frame(width: 320, height: 400))
+        return renderer.uiImage.map { Image(uiImage: $0) } ?? Image(systemName: artworkSymbol)
     }
 
     var body: some View {
         ZStack {
             CollaborationBackdrop(
                 imageData: selectedEventImageData,
-                assetName: workspace.isMainEventContext ? "DefaultVenueHero" : nil,
-                category: selectedEventCategory
+                symbol: artworkSymbol,
+                colors: artworkColors,
+                accent: artworkAccent
             )
 
             ScrollView {
@@ -136,10 +143,9 @@ private struct CollaborationInviteScreen: View {
         return layout {
             MediaArtwork(
                 imageData: selectedEventImageData,
-                assetName: workspace.isMainEventContext ? "DefaultVenueHero" : nil,
-                symbol: selectedEventCategory.symbol,
-                colors: selectedEventCategory.artworkColors,
-                accent: selectedEventCategory.artworkAccent,
+                symbol: artworkSymbol,
+                colors: artworkColors,
+                accent: artworkAccent,
                 progressiveBlurRadius: 0
             )
             .frame(width: 72, height: 88)
@@ -725,8 +731,9 @@ private struct CollaborationBackdrop: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let imageData: Data?
-    let assetName: String?
-    let category: TimelineCategory
+    let symbol: String
+    let colors: [Color]
+    let accent: Color
 
     var body: some View {
         ZStack {
@@ -735,10 +742,9 @@ private struct CollaborationBackdrop: View {
             } else {
                 MediaArtwork(
                     imageData: imageData,
-                    assetName: assetName,
-                    symbol: category.symbol,
-                    colors: category.artworkColors,
-                    accent: category.artworkAccent,
+                    symbol: symbol,
+                    colors: colors,
+                    accent: accent,
                     progressiveBlurRadius: 0
                 )
                     .scaleEffect(1.16)

@@ -4,6 +4,184 @@ import Testing
 @testable import Gatherory
 
 struct OfflineSyncTests {
+    @Test("Skipping event creation survives account switches without creating data or skipping another account")
+    @MainActor
+    func skipEventCreation() async throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false)
+        let first = UUID().uuidString
+        let second = UUID().uuidString
+        defer {
+            UserDefaults.standard.removeObject(forKey: "accountOnboardingComplete.\(first)")
+            UserDefaults.standard.removeObject(forKey: "accountOnboardingComplete.\(second)")
+        }
+        let sync = WorkspaceCloudSyncController(persistence: persistence, library: library,
+            baseURL: URL(string: "https://example.invalid")!, transport: SignOutSyncTransport(), usesRemoteAccountState: true)
+        await sync.activate(userID: first, seedData: false)
+        #expect(sync.accountOnboardingState == .needsOnboarding)
+        sync.markOnboardingCompletedLocally()
+        #expect(sync.accountOnboardingState == .complete)
+        #expect(library.workspaces.isEmpty)
+        #expect(try persistence.pendingScopeIDs().isEmpty)
+        await sync.activate(userID: second, seedData: false)
+        #expect(sync.accountOnboardingState == .needsOnboarding)
+        await sync.activate(userID: first, seedData: false)
+        #expect(sync.accountOnboardingState == .complete)
+        #expect(library.workspaces.isEmpty)
+    }
+
+    @Test("A clean account can sign out after a failed refresh without losing its saved data")
+    @MainActor
+    func cleanSignOutAfterFailedRefresh() async throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false)
+        let transport = SignOutSyncTransport()
+        let sync = WorkspaceCloudSyncController(persistence: persistence, library: library,
+            baseURL: URL(string: "https://example.invalid")!, transport: transport, usesRemoteAccountState: true)
+        await sync.activate(userID: "host", seedData: false)
+        library.add(PlanningWorkspace.newWorkspace(title: "Saved", startsAt: .now, eventLocation: nil, imageData: nil))
+        try persistence.flushForAccountTransition(library)
+        await sync.synchronize()
+        #expect(try persistence.pendingScopeIDs().isEmpty)
+        transport.failPull = true
+        await sync.synchronize()
+        #expect(sync.lastError != nil)
+        try await sync.prepareForSignOut(keepingPendingChanges: false)
+        #expect(persistence.activeUserID == nil)
+        await sync.activate(userID: "collaborator", seedData: false)
+        #expect(library.workspaces.isEmpty)
+        try await sync.prepareForSignOut(keepingPendingChanges: false)
+        await sync.activate(userID: "host", seedData: false)
+        #expect(library.workspaces.first?.title == "Saved")
+    }
+
+    @Test("Final sign-out uploads pending edits without requiring a successful refresh")
+    @MainActor
+    func signOutDoesNotPull() async throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false)
+        let transport = SignOutSyncTransport()
+        let sync = WorkspaceCloudSyncController(persistence: persistence, library: library,
+            baseURL: URL(string: "https://example.invalid")!, transport: transport, usesRemoteAccountState: true)
+        await sync.activate(userID: "host", seedData: false)
+        library.add(PlanningWorkspace.newWorkspace(title: "Final edit", startsAt: .now, eventLocation: nil, imageData: nil))
+        transport.failPull = true
+        try await sync.prepareForSignOut(keepingPendingChanges: false)
+        #expect(persistence.activeUserID == nil)
+        #expect(!transport.payloads.isEmpty)
+        persistence.activate(userID: "host", in: library)
+        #expect(try persistence.pendingScopeIDs().isEmpty)
+    }
+
+    @Test("Sync diagnostics preserve typed and legacy server error identifiers")
+    func diagnosticErrorEnvelopes() {
+        let media = SyncDiagnostics.serverFailure(in: Data(#"{"ok":false,"error":{"code":"MEDIA_FORBIDDEN","errorId":"reference","userMessage":"Private message"}}"#.utf8))
+        #expect(media.code == "MEDIA_FORBIDDEN")
+        #expect(media.errorID == "reference")
+        let sync = SyncDiagnostics.serverFailure(in: Data(#"{"error":"SYNC_SCOPE_NOT_FOUND","errorId":"sync-reference"}"#.utf8))
+        #expect(sync.code == "SYNC_SCOPE_NOT_FOUND")
+        #expect(sync.errorID == "sync-reference")
+        #expect(SyncDiagnostics.serverFailure(in: Data("not json".utf8)).code == nil)
+    }
+
+    @Test("A cancelled pull cannot apply its late response during account teardown")
+    @MainActor
+    func cancelledPullDoesNotApply() async throws {
+        let transport = SignOutSyncTransport()
+        transport.holdNextPull = true
+        let applier = EmptyRemoteChangeApplier()
+        let coordinator = OfflineSyncCoordinator(store: BatchOutboxStore(mutations: []), transport: transport, remoteApplier: applier)
+        let task = Task { try await coordinator.synchronize(scopeID: UUID()) }
+        while transport.resumePull == nil { await Task.yield() }
+        task.cancel()
+        transport.resumePull?.resume()
+        await #expect(throws: CancellationError.self) { try await task.value }
+        #expect(applier.appliedPages == 0)
+    }
+
+    @Test("Final sign-out sync joins a pending push and flushes the latest local edits")
+    @MainActor
+    func finalSyncWaitsAndFlushes() async throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false)
+        let transport = SignOutSyncTransport()
+        let sync = WorkspaceCloudSyncController(persistence: persistence, library: library,
+            baseURL: URL(string: "https://example.invalid")!, transport: transport, usesRemoteAccountState: true)
+        await sync.activate(userID: "host", seedData: false)
+        let workspace = PlanningWorkspace.newWorkspace(title: "Before", startsAt: .now, eventLocation: nil, imageData: nil)
+        library.add(workspace)
+        try persistence.flushForAccountTransition(library)
+        transport.holdNextPush = true
+        let background = Task { await sync.synchronize() }
+        while transport.resumePush == nil { await Task.yield() }
+        workspace.title = "Latest edit before sign out"
+        let finalSync = Task { try await sync.prepareForSignOut(keepingPendingChanges: false) }
+        await Task.yield()
+        #expect(persistence.activeUserID == "host")
+        transport.resumePush?.resume()
+        transport.resumePush = nil
+        await background.value
+        try await finalSync.value
+        #expect(persistence.activeUserID == nil)
+        #expect(library.workspaces.isEmpty)
+        persistence.activate(userID: "host", in: library)
+        #expect(try persistence.pendingScopeIDs().isEmpty)
+        #expect(transport.payloads.contains { String(data: $0, encoding: .utf8)?.contains("Latest edit before sign out") == true })
+    }
+
+    @Test("Offline sign-out keeps pending changes isolated until the same account returns")
+    @MainActor
+    func failedFinalSyncPreservesOutbox() async throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false)
+        let transport = SignOutSyncTransport()
+        let sync = WorkspaceCloudSyncController(persistence: persistence, library: library,
+            baseURL: URL(string: "https://example.invalid")!, transport: transport, usesRemoteAccountState: true)
+        await sync.activate(userID: "host", seedData: false)
+        library.add(PlanningWorkspace.newWorkspace(title: "Offline event", startsAt: .now, eventLocation: nil, imageData: nil))
+        transport.failPush = true
+        await #expect(throws: URLError.self) {
+            try await sync.prepareForSignOut(keepingPendingChanges: false)
+        }
+        #expect(persistence.activeUserID == "host")
+        #expect(try !persistence.pendingScopeIDs().isEmpty)
+        try await sync.prepareForSignOut(keepingPendingChanges: true)
+        persistence.activate(userID: "guest", in: library)
+        #expect(library.workspaces.isEmpty)
+        #expect(try persistence.pendingScopeIDs().isEmpty)
+        persistence.activate(userID: "host", in: library)
+        #expect(library.workspaces.first?.title == "Offline event")
+        #expect(try !persistence.pendingScopeIDs().isEmpty)
+    }
+
+    @Test("Returning to an account preserves its matching cover cache during bootstrap")
+    @MainActor
+    func bootstrapPreservesAccountArtwork() throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false, ownerUserID: "host")
+        let bytes = Data([1, 2, 3])
+        let workspace = PlanningWorkspace.newWorkspace(title: "Host event", startsAt: .now, eventLocation: nil, imageData: bytes)
+        workspace.mainEventMediaAssetID = UUID()
+        func snapshot(_ workspace: PlanningWorkspace) throws -> RemoteWorkspaceSnapshot {
+            RemoteWorkspaceSnapshot(scopeID: workspace.mainEventID,
+                payload: try JSONEncoder().encode(WorkspaceArchiveV1(workspace: workspace)), serverVersion: 1, updatedAt: .now)
+        }
+        try persistence.applyBootstrap([snapshot(workspace)], to: library)
+        workspace.mainEventImageData = nil
+        persistence.activate(userID: "guest", in: library)
+        try persistence.applyBootstrap([snapshot(workspace)], to: library)
+        #expect(library.workspaces.first?.mainEventImageData == nil)
+        persistence.activate(userID: "host", in: library)
+        try persistence.applyBootstrap([snapshot(workspace)], to: library)
+        #expect(library.workspaces.first?.mainEventImageData == bytes)
+        workspace.mainEventMediaAssetID = UUID()
+        try persistence.applyBootstrap([snapshot(workspace)], to: library)
+        #expect(library.workspaces.first?.mainEventImageData == nil)
+        workspace.mainEventMediaAssetID = nil
+        try persistence.applyBootstrap([snapshot(workspace)], to: library)
+        #expect(library.workspaces.first?.mainEventImageData == nil)
+    }
+
     @Test("Media upload completion keeps its queued workspace and child event after a context switch")
     @MainActor
     func mediaUploadContextSwitch() throws {
@@ -858,6 +1036,36 @@ private final class RejectedSyncTransport: SyncTransport {
 
 @MainActor
 private final class EmptyRemoteChangeApplier: RemoteChangeApplying {
+    var appliedPages = 0
     func currentCursor(for scopeID: UUID) -> String? { nil }
-    func apply(_ page: SyncPullPage, to scopeID: UUID) {}
+    func apply(_ page: SyncPullPage, to scopeID: UUID) { appliedPages += 1 }
+}
+
+@MainActor
+private final class SignOutSyncTransport: WorkspaceSnapshotTransport {
+    var failPull = false
+    var holdNextPull = false
+    var resumePull: CheckedContinuation<Void, Never>?
+    var holdNextPush = false
+    var failPush = false
+    var resumePush: CheckedContinuation<Void, Never>?
+    var payloads: [Data] = []
+    func bootstrap() -> SyncBootstrapResponse { .init(account: nil, snapshots: []) }
+    func push(_ mutations: [PendingMutationSnapshot]) async throws -> SyncPushResponse {
+        if holdNextPush {
+            holdNextPush = false
+            await withCheckedContinuation { resumePush = $0 }
+        }
+        if failPush { throw URLError(.notConnectedToInternet) }
+        payloads.append(contentsOf: mutations.map(\.payload))
+        return .init(results: mutations.map { .init(mutationID: $0.id, disposition: .applied, serverVersion: 1, failureCode: nil) })
+    }
+    func pull(scopeID: UUID, after cursor: String?) async throws -> SyncPullPage {
+        if failPull { throw CloudSyncFailure.server("SYNC_SCOPE_NOT_FOUND") }
+        if holdNextPull {
+            holdNextPull = false
+            await withCheckedContinuation { resumePull = $0 }
+        }
+        return .init(changes: [], nextCursor: cursor, hasMore: false)
+    }
 }

@@ -3,6 +3,47 @@ import Testing
 @testable import Gatherory
 
 struct EventInvitationTests {
+    @Test("RSVP updates only the viewer's participation in that event and survives sync encoding")
+    @MainActor
+    func perPersonAttendance() throws {
+        let workspace = PlanningWorkspace.sample
+        let collaboratorIndex = try #require(workspace.members.firstIndex { $0.participantRole == .collaborator })
+        let memberID = workspace.members[collaboratorIndex].id
+        workspace.members[collaboratorIndex].userID = "rsvp-collaborator"
+        let account = UserAccount(id: "rsvp-collaborator", email: "rsvp@example.com", displayName: "Collaborator",
+                                  role: .member, authenticationProvider: .password, createdAt: .now)
+        workspace.configureViewer(account)
+        let child = TimelineItem(title: "Dinner", category: .other, scheduledAt: .now, location: "", participantIDs: [memberID])
+        workspace.timeline.append(child)
+        workspace.addParticipant(memberID, to: .subevent(child.id))
+        let otherPeople = workspace.eventParticipations.filter { $0.memberID != memberID }
+        let childBefore = workspace.currentViewerResponse(for: .subevent(child.id))
+        for (response, attendance) in [(EventResponse.going, AttendanceStatus.going), (.notSure, .maybe), (.notGoing, .declined)] {
+            workspace.setMainEventResponse(response)
+            #expect(workspace.currentViewerResponse(for: .main) == response)
+            #expect(workspace.participants(for: .main).first { $0.id == memberID }?.attendance == attendance)
+            #expect(workspace.currentViewerResponse(for: .subevent(child.id)) == childBefore)
+            #expect(workspace.eventParticipations.filter { $0.memberID != memberID } == otherPeople)
+
+            let archive = WorkspaceArchiveV1(workspace: workspace)
+            let relationship = try #require(workspace.eventParticipations.first { $0.memberID == memberID && $0.eventID == workspace.mainEventID })
+            let payload = try JSONEncoder().encode(relationship)
+            #expect(try JSONDecoder().decode(EventParticipation.self, from: payload).attendance == attendance)
+            let restored = try JSONDecoder().decode(WorkspaceArchiveV1.self, from: JSONEncoder().encode(archive)).makeWorkspace()
+            restored.configureViewer(account)
+            #expect(restored.currentViewerResponse(for: .main) == response)
+        }
+        workspace.setResponse(.notSure, for: child)
+        #expect(workspace.currentViewerResponse(for: .subevent(child.id)) == .notSure)
+        #expect(workspace.currentViewerResponse(for: .main) == .notGoing)
+        workspace.configureViewer(UserAccount(id: "not-in-event", email: "stranger@example.com", displayName: "Stranger",
+                                              role: .member, authenticationProvider: .password, createdAt: .now))
+        #expect(workspace.currentViewerResponse(for: .main) == nil)
+        let before = workspace.eventParticipations
+        workspace.setMainEventResponse(.going)
+        #expect(workspace.eventParticipations == before)
+    }
+
     @Test("Messages contains the real invitation URL and preserves the original event context")
     @MainActor
     func nativeMessageDraftContent() throws {

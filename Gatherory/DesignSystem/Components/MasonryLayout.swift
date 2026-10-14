@@ -12,7 +12,16 @@ struct MasonryLayout: Layout {
         subviews: Subviews,
         cache: inout Void
     ) -> CGSize {
-        let width = proposal.width ?? 0
+        // Layout probes may propose infinity. Never return that as a concrete
+        // size or pass it to a child's frame; use the ideal column width.
+        let width: CGFloat
+        if let proposed = proposal.width, proposed.isFinite {
+            width = Self.finiteDimension(proposed)
+        } else {
+            let idealColumnWidth = subviews.map { Self.finiteDimension($0.sizeThatFits(.unspecified).width) }.max() ?? 0
+            let idealWidth = idealColumnWidth * CGFloat(max(columnCount, 1)) + CGFloat(max(columnCount - 1, 0)) * spacing
+            width = Self.resolvedWidth(proposal.width, idealWidth: idealWidth)
+        }
         let measurements = measurements(for: subviews, width: width)
         return CGSize(width: width, height: measurements.height)
     }
@@ -43,7 +52,7 @@ struct MasonryLayout: Layout {
 
     private func measurements(for subviews: Subviews, width: CGFloat) -> Measurements {
         let columns = max(columnCount, 1)
-        let availableWidth = max(width - (CGFloat(columns - 1) * spacing), 0)
+        let availableWidth = max(Self.finiteDimension(width) - (CGFloat(columns - 1) * spacing), 0)
         let columnWidth = availableWidth / CGFloat(columns)
         var columnHeights = Array(repeating: CGFloat.zero, count: columns)
         var placements: [Placement] = []
@@ -57,7 +66,7 @@ struct MasonryLayout: Layout {
             )
 
             placements.append(Placement(column: column, y: columnHeights[column]))
-            columnHeights[column] += size.height + spacing
+            columnHeights[column] += Self.finiteDimension(size.height) + spacing
         }
 
         let height = max((columnHeights.max() ?? 0) - (subviews.isEmpty ? 0 : spacing), 0)
@@ -67,6 +76,15 @@ struct MasonryLayout: Layout {
             height: height,
             placements: placements
         )
+    }
+
+    nonisolated static func finiteDimension(_ value: CGFloat) -> CGFloat {
+        value.isFinite ? max(value, 0) : 0
+    }
+
+    nonisolated static func resolvedWidth(_ proposed: CGFloat?, idealWidth: CGFloat) -> CGFloat {
+        guard let proposed, proposed.isFinite else { return finiteDimension(idealWidth) }
+        return finiteDimension(proposed)
     }
 
     private struct Measurements {

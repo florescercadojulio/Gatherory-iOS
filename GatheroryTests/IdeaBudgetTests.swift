@@ -52,14 +52,14 @@ struct IdeaBudgetTests {
         #expect(workspace.workspaceBudgetRemaining == 100)
     }
 
-    @Test("Undoing a pass restores the idea estimate")
+    @Test("Personal responses and undo do not alter the shared budget")
     func undoRestoresBudgetImpact() {
         let workspace = makeWorkspace()
         let idea = makeIdea(cost: 50)
         workspace.addIdea(idea)
 
         workspace.decide(.pass, on: idea)
-        #expect(workspace.workspaceCostTotal == .zero)
+        #expect(workspace.workspaceCostTotal == 50)
 
         workspace.undoLastDecision()
         #expect(workspace.workspaceCostTotal == 50)

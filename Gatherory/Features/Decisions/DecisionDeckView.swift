@@ -43,8 +43,8 @@ struct DecisionDeckView: View {
             if let idea = currentIdea {
                 DecisionCard(
                     idea: idea,
-                    eventTitle: idea.category == .event ? nil : workspace.eventTitle(for: idea),
                     currencyCode: workspace.currencyCode,
+                    teamSummary: workspace.teamResponseSummary(for: idea),
                     dragOffset: dragOffset,
                     transitionNamespace: decisionTransition
                 )
@@ -256,28 +256,16 @@ struct DecisionDeckView: View {
 
 private struct DecisionCard: View {
     @Environment(ImageSafetyStore.self) private var imageSafety
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     let idea: PlanningIdea
-    let eventTitle: String?
     let currencyCode: String
+    let teamSummary: TeamResponseSummary
     let dragOffset: CGSize
     let transitionNamespace: Namespace.ID
 
     var body: some View {
         ZStack {
             artwork
-
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0.28),
-                    .init(color: .black.opacity(0.14), location: 0.48),
-                    .init(color: .black.opacity(reduceTransparency ? 0.88 : 0.72), location: 0.78),
-                    .init(color: .black.opacity(reduceTransparency ? 0.96 : 0.88), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
 
             VStack(spacing: 0) {
                 SwipeGuide()
@@ -292,11 +280,11 @@ private struct DecisionCard: View {
             }
             .padding(AppTheme.Spacing.standard)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.primary)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous)
-                .stroke(.white.opacity(0.16), lineWidth: 1)
+                .stroke(Color(uiColor: .separator), lineWidth: 0.5)
         }
         .shadow(color: .black.opacity(0.18), radius: 20, y: 10)
         .matchedTransitionSource(id: idea.id, in: transitionNamespace)
@@ -326,20 +314,6 @@ private struct DecisionCard: View {
 
     private var ideaDetails: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let eventTitle {
-                Label(eventTitle, systemImage: "calendar")
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .padding(.horizontal, 10)
-                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-                    .background(.black.opacity(reduceTransparency ? 0.72 : 0.24), in: Capsule())
-                    .overlay {
-                        Capsule()
-                            .stroke(.white.opacity(0.14), lineWidth: 0.5)
-                    }
-                    .accessibilityLabel("For \(eventTitle)")
-            }
-
             HStack(spacing: AppTheme.Spacing.compact) {
                 Label(idea.category.title, systemImage: idea.category.symbol)
                     .font(.caption.weight(.semibold))
@@ -357,28 +331,24 @@ private struct DecisionCard: View {
                 .tracking(-0.7)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(idea.note)
-                .font(.body)
-                .foregroundStyle(.white.opacity(0.82))
-                .fixedSize(horizontal: false, vertical: true)
+            if !idea.note.isEmpty {
+                Text(idea.note)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
-            Label("Suggested by \(idea.submittedBy)", systemImage: "person.crop.circle.fill")
+            TeamResponseBar(summary: teamSummary, showsTitle: false)
+                .id(idea.id)
+
+            Label(idea.submittedBy, systemImage: "person.crop.circle.fill")
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white.opacity(0.9))
-                .padding(.horizontal, 12)
-                .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-                .background(.black.opacity(reduceTransparency ? 0.72 : 0.24), in: Capsule())
-                .overlay {
-                    Capsule()
-                        .stroke(.white.opacity(0.14), lineWidth: 0.5)
-                }
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel("Suggested by \(idea.submittedBy)")
         }
         .padding(AppTheme.Spacing.standard)
-        .background(.black.opacity(reduceTransparency ? 0.62 : 0.18), in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 0.5)
-        }
+        .ideaContentSurface()
     }
 
     @ViewBuilder
@@ -404,6 +374,7 @@ private enum DecisionScope: Hashable {
 }
 
 private struct SwipeLabel: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let title: String
     let symbol: String
 
@@ -412,8 +383,8 @@ private struct SwipeLabel: View {
             .font(.title2.bold())
             .padding(.horizontal, AppTheme.Spacing.standard)
             .padding(.vertical, AppTheme.Spacing.compact)
-            .background(.black.opacity(0.55), in: Capsule())
-            .foregroundStyle(.white)
+            .background(reduceTransparency ? AnyShapeStyle(Color(uiColor: .secondarySystemBackground)) : AnyShapeStyle(.regularMaterial), in: Capsule())
+            .foregroundStyle(.primary)
     }
 }
 
@@ -432,27 +403,57 @@ private struct SwipeGuide: View {
 }
 
 private struct SwipeGuideLabel: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let title: String
     let symbol: String
 
     var body: some View {
         Label(title, systemImage: symbol)
             .font(.caption.weight(.bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(.primary)
             .padding(.horizontal, 10)
             .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-            .background(.black.opacity(0.28), in: Capsule())
+            .background(reduceTransparency ? AnyShapeStyle(Color(uiColor: .secondarySystemBackground)) : AnyShapeStyle(.regularMaterial), in: Capsule())
             .overlay {
                 Capsule()
-                    .stroke(.white.opacity(0.16), lineWidth: 0.5)
+                    .stroke(Color(uiColor: .separator), lineWidth: 0.5)
             }
     }
 }
 
-#Preview {
-    NavigationStack {
-        DecisionDeckView()
-            .environment(PlanningWorkspace.sample)
-            .environment(MusicCatalog())
+#if DEBUG
+private struct DecisionCardAppearancePreview: View {
+    @Namespace private var transition
+    @State private var safety = ImageSafetyStore()
+    @State private var replayID = 0
+    private let idea = PlanningIdea(
+        title: "Reception Decor", note: "", category: .decor,
+        submittedBy: "Julio Flores Cercado"
+    )
+
+    var body: some View {
+        VStack {
+            Button { replayID += 1 } label: { Text(verbatim: "Replay entrance") }
+                .buttonStyle(.bordered)
+            DecisionCard(
+                idea: idea, currencyCode: "USD",
+                teamSummary: .init(love: 1, unanswered: 1),
+                dragOffset: .zero, transitionNamespace: transition
+            )
+            .id(replayID)
+        }
+        .padding(16)
+        .background(Color(uiColor: .systemBackground))
+        .environment(safety)
     }
 }
+
+#Preview("Decide card · Light") {
+    DecisionCardAppearancePreview().preferredColorScheme(.light)
+}
+
+#Preview("Decide card · Dark") {
+    DecisionCardAppearancePreview().preferredColorScheme(.dark)
+}
+
+#endif

@@ -43,6 +43,7 @@ final class PlanningWorkspace {
     /// The main event owns the portion that hasn't been allocated to child events.
     var mainEventBudgetCap: Decimal?
     var notes: [EventNote]
+    var ideaResponses: [IdeaResponse]
     var mainEventStatus: MainEventStatus
     var mainEventResponse: EventResponse?
     private(set) var eventMoments: [EventMoment]
@@ -94,6 +95,7 @@ final class PlanningWorkspace {
         currencyCode: String = Locale.current.currency?.identifier ?? "USD",
         mainEventBudgetCap: Decimal? = nil,
         notes: [EventNote] = [],
+        ideaResponses: [IdeaResponse] = [],
         mainEventStatus: MainEventStatus = .draft,
         mainEventResponse: EventResponse? = nil,
         eventMoments: [EventMoment] = [],
@@ -194,6 +196,7 @@ final class PlanningWorkspace {
         } else {
             self.mainEventBudgetCap = nil
         }
+        self.ideaResponses = ideaResponses
         self.notes = notes.map { note in
             guard note.eventID == nil else { return note }
             return EventNote(
@@ -250,9 +253,12 @@ final class PlanningWorkspace {
     /// ideas are created and viewed, but it must not hide another event's
     /// pending decision.
     func decisionQueue(for eventID: UUID?) -> [PlanningIdea] {
-        ideas
+        let answeredIDs = Set(ideaResponses.filter {
+            $0.userID == responseUserID && $0.choice != nil
+        }.map(\.ideaID))
+        return ideas
             .filter { idea in
-                guard idea.status == .new, canDecide(on: idea) else { return false }
+                guard canRespond(to: idea), !answeredIDs.contains(idea.id) else { return false }
                 guard let eventID else { return true }
                 return (idea.eventID ?? mainEventID) == eventID
             }
@@ -300,6 +306,7 @@ final class PlanningWorkspace {
     }
 
     func configureViewer(_ account: UserAccount?) {
+        if viewerUserID != account?.id { decisionHistory.removeAll() }
         isViewerConfigured = true
         viewerUserID = account?.id
         viewerEmail = account?.email
@@ -1064,14 +1071,49 @@ final class PlanningWorkspace {
     var canUndoDecision: Bool {
         guard let decision = decisionHistory.last,
               let idea = ideas.first(where: { $0.id == decision.ideaID }) else { return false }
-        return canDecide(on: idea)
+        return decision.userID == responseUserID && canRespond(to: idea)
     }
 
     private func canDecide(on idea: PlanningIdea) -> Bool {
         guard !isInvitationProjection, showsPlanningInterface, !isMainEventDeleted,
-              !currentMainEventStatus.isReadOnly else { return false }
+              !currentMainEventStatus.isReadOnly,
+              currentViewerMember(for: .main)?.planningPermission != .viewOnly else { return false }
         guard let eventID = idea.eventID, eventID != mainEventID else { return true }
-        return timeline.contains { $0.id == eventID && $0.status != .cancelled }
+        return canManageEvent(.subevent(eventID))
+    }
+
+    private var responseUserID: String? {
+        viewerUserID ?? currentViewerMember?.userID
+            ?? (!isViewerConfigured ? currentViewerMember?.id.uuidString : nil)
+    }
+
+    func canRespond(to idea: PlanningIdea) -> Bool {
+        canDecide(on: idea) && responseUserID != nil && idea.category != .music
+            && [.new, .maybe, .shortlisted].contains(idea.status)
+    }
+
+    func response(on idea: PlanningIdea) -> DecisionChoice? {
+        ideaResponses.first { $0.ideaID == idea.id && $0.userID == responseUserID }?.choice
+    }
+
+    func teamResponseSummary(for idea: PlanningIdea) -> TeamResponseSummary {
+        let eligible = Set(participants(for: .main).filter {
+            $0.participantRole != .guest && $0.planningPermission != .viewOnly && $0.invitationStatus == .active
+        }.map { $0.userID ?? $0.id.uuidString })
+        var choices: [String: DecisionChoice] = [:]
+        for response in ideaResponses where response.ideaID == idea.id {
+            choices[response.userID] = response.choice
+        }
+        var result = TeamResponseSummary()
+        for userID in eligible {
+            switch choices[userID] {
+            case .love: result.love += 1
+            case .maybe: result.maybe += 1
+            case .pass: result.pass += 1
+            case nil: result.unanswered += 1
+            }
+        }
+        return result
     }
 
     func canCancelEvent(_ reference: EventReference) -> Bool {
@@ -1093,30 +1135,25 @@ final class PlanningWorkspace {
     }
 
     func decide(_ choice: DecisionChoice, on idea: PlanningIdea) {
-        guard let index = ideas.firstIndex(where: { $0.id == idea.id }), canDecide(on: ideas[index]) else { return }
-
-        decisionHistory.append(
-            DecisionRecord(ideaID: idea.id, previousStatus: ideas[index].status)
-        )
-
-        var updatedIdea = ideas[index]
-        updatedIdea.status = switch choice {
-        case .pass: .passed
-        case .maybe: .maybe
-        case .love: .chosen
-        }
-        replaceIdea(at: index, with: updatedIdea)
+        guard let current = ideas.first(where: { $0.id == idea.id }), canRespond(to: current),
+              let userID = responseUserID else { return }
+        decisionHistory.append(DecisionRecord(ideaID: idea.id, userID: userID, previousChoice: response(on: current)))
+        setResponse(choice, ideaID: idea.id, userID: userID)
     }
 
     func undoLastDecision() {
         guard canUndoDecision, let decision = decisionHistory.popLast(),
-              let index = ideas.firstIndex(where: { $0.id == decision.ideaID }) else {
+              ideas.contains(where: { $0.id == decision.ideaID }) else {
             return
         }
 
-        var restoredIdea = ideas[index]
-        restoredIdea.status = decision.previousStatus
-        replaceIdea(at: index, with: restoredIdea)
+        setResponse(decision.previousChoice, ideaID: decision.ideaID, userID: decision.userID)
+    }
+
+    private func setResponse(_ choice: DecisionChoice?, ideaID: UUID, userID: String) {
+        let response = IdeaResponse(ideaID: ideaID, userID: userID, choice: choice)
+        ideaResponses.removeAll { $0.id == response.id }
+        ideaResponses.append(response)
     }
 
     func toggleTimelineItem(_ item: TimelineItem) {
@@ -1178,8 +1215,43 @@ final class PlanningWorkspace {
     }
 
     func setResponse(_ response: EventResponse?, for item: TimelineItem) {
-        guard let index = timeline.firstIndex(where: { $0.id == item.id }) else { return }
+        guard !currentMainEventStatus.isReadOnly,
+              let index = timeline.firstIndex(where: { $0.id == item.id }),
+              timeline[index].status != .archived, timeline[index].status != .cancelled,
+              timeline[index].completionStatus != .complete,
+              setViewerAttendance(response, for: .subevent(item.id)) else { return }
         timeline[index].response = response
+    }
+
+    /// RSVP belongs to a person in an event, not to the shared event itself.
+    /// Always derive the selection from the same records as the attendee list.
+    func currentViewerResponse(for reference: EventReference) -> EventResponse? {
+        switch currentViewerMember(for: reference)?.attendance {
+        case .going: .going
+        case .maybe: .notSure
+        case .declined: .notGoing
+        case .invited, .none: nil
+        }
+    }
+
+    private func setViewerAttendance(_ response: EventResponse?, for reference: EventReference) -> Bool {
+        guard !isInvitationProjection,
+              let viewer = currentViewerMember(for: reference),
+              let index = eventParticipations.firstIndex(where: {
+                  $0.eventID == participantEventID(for: reference) && $0.memberID == viewer.id
+              }) else { return false }
+        let attendance: AttendanceStatus = switch response {
+        case .going: .going
+        case .notSure: .maybe
+        case .notGoing: .declined
+        case .none: .invited
+        }
+        eventParticipations[index].attendance = attendance
+        eventParticipations[index].updatedAt = .now
+        if reference == .main, let memberIndex = members.firstIndex(where: { $0.id == viewer.id }) {
+            members[memberIndex].attendance = attendance
+        }
+        return true
     }
 
     func setEventStatus(_ status: EventStatus, for item: TimelineItem) {
@@ -1196,7 +1268,7 @@ final class PlanningWorkspace {
     }
 
     func setMainEventResponse(_ response: EventResponse?) {
-        guard !currentMainEventStatus.isReadOnly else { return }
+        guard !currentMainEventStatus.isReadOnly, setViewerAttendance(response, for: .main) else { return }
         mainEventResponse = response
     }
 
@@ -1338,13 +1410,23 @@ final class PlanningWorkspace {
         selectedEventReference = .main
     }
 
-    func sendNote(_ body: String) {
+    func canSendNote(to reference: EventReference) -> Bool {
+        canManageEvent(reference)
+            && currentViewerMember(for: .main)?.planningPermission != .viewOnly
+    }
+
+    @discardableResult
+    func sendNote(_ body: String, to reference: EventReference? = nil) -> EventNote? {
+        let target = reference ?? selectedEventReference
         let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedBody.isEmpty else { return }
-        notes.insert(
-            EventNote(eventID: selectedEventID, body: String(trimmedBody.prefix(750))),
-            at: 0
-        )
+        // Match the server's UTF-16 limit; never silently truncate a message.
+        guard canSendNote(to: target), !trimmedBody.isEmpty,
+              trimmedBody.utf16.count <= 750 else { return nil }
+        let note = EventNote(eventID: participantEventID(for: target),
+                             authorUserID: viewerUserID ?? currentViewerMember?.userID,
+                             body: trimmedBody)
+        notes.insert(note, at: 0)
+        return note
     }
 
     func deleteTimelineItem(_ item: TimelineItem) {
@@ -1361,7 +1443,7 @@ final class PlanningWorkspace {
     }
 
     func updateIdea(_ idea: PlanningIdea, status: IdeaStatus) {
-        guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
+        guard let index = ideas.firstIndex(where: { $0.id == idea.id }), canDecide(on: ideas[index]) else { return }
         var updatedIdea = ideas[index]
         updatedIdea.status = updatedIdea.category == .music ? .chosen : status
         replaceIdea(at: index, with: updatedIdea)
@@ -1720,7 +1802,8 @@ private extension PlanningIdea {
 
 private struct DecisionRecord {
     let ideaID: UUID
-    let previousStatus: IdeaStatus
+    let userID: String
+    let previousChoice: DecisionChoice?
 }
 
 extension PlanningWorkspace {

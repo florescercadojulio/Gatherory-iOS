@@ -98,19 +98,40 @@ struct PostgresSyncTransport: WorkspaceSnapshotTransport {
     }
 
     private func perform<Response: Decodable>(_ request: URLRequest) async throws -> Response {
-        let (data, rawResponse) = try await urlSession.data(for: request)
+        var request = request
+        let requestID = UUID().uuidString
+        request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
+        let started = Date()
+        var fields = ["request_id": requestID, "operation": request.url?.lastPathComponent ?? "sync"]
+        let data: Data
+        let rawResponse: URLResponse
+        do {
+            (data, rawResponse) = try await urlSession.data(for: request)
+        } catch {
+            SyncDiagnostics.record("sync_request_failed", fields: fields, error: error)
+            throw error
+        }
         guard let response = rawResponse as? HTTPURLResponse else {
             throw CloudSyncFailure.invalidResponse
         }
+        fields["http_status"] = String(response.statusCode)
+        fields["duration_ms"] = String(Int(Date().timeIntervalSince(started) * 1000))
         guard (200..<300).contains(response.statusCode) else {
+            let failure = SyncDiagnostics.serverFailure(in: data)
+            fields["failure_code"] = failure.code
+            fields["server_error_id"] = failure.errorID
+            SyncDiagnostics.record("sync_request_failed", fields: fields, error: CloudSyncFailure.server(failure.code ?? "HTTP_\(response.statusCode)"))
             if response.statusCode == 401 { throw CloudSyncFailure.invalidSession }
             if response.statusCode == 413 { throw CloudSyncFailure.payloadTooLarge }
-            let body = try? decoder.decode(SyncErrorResponse.self, from: data)
-            throw CloudSyncFailure.server(body?.error ?? "HTTP_\(response.statusCode)")
+            throw CloudSyncFailure.server(failure.code ?? "HTTP_\(response.statusCode)")
         }
         do {
-            return try decoder.decode(Response.self, from: data)
+            let decoded = try decoder.decode(Response.self, from: data)
+            SyncDiagnostics.record("sync_request_completed", fields: fields)
+            return decoded
         } catch {
+            fields["coding_path"] = SyncDiagnostics.decodePath(error)
+            SyncDiagnostics.record("sync_response_decode_failed", fields: fields, error: error)
             throw CloudSyncFailure.invalidResponse
         }
     }
@@ -124,8 +145,4 @@ struct PostgresSyncTransport: WorkspaceSnapshotTransport {
 
 private struct SyncPushRequest: Encodable {
     let mutations: [PendingMutationSnapshot]
-}
-
-private struct SyncErrorResponse: Decodable {
-    let error: String
 }

@@ -4,6 +4,7 @@ enum MediaSyncFailure: LocalizedError {
     case invalidSession
     case invalidResponse
     case imageTooLarge
+    case invalidImage
     case server(String)
 
     var errorDescription: String? {
@@ -14,6 +15,8 @@ enum MediaSyncFailure: LocalizedError {
             "Gatherory received an unexpected media response."
         case .imageTooLarge:
             "This image is larger than the 20 MB upload limit."
+        case .invalidImage:
+            String(localized: "This image could not be prepared for upload. Choose another photo and try again.")
         case .server(let message):
             message
         }
@@ -53,18 +56,30 @@ struct R2MediaTransport: Sendable {
     }
 
     func upload(_ transfer: PendingMediaTransferSnapshot) async throws -> UUID {
-        let values = try transfer.localFileURL.resourceValues(forKeys: [.fileSizeKey])
-        guard let byteSize = values.fileSize else { throw MediaSyncFailure.invalidResponse }
-        guard byteSize <= 20 * 1024 * 1024 else { throw MediaSyncFailure.imageTooLarge }
+        let preparation = Task.detached(priority: .utility) {
+            try UploadImagePreparation.prepare(sourceURL: transfer.localFileURL)
+        }
+        let image = try await withTaskCancellationHandler {
+            try await preparation.value
+        } onCancel: {
+            preparation.cancel()
+        }
+        defer { image.removeTemporaryFile() }
+        try Task.checkCancellation()
+        SyncDiagnostics.record("media_upload_prepared", fields: [
+            "transfer_id": transfer.id.uuidString,
+            "upload_bytes": String(image.byteSize),
+            "content_type": image.contentType
+        ])
 
         let prepared: PreparedUpload = try await post(
             path: ["api", "media", "native", "prepare"],
             body: PrepareUploadRequest(
                 scopeId: transfer.scopeID,
                 mediaAssetId: transfer.id,
-                originalFilename: transfer.localFileURL.lastPathComponent,
-                contentType: transfer.contentType,
-                byteSize: byteSize
+                originalFilename: image.fileURL.lastPathComponent,
+                contentType: image.contentType,
+                byteSize: image.byteSize
             )
         )
         guard prepared.mediaAssetId == transfer.id,
@@ -77,12 +92,17 @@ struct R2MediaTransport: Sendable {
         for (name, value) in prepared.requiredHeaders {
             uploadRequest.setValue(value, forHTTPHeaderField: name)
         }
-        let (_, rawUploadResponse) = try await urlSession.upload(
-            for: uploadRequest,
-            fromFile: transfer.localFileURL
-        )
+        var fields = ["operation": "r2_put", "transfer_id": transfer.id.uuidString, "scope_id": transfer.scopeID.uuidString]
+        let rawUploadResponse: URLResponse
+        do { (_, rawUploadResponse) = try await urlSession.upload(for: uploadRequest, fromFile: image.fileURL) }
+        catch {
+            SyncDiagnostics.record("media_object_failed", fields: fields, error: error)
+            throw error
+        }
         guard let uploadResponse = rawUploadResponse as? HTTPURLResponse,
               (200..<300).contains(uploadResponse.statusCode) else {
+            fields["http_status"] = (rawUploadResponse as? HTTPURLResponse).map { String($0.statusCode) }
+            SyncDiagnostics.record("media_object_failed", fields: fields, error: MediaSyncFailure.invalidResponse)
             throw MediaSyncFailure.server("The image could not be uploaded.")
         }
 
@@ -109,10 +129,20 @@ struct R2MediaTransport: Sendable {
         guard let downloadURL = URL(string: response.url) else {
             throw MediaSyncFailure.invalidResponse
         }
-        let (data, rawResponse) = try await urlSession.data(from: downloadURL)
+        var fields = ["operation": "r2_get", "asset_id": mediaAssetID.uuidString]
+        let data: Data
+        let rawResponse: URLResponse
+        do { (data, rawResponse) = try await urlSession.data(from: downloadURL) }
+        catch {
+            SyncDiagnostics.record("media_object_failed", fields: fields, error: error)
+            throw error
+        }
         guard let response = rawResponse as? HTTPURLResponse,
               (200..<300).contains(response.statusCode),
               !data.isEmpty else {
+            fields["http_status"] = (rawResponse as? HTTPURLResponse).map { String($0.statusCode) }
+            fields["empty_body"] = String(data.isEmpty)
+            SyncDiagnostics.record("media_object_failed", fields: fields, error: MediaSyncFailure.invalidResponse)
             throw MediaSyncFailure.invalidResponse
         }
         return data
@@ -146,16 +176,36 @@ struct R2MediaTransport: Sendable {
     }
 
     private func perform<Response: Decodable>(_ request: URLRequest) async throws -> Response {
-        let (data, rawResponse) = try await urlSession.data(for: request)
+        var request = request
+        let requestID = UUID().uuidString
+        request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
+        var fields = ["request_id": requestID, "operation": "media_\(request.url?.lastPathComponent ?? "unknown")"]
+        let data: Data
+        let rawResponse: URLResponse
+        do { (data, rawResponse) = try await urlSession.data(for: request) }
+        catch {
+            SyncDiagnostics.record("media_request_failed", fields: fields, error: error)
+            throw error
+        }
         guard let response = rawResponse as? HTTPURLResponse else {
             throw MediaSyncFailure.invalidResponse
         }
+        fields["http_status"] = String(response.statusCode)
         guard (200..<300).contains(response.statusCode) else {
+            let failure = SyncDiagnostics.serverFailure(in: data)
+            fields["failure_code"] = failure.code
+            fields["server_error_id"] = failure.errorID
+            SyncDiagnostics.record("media_request_failed", fields: fields, error: MediaSyncFailure.invalidResponse)
             if response.statusCode == 401 { throw MediaSyncFailure.invalidSession }
-            let error = try? decoder.decode(SimpleErrorResponse.self, from: data)
-            throw MediaSyncFailure.server(error?.error ?? "HTTP_\(response.statusCode)")
+            throw MediaSyncFailure.server(failure.code ?? "HTTP_\(response.statusCode)")
         }
-        let envelope = try decoder.decode(ServerResult<Response>.self, from: data)
+        let envelope: ServerResult<Response>
+        do { envelope = try decoder.decode(ServerResult<Response>.self, from: data) }
+        catch {
+            fields["coding_path"] = SyncDiagnostics.decodePath(error)
+            SyncDiagnostics.record("media_response_decode_failed", fields: fields, error: error)
+            throw error
+        }
         guard envelope.ok, let value = envelope.data else {
             throw MediaSyncFailure.server(
                 envelope.error?.userMessage ?? "The media operation failed."
@@ -203,9 +253,6 @@ private struct ServerResultError: Decodable {
     let userMessage: String
 }
 
-private struct SimpleErrorResponse: Decodable {
-    let error: String
-}
 
 @MainActor
 struct WorkspaceMediaSyncCoordinator {
@@ -219,9 +266,11 @@ struct WorkspaceMediaSyncCoordinator {
         try persistence.prepareMediaTransfers(from: library)
         var summary = MediaUploadRunSummary()
         for transfer in try persistence.pendingMediaTransfers(scopeID: scopeID) {
+            try Task.checkCancellation()
             do {
                 try persistence.markMediaTransferUploading(transfer.id)
                 let mediaAssetID = try await transport.upload(transfer)
+                try Task.checkCancellation()
                 if try completeUploadedMedia(mediaAssetID, for: transfer) {
                     summary.changed = true
                 }
@@ -248,19 +297,33 @@ struct WorkspaceMediaSyncCoordinator {
         return changed
     }
 
-    func downloadMissingMedia(scopeID: UUID) async {
+    func downloadMissingMedia(scopeID: UUID) async -> MediaUploadRunSummary {
+        let ownerUserID = persistence.activeUserID
+        var summary = MediaUploadRunSummary()
         guard let workspace = library.workspaces.first(where: {
             $0.mainEventID == scopeID
-        }) else { return }
-        var changed = false
+        }) else { return summary }
         for attachment in workspace.mediaAttachments
         where attachment.imageData?.isEmpty != false {
             guard let mediaAssetID = attachment.mediaAssetID else { continue }
-            guard let data = try? await transport.download(mediaAssetID: mediaAssetID) else {
-                continue
+            do {
+                try Task.checkCancellation()
+                let data = try await transport.download(mediaAssetID: mediaAssetID)
+                guard persistence.activeUserID == ownerUserID, !Task.isCancelled else { return summary }
+                // Pulling changes can replace the observable workspace while a
+                // download is in flight. Apply to the current graph, and never
+                // overwrite a cover that was changed during the request.
+                guard let current = library.workspaces.first(where: { $0.mainEventID == scopeID }),
+                      let target = current.mediaAttachments.first(where: { $0.entityID == attachment.entityID }),
+                      target.mediaAssetID == mediaAssetID,
+                      target.imageData?.isEmpty != false else { continue }
+                summary.changed = current.applyDownloadedMedia(data, to: attachment.entityID) || summary.changed
+            } catch {
+                guard persistence.activeUserID == ownerUserID, !Task.isCancelled else { return summary }
+                summary.deferredError = summary.deferredError ?? error
             }
-            changed = workspace.applyDownloadedMedia(data, to: attachment.entityID) || changed
         }
-        if changed { persistence.flush(library) }
+        if summary.changed { persistence.flush(library) }
+        return summary
     }
 }

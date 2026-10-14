@@ -95,6 +95,8 @@ struct AccountView: View {
                 return "Sign in again to finish uploading photos."
             case .imageTooLarge:
                 return "One photo is larger than the 20 MB upload limit."
+            case .invalidImage:
+                return failure.localizedDescription
             case .invalidResponse:
                 return "A photo is waiting for a valid cloud response."
             case .server(let code):
@@ -247,7 +249,7 @@ struct AccountView: View {
             Section("Account") {
                 Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right") {
                     dismiss()
-                    authentication.signOut()
+                    Task { await authentication.signOut() }
                 }
 
                 Button("Delete Account", systemImage: "trash", role: .destructive) {

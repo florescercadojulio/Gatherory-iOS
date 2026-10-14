@@ -474,7 +474,6 @@ private struct TimelineItemEditorView: View {
                 PhotoAttachmentPicker(
                     imageData: $imageData,
                     emptySymbol: category.symbol,
-                    fallbackAssetName: category == .venue ? "DefaultVenueHero" : nil,
                     fallbackColors: category.artworkColors,
                     fallbackAccent: category.artworkAccent,
                     suggestedConcept: "Wedding \(category.title.lowercased()) event artwork for \(resolvedTitle)"
@@ -1100,12 +1099,6 @@ struct TimelineCollectionCard: View {
             return min(max(image.size.width / image.size.height, 0.72), 1.35)
         }
 
-        if item.category == .venue,
-           let image = UIImage(named: "DefaultVenueHero"),
-           image.size.height > 0 {
-            return min(max(image.size.width / image.size.height, 0.72), 1.35)
-        }
-
         return item.category.collectionAspectRatio
     }
 
@@ -1266,7 +1259,6 @@ private struct TimelineArtwork: View {
     var body: some View {
         MediaArtwork(
             imageData: item.imageData,
-            assetName: item.imageData == nil && item.category == .venue ? "DefaultVenueHero" : nil,
             symbol: item.category.symbol,
             colors: item.category.artworkColors,
             accent: item.category.artworkAccent,
@@ -1535,7 +1527,7 @@ struct TimelineEventDetailScreen: View {
             Label("Will you join us?", systemImage: "envelope.open.fill")
                 .font(.headline)
 
-            EventResponseControl(selection: item.response) { response in
+            EventResponseControl(selection: workspace.currentViewerResponse(for: .subevent(item.id))) { response in
                 withAnimation(.snappy) {
                     workspace.setResponse(response, for: item)
                 }

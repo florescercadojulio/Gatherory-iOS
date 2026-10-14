@@ -11,22 +11,21 @@ struct DecideEventPrimer: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                practiceDeck
-
-                VStack(spacing: AppTheme.Spacing.section) {
+            VStack(spacing: AppTheme.Spacing.section) {
                     VStack(spacing: AppTheme.Spacing.standard) {
                         Text(AppCopy.Primer.Decide.title)
-                            .font(AppTheme.Typography.display)
+                            .font(.largeTitle.bold())
                             .multilineTextAlignment(.center)
                             .accessibilityAddTraits(.isHeader)
 
                         Text(AppCopy.Primer.Decide.message)
-                            .font(.title3)
+                            .font(.body)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }
                     .fixedSize(horizontal: false, vertical: true)
+
+                    practiceDeck
 
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
                         primerRow(
@@ -40,17 +39,11 @@ struct DecideEventPrimer: View {
                             detail: AppCopy.Primer.Decide.undatedDetail
                         )
                     }
-                }
-                .padding(AppTheme.Spacing.spacious)
             }
-            .frame(maxWidth: 680)
-            .background(AppTheme.ColorToken.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 44, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 44, style: .continuous)
-                    .stroke(AppTheme.ColorToken.cardBorder, lineWidth: 0.5)
-            }
-            .padding(AppTheme.Spacing.compact)
+            .frame(maxWidth: 632)
+            .padding(.horizontal, AppTheme.Spacing.spacious)
+            .padding(.top, AppTheme.Spacing.section)
+            .padding(.bottom, AppTheme.Spacing.spacious)
             .frame(maxWidth: .infinity)
         }
         .scrollBounceBehavior(.basedOnSize)
@@ -67,7 +60,7 @@ struct DecideEventPrimer: View {
             .padding(.horizontal, AppTheme.Spacing.spacious)
             .padding(.vertical, AppTheme.Spacing.standard)
             .frame(maxWidth: .infinity)
-            .background(AppTheme.ColorToken.background)
+            .background(.regularMaterial)
         }
         .background(AppTheme.ColorToken.background.ignoresSafeArea())
         .tint(AppTheme.ColorToken.accent)
@@ -78,18 +71,6 @@ struct DecideEventPrimer: View {
             previewCard
                 .rotationEffect(.degrees(reduceMotion ? 0 : previewChoice?.rotation ?? 0))
                 .offset(x: reduceMotion ? 0 : previewChoice?.offset ?? 0)
-                .background {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                        .fill(AppTheme.ColorToken.onMedia.opacity(0.08))
-                        .rotationEffect(.degrees(reduceMotion ? 0 : -9))
-                        .offset(x: -13, y: 6)
-                }
-                .background {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                        .fill(AppTheme.ColorToken.onMedia.opacity(0.12))
-                        .rotationEffect(.degrees(reduceMotion ? 0 : 6))
-                        .offset(x: 10, y: 3)
-                }
                 .padding(.vertical, AppTheme.Spacing.compact)
                 .frame(maxWidth: .infinity)
 
@@ -100,23 +81,12 @@ struct DecideEventPrimer: View {
 
             Text(previewChoice?.feedback ?? AppCopy.Primer.Decide.practiceInstruction)
                 .font(.footnote)
-                .foregroundStyle(AppTheme.ColorToken.onMedia.opacity(0.85))
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(minHeight: feedbackHeight, alignment: .top)
                 .accessibilityIdentifier("decide-primer-feedback")
         }
-        .padding(AppTheme.Spacing.spacious)
-        .background {
-            RadialGradient(
-                colors: [AppTheme.ColorToken.accentSecondary.opacity(0.32), AppTheme.ColorToken.inverseCanvas],
-                center: .center,
-                startRadius: 12,
-                endRadius: 320
-            )
-            .background(AppTheme.ColorToken.inverseCanvas)
-        }
-        .environment(\.colorScheme, .dark)
         .animation(reduceMotion ? nil : .snappy(duration: 0.28), value: previewChoice)
     }
 
@@ -139,12 +109,12 @@ struct DecideEventPrimer: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         .padding(AppTheme.Spacing.standard)
-        .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? 320 : 220, minHeight: 190, alignment: .bottomLeading)
+        .frame(maxWidth: .infinity, minHeight: dynamicTypeSize.isAccessibilitySize ? 260 : 220, alignment: .bottomLeading)
         .foregroundStyle(AppTheme.ColorToken.onMedia)
         .background {
-            Image("DefaultVenueHero")
-                .resizable()
-                .scaledToFill()
+            MediaArtwork(imageData: nil, symbol: IdeaCategory.event.symbol,
+                         colors: IdeaCategory.event.artworkColors,
+                         accent: IdeaCategory.event.artworkAccent, progressiveBlurRadius: 22, blurStart: 0.25)
                 .overlay {
                     LinearGradient(
                         colors: [.clear, AppTheme.ColorToken.mediaScrim.opacity(0.95)],
@@ -183,7 +153,7 @@ struct DecideEventPrimer: View {
             }
             .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
-            .tint(AppTheme.ColorToken.onMedia)
+            .tint(AppTheme.ColorToken.accent)
             .accessibilityIdentifier("decide-primer-\(choice.rawValue)")
         }
     }

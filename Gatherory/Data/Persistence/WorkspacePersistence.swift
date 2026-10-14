@@ -38,6 +38,7 @@ struct WorkspaceArchiveV1: Codable {
     let currencyCode: String?
     let mainEventBudgetCap: Decimal?
     var notes: [EventNote]
+    var ideaResponses: [IdeaResponse]?
     let mainEventStatus: MainEventStatus
     let mainEventResponse: EventResponse?
     var eventMoments: [EventMoment]
@@ -73,6 +74,7 @@ struct WorkspaceArchiveV1: Codable {
         currencyCode = workspace.currencyCode
         mainEventBudgetCap = workspace.mainEventBudgetCap
         notes = workspace.notes
+        ideaResponses = workspace.ideaResponses
         mainEventStatus = workspace.mainEventStatus
         mainEventResponse = workspace.mainEventResponse
         eventMoments = workspace.eventMoments
@@ -110,6 +112,7 @@ struct WorkspaceArchiveV1: Codable {
             currencyCode: currencyCode ?? Locale.current.currency?.identifier ?? "USD",
             mainEventBudgetCap: mainEventBudgetCap,
             notes: notes,
+            ideaResponses: ideaResponses ?? [],
             mainEventStatus: mainEventStatus,
             mainEventResponse: mainEventResponse,
             eventMoments: eventMoments,
@@ -131,6 +134,9 @@ private struct WorkspaceSyncEntityKey: Hashable {
 private extension WorkspaceArchiveV1 {
     func syncPayload(using encoder: JSONEncoder) throws -> Data {
         var remote = self
+        // Responses have independent versions; a workspace snapshot must not
+        // overwrite a teammate's input or resend it under another account.
+        remote.ideaResponses = nil
         remote.mainEventImageData = nil
         remote.ideas = remote.ideas.map { idea in
             var idea = idea
@@ -180,6 +186,9 @@ private extension WorkspaceArchiveV1 {
         for note in notes {
             entities[.init(type: .note, id: note.id)] = try encoder.encode(note)
         }
+        for response in ideaResponses ?? [] {
+            entities[.init(type: .ideaResponse, id: response.id)] = try encoder.encode(response)
+        }
         for moment in eventMoments {
             var remote = moment
             remote.imageData = Data()
@@ -205,8 +214,39 @@ private extension WorkspaceArchiveV1 {
         timeline = local.timeline
         eventExpenses = local.eventExpenses
         notes = local.notes
+        ideaResponses = local.ideaResponses
         eventMoments = local.eventMoments
         registry = local.registry
+    }
+
+    /// Bootstrap is metadata-only. Keep this account's downloaded bytes when
+    /// the server still references exactly the same asset, without restoring
+    /// removed records or overwriting remote fields with an older local copy.
+    mutating func preserveDownloadedMedia(from local: WorkspaceArchiveV1) {
+        if mainEventImageData == nil, let assetID = mainEventMediaAssetID,
+           assetID == local.mainEventMediaAssetID {
+            mainEventImageData = local.mainEventImageData
+        }
+        for index in ideas.indices {
+            guard ideas[index].imageData == nil, let assetID = ideas[index].mediaAssetID,
+                  let cached = local.ideas.first(where: { $0.id == ideas[index].id && $0.mediaAssetID == assetID }) else { continue }
+            ideas[index].imageData = cached.imageData
+        }
+        for index in timeline.indices {
+            guard timeline[index].imageData == nil, let assetID = timeline[index].mediaAssetID,
+                  let cached = local.timeline.first(where: { $0.id == timeline[index].id && $0.mediaAssetID == assetID }) else { continue }
+            timeline[index].imageData = cached.imageData
+        }
+        for index in registry.indices {
+            guard registry[index].imageData == nil, let assetID = registry[index].mediaAssetID,
+                  let cached = local.registry.first(where: { $0.id == registry[index].id && $0.mediaAssetID == assetID }) else { continue }
+            registry[index].imageData = cached.imageData
+        }
+        for index in eventMoments.indices {
+            guard eventMoments[index].imageData.isEmpty, let assetID = eventMoments[index].mediaAssetID,
+                  let cached = local.eventMoments.first(where: { $0.id == eventMoments[index].id && $0.mediaAssetID == assetID }) else { continue }
+            eventMoments[index].imageData = cached.imageData
+        }
     }
 
     mutating func applyEntity(
@@ -243,6 +283,10 @@ private extension WorkspaceArchiveV1 {
             try applyRecord(EventExpense.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &eventExpenses)
         case .note:
             try applyRecord(EventNote.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &notes)
+        case .ideaResponse:
+            var responses = ideaResponses ?? []
+            try applyRecord(IdeaResponse.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &responses)
+            ideaResponses = responses
         case .moment:
             try applyMediaRecord(EventMoment.self, id: id, operation: operation, payload: payload, decoder: decoder, to: &eventMoments) { remote, local in
                 var remote = remote
@@ -481,11 +525,46 @@ final class WorkspacePersistenceController {
 
         guard let library = library ?? observedLibrary else { return }
         do {
-            try persist(library, enqueuesMutations: true)
+            try flushForAccountTransition(library)
         } catch {
             context.rollback()
             lastError = error
         }
+    }
+
+    /// Account teardown must surface disk errors instead of losing unsaved edits.
+    func flushForAccountTransition(_ library: WorkspaceLibrary) throws {
+        try saveChanges(in: library)
+    }
+
+    /// Explicit actions can confirm durable local storage before closing their UI.
+    func saveChanges(in library: WorkspaceLibrary) throws {
+        pendingSaveTask?.cancel()
+        pendingSaveTask = nil
+        do {
+            try persist(library, enqueuesMutations: true)
+            lastError = nil
+        } catch {
+            context.rollback()
+            lastError = error
+            throw error
+        }
+    }
+
+    /// Explicit sign-out retries pending work, but never discards conflicts.
+    /// Call only after joining the active sync task (no live leases).
+    func prepareFinalSyncRetry() throws {
+        for mutation in try context.fetch(FetchDescriptor<PendingMutation>())
+        where mutation.ownerUserID == activeUserID && mutation.state != .requiresAttention {
+            mutation.state = .pending
+            mutation.nextAttemptAt = nil
+            mutation.leaseExpiresAt = nil
+        }
+        for transfer in try context.fetch(FetchDescriptor<PendingMediaTransfer>())
+        where transfer.ownerUserID == activeUserID && transfer.state == .pending {
+            transfer.nextAttemptAt = nil
+        }
+        try context.save()
     }
 
     /// Removes every account-scoped local artifact after the backend confirms
@@ -612,8 +691,9 @@ final class WorkspacePersistenceController {
                 )
             }
 
-            guard enqueuesMutations, syncPayloadChanged || existingRecord == nil else { continue }
-            coalesceMutation(
+            guard enqueuesMutations else { continue }
+            if syncPayloadChanged || existingRecord == nil {
+                coalesceMutation(
                 scopeID: archive.mainEventID,
                 entityType: .workspace,
                 entityID: archive.mainEventID,
@@ -623,7 +703,8 @@ final class WorkspacePersistenceController {
                 // Independently versioned child records are the collaboration boundary.
                 baseVersion: nil,
                 pendingMutations: pendingMutations
-            )
+                )
+            }
             try coalesceEntityMutations(
                 scopeID: archive.mainEventID,
                 previousArchive: previousArchive,
@@ -1149,11 +1230,15 @@ final class WorkspacePersistenceController {
                     decoder: decoder
                 )
             }
-            let payload = try encoder.encode(archive)
             let record = try context.fetch(FetchDescriptor<WorkspaceRecord>())
                 .first(where: {
                     $0.id == snapshot.scopeID && $0.ownerUserID == activeUserID
                 })
+
+            if let record, let cached = try? decoder.decode(WorkspaceArchiveV1.self, from: record.payload) {
+                archive.preserveDownloadedMedia(from: cached)
+            }
+            let payload = try encoder.encode(archive)
 
             if let record {
                 record.payload = payload

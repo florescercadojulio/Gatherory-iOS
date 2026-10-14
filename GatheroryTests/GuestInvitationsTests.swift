@@ -4,6 +4,26 @@ import Testing
 @testable import Gatherory
 
 struct GuestInvitationsTests {
+    @Test("Pulling invitations refreshes each person's RSVP for the matching event")
+    @MainActor func refreshAttendance() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "guest-rsvp-test-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = try fixture(role: "guest"), other = try fixture(role: "guest")
+        let transport = GuestTestTransport(events: [first, other])
+        let store = GuestInvitationStore(baseURL: nil, cacheDirectory: directory, client: transport)
+        await store.activate(account: account("guest-a"))
+        for (wireValue, attendance) in [("not_sure", AttendanceStatus.maybe), ("not_going", .declined), ("going", .going)] {
+            transport.events[0].attendance = wireValue
+            transport.events[0].people[0].attendance = wireValue
+            await store.refresh(force: true)
+            #expect(store.presentations[first.id]?.participants(for: .main).first?.attendance == attendance)
+            #expect(store.presentations[other.id]?.participants(for: .main).first?.attendance == .going)
+        }
+        transport.failRefresh = true
+        await store.refresh(force: true)
+        #expect(store.errorMessage != nil)
+        #expect(store.presentations[first.id]?.participants(for: .main).first?.attendance == .going)
+    }
     @Test("Leaving a guest invitation requires server acknowledgement and never deletes other events")
     @MainActor func departure() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "guest-leave-test-\(UUID())")
@@ -125,8 +145,12 @@ struct GuestInvitationsTests {
 @MainActor private final class GuestTestTransport: GuestInvitationTransport {
     var events: [GuestEventInvitation]
     var failLeave = false
+    var failRefresh = false
     init(events: [GuestEventInvitation]) { self.events = events }
-    func invitations() async throws -> GuestInvitationFeed { GuestInvitationFeed(events: events) }
+    func invitations() async throws -> GuestInvitationFeed {
+        if failRefresh { throw EventInvitationFailure.unavailable }
+        return GuestInvitationFeed(events: events)
+    }
     func leaveInvitation(eventID: UUID) async throws -> UUID {
         if failLeave { throw EventInvitationFailure.unavailable }
         events.removeAll { $0.id == eventID }

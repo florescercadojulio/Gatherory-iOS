@@ -137,9 +137,14 @@ final class GuestInvitationStore {
                     guard let id, let url, ["https", "http"].contains(url.scheme), artwork[id] == nil else { continue }
                     if let (data, response) = try? await URLSession.shared.data(from: url),
                        let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode),
-                       data.count <= 12_000_000, UIImage(data: data) != nil {
+                       data.count <= 20 * 1024 * 1024 {
+                        // Guest projections are display-only. Prepare a bounded
+                        // local copy off the main actor; never alter the upload.
+                        let prepared = await Task.detached(priority: .utility) {
+                            InvitationImageDecoder.thumbnail(data: data)?.pngData()
+                        }.value
                         guard self.account?.id == userID, feedRevision == revision, !Task.isCancelled else { return }
-                        artwork[id] = data
+                        if let prepared { artwork[id] = prepared }
                     }
                 }
             }

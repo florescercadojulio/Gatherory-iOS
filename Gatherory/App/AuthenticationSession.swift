@@ -49,6 +49,9 @@ final class AuthenticationSession {
     private(set) var currentUser: UserAccount?
     private(set) var developmentAccounts: [UserAccount]
     private(set) var isProcessing = false
+    private(set) var isSigningOut = false
+    var signOutNeedsAttention = false
+    @ObservationIgnored var prepareForSignOut: ((Bool) async throws -> Void)?
     private(set) var registrationNotice: String?
 
     let environment: AppRuntimeConfiguration.Environment
@@ -98,7 +101,7 @@ final class AuthenticationSession {
     }
 
     func restoreSession() async {
-        guard currentUser == nil, let client else { return }
+        guard !isProcessing, currentUser == nil, let client else { return }
 
         isProcessing = true
         defer { isProcessing = false }
@@ -119,6 +122,7 @@ final class AuthenticationSession {
     }
 
     func signIn(email: String, password: String) async throws {
+        guard !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         registrationNotice = nil
 
@@ -147,6 +151,7 @@ final class AuthenticationSession {
     }
 
     func register(displayName: String, email: String, password: String) async throws {
+        guard !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
         let normalizedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
@@ -202,6 +207,7 @@ final class AuthenticationSession {
     }
 
     func signIn(using provider: AuthenticationProvider) async throws {
+        guard !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
         registrationNotice = nil
         guard environment == .development, client == nil else {
             throw AuthenticationFailure.providerUnavailable
@@ -217,6 +223,7 @@ final class AuthenticationSession {
         _ identity: AppleIdentity,
         requestingSignUp: Bool
     ) async throws {
+        guard !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
         registrationNotice = nil
 
         guard let client else {
@@ -239,6 +246,7 @@ final class AuthenticationSession {
         nonce: String,
         requestingSignUp: Bool
     ) async throws {
+        guard !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
         registrationNotice = nil
 
         guard let client else {
@@ -271,18 +279,30 @@ final class AuthenticationSession {
         return true
     }
 
-    func signOut() {
+    @discardableResult
+    func signOut(keepingPendingChanges: Bool = false) async -> Bool {
+        guard !isProcessing, !isSigningOut else { return false }
+        isSigningOut = true
+        isProcessing = true
+        signOutNeedsAttention = false
+        defer { isSigningOut = false; isProcessing = false }
+        do {
+            // Keep the bearer alive until the final outbox and media sync.
+            try await prepareForSignOut?(keepingPendingChanges)
+        } catch {
+            SyncDiagnostics.record("sign_out_sync_failed", error: error)
+            signOutNeedsAttention = true
+            return false
+        }
+        await client?.signOut()
         PostHogSDK.shared.reset()
         currentUser = nil
         registrationNotice = nil
-
-        guard let client else { return }
-        Task {
-            await client.signOut()
-        }
+        return true
     }
 
     func deleteAccount() async throws {
+        guard !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
         guard let account = currentUser else {
             throw AuthenticationFailure.invalidSession
         }

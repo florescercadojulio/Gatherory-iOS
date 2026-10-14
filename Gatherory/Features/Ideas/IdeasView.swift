@@ -504,7 +504,6 @@ struct IdeaDetailView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
-        .appImageNavigationBarAppearance()
         .toolbar {
             if let idea {
                 if idea.category != .music || workspace.canEditMusicPlaylist(for: idea) {
@@ -549,6 +548,12 @@ struct IdeaDetailView: View {
                                 withAnimation {
                                     workspace.updateIdea(idea, status: .chosen)
                                 }
+                            }
+                        }
+
+                        if idea.status != .passed {
+                            Button("Decline for Event", systemImage: "xmark.circle") {
+                                workspace.updateIdea(idea, status: .passed)
                             }
                         }
 
@@ -623,6 +628,9 @@ private struct IdeaDetailScreen: View {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
                     Spacer(minLength: max(proxy.size.height * 0.42, 260))
                     ideaIdentity
+                    if idea.category != .music {
+                        IdeaTeamResponseSection(idea: idea)
+                    }
                     IdeaCategoryDetailContent(idea: idea)
                     metadata
                 }
@@ -694,9 +702,9 @@ private struct IdeaDetailScreen: View {
     private var readingScrim: some View {
         LinearGradient(
             stops: [
-                .init(color: .black.opacity(0.02), location: 0),
-                .init(color: .black.opacity(0.18 + 0.18 * blurProgress), location: 0.55),
-                .init(color: .black.opacity(reduceTransparency ? 0.88 : 0.64 + 0.18 * blurProgress), location: 1)
+                .init(color: .clear, location: 0),
+                .init(color: .black.opacity(0.18 + 0.18 * activeBlurProgress), location: 0.55),
+                .init(color: .black.opacity(reduceTransparency ? 0.88 : 0.64), location: 1)
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -722,7 +730,10 @@ private struct IdeaDetailScreen: View {
                 .tracking(-0.7)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        // Text directly on photography has its own contrast treatment; tiles
+        // below still inherit the user's system appearance.
         .foregroundStyle(.white)
+        .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
     }
 
     private var metadata: some View {
@@ -760,11 +771,7 @@ private struct IdeaDetailScreen: View {
             }
         }
         .padding(.vertical, 4)
-        .background(
-            reduceTransparency ? AnyShapeStyle(.black.opacity(0.82)) : AnyShapeStyle(.regularMaterial),
-            in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-        )
-        .appImageOverlayAppearance()
+        .ideaContentSurface()
     }
 
     private var guestVisibilityValue: String {
@@ -793,7 +800,6 @@ private struct IdeaDetailScreen: View {
 
 private struct IdeaCategoryDetailContent: View {
     @Environment(PlanningWorkspace.self) private var workspace
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var isPickingMusic = false
     @State private var pickedSongs: [Song] = []
 
@@ -977,7 +983,7 @@ private struct IdeaCategoryDetailContent: View {
                     .font(.title2)
                     .foregroundStyle(AppTheme.ColorToken.accent)
                     .frame(width: 48, height: 48)
-                    .background(.white.opacity(0.10), in: Circle())
+                    .background(.quaternary, in: Circle())
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(primaryTitle)
@@ -1000,7 +1006,7 @@ private struct IdeaCategoryDetailContent: View {
                 detailText(title: fact.title, text: fact.value, symbol: fact.symbol)
             }
         }
-        .ideaDetailCard(reduceTransparency: reduceTransparency)
+        .ideaDetailCard()
         .accessibilityElement(children: .contain)
     }
 
@@ -1012,7 +1018,7 @@ private struct IdeaCategoryDetailContent: View {
                     .font(.title2)
                     .foregroundStyle(AppTheme.ColorToken.accent)
                     .frame(width: 48, height: 48)
-                    .background(.white.opacity(0.10), in: Circle())
+                    .background(.quaternary, in: Circle())
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Website")
@@ -1037,17 +1043,17 @@ private struct IdeaCategoryDetailContent: View {
             }
             .buttonStyle(.borderedProminent)
         }
-        .ideaDetailCard(reduceTransparency: reduceTransparency)
+        .ideaDetailCard()
         .accessibilityElement(children: .contain)
     }
 
     private func attireContent(_ configuration: AttireIdeaConfiguration) -> some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
             HStack(spacing: AppTheme.Spacing.standard) {
-                AttireStyleSilhouette(style: configuration.style, color: .white)
+                AttireStyleSilhouette(style: configuration.style, color: .primary)
                     .frame(width: 58, height: 72)
                     .padding(AppTheme.Spacing.compact)
-                    .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: AppTheme.Radius.control))
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: AppTheme.Radius.control))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Dress Code")
@@ -1069,7 +1075,7 @@ private struct IdeaCategoryDetailContent: View {
                 detailText(title: "Guidance", text: configuration.restrictions, symbol: "checklist")
             }
         }
-        .ideaDetailCard(reduceTransparency: reduceTransparency)
+        .ideaDetailCard()
         .accessibilityElement(children: .contain)
     }
 
@@ -1100,7 +1106,7 @@ private struct IdeaCategoryDetailContent: View {
                 )
             }
         }
-        .ideaDetailCard(reduceTransparency: reduceTransparency)
+        .ideaDetailCard()
         .accessibilityElement(children: .contain)
     }
 
@@ -1161,7 +1167,7 @@ private struct IdeaCategoryDetailContent: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .ideaDetailCard(reduceTransparency: reduceTransparency)
+        .ideaDetailCard()
     }
 
     private func appendPickedSongs(_ songs: [Song]) {
@@ -1185,7 +1191,7 @@ private struct IdeaCategoryDetailContent: View {
         Group {
             if !idea.note.isEmpty {
                 detailText(title: "About This Idea", text: idea.note, symbol: idea.category.symbol)
-                    .ideaDetailCard(reduceTransparency: reduceTransparency)
+                    .ideaDetailCard()
             }
         }
     }
@@ -1241,7 +1247,6 @@ private struct IdeaCategoryDetailContent: View {
 
 private struct EventIdeaDetailCard: View {
     @Environment(PlanningWorkspace.self) private var workspace
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var weather = EventWeatherModel()
 
     let idea: PlanningIdea
@@ -1352,11 +1357,7 @@ private struct EventIdeaDetailCard: View {
             }
         }
         .padding(.vertical, 4)
-        .background(
-            reduceTransparency ? AnyShapeStyle(.black.opacity(0.82)) : AnyShapeStyle(.regularMaterial),
-            in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-        )
-        .appImageOverlayAppearance()
+        .ideaContentSurface()
         .task(id: requestID) {
             loadWeather()
         }
@@ -1394,18 +1395,18 @@ private struct EventIdeaMetadataRow: View {
         HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
             Image(systemName: symbol)
                 .font(.title3)
-                .foregroundStyle(.white.opacity(0.72))
+                .foregroundStyle(.secondary)
                 .frame(width: 28)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.72))
+                    .foregroundStyle(.secondary)
 
                 Text(value)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -1414,7 +1415,7 @@ private struct EventIdeaMetadataRow: View {
             if title == "Location" {
                 Image(systemName: "arrow.up.forward")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.72))
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, AppTheme.Spacing.standard)
@@ -1435,15 +1436,11 @@ private struct IdeaDetailFact: Identifiable {
 }
 
 private extension View {
-    func ideaDetailCard(reduceTransparency: Bool) -> some View {
+    func ideaDetailCard() -> some View {
         self
             .padding(AppTheme.Spacing.standard)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                reduceTransparency ? AnyShapeStyle(.black.opacity(0.82)) : AnyShapeStyle(.regularMaterial),
-                in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-            )
-            .appImageOverlayAppearance()
+            .ideaContentSurface()
     }
 }
 
@@ -2987,3 +2984,43 @@ private struct AttireStyleSilhouette: View {
             .environment(MusicPreviewPlayer())
     }
 }
+
+#if DEBUG
+private struct IdeaDetailAppearancePreview: View {
+    @Namespace private var transition
+    @State private var safety = ImageSafetyStore()
+    @State private var player = MusicPreviewPlayer()
+    @State private var workspace: PlanningWorkspace = {
+        let idea = PlanningIdea(title: "Reception Decor", note: "", category: .decor,
+                                submittedBy: "Julio Flores Cercado")
+        let workspace = PlanningWorkspace(
+            title: "Testing", mainEventStartsAt: .now.addingTimeInterval(86400),
+            venueName: "", location: "", planningMode: .openToIdeas,
+            members: [WorkspaceMember(name: "Julio Flores Cercado", participantRole: .host,
+                                      initials: "JF", planningPermission: .manage)],
+            ideas: [idea], timeline: [], registry: []
+        )
+        workspace.decide(.love, on: idea)
+        return workspace
+    }()
+
+    var body: some View {
+        NavigationStack {
+            if let idea = workspace.ideas.first {
+                IdeaDetailView(ideaID: idea.id, transitionNamespace: transition)
+            }
+        }
+        .environment(workspace)
+        .environment(safety)
+        .environment(player)
+    }
+}
+
+#Preview("Idea details · Light") {
+    IdeaDetailAppearancePreview().preferredColorScheme(.light)
+}
+
+#Preview("Idea details · Dark") {
+    IdeaDetailAppearancePreview().preferredColorScheme(.dark)
+}
+#endif

@@ -3,6 +3,57 @@ import Testing
 @testable import Gatherory
 
 struct AuthenticationSessionTests {
+    @Test("Sign out waits for sync and client teardown before clearing the account")
+    @MainActor
+    func signOutWaitsForSync() async throws {
+        let client = StubAuthenticationClient()
+        client.holdSignOut = true
+        let authentication = AuthenticationSession(environment: .production, skipsAuthentication: false, client: client)
+        await authentication.restoreSession()
+        var finishSync: CheckedContinuation<Void, Never>?
+        authentication.prepareForSignOut = { _ in
+            await withCheckedContinuation { finishSync = $0 }
+        }
+        let task = Task { await authentication.signOut() }
+        while finishSync == nil { await Task.yield() }
+        #expect(authentication.isSigningOut)
+        #expect(authentication.currentUser != nil)
+        #expect(!client.didSignOut)
+        #expect(await authentication.signOut() == false)
+        await #expect(throws: AuthenticationFailure.serviceUnavailable) {
+            try await authentication.signIn(email: "other@example.com", password: "password")
+        }
+        finishSync?.resume()
+        while client.finishSignOut == nil { await Task.yield() }
+        #expect(authentication.currentUser != nil)
+        #expect(authentication.isSigningOut)
+        client.finishSignOut?.resume()
+        #expect(await task.value)
+        #expect(client.didSignOut)
+        #expect(authentication.currentUser == nil)
+        #expect(!authentication.isProcessing)
+    }
+
+    @Test("Failed final sync leaves account signed in; explicit override retains pending changes")
+    @MainActor
+    func signOutSyncFailure() async {
+        let client = StubAuthenticationClient()
+        let authentication = AuthenticationSession(environment: .production, skipsAuthentication: false, client: client)
+        await authentication.restoreSession()
+        var requestedModes: [Bool] = []
+        authentication.prepareForSignOut = { keepingPendingChanges in
+            requestedModes.append(keepingPendingChanges)
+            if !keepingPendingChanges { throw URLError(.notConnectedToInternet) }
+        }
+        #expect(await authentication.signOut() == false)
+        #expect(authentication.signOutNeedsAttention)
+        #expect(authentication.currentUser != nil)
+        #expect(!client.didSignOut)
+        #expect(await authentication.signOut(keepingPendingChanges: true))
+        #expect(requestedModes == [false, true])
+        #expect(authentication.currentUser == nil)
+    }
+
     @Test("Production sign in keeps the Better Auth user identifier")
     @MainActor
     func remoteSignInUsesCanonicalUserID() async throws {
@@ -111,6 +162,9 @@ private final class StubAuthenticationClient: AuthenticationClient {
 
     private let registrationRequiresVerification: Bool
     private(set) var didRequestAccountDeletion = false
+    private(set) var didSignOut = false
+    var holdSignOut = false
+    var finishSignOut: CheckedContinuation<Void, Never>?
     private(set) var lastGoogleIdentityToken: String?
     private(set) var lastGoogleNonce: String?
 
@@ -162,5 +216,8 @@ private final class StubAuthenticationClient: AuthenticationClient {
         didRequestAccountDeletion = true
     }
 
-    func signOut() async {}
+    func signOut() async {
+        if holdSignOut { await withCheckedContinuation { finishSignOut = $0 } }
+        didSignOut = true
+    }
 }

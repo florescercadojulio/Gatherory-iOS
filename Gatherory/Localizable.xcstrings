@@ -460,11 +460,22 @@
       }
     },
     "%lld characters remaining" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld caracteres restantes"
+          }
+        }
+      }
+    },
+    "%lld love it, %lld maybe, %lld pass, %lld unanswered" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld a favor, %lld indecisos, %lld en contra, %lld sin responder"
           }
         }
       }
@@ -506,6 +517,7 @@
       }
     },
     "%lld/%lld" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1596,6 +1608,16 @@
         }
       }
     },
+    "Bringing it all together" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todo en un mismo lugar"
+          }
+        }
+      }
+    },
     "Budget" : {
       "localizations" : {
         "es" : {
@@ -2405,12 +2427,32 @@
         }
       }
     },
+    "Couldn’t Finish Syncing" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo completar la sincronización"
+          }
+        }
+      }
+    },
     "Couldn’t Load Your Account" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "No se pudo cargar tu cuenta"
+          }
+        }
+      }
+    },
+    "Couldn’t Save Note" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar la nota"
           }
         }
       }
@@ -2717,6 +2759,16 @@
         }
       }
     },
+    "Decline for Event" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descartar para el evento"
+          }
+        }
+      }
+    },
     "Decor" : {
       "localizations" : {
         "es" : {
@@ -2914,6 +2966,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Desactivar un enlace impide que se unan más personas. Quienes ya se unieron mantienen su acceso."
+          }
+        }
+      }
+    },
+    "Discard" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descartar"
+          }
+        }
+      }
+    },
+    "Discard this note?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Descartar esta nota?"
           }
         }
       }
@@ -3828,6 +3900,16 @@
         }
       }
     },
+    "Finishing sign out…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrando sesión…"
+          }
+        }
+      }
+    },
     "Flower Details" : {
       "localizations" : {
         "es" : {
@@ -3981,6 +4063,7 @@
       }
     },
     "For %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4098,6 +4181,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gatherory usa tu ubicación una vez para encontrar la dirección del evento."
+          }
+        }
+      }
+    },
+    "Getting your events and invitations ready." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estamos preparando tus eventos e invitaciones."
           }
         }
       }
@@ -4759,6 +4852,16 @@
         }
       }
     },
+    "If you used Sign in with Apple before this update, you can also remove Gatherory in Settings > your name > Sign in with Apple." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si usaste Iniciar sesión con Apple antes de esta actualización, también puedes eliminar Gatherory en Ajustes > tu nombre > Iniciar sesión con Apple."
+          }
+        }
+      }
+    },
     "Includes estimated, committed, and paid costs." : {
       "localizations" : {
         "es" : {
@@ -4989,6 +5092,16 @@
         }
       }
     },
+    "Keep Writing" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seguir escribiendo"
+          }
+        }
+      }
+    },
     "Learn More" : {
       "localizations" : {
         "es" : {
@@ -5102,6 +5215,7 @@
       }
     },
     "Loading your Gatherory account…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5295,6 +5409,7 @@
       }
     },
     "Message" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5664,7 +5779,6 @@
       }
     },
     "OK" : {
-      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6361,6 +6475,26 @@
         }
       }
     },
+    "Planning team" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Equipo organizador"
+          }
+        }
+      }
+    },
+    "Planning update" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualización del plan"
+          }
+        }
+      }
+    },
     "planning.mode.decisionMade" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6527,6 +6661,67 @@
         }
       }
     },
+    "Preparing your account…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando tu cuenta…"
+          }
+        }
+      }
+    },
+    "primer.accountLoading.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Getting your events and invitations ready."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estamos preparando tus eventos e invitaciones."
+          }
+        }
+      }
+    },
+    "primer.accountLoading.status" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing your account…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando tu cuenta…"
+          }
+        }
+      }
+    },
+    "primer.accountLoading.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bringing it all together"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todo en un mismo lugar"
+          }
+        }
+      }
+    },
     "primer.decide.action" : {
       "localizations" : {
         "en" : {
@@ -6612,13 +6807,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Approved. Dated event ideas appear on Home."
+            "value" : "You love it. Approval is still a separate team decision."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aprobada. Las ideas de eventos con fecha aparecen en Inicio."
+            "value" : "Te encanta. La aprobación sigue siendo una decisión aparte del equipo."
           }
         }
       }
@@ -6628,13 +6823,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saved for later in Ideas."
+            "value" : "Undecided. You can change your response in Ideas."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Guardada para después en Ideas."
+            "value" : "Aún no te decides. Puedes cambiar tu respuesta en Ideas."
           }
         }
       }
@@ -6644,13 +6839,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Passed. Keep exploring ideas."
+            "value" : "Not for you. Teammates can still weigh in."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pasaste esta idea. Sigue explorando otras."
+            "value" : "No es para ti. Los demás pueden seguir opinando."
           }
         }
       }
@@ -6660,13 +6855,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Explore ideas from every event. Pass, save one for later, or love it to move the plan forward."
+            "value" : "Share your preference on each idea. Your response joins the team’s input without approving or removing the idea for anyone else."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Explora ideas de todos los eventos. Pasa una idea, guárdala para después o marca que te encanta para avanzar con el plan."
+            "value" : "Comparte tu opinión sobre cada idea. Tu respuesta se suma a las del equipo sin aprobar ni eliminar la idea para los demás."
           }
         }
       }
@@ -6676,13 +6871,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Swipe left to pass, up to save for later, or right to approve. This is a practice idea and won’t change your plans."
+            "value" : "Swipe left to pass, up for maybe, or right to love it. This practice won’t change your plans."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Desliza a la izquierda para pasar, hacia arriba para guardar para después o a la derecha para aprobar. Esta idea es de práctica y no cambiará tus planes."
+            "value" : "Desliza a la izquierda para pasar, arriba si no te decides o a la derecha si te encanta. Esta práctica no cambiará tus planes."
           }
         }
       }
@@ -6724,13 +6919,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Decide what moves forward"
+            "value" : "Help your team choose"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Decide qué sigue"
+            "value" : "Ayuda a tu equipo a elegir"
           }
         }
       }
@@ -7061,6 +7256,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Recibiste una invitación?"
+          }
+        }
+      }
+    },
+    "Recent Notes" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notas recientes"
           }
         }
       }
@@ -8217,6 +8422,7 @@
       }
     },
     "Share an update with everyone coordinating %@." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -8273,6 +8479,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lista de reproducción compartida del evento"
+          }
+        }
+      }
+    },
+    "Shared here with hosts and collaborators. No email or notification is sent." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se comparte aquí con anfitriones y colaboradores. No se envía ningún correo ni notificación."
           }
         }
       }
@@ -8400,6 +8616,26 @@
         }
       }
     },
+    "Sign Out Anyway" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar sesión de todos modos"
+          }
+        }
+      }
+    },
+    "Some changes may still need syncing. If you sign out now, saved changes stay on this device for this account. Sign back in to finish syncing before removing the app." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es posible que algunos cambios aún necesiten sincronizarse. Si cierras sesión ahora, los cambios guardados permanecerán en este dispositivo para esta cuenta. Vuelve a iniciar sesión para completar la sincronización antes de eliminar la app."
+          }
+        }
+      }
+    },
     "Song, artist, or album" : {
       "localizations" : {
         "es" : {
@@ -8457,6 +8693,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Estado"
+          }
+        }
+      }
+    },
+    "Stay Signed In" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantener la sesión iniciada"
           }
         }
       }
@@ -8638,6 +8884,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Saboreo"
+          }
+        }
+      }
+    },
+    "Team input" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opinión del equipo"
           }
         }
       }
@@ -8865,12 +9121,33 @@
         }
       }
     },
+    "This event is read-only. You can still read previous notes." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este evento es de solo lectura. Puedes seguir leyendo las notas anteriores."
+          }
+        }
+      }
+    },
     "This idea stays with the planning team, even after it is approved." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Esta idea permanece en el equipo de planificación, incluso después de su aprobación."
+          }
+        }
+      }
+    },
+    "This image could not be prepared for upload. Choose another photo and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo preparar esta imagen para subirla. Elige otra foto e inténtalo de nuevo."
           }
         }
       }
@@ -9271,6 +9548,16 @@
         }
       }
     },
+    "Waiting for team input" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esperando la opinión del equipo"
+          }
+        }
+      }
+    },
     "Weather" : {
       "localizations" : {
         "es" : {
@@ -9357,6 +9644,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bienvenido a la reunión"
+          }
+        }
+      }
+    },
+    "What should the planning team know?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué debería saber el equipo organizador?"
           }
         }
       }
@@ -9573,12 +9870,42 @@
         }
       }
     },
+    "Your message is still here. Try sending it again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu mensaje sigue aquí. Intenta enviarlo de nuevo."
+          }
+        }
+      }
+    },
     "Your own role is managed from workspace settings." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu propio rol se administra desde la configuración del espacio de trabajo."
+          }
+        }
+      }
+    },
+    "Your response" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu respuesta"
+          }
+        }
+      }
+    },
+    "Your response helps the team. Approval is a separate decision." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu respuesta ayuda al equipo. La aprobación es una decisión aparte."
           }
         }
       }

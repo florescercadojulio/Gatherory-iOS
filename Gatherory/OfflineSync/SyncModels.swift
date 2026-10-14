@@ -15,6 +15,7 @@ nonisolated struct SyncEntityType: RawRepresentable, Codable, Hashable, Sendable
     static let workspace = Self(rawValue: "workspace")
     static let event = Self(rawValue: "event")
     static let idea = Self(rawValue: "idea")
+    static let ideaResponse = Self(rawValue: "idea_response")
     static let participant = Self(rawValue: "participant")
     static let eventParticipation = Self(rawValue: "event_participation")
     static let attendance = Self(rawValue: "attendance")
