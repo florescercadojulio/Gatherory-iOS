@@ -326,6 +326,8 @@ final class AuthenticationSession {
         PostHogSDK.shared.identify(
             account.id,
             userProperties: [
+                "email": account.email,
+                "name": account.displayName,
                 "role": account.role.rawValue,
                 "authentication_provider": account.authenticationProvider.rawValue
             ]

@@ -10,6 +10,28 @@ enum AccountOnboardingState: Equatable, Sendable {
     case unavailable
 }
 
+private enum PostHogSyncLogCapture {
+    static func started(trigger: SyncTrigger) {
+        PostHogSDK.shared.logger?.info("workspace_sync_started", attributes: [
+            "trigger": trigger.rawValue
+        ])
+    }
+
+    static func completed(trigger: SyncTrigger) {
+        PostHogSDK.shared.logger?.info("workspace_sync_completed", attributes: [
+            "trigger": trigger.rawValue
+        ])
+    }
+
+    static func failed(trigger: SyncTrigger, stage: String, error: Error) {
+        PostHogSDK.shared.logger?.error("workspace_sync_failed", attributes: [
+            "trigger": trigger.rawValue,
+            "stage": stage,
+            "error_type": String(describing: type(of: error))
+        ])
+    }
+}
+
 @MainActor
 final class WorkspaceRemoteChangeApplier: RemoteChangeApplying {
     private let persistence: WorkspacePersistenceController
@@ -277,6 +299,7 @@ final class WorkspaceCloudSyncController {
              "pending_photo_scopes": String(pendingPhotoScopeIDs.count)]
         }
         SyncDiagnostics.record("workspace_sync_started", fields: diagnosticFields)
+        PostHogSyncLogCapture.started(trigger: trigger)
         let transport: any WorkspaceSnapshotTransport = injectedTransport ?? PostgresSyncTransport(baseURL: baseURL)
         syncPass: repeat {
             needsAnotherSync = false
@@ -403,10 +426,12 @@ final class WorkspaceCloudSyncController {
                 }
                 lastSuccessfulSyncAt = .now
                 SyncDiagnostics.record("workspace_sync_completed", fields: diagnosticFields)
+                PostHogSyncLogCapture.completed(trigger: trigger)
             } catch {
                 guard !Task.isCancelled else { return }
                 failedSyncScopeID = activeSyncScopeID
                 SyncDiagnostics.record("workspace_sync_failed", fields: diagnosticFields, error: error)
+                PostHogSyncLogCapture.failed(trigger: trigger, stage: stage, error: error)
                 lastError = error
                 if hasBootstrappedUserID == nil {
                     accountOnboardingState = hasConfirmedOnboarding(for: userID) || !library.workspaces.isEmpty

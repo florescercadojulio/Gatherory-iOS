@@ -1,6 +1,5 @@
 import Foundation
 import OSLog
-import PostHog
 import CryptoKit
 
 /// Deliberately excludes URLs, bodies, tokens, filenames and user content.
@@ -30,10 +29,8 @@ enum SyncDiagnostics {
         let logger = Logger(subsystem: "com.guide-systems.gatherory", category: "Sync")
         if error != nil {
             logger.error("\(event, privacy: .public) \(line, privacy: .public)")
-            PostHogSDK.shared.logger?.error(event, attributes: fields)
         } else {
             logger.info("\(event, privacy: .public) \(line, privacy: .public)")
-            PostHogSDK.shared.logger?.info(event, attributes: fields)
         }
     }
 

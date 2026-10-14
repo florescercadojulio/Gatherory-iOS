@@ -1,6 +1,7 @@
 import AuthenticationServices
 import CryptoKit
 import GoogleSignIn
+import PostHog
 import Security
 import SwiftUI
 import UIKit
@@ -318,12 +319,14 @@ struct AuthenticationView: View {
                 switch mode {
                 case .signIn:
                     try await authentication.signIn(email: email, password: password)
+                    captureAuthenticationSuccess(requestingSignUp: false, method: "password")
                 case .createAccount:
                     try await authentication.register(
                         displayName: displayName,
                         email: email,
                         password: password
                     )
+                    captureAuthenticationSuccess(requestingSignUp: true, method: "password")
                     if authentication.registrationNotice != nil {
                         mode = .signIn
                     }
@@ -363,11 +366,13 @@ struct AuthenticationView: View {
                 }
 
                 do {
+                    let requestingSignUp = mode == .createAccount
                     try await authentication.signInWithGoogle(
                         identityToken: identityToken,
                         nonce: nonce,
-                        requestingSignUp: mode == .createAccount
+                        requestingSignUp: requestingSignUp
                     )
+                    captureAuthenticationSuccess(requestingSignUp: requestingSignUp, method: "google")
                 } catch {
                     errorMessage = error.localizedDescription
                 }
@@ -403,10 +408,12 @@ struct AuthenticationView: View {
 
             Task {
                 do {
+                    let requestingSignUp = mode == .createAccount
                     try await authentication.signInWithApple(
                         identity,
-                        requestingSignUp: mode == .createAccount
+                        requestingSignUp: requestingSignUp
                     )
+                    captureAuthenticationSuccess(requestingSignUp: requestingSignUp, method: "apple")
                 } catch {
                     errorMessage = error.localizedDescription
                 }
@@ -417,6 +424,14 @@ struct AuthenticationView: View {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    private func captureAuthenticationSuccess(requestingSignUp: Bool, method: String) {
+        guard authentication.currentUser != nil else { return }
+        PostHogSDK.shared.capture(
+            requestingSignUp ? "user_registered" : "user_signed_in",
+            properties: ["method": method]
+        )
     }
 
     private static func randomNonce(length: Int = 32) -> String {

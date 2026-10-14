@@ -70,8 +70,9 @@ struct GatheroryApp: App {
 
         let config = PostHogConfig(projectToken: projectToken, host: host)
         config.errorTrackingConfig.autoCapture = true
+        config.logs.serviceName = "gatherory-ios"
+        config.logs.environment = AppRuntimeConfiguration.environment.rawValue
         PostHogSDK.shared.setup(config)
-        PostHogSDK.shared.logger?.info("posthog_log_capture_configured")
     }
 
     private var selectedColorTheme: AppColorThemeChoice {
