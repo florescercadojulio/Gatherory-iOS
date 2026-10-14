@@ -6,6 +6,15 @@ import Testing
 struct AccountLoadingPresentationTests {
     @Test("Account loading renders in light, dark, and accessible compact layouts")
     @MainActor func loadingLayouts() async throws {
+        // The test host can begin Swift Testing before UIKit connects its first
+        // scene. Yield to the main run loop, but still fail if launch never finishes.
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(5))
+        while UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).isEmpty,
+              clock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         for (name, width, height, scheme, typeSize) in [
             ("light", 390.0, 844.0, ColorScheme.light, DynamicTypeSize.large),
             ("dark", 390.0, 844.0, .dark, .large),
@@ -15,7 +24,6 @@ struct AccountLoadingPresentationTests {
                 .environment(\.colorScheme, scheme)
                 .environment(\.dynamicTypeSize, typeSize)
                 .frame(width: width, height: height))
-            let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
             let previousKeyWindow = scene.keyWindow
             let window = UIWindow(windowScene: scene)
             window.frame = CGRect(x: 0, y: 0, width: width, height: height)

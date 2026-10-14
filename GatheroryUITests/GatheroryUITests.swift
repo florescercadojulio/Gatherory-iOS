@@ -266,17 +266,17 @@ final class GatheroryUITests: XCTestCase {
                 let preview = app.descendants(matching: .any)["decide-primer-preview"]
                 XCTAssertTrue(preview.exists)
                 preview.swipeLeft()
-                XCTAssertEqual(app.staticTexts["decide-primer-feedback"].label, "Passed. Keep exploring ideas.")
+                XCTAssertEqual(app.staticTexts["decide-primer-feedback"].label, "Not for you. Teammates can still weigh in.")
                 preview.swipeUp()
-                XCTAssertEqual(app.staticTexts["decide-primer-feedback"].label, "Saved for later in Ideas.")
+                XCTAssertEqual(app.staticTexts["decide-primer-feedback"].label, "Undecided. You can change your response in Ideas.")
                 preview.swipeRight()
-                XCTAssertEqual(app.staticTexts["decide-primer-feedback"].label, "Approved. Dated event ideas appear on Home.")
+                XCTAssertEqual(app.staticTexts["decide-primer-feedback"].label, "You love it. Approval is still a separate team decision.")
             }
 
             for (choice, english, spanish) in [
-                ("pass", "Passed. Keep exploring ideas.", "Pasaste esta idea. Sigue explorando otras."),
-                ("maybe", "Saved for later in Ideas.", "Guardada para después en Ideas."),
-                ("love", "Approved. Dated event ideas appear on Home.", "Aprobada. Las ideas de eventos con fecha aparecen en Inicio.")
+                ("pass", "Not for you. Teammates can still weigh in.", "No es para ti. Los demás pueden seguir opinando."),
+                ("maybe", "Undecided. You can change your response in Ideas.", "Aún no te decides. Puedes cambiar tu respuesta en Ideas."),
+                ("love", "You love it. Approval is still a separate team decision.", "Te encanta. La aprobación sigue siendo una decisión aparte del equipo.")
             ] {
                 let button = app.buttons["decide-primer-\(choice)"]
                 for _ in 0..<5 where !button.isHittable { app.swipeUp() }

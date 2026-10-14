@@ -3,6 +3,75 @@ import Testing
 @testable import Gatherory
 
 struct AuthenticationSessionTests {
+    @Test("Failed session restoration leaves sign-in available and can be retried")
+    @MainActor
+    func failedRestoreCanRetry() async {
+        let client = StubAuthenticationClient()
+        client.restoreFailure = .networkUnavailable
+        let authentication = AuthenticationSession(environment: .production, skipsAuthentication: false, client: client)
+
+        await authentication.restoreSession()
+        #expect(authentication.currentUser == nil)
+        #expect(!authentication.isProcessing)
+
+        client.restoreFailure = nil
+        await authentication.restoreSession()
+        #expect(authentication.currentUser?.id == StubAuthenticationClient.user.id)
+        #expect(!authentication.isProcessing)
+    }
+
+    @Test("Failed sign-in never authenticates the account and releases the processing guard")
+    @MainActor
+    func failedSignInCanRetry() async throws {
+        let client = StubAuthenticationClient()
+        client.signInFailure = .invalidCredentials
+        let authentication = AuthenticationSession(environment: .production, skipsAuthentication: false, client: client)
+
+        await #expect(throws: AuthenticationFailure.invalidCredentials) {
+            try await authentication.signIn(email: "julio@example.com", password: "wrong-password")
+        }
+        #expect(authentication.currentUser == nil)
+        #expect(!authentication.isProcessing)
+
+        client.signInFailure = nil
+        try await authentication.signIn(email: "julio@example.com", password: "password")
+        #expect(authentication.currentUser?.id == StubAuthenticationClient.user.id)
+        #expect(!authentication.isProcessing)
+    }
+
+    @Test("Failed remote deletion preserves the account until the server acknowledges deletion")
+    @MainActor
+    func failedDeletionPreservesSession() async throws {
+        let client = StubAuthenticationClient()
+        client.deletionFailure = .reauthenticationRequired
+        let authentication = AuthenticationSession(environment: .production, skipsAuthentication: false, client: client)
+        await authentication.restoreSession()
+
+        await #expect(throws: AuthenticationFailure.reauthenticationRequired) {
+            try await authentication.deleteAccount()
+        }
+        #expect(client.didRequestAccountDeletion)
+        #expect(authentication.currentUser?.id == StubAuthenticationClient.user.id)
+        #expect(!authentication.isProcessing)
+
+        client.deletionFailure = nil
+        try await authentication.deleteAccount()
+        #expect(authentication.currentUser == nil)
+        #expect(!authentication.isProcessing)
+    }
+
+    @Test("Deleting without an authenticated account never calls the remote client")
+    @MainActor
+    func unauthenticatedDeletionIsRejected() async {
+        let client = StubAuthenticationClient()
+        let authentication = AuthenticationSession(environment: .production, skipsAuthentication: false, client: client)
+        await #expect(throws: AuthenticationFailure.invalidSession) {
+            try await authentication.deleteAccount()
+        }
+        #expect(!client.didRequestAccountDeletion)
+        #expect(!authentication.isProcessing)
+    }
+
     @Test("Sign out waits for sync and client teardown before clearing the account")
     @MainActor
     func signOutWaitsForSync() async throws {
@@ -164,6 +233,9 @@ private final class StubAuthenticationClient: AuthenticationClient {
     private(set) var didRequestAccountDeletion = false
     private(set) var didSignOut = false
     var holdSignOut = false
+    var restoreFailure: AuthenticationFailure?
+    var signInFailure: AuthenticationFailure?
+    var deletionFailure: AuthenticationFailure?
     var finishSignOut: CheckedContinuation<Void, Never>?
     private(set) var lastGoogleIdentityToken: String?
     private(set) var lastGoogleNonce: String?
@@ -173,11 +245,13 @@ private final class StubAuthenticationClient: AuthenticationClient {
     }
 
     func restoreSession() async throws -> UserAccount? {
-        Self.user
+        if let restoreFailure { throw restoreFailure }
+        return Self.user
     }
 
     func signIn(email: String, password: String) async throws -> UserAccount {
-        Self.user
+        if let signInFailure { throw signInFailure }
+        return Self.user
     }
 
     func register(
@@ -214,6 +288,7 @@ private final class StubAuthenticationClient: AuthenticationClient {
 
     func deleteAccount() async throws {
         didRequestAccountDeletion = true
+        if let deletionFailure { throw deletionFailure }
     }
 
     func signOut() async {
