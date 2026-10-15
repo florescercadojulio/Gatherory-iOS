@@ -964,10 +964,11 @@ private struct IdeaCategoryDetailContent: View {
                 genericContent
             }
         }
-        .musicPicker(
+        .musicPickerCompatible(
             isPresented: $isPickingMusic,
             title: Text("Add to Playlist"),
-            selection: $pickedSongs
+            selection: $pickedSongs,
+            onLegacySelection: appendPickedTrack
         )
         .onChange(of: pickedSongs) { _, songs in
             appendPickedSongs(songs)
@@ -1175,14 +1176,21 @@ private struct IdeaCategoryDetailContent: View {
     }
 
     private func appendPickedSongs(_ songs: [Song]) {
-        guard !songs.isEmpty, canEditMusicPlaylist else {
+        appendPickedTracks(songs.map { MusicTrack(appleMusicSong: $0) })
+    }
+
+    private func appendPickedTrack(_ track: MusicTrack) {
+        appendPickedTracks([track])
+    }
+
+    private func appendPickedTracks(_ pickedTracks: [MusicTrack]) {
+        guard !pickedTracks.isEmpty, canEditMusicPlaylist else {
             pickedSongs.removeAll()
             return
         }
         var updatedIdea = idea
         var tracks = idea.musicTracks
-        for song in songs {
-            let track = MusicTrack(appleMusicSong: song)
+        for track in pickedTracks {
             guard !tracks.contains(where: { $0.id == track.id }) else { continue }
             tracks.append(track)
         }
@@ -2060,10 +2068,11 @@ struct IdeaEditorView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .musicPicker(
+        .musicPickerCompatible(
             isPresented: $isPickingMusic,
             title: Text("Add to \(workspace.selectedEventTitle)"),
-            selection: $pickedSongs
+            selection: $pickedSongs,
+            onLegacySelection: appendPickedTrack
         )
         .onChange(of: pickedSongs) { _, songs in
             appendPickedSongs(songs)
@@ -2830,12 +2839,19 @@ struct IdeaEditorView: View {
     }
 
     private func appendPickedSongs(_ songs: [Song]) {
-        guard !songs.isEmpty, canEditMusicPlaylist else {
+        appendPickedTracks(songs.map { MusicTrack(appleMusicSong: $0) })
+    }
+
+    private func appendPickedTrack(_ track: MusicTrack) {
+        appendPickedTracks([track])
+    }
+
+    private func appendPickedTracks(_ pickedTracks: [MusicTrack]) {
+        guard !pickedTracks.isEmpty, canEditMusicPlaylist else {
             pickedSongs.removeAll()
             return
         }
-        for song in songs {
-            let track = MusicTrack(appleMusicSong: song)
+        for track in pickedTracks {
             guard !musicTracks.contains(where: { $0.id == track.id }) else { continue }
             musicTracks.append(track)
         }

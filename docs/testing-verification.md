@@ -6,6 +6,12 @@ the web backend uses Vitest and `@effect/vitest`.
 
 ## Repeatable local checks
 
+The supported minimum is iOS/iPadOS 26. Before testing an OS compatibility
+change, run `bash scripts/verify-deployment-targets.sh`. It checks effective
+Debug/Release settings for the app and both test targets against the device and
+simulator SDKs; it does not run UI tests. Keep availability checking enabled
+when compiling against newer SDKs.
+
 From the iOS repository, choose an installed simulator with
 `xcrun simctl list devices available`. Substitute its ID below:
 
@@ -132,6 +138,39 @@ Final result bundle: `Test-Gatherory-2026.10.14_13-04-20--0400.xcresult` in the
 project's DerivedData `Logs/Test` directory. The same native-only command and
 Xcode/simulator environment were used. **UI tests were not run**, as requested.
 No live backend, web/server, or physical-device checks were performed.
+
+## iOS 26 compatibility — October 15, 2026
+
+- Lowered the project and unit-test deployment minima to 26.0; app and UI-test
+  targets inherit the project setting. `verify-deployment-targets.sh` passed
+  all 12 effective-setting checks (three targets, two configurations, two SDKs).
+- Compiling with the iOS 27 SDK against the iOS 26 minimum identified the new
+  MusicKit picker and asynchronous AVAudioSession activation/deactivation APIs.
+  The native picker and asynchronous audio APIs remain available on iOS 27+.
+  On iOS 26, the picker uses the existing authorized song-search sheet (one song
+  per selection), and audio activation/deactivation uses `setActive` on a serial
+  background queue. Activation errors still reach the existing failure path;
+  deactivation remains best-effort and notifies interrupted audio sessions.
+- Both picker paths retain the same permission checks, track deduplication,
+  draft editing, and `workspace.updateIdea` save path. Persistence schemas,
+  transaction boundaries, outbox behavior, transports, and account isolation
+  code were not changed.
+- The Debug simulator app built and the full `GatheroryTests` target passed:
+  **337 tests / 404 test runs**, zero failures or skips, on iPhone 17 / iOS 27.0.
+  The suite includes offline persistence, outbox, account-switching, and sync
+  regressions. Result bundle: `/tmp/gatherory-ios26-final-tests.xcresult`.
+- The unsigned Release device build passed. The Debug simulator and Release
+  device artifacts declare `MinimumOSVersion = 26.0`; their Mach-O build
+  metadata also records `minos 26.0`. English/Spanish localization checks passed
+  for all 940 strings. Existing Swift 6 isolation warnings remain outside this
+  compatibility change.
+
+Xcode 27.0 (27A266a) was used. Only the iOS 27 simulator runtime is installed:
+**the iOS 26 fallback branches have been compiled but not exercised on an iOS 26
+runtime/device**. Verify song search/selection/cancel, preview playback/pause/stop
+and interrupted-audio resumption on iOS 26 before release, along with the
+offline/reconnect/account-switching device checks below. UI automation was
+intentionally not run. No live backend or TestFlight upload was performed.
 
 ## Checks still needed before release
 

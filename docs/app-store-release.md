@@ -10,6 +10,17 @@ sign-in. See [App Review Guideline 2.1](https://developer.apple.com/app-store/re
 [Providing information for a complete review](https://developer.apple.com/help/app-review/before-submitting-for-review/complete-review),
 and [Apple’s App Review overview](https://developer.apple.com/app-store/review/).
 
+## Source compatibility baseline — October 15, 2026
+
+The current source targets iOS/iPadOS 26 or later for iPhone and iPad. Music
+selection and audio-session APIs introduced in iOS 27 have guarded iOS 26
+fallbacks. See [compatibility verification](testing-verification.md#ios-26-compatibility--october-15-2026)
+for the build/test evidence and outstanding iOS 26 runtime checks.
+
+This does not change the already-uploaded version 1.0 (3), which was built with
+an iOS 27 minimum. Distributing iOS 26 support requires a new, incremented build;
+no replacement TestFlight upload is part of this source change.
+
 ## Latest TestFlight verification — October 14, 2026
 
 - Version **1.0 (3)** was archived, successfully uploaded, processed, and submitted

@@ -18,6 +18,12 @@ final class MusicPreviewPlayer {
     @ObservationIgnored private var activationTask: Task<Void, Never>?
     @ObservationIgnored private var playbackRequestID = UUID()
 
+    // iOS 26's synchronous audio-session API must not block the main actor.
+    // Serialize activation and deactivation requests on the fallback path.
+    nonisolated private static let legacyAudioSessionQueue = DispatchQueue(
+        label: "com.gatherory.music-preview.audio-session"
+    )
+
     private(set) var activeTrackID: String?
     private(set) var state: PlaybackState = .idle
     private(set) var progress = 0.0
@@ -179,6 +185,10 @@ final class MusicPreviewPlayer {
     private func activateAudioSession() async throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playback, mode: .default)
+        guard #available(iOS 27.0, *) else {
+            try await Self.setLegacyAudioSessionActive(true)
+            return
+        }
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
             session.activate(options: []) { activated, error in
@@ -197,12 +207,34 @@ final class MusicPreviewPlayer {
 
     private func requestAudioSessionDeactivation() {
         Task {
+            guard #available(iOS 27.0, *) else {
+                // Match the newer API path's best-effort deactivation.
+                try? await Self.setLegacyAudioSessionActive(false)
+                return
+            }
             await withCheckedContinuation {
                 (continuation: CheckedContinuation<Void, Never>) in
                 AVAudioSession.sharedInstance().deactivate(
                     options: [.notifyOthersOnDeactivation]
                 ) { _, _ in
                     continuation.resume()
+                }
+            }
+        }
+    }
+
+    nonisolated private static func setLegacyAudioSessionActive(_ active: Bool) async throws {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+            legacyAudioSessionQueue.async {
+                do {
+                    try AVAudioSession.sharedInstance().setActive(
+                        active,
+                        options: active ? [] : [.notifyOthersOnDeactivation]
+                    )
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
                 }
             }
         }
