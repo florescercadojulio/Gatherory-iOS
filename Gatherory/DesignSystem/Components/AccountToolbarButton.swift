@@ -13,6 +13,7 @@ extension EnvironmentValues {
 
 struct AccountToolbarButton: View {
     var monochrome = false
+    var avatarSize: CGFloat = 28
     @Environment(\.currentUserAccount) private var currentUserAccount
     @State private var isPresentingAccount = false
 
@@ -22,7 +23,7 @@ struct AccountToolbarButton: View {
         } label: {
             UserAvatarView(
                 account: currentUserAccount,
-                size: 28,
+                size: avatarSize,
                 fallbackIsMonochrome: monochrome
             )
         }

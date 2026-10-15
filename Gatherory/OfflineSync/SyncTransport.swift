@@ -1,5 +1,19 @@
 import Foundation
 
+nonisolated enum SyncClientCapabilities {
+    static let blueprintGuidesV1 = "blueprint-guides-v1"
+    static let upgradeRequiredCode = "BLUEPRINT_CLIENT_UPGRADE_REQUIRED"
+    static let legacyUpgradeRequiredCode = "blueprint_client_upgrade_required"
+    static let blueprintFeatures = [
+        "event.children_v1",
+        "planning.ideas_v2",
+        "planning.instructions_v1",
+        "planning.portable_idea_config_v1"
+    ]
+    static let headerName = "X-Gatherory-Capabilities"
+    static let headerValue = ([blueprintGuidesV1] + blueprintFeatures).joined(separator: ",")
+}
+
 nonisolated enum SyncPushDisposition: String, Codable, Sendable {
     case applied
     case duplicate

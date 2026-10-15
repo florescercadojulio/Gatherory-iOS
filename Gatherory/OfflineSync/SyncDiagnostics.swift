@@ -22,6 +22,7 @@ enum SyncDiagnostics {
                 case .invalidSession: fields["failure_code"] = "INVALID_SESSION"
                 case .invalidResponse: fields["failure_code"] = "INVALID_RESPONSE"
                 case .payloadTooLarge: fields["failure_code"] = "PAYLOAD_TOO_LARGE"
+                case .clientUpgradeRequired(let code): fields["failure_code"] = code ?? SyncClientCapabilities.upgradeRequiredCode
                 case .forbidden(let code): fields["failure_code"] = code ?? "HTTP_403"
                 }
             }

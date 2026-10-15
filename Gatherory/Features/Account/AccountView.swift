@@ -70,6 +70,8 @@ struct AccountView: View {
                 return "Your session expired. Sign in again to resume cloud sync."
             case .payloadTooLarge:
                 return "A photo is waiting for a separate upload. Your other changes remain saved on this device."
+            case .clientUpgradeRequired:
+                return BlueprintCopy.clientUpgradeRequired
             case .invalidResponse:
                 return "Gatherory received an unexpected response. Try again shortly."
             case .forbidden:

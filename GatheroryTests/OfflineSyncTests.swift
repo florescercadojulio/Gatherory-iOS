@@ -666,6 +666,28 @@ struct OfflineSyncTests {
         #expect(store.attentionCode == "SCOPE_WRITE_FORBIDDEN")
     }
 
+    @Test("A capability upgrade response retries without dropping the durable outbox entry")
+    @MainActor
+    func upgradeRequiredRetainsOutbox() async throws {
+        let scopeID = UUID()
+        let mutation = PendingMutationSnapshot(PendingMutation(
+            scopeID: scopeID, entityType: .workspace, entityID: scopeID,
+            operation: .update, payload: Data("{}".utf8), ownerUserID: "sync-user"
+        ))
+        let store = BatchOutboxStore(mutations: [mutation])
+        let coordinator = OfflineSyncCoordinator(
+            store: store,
+            transport: UpgradeRequiredSyncTransport(),
+            remoteApplier: EmptyRemoteChangeApplier(),
+            ownerUserID: "sync-user"
+        )
+
+        await #expect(throws: CloudSyncFailure.self) {
+            try await coordinator.synchronize(scopeID: scopeID)
+        }
+        #expect(store.remainingCount() == 1)
+    }
+
     @Test("A scoped read-only rejection refreshes authority while retaining attention")
     @MainActor
     func scopedReadOnlyPullsWithoutDiscardingDraft() async throws {
@@ -1022,6 +1044,17 @@ private final class BatchOutboxStore: SyncOutboxStore {
 
     func remainingCount() -> Int {
         mutations.count
+    }
+}
+
+@MainActor
+private struct UpgradeRequiredSyncTransport: SyncTransport {
+    func push(_ mutations: [PendingMutationSnapshot]) async throws -> SyncPushResponse {
+        throw CloudSyncFailure.clientUpgradeRequired(SyncClientCapabilities.upgradeRequiredCode)
+    }
+
+    func pull(scopeID: UUID, after cursor: String?) async throws -> SyncPullPage {
+        .init(changes: [], nextCursor: cursor, hasMore: false)
     }
 }
 

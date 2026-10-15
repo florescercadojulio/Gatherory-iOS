@@ -1,0 +1,777 @@
+{
+  "catalogKey": "private_0123456789abcdef0123456789abcdef",
+  "revision": 1,
+  "contentHash": "3eca1deac3b634cbb7b7f2149ce3d35230eedcc34ca1f5a4ce1f323b09a263f4",
+  "installations": [
+    {
+      "requestID": "90000000-0000-4000-8000-000000000001",
+      "installationID": "91000000-0000-4000-8000-000000000001",
+      "organizationID": "org_private_cottage_copy_1",
+      "input": {
+        "requestId": "90000000-0000-4000-8000-000000000001",
+        "catalogKey": "private_0123456789abcdef0123456789abcdef",
+        "revision": 1,
+        "contentHash": "3eca1deac3b634cbb7b7f2149ce3d35230eedcc34ca1f5a4ce1f323b09a263f4",
+        "mainEvent": {
+          "name": "Lake Cottage Weekend",
+          "startsAt": "2027-07-08T16:00:00.000Z",
+          "timeZone": "America/Detroit"
+        },
+        "selectedChildren": [
+          {
+            "key": "arrival",
+            "startsAt": "2027-07-08T20:00:00.000Z"
+          },
+          {
+            "key": "shared_day",
+            "startsAt": "2027-07-09T14:00:00.000Z"
+          },
+          {
+            "key": "departure",
+            "startsAt": "2027-07-11T14:00:00.000Z"
+          }
+        ],
+        "selectedIdeaKeys": [
+          "meals",
+          "local_outings",
+          "shared_activities",
+          "useful_links"
+        ],
+        "capabilities": [
+          "event.children_v1",
+          "planning.ideas_v2",
+          "planning.instructions_v1",
+          "planning.portable_idea_config_v1"
+        ]
+      },
+      "manifest": {
+        "events": {
+          "main": "10000000-1000-4000-8000-000000000001",
+          "arrival": "10000000-1000-4000-8000-000000000002",
+          "shared_day": "10000000-1000-4000-8000-000000000003",
+          "departure": "10000000-1000-4000-8000-000000000004"
+        },
+        "ideas": {
+          "meals": "10000000-2000-4000-8000-000000000001",
+          "local_outings": "10000000-2000-4000-8000-000000000002",
+          "shared_activities": "10000000-2000-4000-8000-000000000003",
+          "useful_links": "10000000-2000-4000-8000-000000000004"
+        },
+        "guides": {
+          "host_planning_notes": "10000000-3000-4000-8000-000000000001",
+          "arrival_guide": "10000000-3000-4000-8000-000000000002",
+          "shared_day_guide": "10000000-3000-4000-8000-000000000003",
+          "departure_guide": "10000000-3000-4000-8000-000000000004"
+        },
+        "personID": "10000000-7000-4000-8000-000000000001",
+        "participations": {
+          "main": "10000000-8000-4000-8000-000000000001",
+          "arrival": "10000000-8000-4000-8000-000000000002",
+          "shared_day": "10000000-8000-4000-8000-000000000003",
+          "departure": "10000000-8000-4000-8000-000000000004"
+        }
+      },
+      "archive": {
+        "mainEventID": "10000000-1000-4000-8000-000000000001",
+        "title": "Lake Cottage Weekend",
+        "mainEventStartsAt": 836755200,
+        "mainEventEndsAt": null,
+        "mainEventIsAllDay": false,
+        "mainEventTimeZoneIdentifier": "America/Detroit",
+        "mainEventLocation": {
+          "address": "",
+          "shortAddress": "",
+          "placeName": "",
+          "locationName": "",
+          "addressLine2": ""
+        },
+        "mainEventImageData": null,
+        "mainEventMediaAssetID": null,
+        "venueName": "",
+        "location": "",
+        "dressCode": "",
+        "eventMessage": "",
+        "planningMode": "openToIdeas",
+        "members": [
+          {
+            "id": "10000000-7000-4000-8000-000000000001",
+            "userID": "cottage-proof-owner",
+            "name": "Riley Example",
+            "participantRole": "host",
+            "initials": "RE",
+            "attendance": "invited",
+            "email": "riley@example.test",
+            "profileImageAssetName": null,
+            "profileImageURL": null,
+            "planningPermission": "manage",
+            "invitationStatus": "active"
+          }
+        ],
+        "eventParticipations": [
+          {
+            "id": "10000000-8000-4000-8000-000000000001",
+            "eventID": "10000000-1000-4000-8000-000000000001",
+            "memberID": "10000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          },
+          {
+            "id": "10000000-8000-4000-8000-000000000002",
+            "eventID": "10000000-1000-4000-8000-000000000002",
+            "memberID": "10000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          },
+          {
+            "id": "10000000-8000-4000-8000-000000000003",
+            "eventID": "10000000-1000-4000-8000-000000000003",
+            "memberID": "10000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          },
+          {
+            "id": "10000000-8000-4000-8000-000000000004",
+            "eventID": "10000000-1000-4000-8000-000000000004",
+            "memberID": "10000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          }
+        ],
+        "mainEventParticipantIDs": [
+          "10000000-7000-4000-8000-000000000001"
+        ],
+        "ideas": [
+          {
+            "id": "10000000-2000-4000-8000-000000000001",
+            "eventID": "10000000-1000-4000-8000-000000000001",
+            "title": "Meals and groceries",
+            "note": "Collect meal ideas, grocery plans, and dietary considerations.",
+            "category": "food",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "cottage-proof-owner",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "food": {
+                "_0": {
+                  "type": "meal",
+                  "servings": null,
+                  "dietaryNotes": ""
+                }
+              }
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "10000000-2000-4000-8000-000000000002",
+            "eventID": "10000000-1000-4000-8000-000000000003",
+            "title": "Local outings",
+            "note": "Save places and activities the group may want to visit.",
+            "category": "venue",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "cottage-proof-owner",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "venue": {
+                "_0": {
+                  "setting": "indoor",
+                  "capacity": null,
+                  "area": ""
+                }
+              }
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "10000000-2000-4000-8000-000000000003",
+            "eventID": "10000000-1000-4000-8000-000000000001",
+            "title": "Things to do together",
+            "note": "Gather low-key activities that work for the people staying together.",
+            "category": "other",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "cottage-proof-owner",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "standard": {}
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "10000000-2000-4000-8000-000000000004",
+            "eventID": "10000000-1000-4000-8000-000000000001",
+            "title": "Useful links",
+            "note": "Keep useful local and travel links with the stay plan.",
+            "category": "link",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "cottage-proof-owner",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "standard": {}
+            },
+            "invitationVisibility": "planningOnly"
+          }
+        ],
+        "timeline": [
+          {
+            "id": "10000000-1000-4000-8000-000000000002",
+            "title": "Arrival and settling in",
+            "category": "other",
+            "purpose": "eventExperience",
+            "scheduledAt": 836769600,
+            "schedulingState": "scheduled",
+            "endsAt": null,
+            "isAllDay": false,
+            "timeZoneIdentifier": "America/Detroit",
+            "eventLocation": null,
+            "participantIDs": [
+              "10000000-7000-4000-8000-000000000001"
+            ],
+            "parentEventID": "10000000-1000-4000-8000-000000000001",
+            "status": "approved",
+            "statusBeforeArchiving": null,
+            "completionStatus": "upcoming",
+            "response": null,
+            "linkedIdeaID": null,
+            "imageData": null,
+            "mediaAssetID": null,
+            "eventDescription": "",
+            "dressCode": "",
+            "budgetCap": null
+          },
+          {
+            "id": "10000000-1000-4000-8000-000000000003",
+            "title": "Shared cottage day",
+            "category": "other",
+            "purpose": "eventExperience",
+            "scheduledAt": 836834400,
+            "schedulingState": "scheduled",
+            "endsAt": null,
+            "isAllDay": false,
+            "timeZoneIdentifier": "America/Detroit",
+            "eventLocation": null,
+            "participantIDs": [
+              "10000000-7000-4000-8000-000000000001"
+            ],
+            "parentEventID": "10000000-1000-4000-8000-000000000001",
+            "status": "approved",
+            "statusBeforeArchiving": null,
+            "completionStatus": "upcoming",
+            "response": null,
+            "linkedIdeaID": null,
+            "imageData": null,
+            "mediaAssetID": null,
+            "eventDescription": "",
+            "dressCode": "",
+            "budgetCap": null
+          },
+          {
+            "id": "10000000-1000-4000-8000-000000000004",
+            "title": "Departure",
+            "category": "other",
+            "purpose": "eventExperience",
+            "scheduledAt": 837007200,
+            "schedulingState": "scheduled",
+            "endsAt": null,
+            "isAllDay": false,
+            "timeZoneIdentifier": "America/Detroit",
+            "eventLocation": null,
+            "participantIDs": [
+              "10000000-7000-4000-8000-000000000001"
+            ],
+            "parentEventID": "10000000-1000-4000-8000-000000000001",
+            "status": "approved",
+            "statusBeforeArchiving": null,
+            "completionStatus": "upcoming",
+            "response": null,
+            "linkedIdeaID": null,
+            "imageData": null,
+            "mediaAssetID": null,
+            "eventDescription": "",
+            "dressCode": "",
+            "budgetCap": null
+          }
+        ],
+        "eventExpenses": [],
+        "workspaceBudgetCap": null,
+        "currencyCode": "USD",
+        "mainEventBudgetCap": null,
+        "notes": [],
+        "ideaResponses": [],
+        "mainEventStatus": "draft",
+        "mainEventResponse": null,
+        "eventMoments": [],
+        "guides": [
+          {
+            "id": "10000000-3000-4000-8000-000000000001",
+            "eventID": "10000000-1000-4000-8000-000000000001",
+            "key": "host_planning_notes",
+            "title": "Host planning notes",
+            "body": "Add confirmed arrangements for the stay and keep undecided planning details here until they are ready to share.",
+            "sortOrder": 0,
+            "visibility": "planning_only"
+          },
+          {
+            "id": "10000000-3000-4000-8000-000000000002",
+            "eventID": "10000000-1000-4000-8000-000000000002",
+            "key": "arrival_guide",
+            "title": "Arrival guide",
+            "body": "Share confirmed arrival timing, directions, and the agreed way to access the cottage with the people staying here.",
+            "sortOrder": 1,
+            "visibility": "event_participants"
+          },
+          {
+            "id": "10000000-3000-4000-8000-000000000003",
+            "eventID": "10000000-1000-4000-8000-000000000003",
+            "key": "shared_day_guide",
+            "title": "Shared day details",
+            "body": "Add the confirmed plan for the day and any details participants need to take part comfortably.",
+            "sortOrder": 2,
+            "visibility": "event_participants"
+          },
+          {
+            "id": "10000000-3000-4000-8000-000000000004",
+            "eventID": "10000000-1000-4000-8000-000000000004",
+            "key": "departure_guide",
+            "title": "Departure information",
+            "body": "Share confirmed departure timing and any agreed handoff details with the people staying here.",
+            "sortOrder": 3,
+            "visibility": "event_participants"
+          }
+        ],
+        "experienceConfiguration": {
+          "experienceType": "custom",
+          "categoryOrder": [
+            "food",
+            "venue",
+            "other",
+            "link"
+          ]
+        },
+        "isMainEventDeleted": false,
+        "registry": [],
+        "isRegistryShared": false,
+        "isCollaboratorLinkEnabled": false,
+        "requiresCollaboratorApproval": true,
+        "defaultCollaboratorPermission": "contribute",
+        "isScopedEvent": false,
+        "scopedEvent": null
+      }
+    },
+    {
+      "requestID": "90000000-0000-4000-8000-000000000002",
+      "installationID": "91000000-0000-4000-8000-000000000002",
+      "organizationID": "org_private_cottage_copy_2",
+      "input": {
+        "requestId": "90000000-0000-4000-8000-000000000002",
+        "catalogKey": "private_0123456789abcdef0123456789abcdef",
+        "revision": 1,
+        "contentHash": "3eca1deac3b634cbb7b7f2149ce3d35230eedcc34ca1f5a4ce1f323b09a263f4",
+        "mainEvent": {
+          "name": "Autumn Cottage Weekend",
+          "startsAt": "2027-10-13T16:00:00.000Z",
+          "timeZone": "America/Detroit"
+        },
+        "selectedChildren": [
+          {
+            "key": "arrival",
+            "startsAt": "2027-10-13T20:00:00.000Z"
+          },
+          {
+            "key": "shared_day",
+            "startsAt": "2027-10-14T14:00:00.000Z"
+          },
+          {
+            "key": "departure",
+            "startsAt": "2027-10-16T14:00:00.000Z"
+          }
+        ],
+        "selectedIdeaKeys": [
+          "meals",
+          "local_outings",
+          "shared_activities",
+          "useful_links"
+        ],
+        "capabilities": [
+          "event.children_v1",
+          "planning.ideas_v2",
+          "planning.instructions_v1",
+          "planning.portable_idea_config_v1"
+        ]
+      },
+      "manifest": {
+        "events": {
+          "main": "20000000-1000-4000-8000-000000000001",
+          "arrival": "20000000-1000-4000-8000-000000000002",
+          "shared_day": "20000000-1000-4000-8000-000000000003",
+          "departure": "20000000-1000-4000-8000-000000000004"
+        },
+        "ideas": {
+          "meals": "20000000-2000-4000-8000-000000000001",
+          "local_outings": "20000000-2000-4000-8000-000000000002",
+          "shared_activities": "20000000-2000-4000-8000-000000000003",
+          "useful_links": "20000000-2000-4000-8000-000000000004"
+        },
+        "guides": {
+          "host_planning_notes": "20000000-3000-4000-8000-000000000001",
+          "arrival_guide": "20000000-3000-4000-8000-000000000002",
+          "shared_day_guide": "20000000-3000-4000-8000-000000000003",
+          "departure_guide": "20000000-3000-4000-8000-000000000004"
+        },
+        "personID": "20000000-7000-4000-8000-000000000001",
+        "participations": {
+          "main": "20000000-8000-4000-8000-000000000001",
+          "arrival": "20000000-8000-4000-8000-000000000002",
+          "shared_day": "20000000-8000-4000-8000-000000000003",
+          "departure": "20000000-8000-4000-8000-000000000004"
+        }
+      },
+      "archive": {
+        "mainEventID": "20000000-1000-4000-8000-000000000001",
+        "title": "Autumn Cottage Weekend",
+        "mainEventStartsAt": 845136000,
+        "mainEventEndsAt": null,
+        "mainEventIsAllDay": false,
+        "mainEventTimeZoneIdentifier": "America/Detroit",
+        "mainEventLocation": {
+          "address": "",
+          "shortAddress": "",
+          "placeName": "",
+          "locationName": "",
+          "addressLine2": ""
+        },
+        "mainEventImageData": null,
+        "mainEventMediaAssetID": null,
+        "venueName": "",
+        "location": "",
+        "dressCode": "",
+        "eventMessage": "",
+        "planningMode": "openToIdeas",
+        "members": [
+          {
+            "id": "20000000-7000-4000-8000-000000000001",
+            "userID": "cottage-proof-owner",
+            "name": "Riley Example",
+            "participantRole": "host",
+            "initials": "RE",
+            "attendance": "invited",
+            "email": "riley@example.test",
+            "profileImageAssetName": null,
+            "profileImageURL": null,
+            "planningPermission": "manage",
+            "invitationStatus": "active"
+          }
+        ],
+        "eventParticipations": [
+          {
+            "id": "20000000-8000-4000-8000-000000000001",
+            "eventID": "20000000-1000-4000-8000-000000000001",
+            "memberID": "20000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          },
+          {
+            "id": "20000000-8000-4000-8000-000000000002",
+            "eventID": "20000000-1000-4000-8000-000000000002",
+            "memberID": "20000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          },
+          {
+            "id": "20000000-8000-4000-8000-000000000003",
+            "eventID": "20000000-1000-4000-8000-000000000003",
+            "memberID": "20000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          },
+          {
+            "id": "20000000-8000-4000-8000-000000000004",
+            "eventID": "20000000-1000-4000-8000-000000000004",
+            "memberID": "20000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          }
+        ],
+        "mainEventParticipantIDs": [
+          "20000000-7000-4000-8000-000000000001"
+        ],
+        "ideas": [
+          {
+            "id": "20000000-2000-4000-8000-000000000001",
+            "eventID": "20000000-1000-4000-8000-000000000001",
+            "title": "Meals and groceries",
+            "note": "Collect meal ideas, grocery plans, and dietary considerations.",
+            "category": "food",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "cottage-proof-owner",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "food": {
+                "_0": {
+                  "type": "meal",
+                  "servings": null,
+                  "dietaryNotes": ""
+                }
+              }
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "20000000-2000-4000-8000-000000000002",
+            "eventID": "20000000-1000-4000-8000-000000000003",
+            "title": "Local outings",
+            "note": "Save places and activities the group may want to visit.",
+            "category": "venue",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "cottage-proof-owner",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "venue": {
+                "_0": {
+                  "setting": "indoor",
+                  "capacity": null,
+                  "area": ""
+                }
+              }
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "20000000-2000-4000-8000-000000000003",
+            "eventID": "20000000-1000-4000-8000-000000000001",
+            "title": "Things to do together",
+            "note": "Gather low-key activities that work for the people staying together.",
+            "category": "other",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "cottage-proof-owner",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "standard": {}
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "20000000-2000-4000-8000-000000000004",
+            "eventID": "20000000-1000-4000-8000-000000000001",
+            "title": "Useful links",
+            "note": "Keep useful local and travel links with the stay plan.",
+            "category": "link",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "cottage-proof-owner",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "standard": {}
+            },
+            "invitationVisibility": "planningOnly"
+          }
+        ],
+        "timeline": [
+          {
+            "id": "20000000-1000-4000-8000-000000000002",
+            "title": "Arrival and settling in",
+            "category": "other",
+            "purpose": "eventExperience",
+            "scheduledAt": 845150400,
+            "schedulingState": "scheduled",
+            "endsAt": null,
+            "isAllDay": false,
+            "timeZoneIdentifier": "America/Detroit",
+            "eventLocation": null,
+            "participantIDs": [
+              "20000000-7000-4000-8000-000000000001"
+            ],
+            "parentEventID": "20000000-1000-4000-8000-000000000001",
+            "status": "approved",
+            "statusBeforeArchiving": null,
+            "completionStatus": "upcoming",
+            "response": null,
+            "linkedIdeaID": null,
+            "imageData": null,
+            "mediaAssetID": null,
+            "eventDescription": "",
+            "dressCode": "",
+            "budgetCap": null
+          },
+          {
+            "id": "20000000-1000-4000-8000-000000000003",
+            "title": "Shared cottage day",
+            "category": "other",
+            "purpose": "eventExperience",
+            "scheduledAt": 845215200,
+            "schedulingState": "scheduled",
+            "endsAt": null,
+            "isAllDay": false,
+            "timeZoneIdentifier": "America/Detroit",
+            "eventLocation": null,
+            "participantIDs": [
+              "20000000-7000-4000-8000-000000000001"
+            ],
+            "parentEventID": "20000000-1000-4000-8000-000000000001",
+            "status": "approved",
+            "statusBeforeArchiving": null,
+            "completionStatus": "upcoming",
+            "response": null,
+            "linkedIdeaID": null,
+            "imageData": null,
+            "mediaAssetID": null,
+            "eventDescription": "",
+            "dressCode": "",
+            "budgetCap": null
+          },
+          {
+            "id": "20000000-1000-4000-8000-000000000004",
+            "title": "Departure",
+            "category": "other",
+            "purpose": "eventExperience",
+            "scheduledAt": 845388000,
+            "schedulingState": "scheduled",
+            "endsAt": null,
+            "isAllDay": false,
+            "timeZoneIdentifier": "America/Detroit",
+            "eventLocation": null,
+            "participantIDs": [
+              "20000000-7000-4000-8000-000000000001"
+            ],
+            "parentEventID": "20000000-1000-4000-8000-000000000001",
+            "status": "approved",
+            "statusBeforeArchiving": null,
+            "completionStatus": "upcoming",
+            "response": null,
+            "linkedIdeaID": null,
+            "imageData": null,
+            "mediaAssetID": null,
+            "eventDescription": "",
+            "dressCode": "",
+            "budgetCap": null
+          }
+        ],
+        "eventExpenses": [],
+        "workspaceBudgetCap": null,
+        "currencyCode": "USD",
+        "mainEventBudgetCap": null,
+        "notes": [],
+        "ideaResponses": [],
+        "mainEventStatus": "draft",
+        "mainEventResponse": null,
+        "eventMoments": [],
+        "guides": [
+          {
+            "id": "20000000-3000-4000-8000-000000000001",
+            "eventID": "20000000-1000-4000-8000-000000000001",
+            "key": "host_planning_notes",
+            "title": "Host planning notes",
+            "body": "Add confirmed arrangements for the stay and keep undecided planning details here until they are ready to share.",
+            "sortOrder": 0,
+            "visibility": "planning_only"
+          },
+          {
+            "id": "20000000-3000-4000-8000-000000000002",
+            "eventID": "20000000-1000-4000-8000-000000000002",
+            "key": "arrival_guide",
+            "title": "Arrival guide",
+            "body": "Share confirmed arrival timing, directions, and the agreed way to access the cottage with the people staying here.",
+            "sortOrder": 1,
+            "visibility": "event_participants"
+          },
+          {
+            "id": "20000000-3000-4000-8000-000000000003",
+            "eventID": "20000000-1000-4000-8000-000000000003",
+            "key": "shared_day_guide",
+            "title": "Shared day details",
+            "body": "Add the confirmed plan for the day and any details participants need to take part comfortably.",
+            "sortOrder": 2,
+            "visibility": "event_participants"
+          },
+          {
+            "id": "20000000-3000-4000-8000-000000000004",
+            "eventID": "20000000-1000-4000-8000-000000000004",
+            "key": "departure_guide",
+            "title": "Departure information",
+            "body": "Share confirmed departure timing and any agreed handoff details with the people staying here.",
+            "sortOrder": 3,
+            "visibility": "event_participants"
+          }
+        ],
+        "experienceConfiguration": {
+          "experienceType": "custom",
+          "categoryOrder": [
+            "food",
+            "venue",
+            "other",
+            "link"
+          ]
+        },
+        "isMainEventDeleted": false,
+        "registry": [],
+        "isRegistryShared": false,
+        "isCollaboratorLinkEnabled": false,
+        "requiresCollaboratorApproval": true,
+        "defaultCollaboratorPermission": "contribute",
+        "isScopedEvent": false,
+        "scopedEvent": null
+      }
+    }
+  ]
+}

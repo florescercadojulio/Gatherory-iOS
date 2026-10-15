@@ -7,6 +7,7 @@ struct WorkspaceBrowserView: View {
     @Environment(\.currentUserAccount) private var currentUserAccount
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isAddingWorkspace = false
+    var onExplore: () -> Void = {}
     @State private var workspaceFilter: WorkspaceFilter = .all
 
     private var columns: [GridItem] {
@@ -72,20 +73,34 @@ struct WorkspaceBrowserView: View {
             }
         }
         .navigationTitle("Workspaces")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+        .toolbarTitleDisplayMode(.inlineLarge)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack {
                 workspaceFilterMenu
-            }
+                Spacer(minLength: AppTheme.Spacing.standard)
 
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Add workspace", systemImage: "plus") {
-                    isAddingWorkspace = true
+                Menu {
+                    Button("Add workspace", systemImage: "rectangle.stack.badge.plus") {
+                        isAddingWorkspace = true
+                    }
+                    Button(BlueprintCopy.starter, systemImage: "sparkles.rectangle.stack") {
+                        onExplore()
+                    }
+                } label: {
+                    Label("Add workspace", systemImage: "plus")
                 }
                 .labelStyle(.iconOnly)
-
-                AccountToolbarButton()
+                .frame(minWidth: AppTheme.Layout.minimumTouchTarget, minHeight: AppTheme.Layout.minimumTouchTarget)
             }
+            .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+            .padding(.vertical, 8)
+            .background(AppTheme.ColorToken.background)
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                AccountToolbarButton(avatarSize: 44)
+            }
+            .sharedBackgroundVisibility(.hidden)
         }
         .sheet(isPresented: $isAddingWorkspace) {
             NavigationStack {

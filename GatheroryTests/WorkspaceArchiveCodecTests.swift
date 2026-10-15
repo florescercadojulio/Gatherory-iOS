@@ -45,13 +45,43 @@ struct WorkspaceArchiveCodecTests {
         #expect(archive.eventParticipations == nil)
         #expect(archive.ideaResponses == nil)
         #expect(archive.isScopedEvent == nil)
+        #expect(archive.guides == nil)
+        #expect(archive.experienceConfiguration == nil)
         #expect(archive.mainEventImageData == nil)
         #expect(archive.workspaceBudgetCap == nil)
         let workspace = archive.makeWorkspace()
         #expect(workspace.currencyCode == Locale.current.currency?.identifier ?? "USD")
         #expect(workspace.eventParticipations.isEmpty)
         #expect(workspace.ideaResponses.isEmpty)
+        #expect(workspace.guides.isEmpty)
         #expect(!workspace.isScopedEvent)
+    }
+
+    @Test("Installed guides and configuration survive archive round trips")
+    func installedExperienceFieldsRoundTrip() throws {
+        var archive = makeArchive()
+        let guide = ExperienceGuide(
+            id: UUID(uuidString: "10000000-0000-4000-8000-000000000001")!,
+            eventID: archive.mainEventID,
+            key: "ceremony-arrival",
+            title: "Arrival",
+            body: "Meet by the garden entrance.",
+            sortOrder: 2,
+            visibility: .eventParticipants
+        )
+        let configuration = InstalledExperienceConfiguration(
+            experienceType: "wedding",
+            categoryOrder: ["venue", "food", "music"]
+        )
+        archive.guides = [guide]
+        archive.experienceConfiguration = configuration
+
+        let codec = WorkspaceArchiveCodec()
+        let decoded = try codec.decode(WorkspaceArchiveV1.self, from: codec.encode(archive))
+        #expect(decoded.guides == [guide])
+        #expect(decoded.experienceConfiguration == configuration)
+        #expect(decoded.makeWorkspace().guides == [guide])
+        #expect(decoded.makeWorkspace().experienceConfiguration == configuration)
     }
 
     @Test("Scoped event archives round trip while older archives default to a root workspace")

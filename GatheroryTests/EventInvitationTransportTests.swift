@@ -30,6 +30,31 @@ struct EventInvitationTransportTests {
         }
     }
 
+    @Test("Guest invitation guides decode from newer feeds and remain optional for older caches")
+    func guestGuidesAreBackwardCompatible() throws {
+        let eventID = "10000000-0000-4000-8000-000000000001"
+        let required = #""id":"\#(eventID)","title":"Wedding","isAllDay":false,"timeZone":"America/Detroit","complete":"incomplete","viewerPersonId":"70000000-0000-4000-8000-000000000001","role":"guest","attendance":"invited","people":[],"ideas":[],"moments":[]"#
+        let legacy = Data("{\"events\":[{\(required)}]}".utf8)
+        let oldFeed = try JSONDecoder().decode(GuestInvitationFeed.self, from: legacy)
+        #expect(oldFeed.events.first?.guides == nil)
+        let reloadedOldCache = try JSONDecoder().decode(
+            GuestInvitationFeed.self,
+            from: JSONEncoder().encode(oldFeed)
+        )
+        #expect(reloadedOldCache.events.first?.guides == nil)
+
+        let guide = #"{"id":"30000000-0000-4000-8000-000000000001","eventID":"\#(eventID)","key":"ceremony_guidance","title":"Ceremony guidance","body":"Share arrival details with participants.","sortOrder":1,"visibility":"event_participants"}"#
+        let current = Data("{\"events\":[{\(required),\"guides\":[\(guide)]}]}".utf8)
+        let newFeed = try JSONDecoder().decode(GuestInvitationFeed.self, from: current)
+        #expect(newFeed.events.first?.guides?.first?.key == "ceremony_guidance")
+        #expect(newFeed.events.first?.guides?.first?.visibility == .eventParticipants)
+        let reloadedNewCache = try JSONDecoder().decode(
+            GuestInvitationFeed.self,
+            from: JSONEncoder().encode(newFeed)
+        )
+        #expect(reloadedNewCache.events.first?.guides == newFeed.events.first?.guides)
+    }
+
     @Test("Approval responses never become completed joins, even with a scope ID")
     func approvalDoesNotOpenEvent() throws {
         let id = UUID()

@@ -1,0 +1,106 @@
+{
+  "plan": {
+    "plannerVersion": 1,
+    "experienceType": "wedding",
+    "categoryOrder": [
+      "venue",
+      "attire",
+      "food",
+      "flowers",
+      "photography"
+    ],
+    "main": {
+      "sourceKey": "main",
+      "name": "Riley and Jordan",
+      "eventType": "wedding",
+      "startsAt": "2027-06-15T19:00:00Z",
+      "timeZone": "America/Detroit",
+      "parentSourceKey": null,
+      "purpose": null,
+      "category": null,
+      "planningStatus": null
+    },
+    "children": [
+      {
+        "sourceKey": "venue_visit",
+        "name": "Venue visit",
+        "eventType": "wedding",
+        "startsAt": "2027-06-14T16:00:00-04:00",
+        "timeZone": "America/Detroit",
+        "parentSourceKey": "main",
+        "purpose": "planning_scouting",
+        "category": "venue",
+        "planningStatus": "approved"
+      },
+      {
+        "sourceKey": "ceremony",
+        "name": "Ceremony",
+        "eventType": "wedding",
+        "startsAt": "2027-06-15T19:00:00Z",
+        "timeZone": "America/Detroit",
+        "parentSourceKey": "main",
+        "purpose": "part_of_event",
+        "category": "ceremony",
+        "planningStatus": "approved"
+      }
+    ],
+    "ideas": [
+      {
+        "sourceKey": "venue",
+        "title": "Venue",
+        "category": "venue",
+        "notes": "Collect options and compare capacity, accessibility, and budget.",
+        "targetSourceKey": "main",
+        "configuration": {
+          "version": 1
+        },
+        "status": "new"
+      },
+      {
+        "sourceKey": "food",
+        "title": "Food and drinks",
+        "category": "food",
+        "notes": "Explore menu and drink options, including dietary needs.",
+        "targetSourceKey": "main",
+        "configuration": {
+          "version": 1
+        },
+        "status": "new"
+      },
+      {
+        "sourceKey": "photography",
+        "title": "Photography",
+        "category": "photography",
+        "notes": "Compare portfolios, coverage, and delivery options.",
+        "targetSourceKey": "main",
+        "configuration": {
+          "version": 1
+        },
+        "status": "new"
+      }
+    ],
+    "instructions": [
+      {
+        "sourceKey": "planning_priorities",
+        "title": "Planning priorities",
+        "body": "Choose the details that matter most to you, then compare options against your priorities and budget. Add confirmed decisions as they are made.",
+        "audience": "planning_only",
+        "targetSourceKey": "main"
+      },
+      {
+        "sourceKey": "ceremony_guidance",
+        "title": "Ceremony guidance",
+        "body": "Use this space for ceremony timing, accessibility, and arrival details once they are confirmed. Share guest-facing directions with participants when ready.",
+        "audience": "event_participants",
+        "targetSourceKey": "ceremony"
+      }
+    ],
+    "omissions": [
+      {
+        "sourceKey": "reception_guidance",
+        "reason": "child_not_selected"
+      }
+    ]
+  },
+  "contentHash": "24518a2d4795d62a7d0ed5d349cd0bb7ed7a2883a7dec7bf9c522a8e5119878a"
+}

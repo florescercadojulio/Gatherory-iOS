@@ -53,6 +53,16 @@ struct PostgresSyncTransportTests {
         #expect(response.entitySnapshots.isEmpty)
     }
 
+    @Test("Blueprint installation uses the authenticated request body and stable idempotency key")
+    func blueprintInstallRequest() async throws {
+        let fixture = SyncHTTPFixture("blueprint-install")
+        defer { fixture.session.invalidateAndCancel() }
+        let requestID = UUID(uuidString: "44444444-4444-4444-8444-444444444444")!
+        let body = Data(#"{"requestId":"44444444-4444-4444-8444-444444444444","catalogKey":"wedding"}"#.utf8)
+        let response = try await fixture.transport.installBlueprint(requestID: requestID, requestBody: body)
+        #expect(try JSONSerialization.jsonObject(with: response) as? [String: Any] != nil)
+    }
+
     @Test("Push preserves durable mutation identity and decodes each server disposition",
           arguments: ["applied", "duplicate", "conflict", "rejected"])
     func pushContract(disposition: String) async throws {
@@ -106,7 +116,7 @@ struct PostgresSyncTransportTests {
     }
 
     @Test("HTTP, decoding, and network failures retain actionable classifications",
-          arguments: ["unauthorized", "too-large", "forbidden", "legacy-error", "server-error", "malformed", "network"])
+          arguments: ["unauthorized", "too-large", "forbidden", "upgrade-required", "legacy-error", "server-error", "malformed", "network"])
     func failureContract(scenario: String) async {
         let fixture = SyncHTTPFixture(scenario)
         defer { fixture.session.invalidateAndCancel() }
@@ -117,6 +127,8 @@ struct PostgresSyncTransportTests {
             case ("unauthorized", CloudSyncFailure.invalidSession),
                  ("too-large", CloudSyncFailure.payloadTooLarge),
                  ("malformed", CloudSyncFailure.invalidResponse): return true
+            case ("upgrade-required", CloudSyncFailure.clientUpgradeRequired(let code)):
+                return code == SyncClientCapabilities.upgradeRequiredCode
             case ("forbidden", CloudSyncFailure.forbidden(let code)): return code == "EVENT_PERMISSION_REQUIRED"
             case ("legacy-error", CloudSyncFailure.server(let code)): return code == "SYNC_SCOPE_NOT_FOUND"
             case ("server-error", CloudSyncFailure.server(let code)): return code == "HTTP_500"
@@ -167,6 +179,10 @@ private final class SyncHTTPProtocol: URLProtocol, @unchecked Sendable {
             let scenario = url.host?.components(separatedBy: ".").first ?? ""
             #expect(request.value(forHTTPHeaderField: "Accept") == "application/json")
             #expect(UUID(uuidString: request.value(forHTTPHeaderField: "X-Request-ID") ?? "") != nil)
+            #expect(
+                request.value(forHTTPHeaderField: SyncClientCapabilities.headerName)
+                    == SyncClientCapabilities.headerValue
+            )
             let bearer = request.value(forHTTPHeaderField: "Authorization")
             #expect(bearer == "Bearer account-a" || bearer == "Bearer account-b")
             var status = 200
@@ -175,6 +191,13 @@ private final class SyncHTTPProtocol: URLProtocol, @unchecked Sendable {
             case "bootstrap":
                 payload["account"] = ["hasCompletedOnboarding": bearer == "Bearer account-b"]
             case "legacy": break
+            case "blueprint-install":
+                #expect(url.path == "/api/blueprints/install")
+                #expect(request.httpMethod == "POST")
+                #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+                #expect(request.value(forHTTPHeaderField: "Idempotency-Key") == "44444444-4444-4444-8444-444444444444")
+                #expect(try bodyData() == Data(#"{"requestId":"44444444-4444-4444-8444-444444444444","catalogKey":"wedding"}"#.utf8))
+                payload = ["installationID": "55555555-5555-4555-8555-555555555555", "organizationID": "org", "scopeID": "66666666-6666-4666-8666-666666666666"]
             case "applied", "duplicate", "conflict", "rejected":
                 #expect(url.path == "/api/sync/push")
                 #expect(request.httpMethod == "POST")
@@ -219,6 +242,9 @@ private final class SyncHTTPProtocol: URLProtocol, @unchecked Sendable {
                 ]]]
             case "unauthorized": status = 401
             case "too-large": status = 413
+            case "upgrade-required":
+                status = 426
+                payload = ["error": ["code": SyncClientCapabilities.upgradeRequiredCode]]
             case "forbidden":
                 status = 403
                 payload = ["error": ["code": "EVENT_PERMISSION_REQUIRED", "errorId": "test-error"]]
@@ -234,7 +260,7 @@ private final class SyncHTTPProtocol: URLProtocol, @unchecked Sendable {
                 Issue.record("Unexpected HTTP request to \(scenario)")
                 throw URLError(.badURL)
             }
-            if !["applied", "duplicate", "conflict", "rejected", "pull-initial", "pull-next"].contains(scenario) {
+            if !["applied", "duplicate", "conflict", "rejected", "pull-initial", "pull-next", "blueprint-install"].contains(scenario) {
                 #expect(url.path == "/api/sync/bootstrap")
                 #expect(request.httpMethod == "GET")
             }

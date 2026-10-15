@@ -80,6 +80,19 @@ final class WorkspaceCloudSyncController {
     private(set) var lastSuccessfulSyncAt: Date?
     private(set) var accountOnboardingState: AccountOnboardingState = .signedOut
 
+    /// Creates an account-scoped blueprint client for the authenticated
+    /// workspace currently managed by this controller.
+    func makeBlueprintInstallationCoordinator() -> BlueprintInstallationCoordinator? {
+        guard let baseURL,
+              let activeUserID,
+              persistence.activeUserID == activeUserID else { return nil }
+        return BlueprintInstallationCoordinator(
+            baseURL: baseURL,
+            persistence: persistence,
+            library: library
+        )
+    }
+
     @ObservationIgnored private let persistence: WorkspacePersistenceController
     @ObservationIgnored private let library: WorkspaceLibrary
     @ObservationIgnored private let baseURL: URL?

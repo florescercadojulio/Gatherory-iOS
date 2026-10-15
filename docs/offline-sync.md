@@ -164,6 +164,62 @@ normalized records.
 
 ## Local development
 
+### Wedding template installation
+
+The first template slice uses authenticated catalog, preview, install and receipt
+status endpoints. `BlueprintInstallationCoordinator` saves the exact reviewed
+request and UUID atomically in an account-scoped intent file before submission.
+Retry recovers that same receipt; it does not create a fresh event request. After
+success, import uses the existing `applyBootstrap` transaction and server IDs,
+then opens the installed workspace and removes the intent. Account activation
+generations prevent stale requests from importing after A→B→A switching.
+
+Date-aware setup also calls a read-only schedule endpoint with the catalog pin,
+main instant and named event zone. Temporal runs on the server, not the device.
+Suggestions stay in `BlueprintScheduleDraft` until an explicit confirmation;
+refreshes preserve confirmed/edited instants and reject stale response tokens.
+Only confirmed dates enter the reviewed installation body. Suggestion failures
+leave manual entry available and never create install intents or outbox entries.
+The manual picker starts with the existing confirmed edit, otherwise the latest
+single, unambiguous suggestion, otherwise the main event date. Opening/cancelling
+does not confirm anything, and an asynchronous refresh cannot replace the open
+picker's draft. Ambiguous clock-change occurrences still require an explicit
+choice; the picker does not silently pick the first candidate.
+Drafts remain view-local; this does not add offline catalog caching or change
+the existing durable-install, bootstrap, or ordinary sync transactions. See web
+roadmap `08-date-aware-setup.md` for DST behavior and test coverage.
+
+Blueprint setup captures the device clock and system time zone together when
+opened. It does not request GPS access just to determine local time. The explicit
+Use Device Time Zone action can restore the current system zone after a manual
+override, without changing the main or confirmed child instants. System-zone
+changes never silently overwrite an open draft. Time-zone picker options are
+cached and include the selected system alias even if it is absent from the known
+identifier list. Coordinate access remains an explicit, permission-gated action
+in the event location editor, with manual search available when denied.
+
+Birthday Party and Thanksgiving now use that same catalog/setup/install path.
+`CuratedBlueprintTests` imports their server-produced archives and verifies
+hierarchy, host controls, confirmed dates, no-op saves, and offline edit/relaunch
+behavior. Their content does not require new native mutation or archive types;
+see web roadmap `09-curated-starters.md`. Catalog availability requires running
+the explicit server seed, not resetting the native or development database.
+
+Guides and experience configuration are optional fields in archive/sync v1.
+They are read-only in this slice and delivered with authoritative workspace
+snapshots; they are not new outbox mutation types. Ordinary event/idea edits
+retain the existing outbox behavior. Child-only projections contain only the
+child's guides; invitations display only public guidance for the exact event.
+
+Native requests advertise `X-Gatherory-Capabilities: blueprint-guides-v1`.
+Unsupported clients receive HTTP 426 (`blueprint_client_upgrade_required`)
+before accepting installed-scope writes or advancing cursors. An upgrade error
+must retain pending edits for retry. The web blueprint roadmap's
+`06-wedding-installation-proof.md` records deployment requirements and evidence;
+the shared fixture lives in `GatheroryTests/Fixtures/wedding-install-native.v1.json`.
+
+### API connection
+
 Debug defaults to production-like account behavior and
 `https://dev.gatherory.com`. Start `gatherory-web-app` with `pnpm dev`, expose
 port 3003 through the named Cloudflare tunnel for that hostname, then run the

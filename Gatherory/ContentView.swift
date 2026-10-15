@@ -14,7 +14,10 @@ private enum AppTab: Hashable {
     case manage
 }
 
+private enum LibraryTab: Hashable { case workspaces, explore }
+
 struct AppRootView: View {
+    @State private var selectedTab = LibraryTab.workspaces
     @Environment(WorkspaceLibrary.self) private var workspaceLibrary
     @Environment(\.currentUserAccount) private var currentUserAccount
     @Environment(GuestInvitationStore.self) private var guests
@@ -32,9 +35,20 @@ struct AppRootView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            WorkspaceBrowserView()
+        TabView(selection: $selectedTab) {
+            Tab("Workspaces", systemImage: "rectangle.stack.fill", value: .workspaces) {
+                NavigationStack {
+                    WorkspaceBrowserView(onExplore: { selectedTab = .explore })
+                }
+            }
+            Tab(ExploreCopy.title, systemImage: "magnifyingglass", value: .explore) {
+                NavigationStack {
+                    BlueprintExploreView(ownerID: currentUserAccount?.id ?? "")
+                }
+                .id(currentUserAccount?.id)
+            }
         }
+        .tabViewStyle(.sidebarAdaptable)
         .tint(AppTheme.ColorToken.accent)
         .fullScreenCover(isPresented: isPresentingWorkspace) {
             if let eventID = guests.selectedEventID {
@@ -49,6 +63,7 @@ struct AppRootView: View {
         .task(id: currentUserAccount) {
             workspaceLibrary.configureViewer(currentUserAccount)
         }
+        .onChange(of: currentUserAccount?.id) { _, _ in selectedTab = .workspaces }
     }
 }
 

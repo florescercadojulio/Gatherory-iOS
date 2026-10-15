@@ -105,6 +105,38 @@ struct WorkspaceSyncBoundaryTests {
         #expect(try reader.fetch(FetchDescriptor<PendingMutation>()).isEmpty)
     }
 
+    @Test("Bootstrap imports installed guides and configuration without creating local mutations")
+    func installedExperienceBootstrapIsDurableAndOutboxClean() throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false, ownerUserID: "owner")
+        let source = workspace("Wedding")
+        let guide = ExperienceGuide(
+            id: UUID(), eventID: source.mainEventID, key: "guest-arrival",
+            title: "Arrival", body: "Use the garden entrance.", sortOrder: 0,
+            visibility: .eventParticipants
+        )
+        source.guides = [guide]
+        source.experienceConfiguration = InstalledExperienceConfiguration(
+            experienceType: "wedding", categoryOrder: ["venue", "food", "music"]
+        )
+
+        try persistence.applyBootstrap([snapshot(source)], to: library)
+        let imported = try #require(library.workspaces.first)
+        #expect(imported.guides == [guide])
+        #expect(imported.experienceConfiguration?.experienceType == "wedding")
+        #expect(try ModelContext(persistence.container).fetch(FetchDescriptor<PendingMutation>()).isEmpty)
+
+        let originalGeneration = persistence.activeUserGeneration
+        persistence.activate(userID: "other", in: library)
+        let otherGeneration = persistence.activeUserGeneration
+        #expect(library.workspaces.isEmpty)
+        persistence.activate(userID: "owner", in: library)
+        #expect(otherGeneration != originalGeneration)
+        #expect(persistence.activeUserGeneration != otherGeneration)
+        #expect(library.workspaces.first?.guides == [guide])
+        #expect(library.workspaces.first?.experienceConfiguration?.categoryOrder == ["venue", "food", "music"])
+    }
+
     @Test("Writers and mergers use the current account after switching, including remote deletion")
     func accountSwitchScopesBothHelpers() throws {
         let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)

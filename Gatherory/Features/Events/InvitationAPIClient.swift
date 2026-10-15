@@ -107,6 +107,9 @@ struct GuestEventInvitation: Codable, Identifiable {
     var people: [GuestInvitationPerson]
     let ideas: [GuestInvitationIdea]
     let moments: [GuestInvitationMoment]
+    /// Optional for older guest-feed responses; blueprint guidance is carried
+    /// in the event snapshot rather than a separately synced entity.
+    let guides: [ExperienceGuide]?
 
     func makePresentation(account: UserAccount, artwork: [UUID: Data]) -> PlanningWorkspace {
         let members = people.map { person in
@@ -137,7 +140,7 @@ struct GuestEventInvitation: Codable, Identifiable {
             eventMoments: moments.compactMap { photo in
                 guard let data = artwork[photo.id] else { return nil }
                 return EventMoment(id: photo.id, eventID: id, mediaAssetID: photo.id, imageData: data, addedBy: photo.addedBy, addedByUserID: photo.addedByUserId, addedAt: photo.addedAt)
-            }, registry: [])
+            }, guides: guides ?? [], registry: [])
         workspace.isInvitationProjection = true
         workspace.mainEventMediaAssetID = coverId
         workspace.invitationDateIsUndecided = startsAt == nil

@@ -40,6 +40,10 @@ struct WorkspaceArchiveV1: Codable {
     var mainEventStatus: MainEventStatus
     let mainEventResponse: EventResponse?
     var eventMoments: [EventMoment]
+    /// Optional in version 1 archives written before installed guides existed.
+    var guides: [ExperienceGuide]?
+    /// Optional for ordinary workspaces and archives predating blueprints.
+    var experienceConfiguration: InstalledExperienceConfiguration?
     let isMainEventDeleted: Bool
     var registry: [RegistryItem]
     let isRegistryShared: Bool
@@ -81,6 +85,8 @@ struct WorkspaceArchiveV1: Codable {
         mainEventStatus = workspace.mainEventStatus
         mainEventResponse = workspace.mainEventResponse
         eventMoments = workspace.eventMoments
+        guides = workspace.guides
+        experienceConfiguration = workspace.experienceConfiguration
         isMainEventDeleted = workspace.isMainEventDeleted
         registry = workspace.registry
         isRegistryShared = workspace.isRegistryShared
@@ -122,6 +128,8 @@ struct WorkspaceArchiveV1: Codable {
             mainEventStatus: mainEventStatus,
             mainEventResponse: mainEventResponse,
             eventMoments: eventMoments,
+            guides: guides ?? [],
+            experienceConfiguration: experienceConfiguration,
             isMainEventDeleted: isMainEventDeleted,
             registry: registry,
             isRegistryShared: isRegistryShared,

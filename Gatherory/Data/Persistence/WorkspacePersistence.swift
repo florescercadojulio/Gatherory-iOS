@@ -52,6 +52,10 @@ final class WorkspacePersistenceController {
     @ObservationIgnored private var isObserving = false
     @ObservationIgnored private var suppressNextObservedChange = false
     @ObservationIgnored private(set) var activeUserID: String?
+    /// Changes on every account activation, including A -> B -> A transitions.
+    /// Async install callbacks capture this so an old response cannot apply to
+    /// a newly reactivated account with the same user ID.
+    @ObservationIgnored private(set) var activeUserGeneration = UUID()
     @ObservationIgnored var onPendingMutations: (() -> Void)?
 
     /// Passive refresh must yield to local edits, including a failed disk save.
@@ -157,6 +161,7 @@ final class WorkspacePersistenceController {
         pendingSaveTask?.cancel()
         pendingSaveTask = nil
         activeUserID = userID
+        activeUserGeneration = UUID()
 
         let restored = restoreLibrary(seedData: seedData, ownerUserID: userID)
         suppressNextObservedChange = true

@@ -48,6 +48,8 @@ final class PlanningWorkspace {
     var mainEventStatus: MainEventStatus
     var mainEventResponse: EventResponse?
     private(set) var eventMoments: [EventMoment]
+    var guides: [ExperienceGuide]
+    var experienceConfiguration: InstalledExperienceConfiguration?
     var isMainEventDeleted: Bool
     var registry: [RegistryItem]
     var isRegistryShared: Bool
@@ -107,6 +109,8 @@ final class PlanningWorkspace {
         mainEventStatus: MainEventStatus = .draft,
         mainEventResponse: EventResponse? = nil,
         eventMoments: [EventMoment] = [],
+        guides: [ExperienceGuide] = [],
+        experienceConfiguration: InstalledExperienceConfiguration? = nil,
         isMainEventDeleted: Bool = false,
         registry: [RegistryItem],
         isRegistryShared: Bool = false,
@@ -208,6 +212,8 @@ final class PlanningWorkspace {
             childAllocations: scopedTimeline.map(\.budgetCap)
         )
         self.ideaResponses = ideaResponses
+        self.guides = guides
+        self.experienceConfiguration = experienceConfiguration
         self.notes = notes.map { note in
             guard note.eventID == nil else { return note }
             return EventNote(

@@ -1,0 +1,250 @@
+{
+  "mainEventID": "10000000-0000-4000-8000-000000000001",
+  "title": "Riley and Jordan",
+  "mainEventStartsAt": 834778800,
+  "mainEventEndsAt": null,
+  "mainEventIsAllDay": false,
+  "mainEventTimeZoneIdentifier": "America/Detroit",
+  "mainEventLocation": {
+    "address": "",
+    "shortAddress": "",
+    "placeName": "",
+    "locationName": "",
+    "addressLine2": ""
+  },
+  "mainEventImageData": null,
+  "mainEventMediaAssetID": null,
+  "venueName": "",
+  "location": "",
+  "dressCode": "",
+  "eventMessage": "",
+  "planningMode": "openToIdeas",
+  "members": [
+    {
+      "id": "70000000-0000-4000-8000-000000000001",
+      "userID": "user_123",
+      "name": "Riley Example",
+      "participantRole": "host",
+      "initials": "RE",
+      "attendance": "invited",
+      "email": "riley@example.test",
+      "profileImageAssetName": null,
+      "profileImageURL": null,
+      "planningPermission": "manage",
+      "invitationStatus": "active"
+    }
+  ],
+  "eventParticipations": [
+    {
+      "id": "80000000-0000-4000-8000-000000000001",
+      "eventID": "10000000-0000-4000-8000-000000000001",
+      "memberID": "70000000-0000-4000-8000-000000000001",
+      "role": "host",
+      "planningPermission": "manage",
+      "attendance": "invited",
+      "invitationStatus": "active",
+      "createdAt": 813758400,
+      "updatedAt": 813758400
+    },
+    {
+      "id": "80000000-0000-4000-8000-000000000002",
+      "eventID": "10000000-0000-4000-8000-000000000002",
+      "memberID": "70000000-0000-4000-8000-000000000001",
+      "role": "host",
+      "planningPermission": "manage",
+      "attendance": "invited",
+      "invitationStatus": "active",
+      "createdAt": 813758400,
+      "updatedAt": 813758400
+    },
+    {
+      "id": "80000000-0000-4000-8000-000000000003",
+      "eventID": "10000000-0000-4000-8000-000000000003",
+      "memberID": "70000000-0000-4000-8000-000000000001",
+      "role": "host",
+      "planningPermission": "manage",
+      "attendance": "invited",
+      "invitationStatus": "active",
+      "createdAt": 813758400,
+      "updatedAt": 813758400
+    }
+  ],
+  "mainEventParticipantIDs": [
+    "70000000-0000-4000-8000-000000000001"
+  ],
+  "ideas": [
+    {
+      "id": "20000000-0000-4000-8000-000000000001",
+      "eventID": "10000000-0000-4000-8000-000000000001",
+      "title": "Venue",
+      "note": "Collect options and compare capacity, accessibility, and budget.",
+      "category": "venue",
+      "submittedBy": "Riley Example",
+      "submittedByUserID": "user_123",
+      "estimatedCost": null,
+      "status": "new",
+      "submittedAt": 813758400,
+      "imageData": null,
+      "mediaAssetID": null,
+      "configuration": {
+        "venue": {
+          "_0": {
+            "setting": "indoor",
+            "capacity": null,
+            "area": ""
+          }
+        }
+      },
+      "invitationVisibility": "planningOnly"
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000002",
+      "eventID": "10000000-0000-4000-8000-000000000001",
+      "title": "Food and drinks",
+      "note": "Explore menu and drink options, including dietary needs.",
+      "category": "food",
+      "submittedBy": "Riley Example",
+      "submittedByUserID": "user_123",
+      "estimatedCost": null,
+      "status": "new",
+      "submittedAt": 813758400,
+      "imageData": null,
+      "mediaAssetID": null,
+      "configuration": {
+        "food": {
+          "_0": {
+            "type": "meal",
+            "servings": null,
+            "dietaryNotes": ""
+          }
+        }
+      },
+      "invitationVisibility": "planningOnly"
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000003",
+      "eventID": "10000000-0000-4000-8000-000000000001",
+      "title": "Photography",
+      "note": "Compare portfolios, coverage, and delivery options.",
+      "category": "photography",
+      "submittedBy": "Riley Example",
+      "submittedByUserID": "user_123",
+      "estimatedCost": null,
+      "status": "new",
+      "submittedAt": 813758400,
+      "imageData": null,
+      "mediaAssetID": null,
+      "configuration": {
+        "photography": {
+          "_0": {
+            "style": "documentary",
+            "coverageHours": null,
+            "priorities": ""
+          }
+        }
+      },
+      "invitationVisibility": "planningOnly"
+    }
+  ],
+  "timeline": [
+    {
+      "id": "10000000-0000-4000-8000-000000000002",
+      "title": "Venue visit",
+      "category": "venue",
+      "purpose": "planning",
+      "scheduledAt": 834696000,
+      "schedulingState": "scheduled",
+      "endsAt": null,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/Detroit",
+      "eventLocation": null,
+      "participantIDs": [
+        "70000000-0000-4000-8000-000000000001"
+      ],
+      "parentEventID": "10000000-0000-4000-8000-000000000001",
+      "status": "approved",
+      "statusBeforeArchiving": null,
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000003",
+      "title": "Ceremony",
+      "category": "ceremony",
+      "purpose": "eventExperience",
+      "scheduledAt": 834778800,
+      "schedulingState": "scheduled",
+      "endsAt": null,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/Detroit",
+      "eventLocation": null,
+      "participantIDs": [
+        "70000000-0000-4000-8000-000000000001"
+      ],
+      "parentEventID": "10000000-0000-4000-8000-000000000001",
+      "status": "approved",
+      "statusBeforeArchiving": null,
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "",
+      "dressCode": "",
+      "budgetCap": null
+    }
+  ],
+  "eventExpenses": [],
+  "workspaceBudgetCap": null,
+  "currencyCode": "USD",
+  "mainEventBudgetCap": null,
+  "notes": [],
+  "ideaResponses": [],
+  "mainEventStatus": "draft",
+  "mainEventResponse": null,
+  "eventMoments": [],
+  "guides": [
+    {
+      "id": "30000000-0000-4000-8000-000000000001",
+      "eventID": "10000000-0000-4000-8000-000000000001",
+      "key": "planning_priorities",
+      "title": "Planning priorities",
+      "body": "Choose the details that matter most to you, then compare options against your priorities and budget. Add confirmed decisions as they are made.",
+      "sortOrder": 0,
+      "visibility": "planning_only"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000002",
+      "eventID": "10000000-0000-4000-8000-000000000003",
+      "key": "ceremony_guidance",
+      "title": "Ceremony guidance",
+      "body": "Use this space for ceremony timing, accessibility, and arrival details once they are confirmed. Share guest-facing directions with participants when ready.",
+      "sortOrder": 1,
+      "visibility": "event_participants"
+    }
+  ],
+  "experienceConfiguration": {
+    "experienceType": "wedding",
+    "categoryOrder": [
+      "venue",
+      "attire",
+      "food",
+      "flowers",
+      "photography"
+    ]
+  },
+  "isMainEventDeleted": false,
+  "registry": [],
+  "isRegistryShared": false,
+  "isCollaboratorLinkEnabled": false,
+  "requiresCollaboratorApproval": true,
+  "defaultCollaboratorPermission": "contribute",
+  "isScopedEvent": false,
+  "scopedEvent": null
+}

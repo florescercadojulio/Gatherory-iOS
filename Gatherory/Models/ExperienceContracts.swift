@@ -1,5 +1,271 @@
 import Foundation
 
+nonisolated enum ExperienceGuideVisibility: String, Codable, Hashable, Sendable {
+    case planningOnly = "planning_only"
+    case eventParticipants = "event_participants"
+}
+
+/// Copied instructions that travel with an installed experience. These are
+/// read-only in the first native installation slice.
+nonisolated struct ExperienceGuide: Codable, Hashable, Identifiable, Sendable {
+    let id: UUID
+    let eventID: UUID
+    let key: String
+    let title: String
+    let body: String
+    let sortOrder: Int
+    let visibility: ExperienceGuideVisibility
+}
+
+/// Native-facing configuration kept separate from portable blueprint JSON.
+nonisolated struct InstalledExperienceConfiguration: Codable, Hashable, Sendable {
+    let experienceType: String
+    let categoryOrder: [String]
+}
+
+nonisolated struct BlueprintCatalogResponse: Decodable, Sendable {
+    let entries: [BlueprintCatalogEntry]
+}
+
+nonisolated struct BlueprintCatalogEntry: Decodable, Identifiable, Sendable {
+    let catalogKey: String
+    let revision: Int
+    let contentHash: String
+    let definition: ExperienceBlueprintDocument
+    // Optional while clients and the catalog endpoint roll out independently.
+    var discovery: BlueprintDiscoveryMetadata? = nil
+
+    var id: String { "\(catalogKey):\(revision)" }
+}
+
+nonisolated struct BlueprintDiscoveryMetadata: Decodable, Sendable {
+    let categories: [String]
+    let tags: [String]
+    let summary: String
+}
+
+nonisolated struct BlueprintCatalogChild: Decodable, Identifiable, Sendable {
+    let key: String
+    let title: String
+    let purpose: String
+    let category: String
+    let scheduleProposal: BlueprintScheduleProposal?
+    var id: String { key }
+}
+
+nonisolated struct BlueprintScheduleProposal: Decodable, Sendable {
+    let anchor: String
+    let dayOffset: Int
+    let localTime: String
+}
+
+/// Suggestions are read-only and never become installation dates without confirmation.
+nonisolated struct BlueprintScheduleInput: Encodable, Sendable {
+    struct MainEvent: Codable, Sendable {
+        let startsAt: Date
+        let timeZone: String
+
+        init(startsAt: Date, timeZone: String) {
+            // Match the existing transport's ISO8601 encoder precision.
+            self.startsAt = Date(timeIntervalSince1970: floor(startsAt.timeIntervalSince1970))
+            self.timeZone = timeZone
+        }
+    }
+    let catalogKey: String
+    let revision: Int
+    let contentHash: String
+    let mainEvent: MainEvent
+}
+
+nonisolated struct BlueprintScheduleResponse: Decodable, Sendable {
+    let catalogKey: String
+    let revision: Int
+    let contentHash: String
+    let mainEvent: BlueprintScheduleInput.MainEvent
+    let suggestions: [BlueprintScheduleSuggestion]
+}
+
+nonisolated struct BlueprintScheduleSuggestion: Decodable, Sendable {
+    let key: String
+    let status: String
+    let localDateTime: String?
+    let candidates: [Date]
+}
+
+nonisolated struct BlueprintCatalogIdea: Decodable, Identifiable, Sendable {
+    let key: String
+    let title: String
+    let category: String
+    let notes: String?
+    let target: BlueprintTarget
+    let configuration: [String: ExperienceJSONValue]
+    var id: String { key }
+}
+
+nonisolated struct BlueprintCatalogInstruction: Decodable, Identifiable, Sendable {
+    let key: String
+    let title: String
+    let body: String
+    let audience: ExperienceGuideVisibility
+    let target: BlueprintTarget
+    var id: String { key }
+}
+
+nonisolated struct BlueprintCatalogCapability: Decodable, Identifiable, Sendable {
+    let key: String
+    let required: Bool
+    let sourceKeys: [String]
+    var id: String { key }
+}
+
+nonisolated struct BlueprintExperienceTreeConfig: Decodable, Sendable {
+    let mainEventType: String
+    let children: [BlueprintCatalogChild]
+}
+
+nonisolated struct BlueprintIdeasConfig: Decodable, Sendable {
+    let categoryOrder: [String]
+    let ideas: [BlueprintCatalogIdea]
+}
+
+nonisolated struct BlueprintInstructionsConfig: Decodable, Sendable {
+    let sections: [BlueprintCatalogInstruction]
+}
+
+extension ExperienceModuleDefinition {
+    func decodeConfiguration<Value: Decodable>(_ type: Value.Type) -> Value? {
+        guard let data = try? JSONEncoder().encode(configuration) else { return nil }
+        return try? JSONDecoder().decode(Value.self, from: data)
+    }
+}
+
+nonisolated enum BlueprintTarget: Decodable, Sendable {
+    case main
+    case child(key: String)
+
+    private enum CodingKeys: String, CodingKey { case kind, key }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(String.self, forKey: .kind) {
+        case "main": self = .main
+        case "child": self = .child(key: try container.decode(String.self, forKey: .key))
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .kind,
+                in: container,
+                debugDescription: "Unsupported blueprint target."
+            )
+        }
+    }
+}
+
+nonisolated struct BlueprintInstallInput: Encodable, Sendable {
+    struct MainEvent: Encodable, Sendable {
+        let name: String
+        let startsAt: Date
+        let timeZone: String
+    }
+
+    struct SelectedChild: Encodable, Sendable {
+        let key: String
+        let startsAt: Date
+    }
+
+    let requestID: UUID
+    let catalogKey: String
+    let revision: Int
+    let contentHash: String
+    let mainEvent: MainEvent
+    let selectedChildren: [SelectedChild]
+    let selectedIdeaKeys: [String]
+    let capabilities: [String]
+
+    private enum CodingKeys: String, CodingKey {
+        case requestID = "requestId"
+        case catalogKey
+        case revision
+        case contentHash
+        case mainEvent
+        case selectedChildren
+        case selectedIdeaKeys
+        case capabilities
+    }
+}
+
+nonisolated struct BlueprintPreviewResponse: Decodable, Sendable {
+    let plan: BlueprintExpandedPlan
+    let contentHash: String
+}
+
+nonisolated struct BlueprintExpandedPlan: Decodable, Sendable {
+    let plannerVersion: Int
+    let experienceType: String
+    let categoryOrder: [String]
+    let main: BlueprintPlannedEvent
+    let children: [BlueprintPlannedEvent]
+    let ideas: [BlueprintPlannedIdea]
+    let instructions: [BlueprintPlannedInstruction]
+    let omissions: [BlueprintPlanOmission]
+}
+
+nonisolated struct BlueprintPlannedEvent: Decodable, Identifiable, Sendable {
+    let sourceKey: String
+    let name: String
+    let eventType: String
+    let startsAt: Date
+    let timeZone: String
+    let parentSourceKey: String?
+    let purpose: String?
+    let category: String?
+    let planningStatus: String?
+    var id: String { sourceKey }
+}
+
+nonisolated struct BlueprintPlannedIdea: Decodable, Identifiable, Sendable {
+    let sourceKey: String
+    let title: String
+    let category: String
+    let notes: String?
+    let targetSourceKey: String
+    let configuration: [String: ExperienceJSONValue]
+    let status: String
+    var id: String { sourceKey }
+}
+
+nonisolated struct BlueprintPlannedInstruction: Decodable, Identifiable, Sendable {
+    let sourceKey: String
+    let title: String
+    let body: String
+    let audience: ExperienceGuideVisibility
+    let targetSourceKey: String
+    var id: String { sourceKey }
+}
+
+nonisolated struct BlueprintPlanOmission: Decodable, Identifiable, Sendable {
+    let sourceKey: String
+    let reason: String
+    var id: String { "\(sourceKey):\(reason)" }
+}
+
+nonisolated struct BlueprintInstallationResult: Decodable, Sendable {
+    let installationID: UUID
+    let organizationID: String
+    let scopeID: UUID
+}
+
+nonisolated enum BlueprintInstallationState: String, Decodable, Sendable {
+    case pending
+    case provisioned
+    case completed
+    case failed
+}
+
+nonisolated struct BlueprintInstallationStatus: Decodable, Sendable {
+    let state: BlueprintInstallationState
+    let result: BlueprintInstallationResult?
+}
+
 /// Cross-platform wire representation of a reusable Gatherory experience.
 ///
 /// Blueprint documents configure a `PlanningWorkspace` without coupling the

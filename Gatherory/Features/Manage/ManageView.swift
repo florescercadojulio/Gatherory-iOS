@@ -104,6 +104,21 @@ struct ManageView: View {
                     }
                     ManagePeoplePill(summary: summary, approval: approvalMetric)
                     ManageNotesPreview(reference: reference)
+                    if !workspace.visibleGuides(for: reference).isEmpty {
+                        NavigationLink {
+                            ExperienceGuidanceView(reference: reference)
+                        } label: {
+                            HStack {
+                                Label("Planning Guide", systemImage: "book.closed")
+                                Spacer()
+                                Image(systemName: "chevron.right").accessibilityHidden(true)
+                            }
+                            .font(.headline)
+                            .padding(AppTheme.Spacing.spacious)
+                            .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
+                            .background(AppTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+                        }
+                    }
                 } else {
                     ContentUnavailableView("Manage", systemImage: "lock", description: Text("No planning event is available."))
                 }

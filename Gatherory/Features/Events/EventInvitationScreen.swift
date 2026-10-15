@@ -341,6 +341,14 @@ struct EventInvitationScreen: View {
 
             attireCard(event)
 
+            ForEach(workspace.visibleGuides(for: reference, invitation: true)) { guide in
+                EventInvitationSection(title: guide.title, symbol: "book.closed") {
+                    Text(guide.body)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             ForEach(invitationIdeaGroups(for: event)) { group in
                 invitationIdeaCard(group)
             }

@@ -1,6 +1,438 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "blueprint.suggestionConfirmation" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Suggested dates use the main event’s calendar date and time zone. Confirm each date before including a sub-event." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Las fechas sugeridas usan la fecha y la zona horaria del evento principal. Confirma cada fecha antes de incluir un subevento." } }
+      }
+    },
+    "blueprint.datesKept" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your confirmed dates have been kept. Changing the time zone changes how they are displayed, not when they happen." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Se han conservado tus fechas confirmadas. Cambiar la zona horaria modifica cómo se muestran, no cuándo ocurren." } }
+      }
+    },
+    "blueprint.loadingDates" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Finding suggested dates…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Buscando fechas sugeridas…" } }
+      }
+    },
+    "blueprint.datesUnavailable" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Suggested dates aren’t available. You can still choose dates manually." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Las fechas sugeridas no están disponibles. Puedes elegir las fechas manualmente." } }
+      }
+    },
+    "blueprint.confirmedDate" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Confirmed date" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Fecha confirmada" } }
+      }
+    },
+    "blueprint.confirmDate" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Confirm date" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Confirmar fecha" } }
+      }
+    },
+    "blueprint.useSuggestedDate" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Use suggested date" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Usar fecha sugerida" } }
+      }
+    },
+    "blueprint.repeatedTime" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This time occurs twice when the clocks change. Choose which occurrence you mean." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esta hora ocurre dos veces cuando cambia el reloj. Elige a cuál te refieres." } }
+      }
+    },
+    "blueprint.nonexistentTime" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The suggested local time doesn’t exist because the clocks change. Choose another time." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "La hora local sugerida no existe debido al cambio de hora. Elige otra hora." } }
+      }
+    },
+    "explore.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Explore" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Explorar" } }
+      }
+    },
+    "explore.searchTitle" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Buscar" } }
+      }
+    },
+    "explore.search" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search blueprints" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Buscar plantillas" } }
+      }
+    },
+    "explore.recent" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Recently Viewed" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Vistas recientemente" } }
+      }
+    },
+    "explore.clear" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Borrar" } }
+      }
+    },
+    "explore.loading" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Loading blueprints…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargando plantillas…" } }
+      }
+    },
+    "explore.unavailable" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Can’t Load Blueprints" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se pueden cargar las plantillas" } }
+      }
+    },
+    "explore.connection" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect to the internet and sign in to browse blueprints. Your workspaces are still available offline." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Conéctate a internet e inicia sesión para explorar plantillas. Tus espacios de trabajo siguen disponibles sin conexión." } }
+      }
+    },
+    "explore.refreshFailed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t refresh. Showing the last loaded blueprints." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se pudo actualizar. Se muestran las últimas plantillas cargadas." } }
+      }
+    },
+    "explore.noResults" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Blueprints Found" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se encontraron plantillas" } }
+      }
+    },
+    "explore.tryAnotherSearch" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Try a different name, category, or tag." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Prueba con otro nombre, categoría o etiqueta." } }
+      }
+    },
+    "explore.emptyCategory" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Blueprints Yet" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Aún no hay plantillas" } }
+      }
+    },
+    "explore.checkBack" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "There aren’t any blueprints in this category yet. Explore another category or start a blank workspace." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Aún no hay plantillas en esta categoría. Explora otra categoría o crea un espacio de trabajo en blanco." } }
+      }
+    },
+    "explore.noRecents" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Recently Viewed Blueprints" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay plantillas vistas recientemente" } }
+      }
+    },
+    "explore.recentsHint" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Blueprints you open will appear here. Search to find your first one." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Las plantillas que abras aparecerán aquí. Busca para encontrar la primera." } }
+      }
+    },
+    "explore.openHint" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Opens the blueprint setup and preview. Nothing is created until you confirm." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Abre la configuración y la vista previa de la plantilla. No se crea nada hasta que confirmes." } }
+      }
+    },
+    "explore.weddings" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Weddings" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Bodas" } }
+      }
+    },
+    "explore.birthdays" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Birthdays" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cumpleaños" } }
+      }
+    },
+    "explore.holidays" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Holidays" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Festividades" } }
+      }
+    },
+    "explore.events" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Other Events" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Otros eventos" } }
+      }
+    },
+    "Planning Guide" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Planning Guide" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guía de planificación" } }
+      }
+    },
+    "Planning team only" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Planning team only" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Solo el equipo de planificación" } }
+      }
+    },
+    "Shared with event guests" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shared with event guests" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Compartida con los invitados del evento" } }
+      }
+    },
+    "blueprint.catalogInvalid" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This blueprint returned an unsupported plan." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esta plantilla devolvió un plan no compatible." } }
+      }
+    },
+    "blueprint.childDateRequired" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose a date and time to include this sub-event." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Elige una fecha y hora para incluir este subevento." } }
+      }
+    },
+    "blueprint.clientUpgradeRequired" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Update Gatherory to sync this blueprint. Your pending changes remain saved and will retry after updating." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Actualiza Gatherory para sincronizar esta plantilla. Tus cambios pendientes se conservarán y se reintentará la sincronización." } }
+      }
+    },
+    "blueprint.children" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Optional sub-events" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Subeventos opcionales" } }
+      }
+    },
+    "blueprint.chooseDate" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose date and time" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Elegir fecha y hora" } }
+      }
+    },
+    "blueprint.dateTime" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Date and time" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Fecha y hora" } }
+      }
+    },
+    "blueprint.description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Start with a plan you can shape over time." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Empieza con un plan que podrás adaptar con el tiempo." } }
+      }
+    },
+    "blueprint.eventName" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Event name" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Nombre del evento" } }
+      }
+    },
+    "blueprint.eventPurpose" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Purpose" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Propósito" } }
+      }
+    },
+    "blueprint.experienceType" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Experience type" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tipo de experiencia" } }
+      }
+    },
+    "blueprint.categoryOrder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Category order" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Orden de categorías" } }
+      }
+    },
+    "blueprint.planningSetup" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Planning setup" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Configuración de planificación" } }
+      }
+    },
+    "blueprint.eventType" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Event type" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tipo de evento" } }
+      }
+    },
+    "blueprint.category" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Category" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Categoría" } }
+      }
+    },
+    "blueprint.parentEvent" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Parent event" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Evento principal" } }
+      }
+    },
+    "blueprint.status" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Status" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Estado" } }
+      }
+    },
+    "blueprint.target" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "For" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Para" } }
+      }
+    },
+    "blueprint.configuration" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Configuration" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Configuración" } }
+      }
+    },
+    "blueprint.finishPreviousInstall" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Finish the previous creation before starting another. Its request is kept for a safe retry." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Finaliza la creación anterior antes de empezar otra. Conservamos su solicitud para reintentarla de forma segura." } }
+      }
+    },
+    "blueprint.ideas" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Starter ideas" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ideas iniciales" } }
+      }
+    },
+    "blueprint.install" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Create event plan" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Crear plan de evento" } }
+      }
+    },
+    "blueprint.installing" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Creating…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Creando…" } }
+      }
+    },
+    "blueprint.loadFailed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This blueprint isn’t available right now." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esta plantilla no está disponible en este momento." } }
+      }
+    },
+    "blueprint.mainEvent" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Main event" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Evento principal" } }
+      }
+    },
+    "blueprint.omissionReason" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reason" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Motivo" } }
+      }
+    },
+    "blueprint.omitted" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Not included" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No incluido" } }
+      }
+    },
+    "blueprint.nothingCreatedYet" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review is only a preview. Nothing is created or approved until you install the plan." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "La revisión es solo una vista previa. No se crea ni se aprueba nada hasta que instales el plan." } }
+      }
+    },
+    "blueprint.pendingInstall" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "An installation is waiting to finish" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Hay una instalación pendiente de finalizar" } }
+      }
+    },
+    "blueprint.retryInstall" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Resume installation" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Reanudar instalación" } }
+      }
+    },
+    "blueprint.retrySameRequest" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Retry this exact request" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Reintentar esta misma solicitud" } }
+      }
+    },
+    "blueprint.review" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review plan" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Revisar el plan" } }
+      }
+    },
+    "blueprint.reviewing" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Preparing review…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Preparando la revisión…" } }
+      }
+    },
+    "blueprint.signInRequired" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sign in to use blueprints." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Inicia sesión para usar plantillas." } }
+      }
+    },
+    "blueprint.starter" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Use Template" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Usar plantilla" } }
+      }
+    },
+    "blueprint.timeZone" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Time zone" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Zona horaria" } }
+      }
+    },
+    "blueprint.useDeviceTimeZone" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Use Device Time Zone" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Usar la zona horaria del dispositivo" } }
+      }
+    },
+    "blueprint.deviceTimeZoneHint" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Starts with your device’s time zone. Choose another if the event is elsewhere. Location access isn’t needed." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Usa inicialmente la zona horaria de tu dispositivo. Elige otra si el evento es en otro lugar. No se necesita acceso a la ubicación." } }
+      }
+    },
+    "blueprint.workspaceNotInBootstrap" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The installed event is still being prepared. Retry to finish syncing it to this device." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El evento instalado aún se está preparando. Reintenta para terminar de sincronizarlo con este dispositivo." } }
+      }
+    },
+    "blueprint.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Wedding" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Boda" } }
+      }
+    },
+    "blueprint.defaultEventName" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@’s wedding" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Boda de %@" } }
+      }
+    },
     "Idea status" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Idea status" } },

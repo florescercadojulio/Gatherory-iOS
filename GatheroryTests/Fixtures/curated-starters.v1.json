@@ -1,0 +1,1678 @@
+{
+  "catalog": {
+    "entries": [
+      {
+        "catalogKey": "birthday",
+        "revision": 1,
+        "contentHash": "50c7519d13d6e62b00ee05ea481547175b74047cf3a95aed02546448158bd10d",
+        "definition": {
+          "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+          "kind": "experience_blueprint",
+          "schemaVersion": 1,
+          "blueprint": {
+            "id": "birthday",
+            "revision": 1,
+            "name": "Birthday Party"
+          },
+          "experienceDefaults": {
+            "type": "birthday"
+          },
+          "roles": [],
+          "modules": [
+            {
+              "key": "event_tree",
+              "type": "experience_tree",
+              "version": 2,
+              "required": true,
+              "config": {
+                "mainEventType": "birthday",
+                "children": [
+                  {
+                    "key": "gathering_setup",
+                    "title": "Gathering setup",
+                    "purpose": "planning_scouting",
+                    "category": "other",
+                    "scheduleProposal": {
+                      "anchor": "main_start",
+                      "dayOffset": 0,
+                      "localTime": "10:00"
+                    }
+                  },
+                  {
+                    "key": "birthday_gathering",
+                    "title": "Games and activities",
+                    "purpose": "part_of_event",
+                    "category": "other",
+                    "scheduleProposal": {
+                      "anchor": "main_start",
+                      "dayOffset": 0,
+                      "localTime": "14:00"
+                    }
+                  },
+                  {
+                    "key": "shared_food",
+                    "title": "Cake and treats",
+                    "purpose": "part_of_event",
+                    "category": "other",
+                    "scheduleProposal": {
+                      "anchor": "main_start",
+                      "dayOffset": 0,
+                      "localTime": "16:00"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "key": "starter_ideas",
+              "type": "ideas",
+              "version": 2,
+              "required": true,
+              "config": {
+                "categoryOrder": [
+                  "event",
+                  "food",
+                  "invitations",
+                  "decor",
+                  "other"
+                ],
+                "ideas": [
+                  {
+                    "key": "gathering_plans",
+                    "title": "Gathering plans",
+                    "category": "event",
+                    "notes": "Collect ideas for the kind of birthday gathering that feels right.",
+                    "target": {
+                      "kind": "main"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  },
+                  {
+                    "key": "food_and_drinks",
+                    "title": "Food and drinks",
+                    "category": "food",
+                    "notes": "Explore options that work for guests’ preferences and dietary needs.",
+                    "target": {
+                      "kind": "main"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  },
+                  {
+                    "key": "invitations",
+                    "title": "Invitations",
+                    "category": "invitations",
+                    "notes": "Gather invitation ideas and add timing or location details once confirmed.",
+                    "target": {
+                      "kind": "main"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  },
+                  {
+                    "key": "decor_and_setup",
+                    "title": "Decor and setup",
+                    "category": "decor",
+                    "notes": "Collect optional decor and setup ideas that suit the gathering.",
+                    "target": {
+                      "kind": "child",
+                      "key": "gathering_setup"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  },
+                  {
+                    "key": "activities",
+                    "title": "Activities",
+                    "category": "other",
+                    "notes": "Share activity ideas for different ages, interests, and ways to take part.",
+                    "target": {
+                      "kind": "child",
+                      "key": "birthday_gathering"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "key": "guest_guidance",
+              "type": "instructions",
+              "version": 1,
+              "required": true,
+              "config": {
+                "sections": [
+                  {
+                    "key": "planning_priorities",
+                    "title": "Planning priorities",
+                    "body": "Collect ideas and decide together which details matter for this gathering. Keep options open until plans are confirmed.",
+                    "audience": "planning_only",
+                    "target": {
+                      "kind": "main"
+                    }
+                  },
+                  {
+                    "key": "gathering_details",
+                    "title": "Activity details",
+                    "body": "Add confirmed timing, arrival, and accessibility information here when it is ready to share with participants.",
+                    "audience": "event_participants",
+                    "target": {
+                      "kind": "child",
+                      "key": "birthday_gathering"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "discovery": {
+          "categories": [
+            "birthdays"
+          ],
+          "tags": [
+            "birthday",
+            "party",
+            "cake",
+            "games",
+            "celebration"
+          ],
+          "summary": "Bring a birthday party together with food, activities, and time to celebrate."
+        }
+      },
+      {
+        "catalogKey": "thanksgiving",
+        "revision": 1,
+        "contentHash": "1133e9e24493fdc68a5e15b42740f7ce279b94cb881194ed73a94594b4ef8380",
+        "definition": {
+          "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+          "kind": "experience_blueprint",
+          "schemaVersion": 1,
+          "blueprint": {
+            "id": "thanksgiving",
+            "revision": 1,
+            "name": "Thanksgiving"
+          },
+          "experienceDefaults": {
+            "type": "holiday"
+          },
+          "roles": [],
+          "modules": [
+            {
+              "key": "event_tree",
+              "type": "experience_tree",
+              "version": 2,
+              "required": true,
+              "config": {
+                "mainEventType": "holiday",
+                "children": [
+                  {
+                    "key": "gathering_preparation",
+                    "title": "Gathering preparation",
+                    "purpose": "planning_scouting",
+                    "category": "other",
+                    "scheduleProposal": {
+                      "anchor": "main_start",
+                      "dayOffset": -1,
+                      "localTime": "16:00"
+                    }
+                  },
+                  {
+                    "key": "thanksgiving_gathering",
+                    "title": "Time together",
+                    "purpose": "part_of_event",
+                    "category": "other",
+                    "scheduleProposal": {
+                      "anchor": "main_start",
+                      "dayOffset": 0,
+                      "localTime": "13:00"
+                    }
+                  },
+                  {
+                    "key": "shared_meal",
+                    "title": "Shared meal",
+                    "purpose": "part_of_event",
+                    "category": "other",
+                    "scheduleProposal": {
+                      "anchor": "main_start",
+                      "dayOffset": 0,
+                      "localTime": "16:00"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "key": "starter_ideas",
+              "type": "ideas",
+              "version": 2,
+              "required": true,
+              "config": {
+                "categoryOrder": [
+                  "event",
+                  "food",
+                  "invitations",
+                  "other",
+                  "decor"
+                ],
+                "ideas": [
+                  {
+                    "key": "gathering_plans",
+                    "title": "Gathering plans",
+                    "category": "event",
+                    "notes": "Collect ideas for how you would like to spend time together.",
+                    "target": {
+                      "kind": "main"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  },
+                  {
+                    "key": "food_and_drinks",
+                    "title": "Food and drinks",
+                    "category": "food",
+                    "notes": "Explore dishes and drinks while accounting for preferences and dietary needs.",
+                    "target": {
+                      "kind": "main"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  },
+                  {
+                    "key": "invitations",
+                    "title": "Invitations",
+                    "category": "invitations",
+                    "notes": "Gather invitation ideas and share timing or location after those details are confirmed.",
+                    "target": {
+                      "kind": "main"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  },
+                  {
+                    "key": "shared_activities",
+                    "title": "Activities",
+                    "category": "other",
+                    "notes": "Collect optional ways to spend time together across ages and interests.",
+                    "target": {
+                      "kind": "child",
+                      "key": "thanksgiving_gathering"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  },
+                  {
+                    "key": "table_and_space",
+                    "title": "Table and shared space",
+                    "category": "decor",
+                    "notes": "Save optional ideas for making the shared space comfortable and welcoming.",
+                    "target": {
+                      "kind": "child",
+                      "key": "shared_meal"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "key": "guest_guidance",
+              "type": "instructions",
+              "version": 1,
+              "required": true,
+              "config": {
+                "sections": [
+                  {
+                    "key": "planning_priorities",
+                    "title": "Planning priorities",
+                    "body": "Choose the date that works for your group; this template does not assume a national holiday date. Collect menu ideas, dietary needs, and possible contributions without assigning anyone a task until they agree.",
+                    "audience": "planning_only",
+                    "target": {
+                      "kind": "main"
+                    }
+                  },
+                  {
+                    "key": "gathering_details",
+                    "title": "Gathering details",
+                    "body": "Share confirmed timing, arrival, and accessibility information here when it is ready for participants.",
+                    "audience": "event_participants",
+                    "target": {
+                      "kind": "child",
+                      "key": "thanksgiving_gathering"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "discovery": {
+          "categories": [
+            "holidays"
+          ],
+          "tags": [
+            "thanksgiving",
+            "friendsgiving",
+            "holiday",
+            "dinner",
+            "potluck"
+          ],
+          "summary": "Plan a Thanksgiving gathering on your chosen date, with shared food and time together."
+        }
+      },
+      {
+        "catalogKey": "wedding",
+        "revision": 1,
+        "contentHash": "24518a2d4795d62a7d0ed5d349cd0bb7ed7a2883a7dec7bf9c522a8e5119878a",
+        "definition": {
+          "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+          "kind": "experience_blueprint",
+          "schemaVersion": 1,
+          "blueprint": {
+            "id": "wedding",
+            "revision": 1,
+            "name": "Wedding"
+          },
+          "experienceDefaults": {
+            "type": "wedding"
+          },
+          "roles": [],
+          "modules": [
+            {
+              "key": "event_tree",
+              "type": "experience_tree",
+              "version": 2,
+              "required": true,
+              "config": {
+                "mainEventType": "wedding",
+                "children": [
+                  {
+                    "key": "venue_visit",
+                    "title": "Venue visit",
+                    "purpose": "planning_scouting",
+                    "category": "venue",
+                    "scheduleProposal": {
+                      "anchor": "main_start",
+                      "dayOffset": -30,
+                      "localTime": "12:00"
+                    }
+                  },
+                  {
+                    "key": "rehearsal",
+                    "title": "Rehearsal",
+                    "purpose": "part_of_event",
+                    "category": "rehearsal",
+                    "scheduleProposal": {
+                      "anchor": "main_start",
+                      "dayOffset": -1,
+                      "localTime": "17:00"
+                    }
+                  },
+                  {
+                    "key": "ceremony",
+                    "title": "Ceremony",
+                    "purpose": "part_of_event",
+                    "category": "ceremony",
+                    "scheduleProposal": {
+                      "anchor": "main_start",
+                      "dayOffset": 0,
+                      "localTime": "15:00"
+                    }
+                  },
+                  {
+                    "key": "reception",
+                    "title": "Reception",
+                    "purpose": "part_of_event",
+                    "category": "reception",
+                    "scheduleProposal": {
+                      "anchor": "main_start",
+                      "dayOffset": 0,
+                      "localTime": "18:00"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "key": "starter_ideas",
+              "type": "ideas",
+              "version": 2,
+              "required": true,
+              "config": {
+                "categoryOrder": [
+                  "venue",
+                  "attire",
+                  "food",
+                  "flowers",
+                  "photography"
+                ],
+                "ideas": [
+                  {
+                    "key": "venue",
+                    "title": "Venue",
+                    "category": "venue",
+                    "notes": "Collect options and compare capacity, accessibility, and budget.",
+                    "target": {
+                      "kind": "main"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  },
+                  {
+                    "key": "attire",
+                    "title": "Attire",
+                    "category": "attire",
+                    "notes": "Gather ideas for outfits, fittings, and any needed alterations.",
+                    "target": {
+                      "kind": "main"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  },
+                  {
+                    "key": "food",
+                    "title": "Food and drinks",
+                    "category": "food",
+                    "notes": "Explore menu and drink options, including dietary needs.",
+                    "target": {
+                      "kind": "main"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  },
+                  {
+                    "key": "flowers",
+                    "title": "Flowers",
+                    "category": "flowers",
+                    "notes": "Collect floral styles and seasonal ideas.",
+                    "target": {
+                      "kind": "main"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  },
+                  {
+                    "key": "photography",
+                    "title": "Photography",
+                    "category": "photography",
+                    "notes": "Compare portfolios, coverage, and delivery options.",
+                    "target": {
+                      "kind": "main"
+                    },
+                    "configuration": {
+                      "version": 1
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "key": "guest_guidance",
+              "type": "instructions",
+              "version": 1,
+              "required": true,
+              "config": {
+                "sections": [
+                  {
+                    "key": "planning_priorities",
+                    "title": "Planning priorities",
+                    "body": "Choose the details that matter most to you, then compare options against your priorities and budget. Add confirmed decisions as they are made.",
+                    "audience": "planning_only",
+                    "target": {
+                      "kind": "main"
+                    }
+                  },
+                  {
+                    "key": "ceremony_guidance",
+                    "title": "Ceremony guidance",
+                    "body": "Use this space for ceremony timing, accessibility, and arrival details once they are confirmed. Share guest-facing directions with participants when ready.",
+                    "audience": "event_participants",
+                    "target": {
+                      "kind": "child",
+                      "key": "ceremony"
+                    }
+                  },
+                  {
+                    "key": "reception_guidance",
+                    "title": "Reception guidance",
+                    "body": "Add arrival, meal, and accessibility details after they are confirmed. Keep planning notes separate from information intended for attendees.",
+                    "audience": "event_participants",
+                    "target": {
+                      "kind": "child",
+                      "key": "reception"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "discovery": {
+          "categories": [
+            "weddings"
+          ],
+          "tags": [
+            "wedding",
+            "ceremony",
+            "reception",
+            "celebration"
+          ],
+          "summary": "Plan your wedding, from the first venue visit to the celebration."
+        }
+      }
+    ]
+  },
+  "samples": [
+    {
+      "catalogKey": "birthday",
+      "input": {
+        "requestId": "10000000-9000-4000-8000-000000000001",
+        "catalogKey": "birthday",
+        "revision": 1,
+        "contentHash": "50c7519d13d6e62b00ee05ea481547175b74047cf3a95aed02546448158bd10d",
+        "mainEvent": {
+          "name": "Birthday Party",
+          "startsAt": "2027-06-15T19:00:00Z",
+          "timeZone": "America/Detroit"
+        },
+        "selectedChildren": [
+          {
+            "key": "gathering_setup",
+            "startsAt": "2027-06-15T14:30:00Z"
+          },
+          {
+            "key": "birthday_gathering",
+            "startsAt": "2027-06-15T18:00:00Z"
+          },
+          {
+            "key": "shared_food",
+            "startsAt": "2027-06-15T20:00:00Z"
+          }
+        ],
+        "selectedIdeaKeys": [
+          "gathering_plans",
+          "food_and_drinks",
+          "invitations",
+          "decor_and_setup",
+          "activities"
+        ],
+        "capabilities": [
+          "event.children_v1",
+          "planning.ideas_v2",
+          "planning.instructions_v1",
+          "planning.portable_idea_config_v1"
+        ]
+      },
+      "schedule": {
+        "catalogKey": "birthday",
+        "revision": 1,
+        "contentHash": "50c7519d13d6e62b00ee05ea481547175b74047cf3a95aed02546448158bd10d",
+        "mainEvent": {
+          "startsAt": "2027-06-15T19:00:00Z",
+          "timeZone": "America/Detroit"
+        },
+        "suggestions": [
+          {
+            "key": "gathering_setup",
+            "localDateTime": "2027-06-15T10:00:00",
+            "status": "suggested",
+            "candidates": [
+              "2027-06-15T14:00:00Z"
+            ]
+          },
+          {
+            "key": "birthday_gathering",
+            "localDateTime": "2027-06-15T14:00:00",
+            "status": "suggested",
+            "candidates": [
+              "2027-06-15T18:00:00Z"
+            ]
+          },
+          {
+            "key": "shared_food",
+            "localDateTime": "2027-06-15T16:00:00",
+            "status": "suggested",
+            "candidates": [
+              "2027-06-15T20:00:00Z"
+            ]
+          }
+        ]
+      },
+      "preview": {
+        "plan": {
+          "plannerVersion": 1,
+          "experienceType": "birthday",
+          "categoryOrder": [
+            "event",
+            "food",
+            "invitations",
+            "decor",
+            "other"
+          ],
+          "main": {
+            "sourceKey": "main",
+            "name": "Birthday Party",
+            "eventType": "birthday",
+            "startsAt": "2027-06-15T19:00:00Z",
+            "timeZone": "America/Detroit",
+            "parentSourceKey": null,
+            "purpose": null,
+            "category": null,
+            "planningStatus": null
+          },
+          "children": [
+            {
+              "sourceKey": "gathering_setup",
+              "name": "Gathering setup",
+              "eventType": "birthday",
+              "startsAt": "2027-06-15T14:30:00Z",
+              "timeZone": "America/Detroit",
+              "parentSourceKey": "main",
+              "purpose": "planning_scouting",
+              "category": "other",
+              "planningStatus": "approved"
+            },
+            {
+              "sourceKey": "birthday_gathering",
+              "name": "Games and activities",
+              "eventType": "birthday",
+              "startsAt": "2027-06-15T18:00:00Z",
+              "timeZone": "America/Detroit",
+              "parentSourceKey": "main",
+              "purpose": "part_of_event",
+              "category": "other",
+              "planningStatus": "approved"
+            },
+            {
+              "sourceKey": "shared_food",
+              "name": "Cake and treats",
+              "eventType": "birthday",
+              "startsAt": "2027-06-15T20:00:00Z",
+              "timeZone": "America/Detroit",
+              "parentSourceKey": "main",
+              "purpose": "part_of_event",
+              "category": "other",
+              "planningStatus": "approved"
+            }
+          ],
+          "ideas": [
+            {
+              "sourceKey": "gathering_plans",
+              "title": "Gathering plans",
+              "category": "event",
+              "notes": "Collect ideas for the kind of birthday gathering that feels right.",
+              "targetSourceKey": "main",
+              "configuration": {
+                "version": 1
+              },
+              "status": "new"
+            },
+            {
+              "sourceKey": "food_and_drinks",
+              "title": "Food and drinks",
+              "category": "food",
+              "notes": "Explore options that work for guests’ preferences and dietary needs.",
+              "targetSourceKey": "main",
+              "configuration": {
+                "version": 1
+              },
+              "status": "new"
+            },
+            {
+              "sourceKey": "invitations",
+              "title": "Invitations",
+              "category": "invitations",
+              "notes": "Gather invitation ideas and add timing or location details once confirmed.",
+              "targetSourceKey": "main",
+              "configuration": {
+                "version": 1
+              },
+              "status": "new"
+            },
+            {
+              "sourceKey": "decor_and_setup",
+              "title": "Decor and setup",
+              "category": "decor",
+              "notes": "Collect optional decor and setup ideas that suit the gathering.",
+              "targetSourceKey": "gathering_setup",
+              "configuration": {
+                "version": 1
+              },
+              "status": "new"
+            },
+            {
+              "sourceKey": "activities",
+              "title": "Activities",
+              "category": "other",
+              "notes": "Share activity ideas for different ages, interests, and ways to take part.",
+              "targetSourceKey": "birthday_gathering",
+              "configuration": {
+                "version": 1
+              },
+              "status": "new"
+            }
+          ],
+          "instructions": [
+            {
+              "sourceKey": "planning_priorities",
+              "title": "Planning priorities",
+              "body": "Collect ideas and decide together which details matter for this gathering. Keep options open until plans are confirmed.",
+              "audience": "planning_only",
+              "targetSourceKey": "main"
+            },
+            {
+              "sourceKey": "gathering_details",
+              "title": "Activity details",
+              "body": "Add confirmed timing, arrival, and accessibility information here when it is ready to share with participants.",
+              "audience": "event_participants",
+              "targetSourceKey": "birthday_gathering"
+            }
+          ],
+          "omissions": []
+        },
+        "contentHash": "50c7519d13d6e62b00ee05ea481547175b74047cf3a95aed02546448158bd10d"
+      },
+      "archive": {
+        "mainEventID": "10000000-1000-4000-8000-000000000001",
+        "title": "Birthday Party",
+        "mainEventStartsAt": 834778800,
+        "mainEventEndsAt": null,
+        "mainEventIsAllDay": false,
+        "mainEventTimeZoneIdentifier": "America/Detroit",
+        "mainEventLocation": {
+          "address": "",
+          "shortAddress": "",
+          "placeName": "",
+          "locationName": "",
+          "addressLine2": ""
+        },
+        "mainEventImageData": null,
+        "mainEventMediaAssetID": null,
+        "venueName": "",
+        "location": "",
+        "dressCode": "",
+        "eventMessage": "",
+        "planningMode": "openToIdeas",
+        "members": [
+          {
+            "id": "10000000-7000-4000-8000-000000000001",
+            "userID": "curated-starter-host",
+            "name": "Riley Example",
+            "participantRole": "host",
+            "initials": "RE",
+            "attendance": "invited",
+            "email": "riley@example.test",
+            "profileImageAssetName": null,
+            "profileImageURL": null,
+            "planningPermission": "manage",
+            "invitationStatus": "active"
+          }
+        ],
+        "eventParticipations": [
+          {
+            "id": "10000000-8000-4000-8000-000000000001",
+            "eventID": "10000000-1000-4000-8000-000000000001",
+            "memberID": "10000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          },
+          {
+            "id": "10000000-8000-4000-8000-000000000002",
+            "eventID": "10000000-1000-4000-8000-000000000002",
+            "memberID": "10000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          },
+          {
+            "id": "10000000-8000-4000-8000-000000000003",
+            "eventID": "10000000-1000-4000-8000-000000000003",
+            "memberID": "10000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          },
+          {
+            "id": "10000000-8000-4000-8000-000000000004",
+            "eventID": "10000000-1000-4000-8000-000000000004",
+            "memberID": "10000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          }
+        ],
+        "mainEventParticipantIDs": [
+          "10000000-7000-4000-8000-000000000001"
+        ],
+        "ideas": [
+          {
+            "id": "10000000-2000-4000-8000-000000000001",
+            "eventID": "10000000-1000-4000-8000-000000000001",
+            "title": "Gathering plans",
+            "note": "Collect ideas for the kind of birthday gathering that feels right.",
+            "category": "event",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "curated-starter-host",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "event": {
+                "_0": {
+                  "category": "other",
+                  "purpose": "planning",
+                  "audience": "inherited",
+                  "requiresBudget": false,
+                  "proposedBudget": null,
+                  "proposedDate": null,
+                  "proposedEndDate": null,
+                  "isAllDay": false,
+                  "timeZoneIdentifier": "America/Detroit",
+                  "location": null,
+                  "attireStyle": "any",
+                  "attireGuidance": ""
+                }
+              }
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "10000000-2000-4000-8000-000000000002",
+            "eventID": "10000000-1000-4000-8000-000000000001",
+            "title": "Food and drinks",
+            "note": "Explore options that work for guests’ preferences and dietary needs.",
+            "category": "food",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "curated-starter-host",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "food": {
+                "_0": {
+                  "type": "meal",
+                  "servings": null,
+                  "dietaryNotes": ""
+                }
+              }
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "10000000-2000-4000-8000-000000000003",
+            "eventID": "10000000-1000-4000-8000-000000000001",
+            "title": "Invitations",
+            "note": "Gather invitation ideas and add timing or location details once confirmed.",
+            "category": "invitations",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "curated-starter-host",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "invitations": {
+                "_0": {
+                  "format": "printed",
+                  "quantity": null,
+                  "productionNotes": ""
+                }
+              }
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "10000000-2000-4000-8000-000000000004",
+            "eventID": "10000000-1000-4000-8000-000000000002",
+            "title": "Decor and setup",
+            "note": "Collect optional decor and setup ideas that suit the gathering.",
+            "category": "decor",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "curated-starter-host",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "decor": {
+                "_0": {
+                  "focus": "reception",
+                  "paletteOrMaterials": ""
+                }
+              }
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "10000000-2000-4000-8000-000000000005",
+            "eventID": "10000000-1000-4000-8000-000000000003",
+            "title": "Activities",
+            "note": "Share activity ideas for different ages, interests, and ways to take part.",
+            "category": "other",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "curated-starter-host",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "standard": {}
+            },
+            "invitationVisibility": "planningOnly"
+          }
+        ],
+        "timeline": [
+          {
+            "id": "10000000-1000-4000-8000-000000000002",
+            "title": "Gathering setup",
+            "category": "other",
+            "purpose": "planning",
+            "scheduledAt": 834762600,
+            "schedulingState": "scheduled",
+            "endsAt": null,
+            "isAllDay": false,
+            "timeZoneIdentifier": "America/Detroit",
+            "eventLocation": null,
+            "participantIDs": [
+              "10000000-7000-4000-8000-000000000001"
+            ],
+            "parentEventID": "10000000-1000-4000-8000-000000000001",
+            "status": "approved",
+            "statusBeforeArchiving": null,
+            "completionStatus": "upcoming",
+            "response": null,
+            "linkedIdeaID": null,
+            "imageData": null,
+            "mediaAssetID": null,
+            "eventDescription": "",
+            "dressCode": "",
+            "budgetCap": null
+          },
+          {
+            "id": "10000000-1000-4000-8000-000000000003",
+            "title": "Games and activities",
+            "category": "other",
+            "purpose": "eventExperience",
+            "scheduledAt": 834775200,
+            "schedulingState": "scheduled",
+            "endsAt": null,
+            "isAllDay": false,
+            "timeZoneIdentifier": "America/Detroit",
+            "eventLocation": null,
+            "participantIDs": [
+              "10000000-7000-4000-8000-000000000001"
+            ],
+            "parentEventID": "10000000-1000-4000-8000-000000000001",
+            "status": "approved",
+            "statusBeforeArchiving": null,
+            "completionStatus": "upcoming",
+            "response": null,
+            "linkedIdeaID": null,
+            "imageData": null,
+            "mediaAssetID": null,
+            "eventDescription": "",
+            "dressCode": "",
+            "budgetCap": null
+          },
+          {
+            "id": "10000000-1000-4000-8000-000000000004",
+            "title": "Cake and treats",
+            "category": "other",
+            "purpose": "eventExperience",
+            "scheduledAt": 834782400,
+            "schedulingState": "scheduled",
+            "endsAt": null,
+            "isAllDay": false,
+            "timeZoneIdentifier": "America/Detroit",
+            "eventLocation": null,
+            "participantIDs": [
+              "10000000-7000-4000-8000-000000000001"
+            ],
+            "parentEventID": "10000000-1000-4000-8000-000000000001",
+            "status": "approved",
+            "statusBeforeArchiving": null,
+            "completionStatus": "upcoming",
+            "response": null,
+            "linkedIdeaID": null,
+            "imageData": null,
+            "mediaAssetID": null,
+            "eventDescription": "",
+            "dressCode": "",
+            "budgetCap": null
+          }
+        ],
+        "eventExpenses": [],
+        "workspaceBudgetCap": null,
+        "currencyCode": "USD",
+        "mainEventBudgetCap": null,
+        "notes": [],
+        "ideaResponses": [],
+        "mainEventStatus": "draft",
+        "mainEventResponse": null,
+        "eventMoments": [],
+        "guides": [
+          {
+            "id": "10000000-3000-4000-8000-000000000001",
+            "eventID": "10000000-1000-4000-8000-000000000001",
+            "key": "planning_priorities",
+            "title": "Planning priorities",
+            "body": "Collect ideas and decide together which details matter for this gathering. Keep options open until plans are confirmed.",
+            "sortOrder": 0,
+            "visibility": "planning_only"
+          },
+          {
+            "id": "10000000-3000-4000-8000-000000000002",
+            "eventID": "10000000-1000-4000-8000-000000000003",
+            "key": "gathering_details",
+            "title": "Activity details",
+            "body": "Add confirmed timing, arrival, and accessibility information here when it is ready to share with participants.",
+            "sortOrder": 1,
+            "visibility": "event_participants"
+          }
+        ],
+        "experienceConfiguration": {
+          "experienceType": "birthday",
+          "categoryOrder": [
+            "event",
+            "food",
+            "invitations",
+            "decor",
+            "other"
+          ]
+        },
+        "isMainEventDeleted": false,
+        "registry": [],
+        "isRegistryShared": false,
+        "isCollaboratorLinkEnabled": false,
+        "requiresCollaboratorApproval": true,
+        "defaultCollaboratorPermission": "contribute",
+        "isScopedEvent": false,
+        "scopedEvent": null
+      }
+    },
+    {
+      "catalogKey": "thanksgiving",
+      "input": {
+        "requestId": "20000000-9000-4000-8000-000000000001",
+        "catalogKey": "thanksgiving",
+        "revision": 1,
+        "contentHash": "1133e9e24493fdc68a5e15b42740f7ce279b94cb881194ed73a94594b4ef8380",
+        "mainEvent": {
+          "name": "Thanksgiving",
+          "startsAt": "2027-10-11T20:00:00Z",
+          "timeZone": "America/Toronto"
+        },
+        "selectedChildren": [
+          {
+            "key": "gathering_preparation",
+            "startsAt": "2027-10-10T20:30:00Z"
+          },
+          {
+            "key": "thanksgiving_gathering",
+            "startsAt": "2027-10-11T17:00:00Z"
+          },
+          {
+            "key": "shared_meal",
+            "startsAt": "2027-10-11T20:00:00Z"
+          }
+        ],
+        "selectedIdeaKeys": [
+          "gathering_plans",
+          "food_and_drinks",
+          "invitations",
+          "shared_activities",
+          "table_and_space"
+        ],
+        "capabilities": [
+          "event.children_v1",
+          "planning.ideas_v2",
+          "planning.instructions_v1",
+          "planning.portable_idea_config_v1"
+        ]
+      },
+      "schedule": {
+        "catalogKey": "thanksgiving",
+        "revision": 1,
+        "contentHash": "1133e9e24493fdc68a5e15b42740f7ce279b94cb881194ed73a94594b4ef8380",
+        "mainEvent": {
+          "startsAt": "2027-10-11T20:00:00Z",
+          "timeZone": "America/Toronto"
+        },
+        "suggestions": [
+          {
+            "key": "gathering_preparation",
+            "localDateTime": "2027-10-10T16:00:00",
+            "status": "suggested",
+            "candidates": [
+              "2027-10-10T20:00:00Z"
+            ]
+          },
+          {
+            "key": "thanksgiving_gathering",
+            "localDateTime": "2027-10-11T13:00:00",
+            "status": "suggested",
+            "candidates": [
+              "2027-10-11T17:00:00Z"
+            ]
+          },
+          {
+            "key": "shared_meal",
+            "localDateTime": "2027-10-11T16:00:00",
+            "status": "suggested",
+            "candidates": [
+              "2027-10-11T20:00:00Z"
+            ]
+          }
+        ]
+      },
+      "preview": {
+        "plan": {
+          "plannerVersion": 1,
+          "experienceType": "holiday",
+          "categoryOrder": [
+            "event",
+            "food",
+            "invitations",
+            "other",
+            "decor"
+          ],
+          "main": {
+            "sourceKey": "main",
+            "name": "Thanksgiving",
+            "eventType": "holiday",
+            "startsAt": "2027-10-11T20:00:00Z",
+            "timeZone": "America/Toronto",
+            "parentSourceKey": null,
+            "purpose": null,
+            "category": null,
+            "planningStatus": null
+          },
+          "children": [
+            {
+              "sourceKey": "gathering_preparation",
+              "name": "Gathering preparation",
+              "eventType": "holiday",
+              "startsAt": "2027-10-10T20:30:00Z",
+              "timeZone": "America/Toronto",
+              "parentSourceKey": "main",
+              "purpose": "planning_scouting",
+              "category": "other",
+              "planningStatus": "approved"
+            },
+            {
+              "sourceKey": "thanksgiving_gathering",
+              "name": "Time together",
+              "eventType": "holiday",
+              "startsAt": "2027-10-11T17:00:00Z",
+              "timeZone": "America/Toronto",
+              "parentSourceKey": "main",
+              "purpose": "part_of_event",
+              "category": "other",
+              "planningStatus": "approved"
+            },
+            {
+              "sourceKey": "shared_meal",
+              "name": "Shared meal",
+              "eventType": "holiday",
+              "startsAt": "2027-10-11T20:00:00Z",
+              "timeZone": "America/Toronto",
+              "parentSourceKey": "main",
+              "purpose": "part_of_event",
+              "category": "other",
+              "planningStatus": "approved"
+            }
+          ],
+          "ideas": [
+            {
+              "sourceKey": "gathering_plans",
+              "title": "Gathering plans",
+              "category": "event",
+              "notes": "Collect ideas for how you would like to spend time together.",
+              "targetSourceKey": "main",
+              "configuration": {
+                "version": 1
+              },
+              "status": "new"
+            },
+            {
+              "sourceKey": "food_and_drinks",
+              "title": "Food and drinks",
+              "category": "food",
+              "notes": "Explore dishes and drinks while accounting for preferences and dietary needs.",
+              "targetSourceKey": "main",
+              "configuration": {
+                "version": 1
+              },
+              "status": "new"
+            },
+            {
+              "sourceKey": "invitations",
+              "title": "Invitations",
+              "category": "invitations",
+              "notes": "Gather invitation ideas and share timing or location after those details are confirmed.",
+              "targetSourceKey": "main",
+              "configuration": {
+                "version": 1
+              },
+              "status": "new"
+            },
+            {
+              "sourceKey": "shared_activities",
+              "title": "Activities",
+              "category": "other",
+              "notes": "Collect optional ways to spend time together across ages and interests.",
+              "targetSourceKey": "thanksgiving_gathering",
+              "configuration": {
+                "version": 1
+              },
+              "status": "new"
+            },
+            {
+              "sourceKey": "table_and_space",
+              "title": "Table and shared space",
+              "category": "decor",
+              "notes": "Save optional ideas for making the shared space comfortable and welcoming.",
+              "targetSourceKey": "shared_meal",
+              "configuration": {
+                "version": 1
+              },
+              "status": "new"
+            }
+          ],
+          "instructions": [
+            {
+              "sourceKey": "planning_priorities",
+              "title": "Planning priorities",
+              "body": "Choose the date that works for your group; this template does not assume a national holiday date. Collect menu ideas, dietary needs, and possible contributions without assigning anyone a task until they agree.",
+              "audience": "planning_only",
+              "targetSourceKey": "main"
+            },
+            {
+              "sourceKey": "gathering_details",
+              "title": "Gathering details",
+              "body": "Share confirmed timing, arrival, and accessibility information here when it is ready for participants.",
+              "audience": "event_participants",
+              "targetSourceKey": "thanksgiving_gathering"
+            }
+          ],
+          "omissions": []
+        },
+        "contentHash": "1133e9e24493fdc68a5e15b42740f7ce279b94cb881194ed73a94594b4ef8380"
+      },
+      "archive": {
+        "mainEventID": "20000000-1000-4000-8000-000000000001",
+        "title": "Thanksgiving",
+        "mainEventStartsAt": 844977600,
+        "mainEventEndsAt": null,
+        "mainEventIsAllDay": false,
+        "mainEventTimeZoneIdentifier": "America/Toronto",
+        "mainEventLocation": {
+          "address": "",
+          "shortAddress": "",
+          "placeName": "",
+          "locationName": "",
+          "addressLine2": ""
+        },
+        "mainEventImageData": null,
+        "mainEventMediaAssetID": null,
+        "venueName": "",
+        "location": "",
+        "dressCode": "",
+        "eventMessage": "",
+        "planningMode": "openToIdeas",
+        "members": [
+          {
+            "id": "20000000-7000-4000-8000-000000000001",
+            "userID": "curated-starter-host",
+            "name": "Riley Example",
+            "participantRole": "host",
+            "initials": "RE",
+            "attendance": "invited",
+            "email": "riley@example.test",
+            "profileImageAssetName": null,
+            "profileImageURL": null,
+            "planningPermission": "manage",
+            "invitationStatus": "active"
+          }
+        ],
+        "eventParticipations": [
+          {
+            "id": "20000000-8000-4000-8000-000000000001",
+            "eventID": "20000000-1000-4000-8000-000000000001",
+            "memberID": "20000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          },
+          {
+            "id": "20000000-8000-4000-8000-000000000002",
+            "eventID": "20000000-1000-4000-8000-000000000002",
+            "memberID": "20000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          },
+          {
+            "id": "20000000-8000-4000-8000-000000000003",
+            "eventID": "20000000-1000-4000-8000-000000000003",
+            "memberID": "20000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          },
+          {
+            "id": "20000000-8000-4000-8000-000000000004",
+            "eventID": "20000000-1000-4000-8000-000000000004",
+            "memberID": "20000000-7000-4000-8000-000000000001",
+            "role": "host",
+            "planningPermission": "manage",
+            "attendance": "invited",
+            "invitationStatus": "active",
+            "createdAt": 813758400,
+            "updatedAt": 813758400
+          }
+        ],
+        "mainEventParticipantIDs": [
+          "20000000-7000-4000-8000-000000000001"
+        ],
+        "ideas": [
+          {
+            "id": "20000000-2000-4000-8000-000000000001",
+            "eventID": "20000000-1000-4000-8000-000000000001",
+            "title": "Gathering plans",
+            "note": "Collect ideas for how you would like to spend time together.",
+            "category": "event",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "curated-starter-host",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "event": {
+                "_0": {
+                  "category": "other",
+                  "purpose": "planning",
+                  "audience": "inherited",
+                  "requiresBudget": false,
+                  "proposedBudget": null,
+                  "proposedDate": null,
+                  "proposedEndDate": null,
+                  "isAllDay": false,
+                  "timeZoneIdentifier": "America/Toronto",
+                  "location": null,
+                  "attireStyle": "any",
+                  "attireGuidance": ""
+                }
+              }
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "20000000-2000-4000-8000-000000000002",
+            "eventID": "20000000-1000-4000-8000-000000000001",
+            "title": "Food and drinks",
+            "note": "Explore dishes and drinks while accounting for preferences and dietary needs.",
+            "category": "food",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "curated-starter-host",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "food": {
+                "_0": {
+                  "type": "meal",
+                  "servings": null,
+                  "dietaryNotes": ""
+                }
+              }
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "20000000-2000-4000-8000-000000000003",
+            "eventID": "20000000-1000-4000-8000-000000000001",
+            "title": "Invitations",
+            "note": "Gather invitation ideas and share timing or location after those details are confirmed.",
+            "category": "invitations",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "curated-starter-host",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "invitations": {
+                "_0": {
+                  "format": "printed",
+                  "quantity": null,
+                  "productionNotes": ""
+                }
+              }
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "20000000-2000-4000-8000-000000000004",
+            "eventID": "20000000-1000-4000-8000-000000000003",
+            "title": "Activities",
+            "note": "Collect optional ways to spend time together across ages and interests.",
+            "category": "other",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "curated-starter-host",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "standard": {}
+            },
+            "invitationVisibility": "planningOnly"
+          },
+          {
+            "id": "20000000-2000-4000-8000-000000000005",
+            "eventID": "20000000-1000-4000-8000-000000000004",
+            "title": "Table and shared space",
+            "note": "Save optional ideas for making the shared space comfortable and welcoming.",
+            "category": "decor",
+            "submittedBy": "Riley Example",
+            "submittedByUserID": "curated-starter-host",
+            "estimatedCost": null,
+            "status": "new",
+            "submittedAt": 813758400,
+            "imageData": null,
+            "mediaAssetID": null,
+            "configuration": {
+              "decor": {
+                "_0": {
+                  "focus": "reception",
+                  "paletteOrMaterials": ""
+                }
+              }
+            },
+            "invitationVisibility": "planningOnly"
+          }
+        ],
+        "timeline": [
+          {
+            "id": "20000000-1000-4000-8000-000000000002",
+            "title": "Gathering preparation",
+            "category": "other",
+            "purpose": "planning",
+            "scheduledAt": 844893000,
+            "schedulingState": "scheduled",
+            "endsAt": null,
+            "isAllDay": false,
+            "timeZoneIdentifier": "America/Toronto",
+            "eventLocation": null,
+            "participantIDs": [
+              "20000000-7000-4000-8000-000000000001"
+            ],
+            "parentEventID": "20000000-1000-4000-8000-000000000001",
+            "status": "approved",
+            "statusBeforeArchiving": null,
+            "completionStatus": "upcoming",
+            "response": null,
+            "linkedIdeaID": null,
+            "imageData": null,
+            "mediaAssetID": null,
+            "eventDescription": "",
+            "dressCode": "",
+            "budgetCap": null
+          },
+          {
+            "id": "20000000-1000-4000-8000-000000000003",
+            "title": "Time together",
+            "category": "other",
+            "purpose": "eventExperience",
+            "scheduledAt": 844966800,
+            "schedulingState": "scheduled",
+            "endsAt": null,
+            "isAllDay": false,
+            "timeZoneIdentifier": "America/Toronto",
+            "eventLocation": null,
+            "participantIDs": [
+              "20000000-7000-4000-8000-000000000001"
+            ],
+            "parentEventID": "20000000-1000-4000-8000-000000000001",
+            "status": "approved",
+            "statusBeforeArchiving": null,
+            "completionStatus": "upcoming",
+            "response": null,
+            "linkedIdeaID": null,
+            "imageData": null,
+            "mediaAssetID": null,
+            "eventDescription": "",
+            "dressCode": "",
+            "budgetCap": null
+          },
+          {
+            "id": "20000000-1000-4000-8000-000000000004",
+            "title": "Shared meal",
+            "category": "other",
+            "purpose": "eventExperience",
+            "scheduledAt": 844977600,
+            "schedulingState": "scheduled",
+            "endsAt": null,
+            "isAllDay": false,
+            "timeZoneIdentifier": "America/Toronto",
+            "eventLocation": null,
+            "participantIDs": [
+              "20000000-7000-4000-8000-000000000001"
+            ],
+            "parentEventID": "20000000-1000-4000-8000-000000000001",
+            "status": "approved",
+            "statusBeforeArchiving": null,
+            "completionStatus": "upcoming",
+            "response": null,
+            "linkedIdeaID": null,
+            "imageData": null,
+            "mediaAssetID": null,
+            "eventDescription": "",
+            "dressCode": "",
+            "budgetCap": null
+          }
+        ],
+        "eventExpenses": [],
+        "workspaceBudgetCap": null,
+        "currencyCode": "USD",
+        "mainEventBudgetCap": null,
+        "notes": [],
+        "ideaResponses": [],
+        "mainEventStatus": "draft",
+        "mainEventResponse": null,
+        "eventMoments": [],
+        "guides": [
+          {
+            "id": "20000000-3000-4000-8000-000000000001",
+            "eventID": "20000000-1000-4000-8000-000000000001",
+            "key": "planning_priorities",
+            "title": "Planning priorities",
+            "body": "Choose the date that works for your group; this template does not assume a national holiday date. Collect menu ideas, dietary needs, and possible contributions without assigning anyone a task until they agree.",
+            "sortOrder": 0,
+            "visibility": "planning_only"
+          },
+          {
+            "id": "20000000-3000-4000-8000-000000000002",
+            "eventID": "20000000-1000-4000-8000-000000000003",
+            "key": "gathering_details",
+            "title": "Gathering details",
+            "body": "Share confirmed timing, arrival, and accessibility information here when it is ready for participants.",
+            "sortOrder": 1,
+            "visibility": "event_participants"
+          }
+        ],
+        "experienceConfiguration": {
+          "experienceType": "holiday",
+          "categoryOrder": [
+            "event",
+            "food",
+            "invitations",
+            "other",
+            "decor"
+          ]
+        },
+        "isMainEventDeleted": false,
+        "registry": [],
+        "isRegistryShared": false,
+        "isCollaboratorLinkEnabled": false,
+        "requiresCollaboratorApproval": true,
+        "defaultCollaboratorPermission": "contribute",
+        "isScopedEvent": false,
+        "scopedEvent": null
+      }
+    }
+  ]
+}
