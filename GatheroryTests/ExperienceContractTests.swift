@@ -107,8 +107,11 @@ struct ExperienceContractTests {
             updatedAt: .now
         )
 
-        #expect(throws: WorkspacePersistenceError.self) {
+        do {
             try persistence.applyBootstrap([snapshot], to: library)
+            Issue.record("Unsupported versions must be rejected before decoding the payload")
+        } catch WorkspacePersistenceError.unsupportedSyncPayloadVersion(let version) {
+            #expect(version == 2)
         }
     }
 }

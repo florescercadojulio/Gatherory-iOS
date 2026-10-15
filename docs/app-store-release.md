@@ -10,6 +10,30 @@ sign-in. See [App Review Guideline 2.1](https://developer.apple.com/app-store/re
 [Providing information for a complete review](https://developer.apple.com/help/app-review/before-submitting-for-review/complete-review),
 and [Apple’s App Review overview](https://developer.apple.com/app-store/review/).
 
+## Latest TestFlight verification — October 14, 2026
+
+- Version **1.0 (3)** was archived, successfully uploaded, processed, and submitted
+  to TestFlight beta review for the existing External Friends & Family group.
+  App Store Connect confirmed **Waiting for Review**. Build 2 was withdrawn
+  with the release owner's approval and remains available as Ready to Submit;
+  it was not expired or deleted. Build 3 includes updated testing notes and
+  automatic tester notification after approval.
+- The complete `GatheroryTests` unit suite passed: 337 tests / 404 parameterized
+  test runs. UI tests were excluded. English/Spanish localization coverage passed.
+- The bootstrap preflight now checks the remote payload schema version before
+  decoding it. Its regression verifies the specific unsupported-version error;
+  save and remote-merge transaction boundaries are unchanged.
+- The archived app uses the production authentication origin, disables
+  development seeding and login bypasses, and retains the existing Release
+  telemetry setting. Sign in with Apple and WeatherKit entitlements are present.
+- Unauthenticated production bootstrap/pull GET requests and push POST requests
+  returned HTTP 401. This is a route/authentication check, not a replacement for
+  the signed-in device walkthrough below.
+
+This is a TestFlight upload, not a public App Store submission. The checklist
+below includes earlier verification gaps; recheck its dated entries against
+current production/device evidence before a public release.
+
 ## Submission blockers
 
 Do not submit the current Release build until every blocking item is resolved.

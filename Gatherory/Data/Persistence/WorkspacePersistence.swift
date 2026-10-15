@@ -556,6 +556,11 @@ final class WorkspacePersistenceController {
         // scoped projections from this account's local cache.
         let hasAuthoritativeRoot = try snapshots.contains { snapshot in
             guard !pendingScopes.contains(snapshot.scopeID) else { return false }
+            guard snapshot.effectivePayloadSchemaVersion == SyncPayloadContract.currentVersion else {
+                throw WorkspacePersistenceError.unsupportedSyncPayloadVersion(
+                    snapshot.effectivePayloadSchemaVersion
+                )
+            }
             let archive = try codec.decode(WorkspaceArchiveV1.self, from: snapshot.payload)
             return archive.isScopedEvent != true
         }
