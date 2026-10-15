@@ -110,6 +110,30 @@ struct PostgresSyncTransport: WorkspaceSnapshotTransport {
         return try await perform(request)
     }
 
+    /// Resolves a shared published revision without sending the viewer's
+    /// session or workspace credentials. The token is also omitted from logs.
+    func sharedBlueprint(token: String) async throws -> BlueprintCatalogEntry {
+        guard BlueprintSharedTemplateLink.isValidToken(token) else {
+            throw CloudSyncFailure.invalidResponse
+        }
+        var request = URLRequest(url: endpointURL(path: ["api", "blueprints", "shared", token]))
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        guard let data = try await performData(request, operation: "blueprints/shared") else {
+            throw CloudSyncFailure.invalidResponse
+        }
+        do {
+            return try decoder.decode(BlueprintCatalogEntry.self, from: data)
+        } catch {
+            SyncDiagnostics.record(
+                "shared_blueprint_decode_failed",
+                fields: ["operation": "blueprints/shared", "coding_path": SyncDiagnostics.decodePath(error)],
+                error: error
+            )
+            throw CloudSyncFailure.invalidResponse
+        }
+    }
+
     func blueprintSchedule(_ input: BlueprintScheduleInput) async throws -> BlueprintScheduleResponse {
         var request = try authenticatedRequest(path: ["api", "blueprints", "schedule"])
         request.httpMethod = "POST"
@@ -194,13 +218,14 @@ struct PostgresSyncTransport: WorkspaceSnapshotTransport {
 
     private func performData(
         _ request: URLRequest,
-        notFoundIsEmpty: Bool = false
+        notFoundIsEmpty: Bool = false,
+        operation: String? = nil
     ) async throws -> Data? {
         var request = request
         let requestID = UUID().uuidString
         request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
         let started = Date()
-        var fields = ["request_id": requestID, "operation": request.url?.lastPathComponent ?? "sync"]
+        var fields = ["request_id": requestID, "operation": operation ?? request.url?.lastPathComponent ?? "sync"]
         let data: Data
         let rawResponse: URLResponse
         do {
@@ -240,6 +265,138 @@ struct PostgresSyncTransport: WorkspaceSnapshotTransport {
         path.reduce(baseURL) { url, component in
             url.appending(path: component)
         }
+    }
+}
+
+extension PostgresSyncTransport: BlueprintCreateShareTransport {
+    func captureSource(eventID: UUID) async throws -> BlueprintCaptureSourceResponse {
+        try await postTemplateCreation(BlueprintCaptureReadAction(action: "source", eventId: eventID.uuidString.lowercased()))
+    }
+
+    func reviewCapture(_ input: BlueprintNativeReviewInput) async throws -> BlueprintCaptureReview {
+        try await postTemplateCreation(input)
+    }
+
+    func createTemplate(_ input: BlueprintNativeCreateInput) async throws -> BlueprintNativeCreationResult {
+        try await postTemplateCreation(input)
+    }
+
+    private func postTemplateCreation<Input: Encodable, Output: Decodable>(_ input: Input) async throws -> Output {
+        var request = try authenticatedRequest(path: ["api", "blueprints", "create-template"])
+        request.httpMethod = "POST"
+        request.httpBody = try encoder.encode(input)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard let data = try await performData(request, operation: "blueprints/create-template") else {
+            throw CloudSyncFailure.invalidResponse
+        }
+        do { return try decoder.decode(Output.self, from: data) }
+        catch { throw CloudSyncFailure.invalidResponse }
+    }
+
+    private struct BlueprintCaptureReadAction: Encodable {
+        let action: String
+        let eventId: String
+    }
+}
+
+extension PostgresSyncTransport: BlueprintLinkManagementTransport {
+    func templates(eventID: UUID) async throws -> [BlueprintManagedTemplate] {
+        let data = try await postSharing(.templates(eventID: eventID))
+        return try decodeSharing(BlueprintManagedTemplatesResponse.self, from: data).templates
+    }
+
+    func links(eventID: UUID, templateID: UUID) async throws -> [BlueprintManagedShareLink] {
+        let data = try await postSharing(.list(eventID: eventID, templateID: templateID))
+        return try decodeSharing(BlueprintManagedLinksResponse.self, from: data).links
+    }
+
+    func createLink(eventID: UUID, templateID: UUID, revision: Int) async throws -> BlueprintCreatedShareLink {
+        let data = try await postSharing(.create(eventID: eventID, templateID: templateID, revision: revision))
+        let created = try decodeSharing(BlueprintCreatedShareLink.self, from: data)
+        guard Self.isValidBlueprintShareToken(created.token) else { throw CloudSyncFailure.invalidResponse }
+        return created
+    }
+
+    func revokeLink(eventID: UUID, templateID: UUID, linkID: UUID) async throws {
+        let data = try await postSharing(.revoke(eventID: eventID, templateID: templateID, linkID: linkID))
+        struct Acknowledgement: Decodable { let revoked: Bool }
+        guard try decodeSharing(Acknowledgement.self, from: data).revoked else {
+            throw CloudSyncFailure.invalidResponse
+        }
+    }
+
+    func setTemplateListing(eventID: UUID, templateID: UUID, revision: Int?) async throws -> Int? {
+        let data = try await postSharing(.listing(eventID: eventID, templateID: templateID, revision: revision))
+        struct Acknowledgement: Decodable {
+            let listedRevision: Int?
+
+            enum CodingKeys: String, CodingKey { case listedRevision }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                // Explicit null acknowledges withdrawal; an absent key does not.
+                listedRevision = try container.decode(Int?.self, forKey: .listedRevision)
+            }
+        }
+        return try decodeSharing(Acknowledgement.self, from: data).listedRevision
+    }
+
+    func shareURL(token: String) -> URL? {
+        guard Self.isValidBlueprintShareToken(token),
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false),
+              let scheme = components.scheme?.lowercased(),
+              let host = components.host?.lowercased(),
+              components.user == nil, components.password == nil,
+              scheme == "https" || (scheme == "http" && ["localhost", "127.0.0.1", "::1"].contains(host)) else {
+            return nil
+        }
+        let basePath = components.percentEncodedPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        components.percentEncodedPath = "/" + [basePath, "templates/shared/\(token)"].filter { !$0.isEmpty }.joined(separator: "/")
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+
+    private func postSharing(_ action: BlueprintLinkManagementAction) async throws -> Data {
+        var request = try authenticatedRequest(path: ["api", "blueprints", "sharing"])
+        request.httpMethod = "POST"
+        request.httpBody = try encoder.encode(action)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard let data = try await performData(request, operation: "blueprints/sharing") else {
+            throw CloudSyncFailure.invalidResponse
+        }
+        return data
+    }
+
+    private func decodeSharing<Value: Decodable>(_ type: Value.Type, from data: Data) throws -> Value {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+            for options: ISO8601DateFormatter.Options in [
+                [.withInternetDateTime, .withFractionalSeconds],
+                [.withInternetDateTime]
+            ] {
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = options
+                if let date = formatter.date(from: value) { return date }
+            }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid ISO-8601 timestamp")
+        }
+        do {
+            return try decoder.decode(type, from: data)
+        } catch {
+            SyncDiagnostics.record(
+                "blueprint_sharing_response_decode_failed",
+                fields: ["operation": "blueprints/sharing", "coding_path": SyncDiagnostics.decodePath(error)],
+                error: error
+            )
+            throw CloudSyncFailure.invalidResponse
+        }
+    }
+
+    private static func isValidBlueprintShareToken(_ token: String) -> Bool {
+        token.count == 64 && token.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
     }
 }
 

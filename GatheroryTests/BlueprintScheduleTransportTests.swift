@@ -48,6 +48,18 @@ struct BlueprintScheduleTransportTests {
         #expect(response.suggestions.count == 3)
     }
 
+    @Test("A shared-template token is included in schedule requests")
+    func sharedTokenScheduleRequest() async throws {
+        let fixture = try ScheduleHTTPFixture("link")
+        defer { fixture.cleanUp() }
+        let token = String(repeating: "c3", count: 32)
+
+        let response = try await fixture.coordinator.schedule(scheduleInput(shareToken: token))
+
+        #expect(response.catalogKey == "wedding")
+        #expect(ScheduleHTTPProtocol.lastShareToken == token)
+    }
+
     @Test("Schedule rejects a stale response with a different catalog pin or anchor",
           arguments: ["catalog", "revision", "hash", "anchor", "timezone"])
     func mismatchedResponseIsRejected(field: String) async throws {
@@ -109,10 +121,14 @@ struct BlueprintScheduleTransportTests {
         }
     }
 
-    private func scheduleInput(startsAt: Date = Date(timeIntervalSince1970: 1_700_000_000)) -> BlueprintScheduleInput {
+    private func scheduleInput(
+        startsAt: Date = Date(timeIntervalSince1970: 1_700_000_000),
+        shareToken: String? = nil
+    ) -> BlueprintScheduleInput {
         BlueprintScheduleInput(
             catalogKey: "wedding", revision: 7, contentHash: String(repeating: "a", count: 64),
-            mainEvent: .init(startsAt: startsAt, timeZone: "America/Detroit")
+            mainEvent: .init(startsAt: startsAt, timeZone: "America/Detroit"),
+            shareToken: shareToken
         )
     }
 
@@ -196,6 +212,14 @@ nonisolated private final class ScheduleResponseGate: @unchecked Sendable {
 
 private final class ScheduleHTTPProtocol: URLProtocol, @unchecked Sendable {
     static let gate = ScheduleResponseGate()
+    private static let tokenLock = NSLock()
+    private static var lastShareTokenValue: String?
+
+    static var lastShareToken: String? {
+        tokenLock.lock()
+        defer { tokenLock.unlock() }
+        return lastShareTokenValue
+    }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -210,7 +234,14 @@ private final class ScheduleHTTPProtocol: URLProtocol, @unchecked Sendable {
             #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
             #expect(request.value(forHTTPHeaderField: "Idempotency-Key") == nil)
             var payload = try #require(try JSONSerialization.jsonObject(with: bodyData()) as? [String: Any])
-            #expect(Set(payload.keys) == Set(["catalogKey", "revision", "contentHash", "mainEvent"]))
+            let shareToken = payload["shareToken"] as? String
+            let expectedKeys: Set<String> = shareToken == nil
+                ? ["catalogKey", "revision", "contentHash", "mainEvent"]
+                : ["catalogKey", "revision", "contentHash", "mainEvent", "shareToken"]
+            #expect(Set(payload.keys) == expectedKeys)
+            Self.tokenLock.lock()
+            Self.lastShareTokenValue = shareToken
+            Self.tokenLock.unlock()
             #expect(payload["catalogKey"] as? String == "wedding")
             #expect(payload["revision"] as? Int == 7)
             #expect(payload["contentHash"] as? String == String(repeating: "a", count: 64))
@@ -223,6 +254,7 @@ private final class ScheduleHTTPProtocol: URLProtocol, @unchecked Sendable {
             case "valid.invalid": break
             case "held.invalid":
                 try #require(Self.gate.hold(), "The account-switch test must release the held response")
+            case "link.invalid": break
             case "catalog.invalid": payload["catalogKey"] = "birthday"
             case "revision.invalid": payload["revision"] = 8
             case "hash.invalid": payload["contentHash"] = String(repeating: "b", count: 64)

@@ -3,9 +3,12 @@ import SwiftUI
 struct BlueprintSetupView: View {
     // nil opens recovery only; it must never silently choose a different starter.
     let catalogKey: String?
+    let sharedToken: String?
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
+    @Environment(BlueprintSharedTemplateRouter.self) private var sharedBlueprintLinks
     @Environment(\.currentUserAccount) private var account
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var coordinator: BlueprintInstallationCoordinator?
     @State private var catalogEntry: BlueprintCatalogEntry?
@@ -28,15 +31,24 @@ struct BlueprintSetupView: View {
     @State private var requestForReview: BlueprintInstallInput?
     @State private var reviewedPlan: BlueprintExpandedPlan?
     @State private var showReview = false
+    @State private var draftOwnerUserID: String?
+    @State private var draftRequestID = UUID()
+    @State private var draftCompleted = false
+    @State private var draftSaveError: String?
+    @State private var draftShareToken: String?
+    @State private var setupGeneration = UUID()
+    @State private var confirmsStartOver = false
+
+    private let draftStore = BlueprintSetupDraftStore()
+
+    init(catalogKey: String?, sharedToken: String? = nil) {
+        self.catalogKey = catalogKey
+        self.sharedToken = sharedToken
+    }
 
     private struct ScheduleRequest {
         let token: UUID
         let input: BlueprintScheduleInput
-    }
-
-    private var coordinatorForView: BlueprintInstallationCoordinator? {
-        if let coordinator { return coordinator }
-        return cloudSync.makeBlueprintInstallationCoordinator()
     }
 
     private var trimmedEventName: String {
@@ -96,6 +108,12 @@ struct BlueprintSetupView: View {
             } else if loading {
                 Section { ProgressView() }
             } else if let tree, let ideas {
+                if let draftSaveError {
+                    Section {
+                        Text(draftSaveError).foregroundStyle(.red)
+                        Button(AppCopy.Common.retry) { persistDraft() }
+                    }
+                }
                 Section {
                     TextField(BlueprintCopy.eventName, text: $eventName)
                         .textInputAutocapitalization(.words)
@@ -194,7 +212,7 @@ struct BlueprintSetupView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .disabled(busy || trimmedEventName.isEmpty || !selectedChildrenHaveDates)
+                    .disabled(busy || trimmedEventName.isEmpty || !selectedChildrenHaveDates || draftSaveError != nil)
                     .buttonStyle(.borderedProminent)
                 }
             } else {
@@ -218,15 +236,30 @@ struct BlueprintSetupView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(AppCopy.Common.close) { dismiss() }
+                Button(AppCopy.Common.close) { closeSetup() }
             }
+            if catalogEntry != nil, !installAttemptStarted, pendingIntents.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(BlueprintCopy.startOver, systemImage: "arrow.counterclockwise") {
+                        confirmsStartOver = true
+                    }
+                    .disabled(busy)
+                }
+            }
+        }
+        .confirmationDialog(BlueprintCopy.startOverConfirmation, isPresented: $confirmsStartOver, titleVisibility: .visible) {
+            Button(BlueprintCopy.startOver, role: .destructive) { Task { await startOver() } }
+            Button(AppCopy.Common.cancel, role: .cancel) {}
         }
         .task(id: loadTaskID) { await load() }
         .task(id: scheduleRequest?.token) {
             if let request = scheduleRequest { await fetchSuggestions(request) }
         }
-        .onChange(of: eventName) { _, _ in invalidateReview() }
-        .onChange(of: scheduleDraft.confirmedDates) { _, _ in invalidateReview() }
+        .onChange(of: eventName) { _, _ in invalidateReview(); persistDraft() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { persistDraft() }
+        }
+        .onDisappear { persistDraft() }
         .navigationDestination(isPresented: Binding(
             get: { dateSheetChild != nil },
             set: { if !$0 { dateSheetChild = nil } }
@@ -248,6 +281,8 @@ struct BlueprintSetupView: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button(BlueprintCopy.confirmDate) {
                             scheduleDraft.confirm(key: child.key, date: dateDraft)
+                            invalidateReview()
+                            persistDraft()
                             dateSheetChild = nil
                         }
                     }
@@ -287,6 +322,7 @@ struct BlueprintSetupView: View {
                     scheduleDraft.remove(key: child.key)
                 }
                 invalidateReview()
+                persistDraft()
             }
         )
     }
@@ -298,6 +334,7 @@ struct BlueprintSetupView: View {
                 if isSelected { selectedIdeas.insert(idea.key) }
                 else { selectedIdeas.remove(idea.key) }
                 invalidateReview()
+                persistDraft()
             }
         )
     }
@@ -306,6 +343,14 @@ struct BlueprintSetupView: View {
         requestForReview = nil
         reviewedPlan = nil
         errorMessage = nil
+    }
+
+    private func closeSetup() {
+        if sharedToken != nil {
+            sharedBlueprintLinks.dismiss()
+        } else {
+            dismiss()
+        }
     }
 
     @ViewBuilder
@@ -318,7 +363,10 @@ struct BlueprintSetupView: View {
                 }
                 ForEach(suggestion.candidates.indices, id: \.self) { index in
                     Button {
-                        _ = scheduleDraft.confirmSuggestion(key: child.key, candidateIndex: index, token: token)
+                        if scheduleDraft.confirmSuggestion(key: child.key, candidateIndex: index, token: token) {
+                            invalidateReview()
+                            persistDraft()
+                        }
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(BlueprintCopy.useSuggestedDate)
@@ -336,6 +384,7 @@ struct BlueprintSetupView: View {
     private func scheduleAnchorChanged() {
         invalidateReview()
         datesKept = !scheduleDraft.confirmedDates.isEmpty
+        persistDraft()
         refreshSuggestions()
     }
 
@@ -345,7 +394,8 @@ struct BlueprintSetupView: View {
         let token = scheduleDraft.beginRefresh()
         scheduleRequest = ScheduleRequest(token: token, input: BlueprintScheduleInput(
             catalogKey: entry.catalogKey, revision: entry.revision, contentHash: entry.contentHash,
-            mainEvent: .init(startsAt: startsAt, timeZone: timeZoneIdentifier)
+            mainEvent: .init(startsAt: startsAt, timeZone: timeZoneIdentifier),
+            shareToken: draftShareToken
         ))
     }
 
@@ -376,11 +426,14 @@ struct BlueprintSetupView: View {
     @MainActor
     private func load() async {
         guard let account else {
+            resetSetup()
             loading = false
             errorMessage = BlueprintCopy.signInRequired
             return
         }
-        guard let coordinator = coordinatorForView else {
+        if draftOwnerUserID != account.id { resetSetup() }
+        let generation = setupGeneration
+        guard let coordinator = cloudSync.makeBlueprintInstallationCoordinator() else {
             loading = false
             errorMessage = BlueprintCopy.loadFailed
             return
@@ -394,35 +447,61 @@ struct BlueprintSetupView: View {
                 loading = false
                 return
             }
+            if let sharedToken {
+                if let saved = try draftStore.load(ownerUserID: account.id, shareToken: sharedToken) {
+                    // A previously resolved entry is safe to keep locally. Restoring
+                    // first preserves offline setup and lets the server enforce
+                    // revocation when preview, scheduling, or installation is requested.
+                    try restore(saved)
+                    guard self.account?.id == account.id, setupGeneration == generation else { return }
+                    loading = false
+                    refreshSuggestions()
+                } else {
+                    let entry = try await coordinator.sharedBlueprint(token: sharedToken)
+                    try Task.checkCancellation()
+                    guard self.account?.id == account.id, setupGeneration == generation else { return }
+                    try configure(entry, ownerID: account.id, shareToken: sharedToken)
+                    persistDraft()
+                    loading = false
+                    refreshSuggestions()
+                }
+                return
+            }
             guard let catalogKey else { throw BlueprintStarterViewError.invalidCatalog }
+            // A saved source is pinned to the reviewed revision. Restore locally
+            // even offline; preview/install still revalidate access on the server.
+            if catalogEntry == nil,
+               let saved = try draftStore.load(ownerUserID: account.id, catalogKey: catalogKey) {
+                try restore(saved)
+            }
+            if catalogEntry != nil {
+                loading = false
+                refreshSuggestions()
+                return
+            }
             let catalog = try await coordinator.catalog()
-            guard let entry = catalog.entries.filter({ $0.catalogKey == catalogKey }).max(by: { $0.revision < $1.revision }),
-                  let treeModule = entry.definition.modules.first(where: { $0.type == "experience_tree" }),
-                  let decodedTree = treeModule.decodeConfiguration(BlueprintExperienceTreeConfig.self),
-                  let ideasModule = entry.definition.modules.first(where: { $0.type == "ideas" }),
-                  let decodedIdeas = ideasModule.decodeConfiguration(BlueprintIdeasConfig.self) else {
+            try Task.checkCancellation()
+            guard self.account?.id == account.id, setupGeneration == generation else { return }
+            guard let entry = catalog.entries.filter({ $0.catalogKey == catalogKey }).max(by: { $0.revision < $1.revision }) else {
                 throw BlueprintStarterViewError.invalidCatalog
             }
             let isInitialLoad = catalogEntry == nil
-            catalogEntry = entry
-            tree = decodedTree
-            ideas = decodedIdeas
-            if isInitialLoad {
-                selectedIdeas = Set(decodedIdeas.ideas.map(\.key))
-                eventName = entry.definition.experienceDefaults.type == "wedding"
-                    ? BlueprintCopy.defaultEventName(for: account.displayName)
-                    : entry.definition.blueprint.name
-            }
+            try configure(entry, ownerID: account.id, shareToken: nil, isInitialLoad: isInitialLoad)
+            persistDraft()
             refreshSuggestions()
         } catch {
-            errorMessage = error.localizedDescription
+            guard !Task.isCancelled, self.account?.id == account.id, setupGeneration == generation else { return }
+            errorMessage = setupErrorMessage(error)
         }
         loading = false
     }
 
     @MainActor
     private func requestPlanReview() async {
-        guard let entry = catalogEntry, let coordinator, selectedChildrenHaveDates else { return }
+        guard let entry = catalogEntry, let coordinator, selectedChildrenHaveDates,
+              draftOwnerUserID == account?.id, persistDraft() else { return }
+        let ownerID = draftOwnerUserID
+        let generation = setupGeneration
         busy = true
         errorMessage = nil
         let input: BlueprintInstallInput
@@ -430,7 +509,7 @@ struct BlueprintSetupView: View {
             input = existing
         } else {
             input = BlueprintInstallInput(
-                requestID: UUID(),
+                requestID: draftRequestID,
                 catalogKey: entry.catalogKey,
                 revision: entry.revision,
                 contentHash: entry.contentHash,
@@ -439,31 +518,38 @@ struct BlueprintSetupView: View {
                     scheduleDraft.confirmedDates[key].map { .init(key: key, startsAt: $0) }
                 },
                 selectedIdeaKeys: selectedIdeas.sorted(),
-                capabilities: SyncClientCapabilities.blueprintFeatures
+                capabilities: SyncClientCapabilities.blueprintFeatures,
+                shareToken: draftShareToken
             )
             requestForReview = input
         }
         do {
             let response = try await coordinator.preview(input)
+            guard !Task.isCancelled, account?.id == ownerID, setupGeneration == generation else { return }
             reviewedPlan = response.plan
             showReview = true
         } catch {
-            errorMessage = error.localizedDescription
+            guard !Task.isCancelled, account?.id == ownerID, setupGeneration == generation else { return }
+            errorMessage = setupErrorMessage(error)
         }
         busy = false
     }
 
     @MainActor
     private func install(_ input: BlueprintInstallInput) async {
-        guard let coordinator else { return }
+        guard let coordinator, let ownerID = draftOwnerUserID, account?.id == ownerID else { return }
+        let generation = setupGeneration
         installAttemptStarted = true
         busy = true
         errorMessage = nil
         do {
             _ = try await coordinator.install(input)
-            dismiss()
+            guard account?.id == ownerID, setupGeneration == generation else { return }
+            draftCompleted = true
+            closeSetup()
         } catch {
-            errorMessage = error.localizedDescription
+            guard self.account?.id == ownerID, setupGeneration == generation else { return }
+            errorMessage = setupErrorMessage(error)
             pendingIntents = (try? coordinator.pendingIntentsForActiveAccount()) ?? []
         }
         busy = false
@@ -472,16 +558,141 @@ struct BlueprintSetupView: View {
     @MainActor
     private func resume(_ intent: BlueprintInstallationIntent) async {
         guard let account, let coordinator, account.id == intent.ownerUserID else { return }
+        let generation = setupGeneration
         busy = true
         errorMessage = nil
         do {
             _ = try await coordinator.resume(intent)
-            dismiss()
+            guard self.account?.id == account.id, setupGeneration == generation else { return }
+            draftCompleted = true
+            closeSetup()
         } catch {
-            errorMessage = error.localizedDescription
+            guard self.account?.id == account.id, setupGeneration == generation else { return }
+            errorMessage = setupErrorMessage(error)
             pendingIntents = (try? coordinator.pendingIntentsForActiveAccount()) ?? []
         }
         busy = false
+    }
+
+    private func resetSetup() {
+        setupGeneration = UUID()
+        coordinator = nil
+        catalogEntry = nil
+        tree = nil
+        ideas = nil
+        selectedChildren = []
+        selectedIdeas = []
+        scheduleDraft = BlueprintScheduleDraft()
+        scheduleRequest = nil
+        dateContext = BlueprintSetupDateContext()
+        eventName = ""
+        draftOwnerUserID = nil
+        draftShareToken = nil
+        draftRequestID = UUID()
+        draftCompleted = false
+        draftSaveError = nil
+        pendingIntents = []
+        installAttemptStarted = false
+        busy = false
+        datesKept = false
+        dateSheetChild = nil
+        showReview = false
+        invalidateReview()
+    }
+
+    private func setupErrorMessage(_ error: Error) -> String {
+        if sharedToken != nil || draftShareToken != nil,
+           case CloudSyncFailure.server(let code) = error,
+           code == "BLUEPRINT_NOT_FOUND" || code == "BLUEPRINT_LINK_UNAVAILABLE" {
+            return BlueprintCopy.sharedLinkUnavailable
+        }
+        return error.localizedDescription
+    }
+
+    private func startOver() async {
+        guard !busy, !installAttemptStarted, pendingIntents.isEmpty,
+              let ownerID = draftOwnerUserID, ownerID == account?.id,
+              let catalogKey = catalogEntry?.catalogKey else { return }
+        do {
+            try draftStore.remove(
+                ownerUserID: ownerID,
+                catalogKey: catalogKey,
+                requestID: draftRequestID,
+                shareToken: draftShareToken
+            )
+            resetSetup()
+            await load()
+        } catch {
+            draftSaveError = BlueprintCopy.draftSaveFailed
+        }
+    }
+
+    private func restore(_ saved: BlueprintSetupDraft) throws {
+        guard let treeModule = saved.entry.definition.modules.first(where: { $0.type == "experience_tree" }),
+              let decodedTree = treeModule.decodeConfiguration(BlueprintExperienceTreeConfig.self),
+              let ideasModule = saved.entry.definition.modules.first(where: { $0.type == "ideas" }),
+              let decodedIdeas = ideasModule.decodeConfiguration(BlueprintIdeasConfig.self),
+              let zone = TimeZone(identifier: saved.timeZoneIdentifier) else {
+            throw BlueprintStarterViewError.invalidCatalog
+        }
+        catalogEntry = saved.entry
+        tree = decodedTree
+        ideas = decodedIdeas
+        draftOwnerUserID = saved.ownerUserID
+        draftShareToken = saved.shareToken
+        draftRequestID = saved.requestID
+        eventName = saved.eventName
+        dateContext = BlueprintSetupDateContext(startsAt: saved.startsAt, timeZone: zone)
+        selectedChildren = saved.selectedChildren
+        selectedIdeas = saved.selectedIdeas
+        scheduleDraft = BlueprintScheduleDraft(confirmedDates: saved.confirmedDates)
+        datesKept = !saved.confirmedDates.isEmpty
+    }
+
+    private func configure(
+        _ entry: BlueprintCatalogEntry,
+        ownerID: String,
+        shareToken: String?,
+        isInitialLoad: Bool = true
+    ) throws {
+        guard let treeModule = entry.definition.modules.first(where: { $0.type == "experience_tree" }),
+              let decodedTree = treeModule.decodeConfiguration(BlueprintExperienceTreeConfig.self),
+              let ideasModule = entry.definition.modules.first(where: { $0.type == "ideas" }),
+              let decodedIdeas = ideasModule.decodeConfiguration(BlueprintIdeasConfig.self) else {
+            throw BlueprintStarterViewError.invalidCatalog
+        }
+        catalogEntry = entry
+        tree = decodedTree
+        ideas = decodedIdeas
+        draftOwnerUserID = ownerID
+        draftShareToken = shareToken
+        if isInitialLoad {
+            selectedIdeas = Set(decodedIdeas.ideas.map(\.key))
+            eventName = entry.definition.experienceDefaults.type == "wedding"
+                ? BlueprintCopy.defaultEventName(for: account?.displayName ?? "")
+                : entry.definition.blueprint.name
+        }
+    }
+
+    @discardableResult
+    private func persistDraft() -> Bool {
+        guard !draftCompleted, !installAttemptStarted, pendingIntents.isEmpty,
+              let ownerID = draftOwnerUserID, ownerID == account?.id,
+              let entry = catalogEntry else { return false }
+        do {
+            try draftStore.save(BlueprintSetupDraft(
+                ownerUserID: ownerID, entry: entry, requestID: draftRequestID,
+                eventName: eventName, startsAt: startsAt, timeZoneIdentifier: timeZoneIdentifier,
+                selectedChildren: selectedChildren, selectedIdeas: selectedIdeas,
+                confirmedDates: scheduleDraft.confirmedDates,
+                shareToken: draftShareToken
+            ))
+            draftSaveError = nil
+            return true
+        } catch {
+            draftSaveError = BlueprintCopy.draftSaveFailed
+            return false
+        }
     }
 }
 

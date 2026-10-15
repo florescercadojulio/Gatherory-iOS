@@ -19,6 +19,7 @@ struct GatheroryApp: App {
     @State private var workspaceLibrary: WorkspaceLibrary
     @State private var cloudSync: WorkspaceCloudSyncController
     @State private var invitations = InvitationRouter(baseURL: AppRuntimeConfiguration.authenticationBaseURL)
+    @State private var sharedBlueprintLinks = BlueprintSharedTemplateRouter(baseURL: AppRuntimeConfiguration.authenticationBaseURL)
     @State private var guestInvitations = GuestInvitationStore(baseURL: AppRuntimeConfiguration.authenticationBaseURL)
     @State private var musicCatalog = MusicCatalog()
     @State private var musicPreviewPlayer = MusicPreviewPlayer()
@@ -100,6 +101,7 @@ struct GatheroryApp: App {
             .environment(persistence)
             .environment(cloudSync)
             .environment(invitations)
+            .environment(sharedBlueprintLinks)
             .environment(guestInvitations)
             .environment(imageSafety)
             .appUserAppearance(selectedAppearance)
@@ -130,10 +132,15 @@ struct GatheroryApp: App {
                 }
             }
             .onOpenURL { url in
-                if !invitations.receive(url) { GIDSignIn.sharedInstance.handle(url) }
+                if !invitations.receive(url), !sharedBlueprintLinks.receive(url) {
+                    GIDSignIn.sharedInstance.handle(url)
+                }
             }
             .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
-                if let url = activity.webpageURL { _ = invitations.receive(url) }
+                if let url = activity.webpageURL,
+                   !invitations.receive(url) {
+                    _ = sharedBlueprintLinks.receive(url)
+                }
             }
         }
     }

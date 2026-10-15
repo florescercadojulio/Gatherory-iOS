@@ -10,6 +10,7 @@ struct BlueprintInstallationImportTests {
     func installUsesFixtureBootstrapAndRecoversReceipt() async throws {
         let storeURL = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).store")
         let intentDirectory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let setupDrafts = BlueprintSetupDraftStore(directoryURL: intentDirectory.appending(path: "setup-drafts"))
         defer {
             try? FileManager.default.removeItem(at: storeURL)
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + "-wal"))
@@ -27,7 +28,11 @@ struct BlueprintInstallationImportTests {
         #expect(fixtureArchive.currencyCode == "USD")
         #expect(fixtureArchive.guides?.count == 2)
         #expect(fixtureArchive.experienceConfiguration?.experienceType == "wedding")
-        BlueprintInstallURLProtocol.configure(archiveBytes: fixtureData, scopeID: fixtureArchive.mainEventID)
+        BlueprintInstallURLProtocol.configure(
+            archiveBytes: fixtureData,
+            scopeID: fixtureArchive.mainEventID,
+            revokeSharedTokenAfterLostResponse: true
+        )
 
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [BlueprintInstallURLProtocol.self]
@@ -49,9 +54,23 @@ struct BlueprintInstallationImportTests {
                 persistence: persistence,
                 library: library,
                 intents: BlueprintInstallationIntentStore(directoryURL: intentDirectory),
+                setupDrafts: setupDrafts,
                 transport: transport
             )
-            let input = weddingInstallInput()
+            let shareToken = String(repeating: "f6", count: 32)
+            let input = weddingInstallInput(shareToken: shareToken)
+            let catalogURL = try #require(Bundle(for: BlueprintInstallURLProtocol.self)
+                .url(forResource: "wedding-catalog.v1", withExtension: "json"))
+            let entry = try #require(JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: catalogURL)).entries.first)
+            try setupDrafts.save(BlueprintSetupDraft(
+                ownerUserID: ownerID, entry: entry, requestID: input.requestID,
+                eventName: input.mainEvent.name, startsAt: input.mainEvent.startsAt,
+                timeZoneIdentifier: input.mainEvent.timeZone,
+                selectedChildren: Set(input.selectedChildren.map(\.key)),
+                selectedIdeas: Set(input.selectedIdeaKeys),
+                confirmedDates: Dictionary(uniqueKeysWithValues: input.selectedChildren.map { ($0.key, $0.startsAt) }),
+                shareToken: shareToken
+            ))
 
             do {
                 _ = try await coordinator.install(input, ownerUserID: ownerID)
@@ -65,7 +84,10 @@ struct BlueprintInstallationImportTests {
             let pendingIntent = try #require(persistedIntents.first)
             let bodyText = try #require(String(data: pendingIntent.requestBody, encoding: .utf8))
             #expect(bodyText.hasPrefix("{\"capabilities\""))
+            #expect((try JSONSerialization.jsonObject(with: pendingIntent.requestBody) as? [String: Any])?["shareToken"] as? String == shareToken)
+            #expect(BlueprintInstallURLProtocol.lastInstallBody == pendingIntent.requestBody)
             #expect(persistedIntents.count == 1)
+            #expect(try setupDrafts.load(ownerUserID: ownerID, catalogKey: "wedding", shareToken: shareToken)?.requestID == input.requestID)
 
             // A new coordinator/store instance represents relaunch. The receipt
             // lets it recover without a second POST, then normal bootstrap owns
@@ -75,6 +97,7 @@ struct BlueprintInstallationImportTests {
                 persistence: persistence,
                 library: library,
                 intents: BlueprintInstallationIntentStore(directoryURL: intentDirectory),
+                setupDrafts: setupDrafts,
                 transport: transport
             )
             let imported = try await relaunched.resume(pendingIntent)
@@ -102,8 +125,11 @@ struct BlueprintInstallationImportTests {
             #expect(library.selectedWorkspaceID == fixtureArchive.mainEventID)
             #expect(try BlueprintInstallationIntentStore(directoryURL: intentDirectory)
                 .pending(ownerUserID: ownerID).isEmpty)
+            #expect(try setupDrafts.load(ownerUserID: ownerID, catalogKey: "wedding", shareToken: shareToken) == nil)
+            #expect(try setupDrafts.all(ownerUserID: ownerID).isEmpty)
             #expect(try ModelContext(persistence.container).fetch(FetchDescriptor<PendingMutation>()).isEmpty)
             #expect(BlueprintInstallURLProtocol.installRequestCount == 1)
+            #expect(BlueprintInstallURLProtocol.lastInstallBody == pendingIntent.requestBody)
 
             // Merely opening or saving the imported plan must not synthesize
             // decisions or an outbox edit before the user changes anything.
@@ -264,6 +290,18 @@ struct BlueprintInstallationImportTests {
         let intentDirectory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: intentDirectory) }
         let input = weddingInstallInput()
+        let setupDrafts = BlueprintSetupDraftStore(directoryURL: intentDirectory.appending(path: "drafts"))
+        let catalogURL = try #require(Bundle(for: BlueprintInstallURLProtocol.self)
+            .url(forResource: "wedding-catalog.v1", withExtension: "json"))
+        let entry = try #require(JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: catalogURL)).entries.first)
+        try setupDrafts.save(BlueprintSetupDraft(
+            ownerUserID: ownerID, entry: entry, requestID: input.requestID,
+            eventName: input.mainEvent.name, startsAt: input.mainEvent.startsAt,
+            timeZoneIdentifier: input.mainEvent.timeZone,
+            selectedChildren: Set(input.selectedChildren.map(\.key)),
+            selectedIdeas: Set(input.selectedIdeaKeys),
+            confirmedDates: Dictionary(uniqueKeysWithValues: input.selectedChildren.map { ($0.key, $0.startsAt) })
+        ))
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let store = BlueprintInstallationIntentStore(directoryURL: intentDirectory)
@@ -287,6 +325,7 @@ struct BlueprintInstallationImportTests {
             persistence: persistence,
             library: library,
             intents: store,
+            setupDrafts: setupDrafts,
             transport: transport
         )
 
@@ -302,6 +341,7 @@ struct BlueprintInstallationImportTests {
         }
         #expect(library.workspaces.isEmpty)
         #expect(try store.pending(ownerUserID: ownerID).count == 1)
+        #expect(try setupDrafts.load(ownerUserID: ownerID, catalogKey: "wedding")?.requestID == input.requestID)
     }
 
     @Test("Two private Cottage copies bootstrap independently and keep edits scoped across recovery")
@@ -494,7 +534,7 @@ struct BlueprintInstallationImportTests {
         return try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
     }
 
-    private func weddingInstallInput() -> BlueprintInstallInput {
+    private func weddingInstallInput(shareToken: String? = nil) -> BlueprintInstallInput {
         BlueprintInstallInput(
             requestID: UUID(uuidString: "af08d534-8c90-4c89-bacc-0f5820bb4d0c")!,
             catalogKey: "wedding",
@@ -510,7 +550,8 @@ struct BlueprintInstallationImportTests {
                 .init(key: "ceremony", startsAt: ISO8601DateFormatter().date(from: "2027-06-15T19:00:00Z")!)
             ],
             selectedIdeaKeys: ["venue", "food", "photography"],
-            capabilities: SyncClientCapabilities.blueprintFeatures
+            capabilities: SyncClientCapabilities.blueprintFeatures,
+            shareToken: shareToken
         )
     }
 
@@ -551,6 +592,8 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
     private static var committedRequestIDs = Set<String>()
     private static var initialStatus: String?
     private static var loseInstallResponse = true
+    private static var revokeSharedTokenAfterLostResponse = false
+    private static var sharedTokenRevoked = false
     private static var holdBootstrapResponse = false
     private static var bootstrapRequestStartedValue = false
     static let releaseBootstrapResponse = DispatchSemaphore(value: 0)
@@ -595,6 +638,7 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
         bootstrapOnlyCommittedInstallations: Bool = false,
         holdBootstrapResponse: Bool = false,
         loseInstallResponse: Bool = true,
+        revokeSharedTokenAfterLostResponse: Bool = false,
         installResultOverrides: [String: [String: Any]] = [:],
         expectedContentHashes: [String: String] = [:]
     ) {
@@ -609,6 +653,8 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
         committedRequestIDs = []
         self.initialStatus = initialStatus
         self.loseInstallResponse = loseInstallResponse
+        self.revokeSharedTokenAfterLostResponse = revokeSharedTokenAfterLostResponse
+        sharedTokenRevoked = false
         self.holdBootstrapResponse = holdBootstrapResponse
         bootstrapRequestStartedValue = false
         _ = releaseBootstrapResponse.wait(timeout: .now())
@@ -659,21 +705,31 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
                 #expect(bodyRequestID == idempotencyKey)
                 #expect(body["capabilities"] as? [String] == SyncClientCapabilities.blueprintFeatures)
                 Self.lock.lock()
-                Self.installCount += 1
-                Self.committedRequestIDs.insert(bodyRequestID)
-                Self.lastInstallRequestIDValue = idempotencyKey
-                Self.lastInstallBodyValue = bodyBytes
-                let loseResponse = Self.loseInstallResponse
-                let expectedHash = Self.expectedContentHashes[bodyRequestID]
-                let installResult = Self.installResultOverrides[bodyRequestID] ?? Self.installResultObject()
-                Self.lock.unlock()
-                #expect(body["contentHash"] as? String == (expectedHash ?? "24518a2d4795d62a7d0ed5d349cd0bb7ed7a2883a7dec7bf9c522a8e5119878a"))
-                if loseResponse {
-                    client?.urlProtocol(self, didFailWithError: URLError(.networkConnectionLost))
-                    return
+                let revoked = Self.sharedTokenRevoked && body["shareToken"] != nil
+                if revoked {
+                    status = 404
+                    payload = ["error": "SHARED_LINK_REVOKED"]
+                    Self.lock.unlock()
+                } else {
+                    Self.installCount += 1
+                    Self.committedRequestIDs.insert(bodyRequestID)
+                    Self.lastInstallRequestIDValue = idempotencyKey
+                    Self.lastInstallBodyValue = bodyBytes
+                    let loseResponse = Self.loseInstallResponse
+                    if loseResponse, body["shareToken"] != nil, Self.revokeSharedTokenAfterLostResponse {
+                        Self.sharedTokenRevoked = true
+                    }
+                    let expectedHash = Self.expectedContentHashes[bodyRequestID]
+                    let installResult = Self.installResultOverrides[bodyRequestID] ?? Self.installResultObject()
+                    Self.lock.unlock()
+                    #expect(body["contentHash"] as? String == (expectedHash ?? "24518a2d4795d62a7d0ed5d349cd0bb7ed7a2883a7dec7bf9c522a8e5119878a"))
+                    if loseResponse {
+                        client?.urlProtocol(self, didFailWithError: URLError(.networkConnectionLost))
+                        return
+                    }
+                    status = 200
+                    payload = installResult
                 }
-                status = 200
-                payload = installResult
             } else if url.path == "/api/sync/bootstrap" {
                 Self.lock.lock()
                 let archives = [Self.archiveBytes] + Self.additionalArchiveBytes

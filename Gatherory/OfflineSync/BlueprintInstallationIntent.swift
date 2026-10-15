@@ -108,6 +108,7 @@ final class BlueprintInstallationCoordinator {
     private let persistence: WorkspacePersistenceController
     private let library: WorkspaceLibrary
     private let intents: BlueprintInstallationIntentStore
+    private let setupDrafts: BlueprintSetupDraftStore
     private let boundOwnerUserID: String?
     private let boundAccountGeneration: UUID
     private let encoder: JSONEncoder
@@ -118,12 +119,14 @@ final class BlueprintInstallationCoordinator {
         persistence: WorkspacePersistenceController,
         library: WorkspaceLibrary,
         intents: BlueprintInstallationIntentStore? = nil,
+        setupDrafts: BlueprintSetupDraftStore? = nil,
         transport: PostgresSyncTransport? = nil
     ) {
         self.transport = transport ?? PostgresSyncTransport(baseURL: baseURL)
         self.persistence = persistence
         self.library = library
         self.intents = intents ?? BlueprintInstallationIntentStore()
+        self.setupDrafts = setupDrafts ?? BlueprintSetupDraftStore()
         self.boundOwnerUserID = persistence.activeUserID
         self.boundAccountGeneration = persistence.activeUserGeneration
         let encoder = JSONEncoder()
@@ -140,6 +143,14 @@ final class BlueprintInstallationCoordinator {
         let response = try await transport.blueprintCatalog()
         try requireBoundAccount()
         return response
+    }
+
+    func sharedBlueprint(token: String) async throws -> BlueprintCatalogEntry {
+        try requireBoundAccount()
+        let entry = try await transport.sharedBlueprint(token: token)
+        try requireBoundAccount()
+        guard entry.definition.supportsCurrentSchema else { throw CloudSyncFailure.invalidResponse }
+        return entry
     }
 
     func schedule(_ input: BlueprintScheduleInput) async throws -> BlueprintScheduleResponse {
@@ -175,6 +186,7 @@ final class BlueprintInstallationCoordinator {
     }
 
     func pendingIntentsForActiveAccount() throws -> [BlueprintInstallationIntent] {
+        try requireBoundAccount()
         guard let ownerUserID = persistence.activeUserID else { return [] }
         return try intents.pending(ownerUserID: ownerUserID)
     }
@@ -239,6 +251,16 @@ final class BlueprintInstallationCoordinator {
             throw BlueprintInstallationFailure.workspaceNotInBootstrap
         }
         library.open(workspace)
+        // Clear only the draft behind this exact request after durable import.
+        // If cleanup fails, retain the install intent so retry recovers the same
+        // receipt rather than offering another creation from the old draft.
+        let source = try decoder.decode(SetupDraftSource.self, from: intent.requestBody)
+        try setupDrafts.remove(
+            ownerUserID: intent.ownerUserID,
+            catalogKey: source.catalogKey,
+            requestID: intent.requestID,
+            shareToken: source.shareToken
+        )
         try intents.complete(ownerUserID: intent.ownerUserID, requestID: intent.requestID)
         return workspace
     }
@@ -248,6 +270,11 @@ final class BlueprintInstallationCoordinator {
               persistence.activeUserGeneration == generation else {
             throw CancellationError()
         }
+    }
+
+    private struct SetupDraftSource: Decodable {
+        let catalogKey: String
+        let shareToken: String?
     }
 
     private func requireBoundAccount() throws {

@@ -27,7 +27,7 @@ nonisolated struct BlueprintCatalogResponse: Decodable, Sendable {
     let entries: [BlueprintCatalogEntry]
 }
 
-nonisolated struct BlueprintCatalogEntry: Decodable, Identifiable, Sendable {
+nonisolated struct BlueprintCatalogEntry: Codable, Identifiable, Sendable {
     let catalogKey: String
     let revision: Int
     let contentHash: String
@@ -38,7 +38,7 @@ nonisolated struct BlueprintCatalogEntry: Decodable, Identifiable, Sendable {
     var id: String { "\(catalogKey):\(revision)" }
 }
 
-nonisolated struct BlueprintDiscoveryMetadata: Decodable, Sendable {
+nonisolated struct BlueprintDiscoveryMetadata: Codable, Sendable {
     let categories: [String]
     let tags: [String]
     let summary: String
@@ -75,6 +75,7 @@ nonisolated struct BlueprintScheduleInput: Encodable, Sendable {
     let revision: Int
     let contentHash: String
     let mainEvent: MainEvent
+    var shareToken: String? = nil
 }
 
 nonisolated struct BlueprintScheduleResponse: Decodable, Sendable {
@@ -180,6 +181,7 @@ nonisolated struct BlueprintInstallInput: Encodable, Sendable {
     let selectedChildren: [SelectedChild]
     let selectedIdeaKeys: [String]
     let capabilities: [String]
+    var shareToken: String? = nil
 
     private enum CodingKeys: String, CodingKey {
         case requestID = "requestId"
@@ -190,6 +192,7 @@ nonisolated struct BlueprintInstallInput: Encodable, Sendable {
         case selectedChildren
         case selectedIdeaKeys
         case capabilities
+        case shareToken
     }
 }
 

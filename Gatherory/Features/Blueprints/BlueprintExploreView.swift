@@ -7,7 +7,6 @@ struct BlueprintExploreView: View {
     @State private var query = ""
     @FocusState private var isFocused: Bool
     @State private var setupRoute: BlueprintSetupRoute?
-    @State private var hasPendingInstallation = false
 
     init(ownerID: String) {
         _model = State(initialValue: BlueprintDiscoveryModel(ownerID: ownerID))
@@ -43,13 +42,6 @@ struct BlueprintExploreView: View {
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: ExploreCopy.search)
         .searchFocused($isFocused)
         .toolbar {
-            if hasPendingInstallation {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(BlueprintCopy.retryInstall, systemImage: "arrow.clockwise") {
-                        setupRoute = BlueprintSetupRoute(catalogKey: nil)
-                    }
-                }
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 AccountToolbarButton(avatarSize: 44)
             }
@@ -66,7 +58,9 @@ struct BlueprintExploreView: View {
         }
         .task(id: String(describing: cloudSync.accountOnboardingState)) { await load() }
         .sheet(item: $setupRoute, onDismiss: { Task { await load() } }) { route in
-            NavigationStack { BlueprintSetupView(catalogKey: route.catalogKey) }
+            NavigationStack {
+                BlueprintSetupView(catalogKey: route.catalogKey, sharedToken: route.shareToken)
+            }
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -161,8 +155,6 @@ struct BlueprintExploreView: View {
             guard let coordinator = cloudSync.makeBlueprintInstallationCoordinator() else {
                 throw CloudSyncFailure.invalidSession
             }
-            // Recovery stays reachable even when the catalog is unavailable or retired.
-            hasPendingInstallation = !(try coordinator.pendingIntentsForActiveAccount()).isEmpty
             return try await coordinator.catalog()
         }
     }
@@ -170,7 +162,13 @@ struct BlueprintExploreView: View {
 
 private struct BlueprintSetupRoute: Identifiable {
     let catalogKey: String?
-    var id: String { catalogKey ?? "pending-installation" }
+    let shareToken: String?
+    let id = UUID()
+
+    init(catalogKey: String?, shareToken: String? = nil) {
+        self.catalogKey = catalogKey
+        self.shareToken = shareToken
+    }
 }
 
 private extension BlueprintBrowseCategory {

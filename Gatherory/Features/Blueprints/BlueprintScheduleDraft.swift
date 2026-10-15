@@ -12,6 +12,10 @@ struct BlueprintScheduleDraft {
     private(set) var isRefreshing = false
     private(set) var refreshFailed = false
 
+    init(confirmedDates: [String: Date] = [:]) {
+        self.confirmedDates = confirmedDates
+    }
+
     /// Seeds the manual editor without confirming or changing any saved choice.
     /// Ambiguous clock-change times still require choosing an occurrence; never
     /// silently select the first candidate. Unavailable/stale suggestions fall

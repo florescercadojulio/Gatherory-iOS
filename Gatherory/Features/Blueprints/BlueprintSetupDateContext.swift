@@ -6,6 +6,11 @@ struct BlueprintSetupDateContext {
     var startsAt: Date
     private(set) var timeZoneIdentifier: String
 
+    init(startsAt: Date, timeZone: TimeZone) {
+        self.startsAt = startsAt
+        timeZoneIdentifier = timeZone.identifier
+    }
+
     init(now: Date = .now, timeZone: TimeZone = .current, calendar: Calendar = .current) {
         var calendar = calendar
         calendar.timeZone = timeZone

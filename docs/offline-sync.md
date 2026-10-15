@@ -185,9 +185,32 @@ single, unambiguous suggestion, otherwise the main event date. Opening/cancellin
 does not confirm anything, and an asynchronous refresh cannot replace the open
 picker's draft. Ambiguous clock-change occurrences still require an explicit
 choice; the picker does not silently pick the first candidate.
-Drafts remain view-local; this does not add offline catalog caching or change
-the existing durable-install, bootstrap, or ordinary sync transactions. See web
-roadmap `08-date-aware-setup.md` for DST behavior and test coverage.
+Unfinished setup now saves in a separate versioned `BlueprintSetupDraftStore`
+under Application Support, keyed by canonical account ID and catalog key. It
+retains the exact source revision/hash and definition, request UUID, untrimmed
+event name, main instant, time zone, selections (including deliberately empty
+sets), and only explicitly confirmed child dates. Edits save atomically; a write
+failure is visible and blocks review until retry succeeds. Close/background save
+the current setup, while cancellation of an unconfirmed manual picker discards
+only that picker's temporary value.
+
+The Workspaces **+ → Resume Setup** menu works without a live catalog. Search
+keeps its discovery flow without a resume banner. Restoring uses the
+saved source rather than merging a newer publication into edited selections;
+suggestions refresh separately and never overwrite confirmations. Preview and
+installation still require connectivity and authoritative server access checks.
+**Start over** requires confirmation, discards only that account/template draft,
+then fetches the latest available source. These drafts are device-local and
+survive sign-out for the same account; they are not cross-device backup.
+
+Pending installation intents take priority over setup drafts. The reviewed
+request keeps the draft's UUID; after canonical bootstrap import, the coordinator
+removes only a draft with that same request UUID, then removes the install
+intent. A failed response/import/cleanup retains recovery through the existing
+receipt. Account changes reset view state and reject stale callbacks. No draft
+write creates a workspace or outbox mutation, and existing bootstrap/outbox/sync
+transaction boundaries remain unchanged. See web roadmaps `08-date-aware-setup.md`
+and `12-resumable-setup.md` for behavior and test coverage.
 
 Blueprint setup captures the device clock and system time zone together when
 opened. It does not request GPS access just to determine local time. The explicit
@@ -197,6 +220,47 @@ changes never silently overwrite an open draft. Time-zone picker options are
 cached and include the selected system alias even if it is absent from the known
 identifier list. Coordinate access remains an explicit, permission-gated action
 in the event location editor, with manual search available when denied.
+
+Long-pressing a card in **Workspaces → Share Template** opens native content
+selection, name entry, review and **Create & Share**. The source is the card's
+root event (the accessible child for a scoped card), not its last selected event.
+The action is also available to assistive technologies and is hidden without
+event-management permission. All authorized supported content and idea notes
+start selected; authors can deselect them before review. Server review shows
+the exact reusable content. Source management and ownership are checked
+independently. Save To is removed: on creation the server resolves/provisions the
+actor's personal template owner without changing the active workspace or source
+membership. Review explicitly discloses publication to Search. New requests send
+`discoverable: true`, with no destination organization ID; source reads still make
+no writes. Existing private/unlisted templates remain private.
+
+Capture/save and publication share a server transaction. Native creation retains
+the exact reviewed request UUID/body in sheet memory after an uncertain response;
+retry recovers the same first publication rather than creating another template.
+Source conflicts require a fresh review. Linking is a separate step; a failed
+link response leaves the template created and requires explicit successful link
+refresh before replacement. Ordinary event edits, outbox writes, installation
+intents and bootstrap transactions remain unchanged. Capture observes the server
+snapshot; unsynced local edits arrive through normal sync, without an implicit
+flush. Capture state clears on dismissal/account changes and cannot continue
+through late callbacks. Persistent capture drafts are outside this slice.
+
+The card's **Manage Links** sheet uses authenticated, source-event-scoped
+requests to list owned captured templates and create/list/revoke published links.
+Owning an installed event does not grant control over the original template.
+Link controls remain available after an event becomes read-only while the
+host/manager grant remains, without re-enabling editing of that source event.
+Empty/draft states offer native creation; advanced web editing remains optional.
+Owners can list or withdraw a published version through Manage Links. Visibility
+changes update only after acknowledgment and use the same account/permission
+guards. Search withdrawal and link revocation are independent; neither changes
+installed copies.
+Publication is explicit; event edits never update installed copies or publish
+automatically. Playlist capture remains unsupported. These operations are
+online-only and never become pending sync mutations.
+Account changes invalidate in-flight responses and clear transient generated
+URLs. Failed revocations remain unconfirmed; uncertain creation requires an
+explicit successful refresh before another creation attempt.
 
 Birthday Party and Thanksgiving now use that same catalog/setup/install path.
 `CuratedBlueprintTests` imports their server-produced archives and verifies

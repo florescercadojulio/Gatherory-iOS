@@ -13,6 +13,7 @@ struct GatheroryLaunchContainer: View {
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(WorkspacePersistenceController.self) private var persistence
     @Environment(InvitationRouter.self) private var invitations
+    @Environment(BlueprintSharedTemplateRouter.self) private var sharedBlueprintLinks
     @Environment(GuestInvitationStore.self) private var guestInvitations
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
@@ -31,7 +32,25 @@ struct GatheroryLaunchContainer: View {
         @Bindable var authentication = authentication
         ZStack {
             Group {
-                if let token = invitations.pendingToken {
+                if let token = sharedBlueprintLinks.pendingToken {
+                    if !authentication.isAuthenticated {
+                        NavigationStack {
+                            AuthenticationView()
+                                .toolbar {
+                                    ToolbarItem(placement: .cancellationAction) {
+                                        Button("Back", systemImage: "chevron.left") { sharedBlueprintLinks.dismiss() }
+                                    }
+                                }
+                        }
+                    } else if preparedAccountID != authentication.currentUser?.id {
+                        AccountOnboardingLoadingView()
+                    } else {
+                        NavigationStack {
+                            BlueprintSetupView(catalogKey: nil, sharedToken: token)
+                                .id("shared-blueprint-\(token)-\(authentication.currentUser?.id ?? "signed-out")")
+                        }
+                    }
+                } else if let token = invitations.pendingToken {
                     if invitations.requiresAuthentication && !authentication.isAuthenticated {
                         NavigationStack {
                             AuthenticationView()
