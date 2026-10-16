@@ -192,3 +192,41 @@ explicitly selected environment, verify:
 Live provider calls, destructive account deletion, production database changes,
 and permissions/RBAC changes were not part of this verification pass. Historical
 deployment notes in other documents are not evidence of the current deployed state.
+
+## Shared album redesign — October 16, 2026
+
+The Home → event card → Shared Album experience now uses adaptive masonry,
+contributor attribution, full-photo viewing/zoom, and selection for saving to
+Photos. See [the album design and behavior](shared-album.md).
+
+- Added **29 native tests** for geometry/EXIF orientation, selection, viewer state,
+  and add-only Photos saving. Existing uploader/event deletion regression tests
+  remain in the native suite. The final full `GatheroryTests` run passed
+  **510 tests in 71 suites**, with zero failures.
+- **Four album UI tests passed**: three iPhone tests cover direct preview routing,
+  viewer dismissal, empty state, and multiselect controls in light, dark, and
+  accessibility XXXL text; the iPad test confirms four nonzero photo cards in
+  more than two columns. The saved app appearance is explicitly set in UI
+  fixtures, separately from the system appearance. Screenshots were inspected
+  for the gallery, viewer, selection state, and iPad layout.
+- The final simulator build passed with the iOS 26 minimum. Deployment-target
+  verification passed for all app/test targets and configurations. English and
+  Spanish localization coverage passed for all **1,152 strings**.
+- Test-driven UI checks caught and resolved first-open preview routing, photo
+  card accessibility exposure, and repeated image-loading lifecycle updates
+  during an animated viewer transition. Only the selected viewer page retains
+  its decoded image; layout metadata is cached across selection changes.
+
+Final result bundles:
+
+- Native: `/tmp/gatherory-album-native-final.xcresult`
+- iPhone routing, empty state, and selection: `/tmp/gatherory-album-ui-complete.xcresult`
+- Final saved-appearance/large-text matrix: `/tmp/gatherory-album-appearance-ui.xcresult`
+- iPad columns: `/tmp/gatherory-album-ipad-verified.xcresult`
+
+Xcode 27.0 and the iOS/iPadOS 27 simulator runtime were used. The iOS 26 minimum
+was compiled and checked, but no iOS 26 runtime/device was available. PhotoKit
+writes and authorization outcomes were injected in native tests; UI tests did
+not add fixture images to the actual Photos library. Before release, verify
+real-device grant/denial/Settings recovery and saving, pinch/double-tap/swipe
+interaction, and iPad multitasking resizing. Live backend behavior and uploads were not verified in this pass.

@@ -4,6 +4,7 @@ struct BlueprintSetupView: View {
     // nil opens recovery only; it must never silently choose a different starter.
     let catalogKey: String?
     let sharedToken: String?
+    let returnsToPreview: Bool
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(BlueprintSharedTemplateRouter.self) private var sharedBlueprintLinks
     @Environment(\.currentUserAccount) private var account
@@ -41,9 +42,10 @@ struct BlueprintSetupView: View {
 
     private let draftStore = BlueprintSetupDraftStore()
 
-    init(catalogKey: String?, sharedToken: String? = nil) {
+    init(catalogKey: String?, sharedToken: String? = nil, returnsToPreview: Bool = false) {
         self.catalogKey = catalogKey
         self.sharedToken = sharedToken
+        self.returnsToPreview = returnsToPreview
     }
 
     private struct ScheduleRequest {
@@ -346,7 +348,11 @@ struct BlueprintSetupView: View {
     }
 
     private func closeSetup() {
-        if sharedToken != nil {
+        if BlueprintSetupExitPolicy.dismissesSharedLink(
+            hasSharedToken: sharedToken != nil,
+            returnsToPreview: returnsToPreview,
+            didComplete: draftCompleted
+        ) {
             sharedBlueprintLinks.dismiss()
         } else {
             dismiss()

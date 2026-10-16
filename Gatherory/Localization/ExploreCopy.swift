@@ -16,5 +16,5 @@ enum ExploreCopy {
     static var checkBack: String { String(localized: "explore.checkBack", defaultValue: "There aren’t any blueprints in this category yet. Explore another category or start a blank workspace.") }
     static var noRecents: String { String(localized: "explore.noRecents", defaultValue: "No Recently Viewed Blueprints") }
     static var recentsHint: String { String(localized: "explore.recentsHint", defaultValue: "Blueprints you open will appear here. Search to find your first one.") }
-    static var openHint: String { String(localized: "explore.openHint", defaultValue: "Opens the blueprint setup and preview. Nothing is created until you confirm.") }
+    static var openHint: String { String(localized: "explore.openHint", defaultValue: "Explore the blueprint’s activities, ideas, and guidance. Nothing is created until you confirm.") }
 }

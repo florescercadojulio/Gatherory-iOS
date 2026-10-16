@@ -407,6 +407,7 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint("Opens event details")
+            .accessibilityIdentifier(reference == .main ? "home.event.main" : "home.event.child")
             .accessibilityLabel(
                 "\(title(for: reference)), \(date(for: reference).formatted(date: .long, time: .omitted)), " +
                 (location(for: reference).map { "at \($0.formatted). " } ?? "") +

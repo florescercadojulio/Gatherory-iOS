@@ -433,31 +433,26 @@ struct IdeaSummaryCard<Footer: View>: View {
     @ViewBuilder var footer: () -> Footer
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: AppTheme.Spacing.compact) {
-                Label(idea.category.title, systemImage: idea.category.symbol)
-                    .font(.caption.weight(.semibold))
-
-                Spacer(minLength: AppTheme.Spacing.compact)
-
-                if let cost = idea.estimatedCost {
-                    Text(cost, format: .currency(code: currencyCode).precision(.fractionLength(0)))
-                        .font(.subheadline.weight(.semibold))
-                }
+        IdeaSummaryContent(title: idea.title, note: idea.note, category: idea.category) {
+            if let cost = idea.estimatedCost {
+                Text(cost, format: .currency(code: currencyCode).precision(.fractionLength(0)))
+                    .font(.subheadline.weight(.semibold))
             }
+        } footer: {
+            IdeaSummaryCollaboration(idea: idea, teamSummary: teamSummary, footer: footer)
+        }
+    }
 
-            Text(idea.title)
-                .font(.largeTitle.bold())
-                .tracking(-0.7)
-                .fixedSize(horizontal: false, vertical: true)
+}
 
-            if !idea.note.isEmpty {
-                Text(idea.note)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+/// Live-only summary content. Template previews never instantiate this view.
+struct IdeaSummaryCollaboration<Footer: View>: View {
+    let idea: PlanningIdea
+    let teamSummary: TeamResponseSummary
+    @ViewBuilder var footer: () -> Footer
 
+    var body: some View {
+        Group {
             TeamResponseBar(summary: teamSummary, ideaStatus: idea.status, showsTitle: false)
                 .id(idea.id)
 
@@ -469,8 +464,6 @@ struct IdeaSummaryCard<Footer: View>: View {
 
             footer()
         }
-        .padding(AppTheme.Spacing.standard)
-        .ideaContentSurface()
     }
 
 }

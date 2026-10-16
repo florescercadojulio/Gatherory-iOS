@@ -1,6 +1,10 @@
 import Foundation
 
 enum BlueprintCopy {
+    static var savedPreviewExplanation: String { String(localized: "blueprint.savedPreviewExplanation", defaultValue: "Showing your saved template preview. Connect to verify the link and create your event.") }
+    static var previewTitle: String { String(localized: "blueprint.previewTitle", defaultValue: "Template Preview") }
+    static var previewExplanation: String { String(localized: "blueprint.previewExplanation", defaultValue: "Make this plan your own. Choose what to include and confirm dates in setup. Your copy is independent of the original event.") }
+    static var previewDatesExplanation: String { String(localized: "blueprint.previewDatesExplanation", defaultValue: "You’ll choose and confirm dates when setting up your own event.") }
     static var sharedLinkUnavailable: String { String(localized: "blueprint.sharedLinkUnavailable", defaultValue: "This template link is no longer available. Ask the person who shared it for a new link.") }
     static var saveAsTemplate: String { String(localized: "blueprint.saveAsTemplate", defaultValue: "Save as Template") }
     static var captureOnWebHint: String { String(localized: "blueprint.captureOnWebHint", defaultValue: "Choose what to reuse and publish on the web.") }

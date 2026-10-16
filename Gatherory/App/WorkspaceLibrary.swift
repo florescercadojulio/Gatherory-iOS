@@ -112,7 +112,11 @@ extension WorkspaceLibrary {
             workspace.members[hostIndex].profileImageURL = developmentAccount.profileImageURL
         }
 
+#if DEBUG
+        return WorkspaceLibrary(workspaces: SharedAlbumUITestFixtures.applying(to: workspaces))
+#else
         return WorkspaceLibrary(workspaces: workspaces)
+#endif
     }
 }
 

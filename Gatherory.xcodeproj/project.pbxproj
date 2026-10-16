@@ -438,6 +438,7 @@
 				INFOPLIST_KEY_NSAppleMusicUsageDescription = "Find songs for events you're planning together.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Take photos for ideas, gifts, and events you're planning.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Use your current location to set where an event takes place.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save the shared album photos you choose to your photo library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = NO;
@@ -480,6 +481,7 @@
 				INFOPLIST_KEY_NSAppleMusicUsageDescription = "Find songs for events you're planning together.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Take photos for ideas, gifts, and events you're planning.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Use your current location to set where an event takes place.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save the shared album photos you choose to your photo library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = NO;

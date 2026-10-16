@@ -162,9 +162,123 @@ idea, participant, expense, registry, note, and moment tables. The compatibility
 snapshot remains available while the web companion transitions to those
 normalized records.
 
+## Shared albums and event idea names
+
+The invitation album previews up to four photos as a masonry collage with a
+compact gallery/upload footer. Every photo opens directly into the full-screen
+viewer. The album uses two columns on iPhone; iPad adapts from two to six columns
+to match the available window width. Cards retain portrait/landscape proportions
+within readable limits and show the uploader's avatar and tail-truncated name.
+Avatars resolve by authenticated user ID within the event's participants, with
+initials for legacy or departed contributors. Full names remain available to
+VoiceOver. Lazy columns and display-sized ImageIO thumbnails limit image memory;
+the full viewer shows the uncropped image with paging and pinch/double-tap zoom.
+
+Select mode offers individual selection, Select All/Deselect All, a selection
+count, and Save to Photos. Selection is reconciled against currently visible
+photo IDs before export. Saving requests PhotoKit **add-only** access only after
+an explicit save and writes the original stored bytes in one batch transaction.
+Invalid photos or denied access retain the selection; permission denial offers
+Settings recovery. The viewer also supports saving one photo. Library browsing,
+editing, filters, and photo organization remain outside this event experience.
+
+Hide/report controls remain available in the viewer. Guests can browse and save
+accessible event photos; this does not add guest upload or planning permissions.
+Icon controls retain 44-point touch targets and localized accessibility labels.
+Large text adapts the action/footer layout, reduced transparency removes photo
+blur, and VoiceOver exposes selection state, photo navigation, and zoom actions.
+
+Active upload-capable planners can remove their own photo after confirmation.
+The local operation checks the stored photo's owner and exact event, including
+legacy main-event photos with no event ID. Archive removal and the account-scoped
+moment tombstone use the existing persistence/outbox transaction. Server checks
+use the canonical gallery placement and uploader; a trusted first native create
+covers an upload still awaiting media registration. Root-workspace and isolated
+child scopes keep their existing boundaries, receipt replay and management grants.
+
+Event-idea editors now accept an explicit name rather than always regenerating
+the category title. Existing `updateIdea` handling updates the approved linked
+Home event in place and queues the ordinary idea/event mutations; no IDs, dates,
+approval states or sync formats are replaced by a rename.
+
 ## Local development
 
 ### Wedding template installation
+
+Search opens a read-only, invitation-style template preview before setup.
+Query results, recents and category results now use artwork-led masonry tiles
+through the same `MasonryLayout` as workspace ideas (two columns, one at
+accessibility text sizes, with RTL support). Each whole tile is a native zoom
+source, keyed by catalog key/revision **and** its results/recent/category surface
+inside a screen-owned namespace. Reduce Motion retains standard navigation.
+Category results own a separate namespace and preview destination at their own
+navigation level; their tiles never drive the Search screen's preview binding.
+Transient `BlueprintDiscoveryNavigation` snapshots retain the active source mode
+and entry order while a preview is presented: losing search focus cannot swap
+the source grid for categories, and access recording cannot reorder it mid-zoom.
+Returning restores the query/focus before releasing a Search snapshot; category
+navigation does not activate Search. This state is not persisted or synced and
+is recreated with the account-bound Explore view. Shared-link entry is unchanged.
+Tile and main-preview artwork share the same browse-category symbol/palette;
+this does not copy source-event photos or require identical bitmap images.
+Its artwork fills the background, while an opening `IdeaSummaryContent` card
+uses the idea detail's category label, left-aligned title, description, material
+and spacing. Suggested relative timing and saved-preview context sit inside the
+same card rather than floating over artwork. The scroll content respects the
+navigation safe area, with priorities and the first content cards directly below.
+The background starts fully Glurred, including the top edge, and no longer
+depends on scrolling. Reduce Motion keeps this static treatment; Reduce
+Transparency retains the unblurred artwork and opaque card fallback.
+Native iOS 26+ scroll-edge
+effects remain beneath navigation, without an extra black dimmer or painted
+status-band gradient. The artwork extends beneath the floating tab bar.
+Summary and scoped planning guidance precede the content pages. Events use
+horizontal pages of four in a 2×2 grid (two single-column entries at accessibility
+sizes); ideas use horizontally swipeable columns of up to three compact rows.
+The carousel viewports span the screen; scroll-content margins align their
+resting cards with the headings without clipping swipes to an inset container.
+There is no solid light/dark content-section backing: the Glur artwork remains
+visible throughout. Individual cards reuse the idea detail's adaptive material
+surface (including its Reduce Transparency fallback), with semantic card text
+independent of the white artwork headings.
+Grouping preserves authored order, full detail content and audience boundaries.
+Main and sub-event previews share `BlueprintEventPreview`; the read-only event
+projection gives only the main event children. A sub-event shows only its own
+guidance, ideas and relative schedule proposal, never a parent/sibling carousel.
+Opening an idea uses the same `IdeaDetailScreen`, full-height opening layout,
+scroll-driven artwork treatment, material summary and `IdeaCategoryDetailContent`
+renderer as workspace idea details. There are no preview-specific layout or
+blur flags in the idea screen. Full-area static Glur belongs to the surrounding
+main/sub-event template previews, not a special idea-detail presentation.
+The shared card renderer reads display content and optional typed configuration;
+only a real live-idea binding enables external actions, playlist controls, picker
+callbacks or live event tools. A surrounding workspace environment alone cannot
+activate those controls. Current portable templates contain title/category/notes
+but not typed category facts or source media, so their supported content follows
+the same renderer's notes fallback without manufacturing settings or currency.
+The live screen still supplies its existing response controls, metadata, refresh action
+and media; catalog previews supply authored title/category/notes without fake
+votes, authors, a mutable workspace or live-event actions. No source media or
+installation dates are manufactured for browsing.
+Use Template is a compact native trailing
+toolbar action, not a full-width bottom bar. Search and shared links use this
+same presentation, with adaptive content surfaces and accessibility fallbacks.
+`BlueprintPreviewContent` reads only the authorized catalog document and groups
+ideas/guidance under their main event or matching child. Activity and idea
+details show authored content without manufacturing a `PlanningWorkspace`,
+RSVPs, absolute dates, or source-event media. Merely browsing never saves a
+setup draft or installation intent. Use Template opens the existing setup
+sheet, retaining its account isolation, confirmed dates and recovery behavior.
+Shared-link entry now resolves its exact token-pinned publication and uses the
+same preview before setup. It never falls back to a public catalog grant or
+records the bearer token in Search history. A saved account/link-scoped setup
+may supply the preview on network loss; server denials, invalid responses and
+TLS failures do not use that fallback. Reading the saved setup does not change
+its UUID, selections or confirmed dates. Pending installation recovery remains
+available even while resolving or after a link is revoked, through the existing
+account-bound receipt path. Closing setup returns to the preview; successful
+installation closes the shared-link handoff. Workspaces draft recovery retains
+its direct setup entry. No archive, outbox, receipt or transaction format changed.
 
 The first template slice uses authenticated catalog, preview, install and receipt
 status endpoints. `BlueprintInstallationCoordinator` saves the exact reviewed

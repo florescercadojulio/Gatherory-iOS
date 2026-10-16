@@ -23,6 +23,8 @@ lives in `../../gatherory-landing`.
   inside `Gatherory/`: UI copy and permission localization.
 - [Authentication contract](docs/auth-integration.md),
   [offline sync](docs/offline-sync.md), and [release guide](docs/app-store-release.md).
+- [Event shared album](docs/shared-album.md): collage design, viewing, selection,
+  saving to Photos, accessibility, and focused tests.
 
 Some older docs retain early product assumptions. Verify current source and
 configuration before treating their status notes as current implementation.

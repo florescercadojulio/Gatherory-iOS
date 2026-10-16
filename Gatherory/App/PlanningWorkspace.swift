@@ -1384,9 +1384,56 @@ final class PlanningWorkspace {
 
         let contributor = currentViewerMember?.name ?? "Guest"
         eventMoments.insert(
-            EventMoment(eventID: eventID, imageData: imageData, addedBy: contributor),
+            EventMoment(
+                eventID: eventID,
+                imageData: imageData,
+                addedBy: contributor,
+                addedByUserID: viewerUserID ?? currentViewerMember?.userID
+            ),
             at: 0
         )
+    }
+
+    /// Removal is limited to the authenticated uploader and the same active
+    /// planning roles that can upload gallery photos. The server must enforce
+    /// that ownership on the tombstone path as well as this local affordance.
+    func canDeleteEventMoment(_ moment: EventMoment, from reference: EventReference) -> Bool {
+        let scopedEventID: UUID
+        switch reference {
+        case .main:
+            scopedEventID = mainEventID
+        case .subevent(let id):
+            scopedEventID = id
+        case .idea(let ideaID):
+            guard let event = timeline.first(where: { $0.linkedIdeaID == ideaID }) else { return false }
+            scopedEventID = event.id
+        }
+        guard !isInvitationProjection,
+              canAddEventMoments(to: reference),
+              let viewer = currentViewerMember(for: reference),
+              viewer.participantRole != .guest,
+              viewer.planningPermission != .viewOnly,
+              viewer.invitationStatus == .active,
+              let storedMoment = eventMoments.first(where: { $0.id == moment.id }) else { return false }
+
+        return AlbumDeletionPolicy.permitsDeletion(
+            moment: storedMoment,
+            eventID: scopedEventID,
+            viewerUserID: viewerUserID ?? viewer.userID,
+            hasGalleryUploadPermission: true,
+            legacyMainEventID: mainEventID
+        )
+    }
+
+    /// Removes an authorized gallery placement from local state. The existing
+    /// persistence observer saves the archive and its account-scoped outbox
+    /// tombstone in one SwiftData transaction.
+    @discardableResult
+    func deleteEventMoment(_ moment: EventMoment, from reference: EventReference) -> Bool {
+        guard canDeleteEventMoment(moment, from: reference),
+              let index = eventMoments.firstIndex(where: { $0.id == moment.id }) else { return false }
+        eventMoments.remove(at: index)
+        return true
     }
 
     var mediaAttachments: [WorkspaceMediaAttachment] {

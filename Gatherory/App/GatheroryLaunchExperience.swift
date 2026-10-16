@@ -46,7 +46,7 @@ struct GatheroryLaunchContainer: View {
                         AccountOnboardingLoadingView()
                     } else {
                         NavigationStack {
-                            BlueprintSetupView(catalogKey: nil, sharedToken: token)
+                            BlueprintSharedPreviewView(token: token)
                                 .id("shared-blueprint-\(token)-\(authentication.currentUser?.id ?? "signed-out")")
                         }
                     }

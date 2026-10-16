@@ -509,7 +509,7 @@ struct IdeaDetailView: View {
                 if idea.category == .event, idea.eventConfiguration != nil {
                     EventInvitationScreen(reference: .idea(idea.id))
                 } else {
-                    IdeaDetailScreen(idea: idea)
+                    WorkspaceIdeaDetailScreen(idea: idea)
                 }
             } else {
                 ContentUnavailableView("Idea unavailable", systemImage: "sparkles")
@@ -522,7 +522,8 @@ struct IdeaDetailView: View {
         .appClearNavigationBar()
         .toolbar {
             if let idea {
-                if idea.category != .music || workspace.canEditMusicPlaylist(for: idea) {
+                if (idea.category != .music || workspace.canEditMusicPlaylist(for: idea))
+                    && (idea.category != .event || IdeaEventEditing.canEdit(idea, in: workspace)) {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Edit idea", systemImage: "pencil") {
                             editorDetent = .large
@@ -628,73 +629,40 @@ struct IdeaDetailView: View {
     }
 }
 
-private struct IdeaDetailScreen: View {
+private struct WorkspaceIdeaDetailScreen: View {
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync: WorkspaceCloudSyncController?
     @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(MusicPreviewPlayer.self) private var previewPlayer
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @State private var scrollOffset: CGFloat = 0
 
     let idea: PlanningIdea
 
     var body: some View {
-        GeometryReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                    VStack(spacing: 0) {
-                        Spacer(minLength: max(proxy.size.height * 0.42, 260) + 16)
-                        IdeaSummaryCard(
-                            idea: idea,
-                            currencyCode: workspace.currencyCode,
-                            teamSummary: workspace.teamResponseSummary(for: idea)
-                        ) {
-                            if idea.category != .music {
-                                IdeaResponseControls(idea: idea)
-                            }
-                        }
-                    }
-                    .padding(.bottom, AppTheme.Spacing.standard)
-                    .frame(minHeight: proxy.size.height, alignment: .bottom)
-                    IdeaCategoryDetailContent(idea: idea)
-                    metadata
+        IdeaDetailScreen(content: IdeaDetailContent(idea: idea, currencyCode: workspace.currencyCode)) {
+            if let cost = idea.estimatedCost {
+                Text(cost, format: .currency(code: workspace.currencyCode).precision(.fractionLength(0)))
+                    .font(.subheadline.weight(.semibold))
+            }
+        } footer: {
+            IdeaSummaryCollaboration(idea: idea, teamSummary: workspace.teamResponseSummary(for: idea)) {
+                if idea.category != .music {
+                    IdeaResponseControls(idea: idea)
                 }
-                .padding(.horizontal, AppTheme.Layout.screenHorizontal)
-                .padding(.bottom, AppTheme.Layout.screenBottom)
-                .frame(minHeight: proxy.size.height, alignment: .bottom)
             }
-            .scrollIndicators(.hidden)
-            .refreshable { await cloudSync?.refreshCollaboration() }
-            .appSoftScrollEdges()
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                max(geometry.contentOffset.y + geometry.contentInsets.top, 0)
-            } action: { _, newOffset in
-                scrollOffset = newOffset
-            }
-            .background {
-                ZStack {
-                    backgroundArtwork
-                        .scaleEffect(1 + (0.06 * activeBlurProgress))
-                        .blur(radius: reduceTransparency ? 0 : 38 * activeBlurProgress, opaque: true)
-                        .clipped()
-                    readingScrim
-                }
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-            }
+        } details: {
+            IdeaCategoryDetailContent(
+                idea: IdeaDetailContent(idea: idea, currencyCode: workspace.currencyCode),
+                liveIdea: idea
+            )
+            metadata
+        } artwork: {
+            backgroundArtwork
         }
+        .refreshable { await cloudSync?.refreshCollaboration() }
         .onDisappear {
             previewPlayer.stop()
         }
-    }
-
-    private var blurProgress: CGFloat {
-        min(max(scrollOffset / 220, 0), 1)
-    }
-
-    private var activeBlurProgress: CGFloat {
-        reduceMotion ? 0 : blurProgress
     }
 
     @ViewBuilder
@@ -724,20 +692,6 @@ private struct IdeaDetailScreen: View {
             }
         }
         .ignoresSafeArea()
-    }
-
-    private var readingScrim: some View {
-        LinearGradient(
-            stops: [
-                .init(color: .clear, location: 0),
-                .init(color: .black.opacity(0.18 + 0.18 * activeBlurProgress), location: 0.55),
-                .init(color: .black.opacity(reduceTransparency ? 0.88 : 0.64), location: 1)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
     }
 
     private var metadata: some View {
@@ -802,47 +756,72 @@ private struct IdeaDetailScreen: View {
     }
 }
 
-private struct IdeaCategoryDetailContent: View {
-    @Environment(PlanningWorkspace.self) private var workspace
+struct IdeaCategoryDetailContent: View {
+    @Environment(PlanningWorkspace.self) private var workspace: PlanningWorkspace?
     @State private var isPickingMusic = false
     @State private var pickedSongs: [Song] = []
 
-    let idea: PlanningIdea
+    let idea: IdeaDetailContent
+    var liveIdea: PlanningIdea? = nil
+
+    // Display content alone never activates live controls, even when this view
+    // inherits a workspace environment from the surrounding app.
+    var showsLiveControls: Bool { liveIdea != nil }
 
     private var canEditMusicPlaylist: Bool {
-        workspace.canEditMusicPlaylist(for: idea)
+        guard let workspace, let liveIdea else { return false }
+        return workspace.canEditMusicPlaylist(for: liveIdea)
     }
 
     var body: some View {
+        if showsLiveControls {
+            cardContent
+                .musicPickerCompatible(
+                    isPresented: $isPickingMusic,
+                    title: Text("Add to Playlist"),
+                    selection: $pickedSongs,
+                    onLegacySelection: appendPickedTrack
+                )
+                .onChange(of: pickedSongs) { _, songs in
+                    appendPickedSongs(songs)
+                }
+        } else {
+            cardContent
+        }
+    }
+
+    private var cardContent: some View {
         Group {
             switch idea.category {
             case .link:
-                if let configuration = idea.linkConfiguration {
+                if case let .link(configuration)? = idea.configuration {
                     linkContent(configuration)
                 } else {
                     genericContent
                 }
 
             case .event:
-                if let configuration = idea.eventConfiguration {
-                    EventIdeaDetailCard(idea: idea, configuration: configuration)
+                if case let .event(configuration)? = idea.configuration, let liveIdea {
+                    EventIdeaDetailCard(idea: liveIdea, configuration: configuration)
                 } else {
                     genericContent
                 }
 
         case .registry:
-            if let configuration = idea.registryConfiguration {
+            if case let .registry(configuration)? = idea.configuration {
                 configurationContent(
                     primaryTitle: "Registry Category",
                     primaryValue: configuration.category.title,
                     primarySymbol: configuration.category.symbol,
                     facts: [
-                        configuration.price.map {
-                            IdeaDetailFact(
-                                title: "Price",
-                                value: $0.formatted(.currency(code: workspace.currencyCode)),
-                                symbol: "tag.fill"
-                            )
+                        configuration.price.flatMap { price in
+                            idea.currencyCode.map { currencyCode in
+                                IdeaDetailFact(
+                                    title: "Price",
+                                    value: price.formatted(.currency(code: currencyCode)),
+                                    symbol: "tag.fill"
+                                )
+                            }
                         },
                         IdeaDetailFact(
                             title: "Quantity",
@@ -856,7 +835,7 @@ private struct IdeaCategoryDetailContent: View {
             }
 
         case .venue:
-            if let configuration = idea.venueConfiguration {
+            if case let .venue(configuration)? = idea.configuration {
                 configurationContent(
                     primaryTitle: "Setting",
                     primaryValue: configuration.setting.title,
@@ -871,21 +850,21 @@ private struct IdeaCategoryDetailContent: View {
             }
 
         case .attire:
-            if let configuration = idea.attireConfiguration {
+            if case let .attire(configuration)? = idea.configuration {
                 attireContent(configuration)
             } else {
                 genericContent
             }
 
         case .food:
-            if let configuration = idea.foodConfiguration {
+            if case let .food(configuration)? = idea.configuration {
                 foodContent(configuration)
             } else {
                 genericContent
             }
 
         case .flowers:
-            if let configuration = idea.flowerConfiguration {
+            if case let .flowers(configuration)? = idea.configuration {
                 configurationContent(
                     primaryTitle: "Floral Focus",
                     primaryValue: configuration.focus.title,
@@ -899,7 +878,7 @@ private struct IdeaCategoryDetailContent: View {
             }
 
         case .photography:
-            if let configuration = idea.photographyConfiguration {
+            if case let .photography(configuration)? = idea.configuration {
                 configurationContent(
                     primaryTitle: "Photography Style",
                     primaryValue: configuration.style.title,
@@ -914,10 +893,16 @@ private struct IdeaCategoryDetailContent: View {
             }
 
         case .music:
-            musicContent
+            if showsLiveControls {
+                musicContent
+            } else if case .music? = idea.configuration {
+                musicContent
+            } else {
+                genericContent
+            }
 
         case .decor:
-            if let configuration = idea.decorConfiguration {
+            if case let .decor(configuration)? = idea.configuration {
                 configurationContent(
                     primaryTitle: "Decor Area",
                     primaryValue: configuration.focus.title,
@@ -931,7 +916,7 @@ private struct IdeaCategoryDetailContent: View {
             }
 
         case .invitations:
-            if let configuration = idea.invitationConfiguration {
+            if case let .invitations(configuration)? = idea.configuration {
                 configurationContent(
                     primaryTitle: "Format",
                     primaryValue: configuration.format.title,
@@ -946,7 +931,7 @@ private struct IdeaCategoryDetailContent: View {
             }
 
         case .honeymoon:
-            if let configuration = idea.honeymoonConfiguration {
+            if case let .honeymoon(configuration)? = idea.configuration {
                 configurationContent(
                     primaryTitle: "Trip Style",
                     primaryValue: configuration.style.title,
@@ -963,15 +948,6 @@ private struct IdeaCategoryDetailContent: View {
             case .other:
                 genericContent
             }
-        }
-        .musicPickerCompatible(
-            isPresented: $isPickingMusic,
-            title: Text("Add to Playlist"),
-            selection: $pickedSongs,
-            onLegacySelection: appendPickedTrack
-        )
-        .onChange(of: pickedSongs) { _, songs in
-            appendPickedSongs(songs)
         }
     }
 
@@ -1042,11 +1018,13 @@ private struct IdeaCategoryDetailContent: View {
                 detailText(title: "Description", text: idea.note, symbol: "text.alignleft")
             }
 
-            Link(destination: configuration.url) {
-                Label("Open Website", systemImage: "arrow.up.right.square")
-                    .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
+            if showsLiveControls {
+                Link(destination: configuration.url) {
+                    Label("Open Website", systemImage: "arrow.up.right.square")
+                        .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
         .ideaDetailCard()
         .accessibilityElement(children: .contain)
@@ -1157,7 +1135,7 @@ private struct IdeaCategoryDetailContent: View {
                 trackRow(track)
             }
 
-            if idea.musicTracks.isEmpty {
+            if idea.musicTracks.isEmpty, showsLiveControls {
                 Text(
                     canEditMusicPlaylist
                         ? "No songs yet. Add the first one for everyone attending this event."
@@ -1166,7 +1144,7 @@ private struct IdeaCategoryDetailContent: View {
                     .foregroundStyle(.secondary)
             }
 
-            if !canEditMusicPlaylist {
+            if !canEditMusicPlaylist, showsLiveControls {
                 Label("This playlist is finalized", systemImage: "checkmark.seal.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -1184,11 +1162,11 @@ private struct IdeaCategoryDetailContent: View {
     }
 
     private func appendPickedTracks(_ pickedTracks: [MusicTrack]) {
-        guard !pickedTracks.isEmpty, canEditMusicPlaylist else {
+        guard !pickedTracks.isEmpty, canEditMusicPlaylist, let workspace, let liveIdea else {
             pickedSongs.removeAll()
             return
         }
-        var updatedIdea = idea
+        var updatedIdea = liveIdea
         var tracks = idea.musicTracks
         for track in pickedTracks {
             guard !tracks.contains(where: { $0.id == track.id }) else { continue }
@@ -1200,12 +1178,7 @@ private struct IdeaCategoryDetailContent: View {
     }
 
     private var genericContent: some View {
-        Group {
-            if !idea.note.isEmpty {
-                detailText(title: "About This Idea", text: idea.note, symbol: idea.category.symbol)
-                    .ideaDetailCard()
-            }
-        }
+        IdeaNotesCard(note: idea.note, category: idea.category)
     }
 
     private func detailText(title: String, text: String, symbol: String) -> some View {
@@ -1238,11 +1211,11 @@ private struct IdeaCategoryDetailContent: View {
 
             Spacer(minLength: AppTheme.Spacing.compact)
 
-            if track.previewURL != nil {
+            if track.previewURL != nil, showsLiveControls {
                 MusicPreviewButton(track: track)
             }
 
-            if let externalURL = track.externalURL {
+            if let externalURL = track.externalURL, showsLiveControls {
                 Link(destination: externalURL) {
                     Image(systemName: "arrow.up.forward")
                         .font(.caption.weight(.semibold))
@@ -1668,6 +1641,11 @@ struct IdeaEditorView: View {
         category != .music || workspace.canEditMusicPlaylist(forEventID: musicPlaylistEventID)
     }
 
+    private var canEditEventIdea: Bool {
+        guard let ideaBeingEdited, ideaBeingEdited.category == .event else { return true }
+        return IdeaEventEditing.canEdit(ideaBeingEdited, in: workspace)
+    }
+
     private var suggestedTitle: String {
         switch category {
         case .event:
@@ -1713,7 +1691,7 @@ struct IdeaEditorView: View {
     }
 
     private var resolvedTitle: String {
-        if category == .event { return suggestedTitle }
+        if category == .event { return trimmedTitle.isEmpty ? suggestedTitle : trimmedTitle }
         if category == .music { return suggestedTitle }
         return trimmedTitle.isEmpty ? suggestedTitle : trimmedTitle
     }
@@ -1799,6 +1777,7 @@ struct IdeaEditorView: View {
         hasValidEstimate
             && hasValidCategoryNumbers
             && hasValidEventBudget
+            && (category != .event || existingIdea == nil || !trimmedTitle.isEmpty)
             && (category != .link || (!trimmedTitle.isEmpty && normalizedLinkURL != nil))
     }
 
@@ -1977,7 +1956,7 @@ struct IdeaEditorView: View {
                     Button(ideaBeingEdited == nil ? "Add" : "Save") {
                         saveIdea()
                     }
-                    .disabled(!isValid || !hasChanges || !canEditMusicPlaylist)
+                    .disabled(!isValid || !hasChanges || !canEditMusicPlaylist || !canEditEventIdea)
                 }
             }
         }
@@ -2140,6 +2119,13 @@ struct IdeaEditorView: View {
             if category != .event {
                 TextField(titlePrompt(for: category), text: $title)
                     .textInputAutocapitalization(.sentences)
+            } else {
+                TextField(
+                    IdeaEditingCopy.eventName,
+                    text: $title,
+                    prompt: Text(suggestedTitle)
+                )
+                .textInputAutocapitalization(.words)
             }
 
             TextField(notePrompt, text: $note, axis: .vertical)
@@ -2815,7 +2801,7 @@ struct IdeaEditorView: View {
     }
 
     private func saveIdea() {
-        guard canEditMusicPlaylist else { return }
+        guard canEditMusicPlaylist, canEditEventIdea else { return }
         if ideaBeingEdited == nil {
             workspace.addIdea(editedIdea)
         } else {

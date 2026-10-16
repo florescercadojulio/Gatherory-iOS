@@ -3,16 +3,18 @@ import SwiftUI
 struct BlueprintExploreView: View {
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var blueprintTransition
     @State private var model: BlueprintDiscoveryModel
     @State private var query = ""
+    @State private var navigation = BlueprintDiscoveryNavigation()
     @FocusState private var isFocused: Bool
-    @State private var setupRoute: BlueprintSetupRoute?
 
     init(ownerID: String) {
         _model = State(initialValue: BlueprintDiscoveryModel(ownerID: ownerID))
     }
 
-    private var mode: BlueprintSearchMode { .resolve(isFocused: isFocused, query: query) }
+    private var mode: BlueprintSearchMode { navigation.mode(isFocused: isFocused, query: query) }
 
     var body: some View {
         Group {
@@ -32,7 +34,7 @@ struct BlueprintExploreView: View {
                 case .browse: categories
                 case .recent: recent
                 case .results:
-                    blueprintList(model.entries.filter { $0.matches(query: query) }, emptyTitle: ExploreCopy.noResults, emptyMessage: ExploreCopy.tryAnotherSearch)
+                    blueprintGrid(model.entries.filter { $0.matches(query: query) }, source: .results, emptyTitle: ExploreCopy.noResults, emptyMessage: ExploreCopy.tryAnotherSearch)
                 }
             }
         }
@@ -41,6 +43,30 @@ struct BlueprintExploreView: View {
         .toolbarTitleDisplayMode(.inlineLarge)
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: ExploreCopy.search)
         .searchFocused($isFocused)
+        .navigationDestination(item: $navigation.selection) { selection in
+            Group {
+                if reduceMotion {
+                    BlueprintPreviewView(entry: selection.entry)
+                } else {
+                    BlueprintPreviewView(entry: selection.entry)
+                        .navigationTransition(.zoom(sourceID: selection.id, in: blueprintTransition))
+                }
+            }
+            .onAppear { model.recordAccess(selection.entry) }
+        }
+        .onChange(of: navigation.selection?.id) { _, selected in
+            guard selected == nil else { return }
+            if navigation.restoresSearchFocus {
+                query = navigation.retainedQuery ?? query
+                if isFocused { navigation.completeReturn() }
+                else { isFocused = true }
+            } else {
+                navigation.completeReturn()
+            }
+        }
+        .onChange(of: isFocused) { _, focused in
+            if focused { navigation.completeReturn() }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 AccountToolbarButton(avatarSize: 44)
@@ -57,13 +83,6 @@ struct BlueprintExploreView: View {
             }
         }
         .task(id: String(describing: cloudSync.accountOnboardingState)) { await load() }
-        .sheet(item: $setupRoute, onDismiss: { Task { await load() } }) { route in
-            NavigationStack {
-                BlueprintSetupView(catalogKey: route.catalogKey, sharedToken: route.shareToken)
-            }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
     }
 
     private var categories: some View {
@@ -72,26 +91,21 @@ struct BlueprintExploreView: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: 16) {
                     ForEach(BlueprintBrowseCategory.allCases) { category in
                         NavigationLink {
-                            blueprintList(model.entries.filter { $0.browseCategories.contains(category) }, emptyTitle: ExploreCopy.emptyCategory, emptyMessage: ExploreCopy.checkBack)
-                                .navigationTitle(category.title)
-                                .navigationBarTitleDisplayMode(.inline)
+                            BlueprintCategoryResultsView(
+                                category: category,
+                                entries: model.entries.filter { $0.browseCategories.contains(category) },
+                                onAccess: { model.recordAccess($0) },
+                                onRefresh: { await load() }
+                            )
                         } label: {
-                            VStack(alignment: .leading, spacing: 24) {
-                                Image(systemName: category.symbol)
-                                    .font(.largeTitle)
-                                    .foregroundStyle(category.tint)
-                                    .accessibilityHidden(true)
-                                Text(category.title).font(.headline).foregroundStyle(.primary)
-                                    .multilineTextAlignment(.leading)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
-                            .padding(20)
-                            .background(category.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 24))
+                            BlueprintCategoryTile(category: category)
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
             .padding(AppTheme.Layout.screenHorizontal)
         }
         .refreshable { await load() }
@@ -107,42 +121,19 @@ struct BlueprintExploreView: View {
                         .frame(minHeight: 44)
                 }
             }.padding(.horizontal)
-            blueprintList(model.recentEntries, emptyTitle: ExploreCopy.noRecents, emptyMessage: ExploreCopy.recentsHint)
+            blueprintGrid(model.recentEntries, source: .recent, emptyTitle: ExploreCopy.noRecents, emptyMessage: ExploreCopy.recentsHint)
         }
     }
 
-    private func blueprintList(_ entries: [BlueprintCatalogEntry], emptyTitle: String, emptyMessage: String) -> some View {
-        List(entries) { entry in
-            Button {
-                model.recordAccess(entry)
-                setupRoute = BlueprintSetupRoute(catalogKey: entry.catalogKey)
-            } label: {
-                HStack(spacing: 16) {
-                    Image(systemName: entry.browseCategories.first?.symbol ?? "sparkles.rectangle.stack")
-                        .font(.title2).foregroundStyle(AppTheme.ColorToken.accent)
-                        .frame(width: 44, height: 52)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(entry.definition.blueprint.name).font(.headline).foregroundStyle(.primary)
-                        if let summary = entry.discovery?.summary, !summary.isEmpty {
-                            Text(summary).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
-                }
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint(ExploreCopy.openHint)
+    private func blueprintGrid(_ entries: [BlueprintCatalogEntry], source: BlueprintCatalogSource,
+                               emptyTitle: String, emptyMessage: String) -> some View {
+        let displayed = navigation.entries(for: source, fallback: entries)
+        return BlueprintCatalogGrid(entries: displayed, source: source, transitionNamespace: blueprintTransition) { entry in
+            navigation.open(entry, from: source, entries: displayed, mode: mode, query: query)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
         .overlay {
-            if entries.isEmpty {
+            if displayed.isEmpty {
                 ContentUnavailableView(emptyTitle, systemImage: "magnifyingglass", description: Text(emptyMessage))
                     .allowsHitTesting(false)
             }
@@ -156,28 +147,6 @@ struct BlueprintExploreView: View {
                 throw CloudSyncFailure.invalidSession
             }
             return try await coordinator.catalog()
-        }
-    }
-}
-
-private struct BlueprintSetupRoute: Identifiable {
-    let catalogKey: String?
-    let shareToken: String?
-    let id = UUID()
-
-    init(catalogKey: String?, shareToken: String? = nil) {
-        self.catalogKey = catalogKey
-        self.shareToken = shareToken
-    }
-}
-
-private extension BlueprintBrowseCategory {
-    var tint: Color {
-        switch self {
-        case .weddings: .pink
-        case .birthdays: .purple
-        case .holidays: .green
-        case .events: .blue
         }
     }
 }

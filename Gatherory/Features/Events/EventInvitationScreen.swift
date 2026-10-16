@@ -12,12 +12,14 @@ struct EventInvitationScreen: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(MusicPreviewPlayer.self) private var previewPlayer
     @Environment(ImageSafetyStore.self) private var imageSafety
+    @Environment(\.currentUserAccount) private var account
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var scrollState = InvitationScrollState()
     @State private var selectedChild: TimelineItem?
     @State private var selectedMomentPhotos: [PhotosPickerItem] = []
+    @State private var sharedAlbumRoute: SharedAlbumRoute?
     @State private var isShowingAttendees = false
     @State private var selectedPlaylistIdeaID: UUID?
     @State private var weather = EventWeatherModel()
@@ -216,8 +218,28 @@ struct EventInvitationScreen: View {
         .sheet(item: $reportedMoment) { moment in
             ReportImageView(moment: moment)
         }
+        .fullScreenCover(item: $sharedAlbumRoute) { route in
+            SharedAlbumView(
+                moments: (presentation?.moments ?? []).filter { !imageSafety.isHidden($0) },
+                canDelete: {
+                    route.ownerUserID != nil && account?.id == route.ownerUserID
+                        && workspace.canDeleteEventMoment($0, from: reference)
+                },
+                delete: {
+                    guard route.ownerUserID != nil, account?.id == route.ownerUserID else { return false }
+                    return workspace.deleteEventMoment($0, from: reference)
+                },
+                hide: { hideMomentForViewer($0) },
+                initialMomentID: route.initialMomentID,
+                avatar: albumContributor
+            )
+        }
         .sheet(item: $calendarDraft) { draft in
             CalendarEventEditor(draft: draft).ignoresSafeArea()
+        }
+        .onChange(of: account?.id) { oldID, newID in
+            guard oldID != newID else { return }
+            sharedAlbumRoute = nil
         }
         .alert(AppCopy.Safety.hide, isPresented: Binding(get: { hideFailure != nil }, set: { if !$0 { hideFailure = nil } })) {
             Button(AppCopy.Common.done) { hideFailure = nil }
@@ -754,94 +776,41 @@ struct EventInvitationScreen: View {
     }
 
     private func momentsCard(_ moments: [EventMoment]) -> some View {
-        EventInvitationFeatureCard {
-            VStack(spacing: AppTheme.Spacing.standard) {
-                Label("Shared Album", systemImage: "photo.on.rectangle.angled")
-                    .font(.title3.bold())
-
-                let visiblePhotos = moments.filter { !imageSafety.isHidden($0) }
-                if visiblePhotos.isEmpty {
-                    Image(systemName: "photo.stack")
-                        .font(.system(size: 52, weight: .light))
-                        .foregroundStyle(.white.opacity(0.74))
-                        .frame(height: 112)
-
-                    Text("Photos shared during the event will gather here.")
-                        .font(.body)
-                        .foregroundStyle(.white.opacity(0.72))
-                        .multilineTextAlignment(.center)
-                } else {
-                    GeometryReader { proxy in
-                        let visibleMoments = Array(visiblePhotos.prefix(3))
-                        let overlap: CGFloat = 24
-                        let photoWidth = min(
-                            118,
-                            max(82, (proxy.size.width + overlap * CGFloat(visibleMoments.count - 1)) / CGFloat(visibleMoments.count))
-                        )
-                        let centerIndex = Double(visibleMoments.count - 1) / 2
-
-                        HStack(spacing: -overlap) {
-                            ForEach(Array(visibleMoments.enumerated()), id: \.element.id) { index, moment in
-                                if let image = UIImage(data: moment.imageData) {
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: photoWidth, height: min(photoWidth * 1.25, 148))
-                                        .clipShape(
-                                            RoundedRectangle(
-                                                cornerRadius: AppTheme.Radius.control,
-                                                style: .continuous
-                                            )
-                                        )
-                                        .overlay {
-                                            RoundedRectangle(
-                                                cornerRadius: AppTheme.Radius.control,
-                                                style: .continuous
-                                            )
-                                            .stroke(.white.opacity(0.26), lineWidth: 0.5)
-                                        }
-                                        .rotationEffect(.degrees((Double(index) - centerIndex) * 5))
-                                        .zIndex(Double(visibleMoments.count - index))
-                                        .accessibilityLabel("Photo added by \(moment.addedBy)")
-                                        .contextMenu {
-                                            Button(AppCopy.Safety.hide, systemImage: "eye.slash") {
-                                                imageSafety.hide(moment)
-                                                if let assetID = moment.mediaAssetID, let baseURL = AppRuntimeConfiguration.authenticationBaseURL {
-                                                    Task {
-                                                        do { try await ImageSafetyClient(baseURL: baseURL).hide(assetID) }
-                                                        catch { hideFailure = AppCopy.Safety.hiddenLocally }
-                                                    }
-                                                }
-                                            }
-                                            if moment.mediaAssetID != nil {
-                                                Button(AppCopy.Safety.report, systemImage: "flag", role: .destructive) { reportedMoment = moment }
-                                            }
-                                        }
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        let visiblePhotos = moments.filter { !imageSafety.isHidden($0) }
+        return EventInvitationFeatureCard(contentPadding: 0) {
+            SharedAlbumPreview(moments: visiblePhotos, open: { openSharedAlbum() }, openPhoto: { openSharedAlbum(initialMomentID: $0.id) }, avatar: albumContributor) {
+                if !visiblePhotos.isEmpty {
+                    Button { openSharedAlbum() } label: {
+                        Label(AlbumCopy.viewAll, systemImage: "square.grid.2x2")
+                            .labelStyle(.iconOnly)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
-                    .frame(height: 158)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(AlbumCopy.viewAll)
+                    .accessibilityIdentifier("album.open")
                 }
-
                 if workspace.canAddEventMoments(to: reference) {
-                    PhotosPicker(
-                        selection: $selectedMomentPhotos,
-                        maxSelectionCount: 20,
-                        matching: .images
-                    ) {
+                    PhotosPicker(selection: $selectedMomentPhotos, maxSelectionCount: 20, matching: .images) {
                         Label("Add Photos", systemImage: "photo.badge.plus")
-                            .font(.headline)
-                            .padding(.horizontal, AppTheme.Spacing.spacious)
-                            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                            .labelStyle(.iconOnly)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.capsule)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("Add Photos"))
                 }
             }
-            .frame(maxWidth: .infinity)
         }
+    }
+
+    private func albumContributor(_ moment: EventMoment) -> WorkspaceMember? {
+        guard let userID = moment.addedByUserID else { return nil }
+        return workspace.participants(for: reference).first { $0.userID == userID }
+    }
+
+    private func openSharedAlbum(initialMomentID: UUID? = nil) {
+        sharedAlbumRoute = SharedAlbumRoute(initialMomentID: initialMomentID, ownerUserID: account?.id)
     }
 
     private func scheduleSummary(_ event: EventPresentation) -> String {
@@ -867,6 +836,16 @@ struct EventInvitationScreen: View {
             workspace.setResponse(response, for: item)
         case .idea:
             break
+        }
+    }
+
+    private func hideMomentForViewer(_ moment: EventMoment) {
+        imageSafety.hide(moment)
+        guard let assetID = moment.mediaAssetID,
+              let baseURL = AppRuntimeConfiguration.authenticationBaseURL else { return }
+        Task {
+            do { try await ImageSafetyClient(baseURL: baseURL).hide(assetID) }
+            catch { hideFailure = AppCopy.Safety.hiddenLocally }
         }
     }
 
@@ -1629,4 +1608,11 @@ private struct EventInvitationLocationView: View {
         }
         .accessibilityHidden(true)
     }
+}
+
+/// Capture the requested photo and actor together before presenting the album.
+private struct SharedAlbumRoute: Identifiable {
+    let id = UUID()
+    let initialMomentID: UUID?
+    let ownerUserID: String?
 }

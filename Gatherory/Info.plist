@@ -68,6 +68,8 @@
 	<string>Connect to your local Gatherory development server while testing the app.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Use your current location to set where an event takes place.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save the shared album photos you choose to your photo library.</string>
 	<key>POSTHOG_ENABLED</key>
 	<string>$(POSTHOG_ENABLED)</string>
 	<key>POSTHOG_HOST</key>
