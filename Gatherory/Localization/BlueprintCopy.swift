@@ -1,13 +1,52 @@
 import Foundation
 
 enum BlueprintCopy {
+    static var deletePersonalBlueprintMessage: String { String(localized: "blueprint.deletePersonalMessage", defaultValue: "This removes your blueprint from search and revokes its sharing links. Other people's completed copies and existing workspaces stay unchanged.") }
+    static var saveBlueprint: String { String(localized: "blueprint.saveToLibrary", defaultValue: "Save Blueprint") }
+    static var blueprintSavedExplanation: String { String(localized: "blueprint.savedToLibrary", defaultValue: "Saved in Blueprints. Your workspace remains independent.") }
+    static var previewInstall: String { String(localized: "blueprint.preview.install", defaultValue: "Install") }
+    static var confirmInstallTitle: String { String(localized: "blueprint.preview.confirmInstall", defaultValue: "Install this template?") }
+    static var confirmInstallMessage: String { String(localized: "blueprint.preview.confirmInstallMessage", defaultValue: "Continue with your current choices? Any unsaved edits will be saved. You’ll confirm dates before creating your independent event plan.") }
+    static var previewNoIdeas: String { String(localized: "blueprint.preview.noIdeas", defaultValue: "There are no ideas to decide on in this preview.") }
+    static var previewChoicesExplanation: String { String(localized: "blueprint.preview.choicesExplanation", defaultValue: "Love includes an idea, Pass leaves it out, and Maybe keeps its current inclusion. Save Draft to keep your choices.") }
+    static var saveDraft: String { String(localized: "blueprint.preview.saveDraft", defaultValue: "Save Draft") }
+    static var previewUnsavedTitle: String { String(localized: "blueprint.preview.unsaved", defaultValue: "Save your template choices?") }
+    static var discardPreviewChanges: String { String(localized: "blueprint.preview.discard", defaultValue: "Discard Changes") }
+    static var previewSaveBeforeCustomize: String { String(localized: "blueprint.preview.saveBeforeCustomize", defaultValue: "Save your choices before customizing?") }
+    static var saveAndCustomize: String { String(localized: "blueprint.preview.saveAndCustomize", defaultValue: "Save & Customize") }
+    static var discardAndCustomize: String { String(localized: "blueprint.preview.discardAndCustomize", defaultValue: "Discard & Customize") }
+    static var previewSaveFailed: String { String(localized: "blueprint.preview.saveFailed", defaultValue: "Couldn’t save this draft. Finish any pending installation or reopen the latest saved setup and try again.") }
+    static var returnToTemplates: String { String(localized: "blueprint.preview.return", defaultValue: "Returns to templates") }
+    static var libraryTitle: String { String(localized: "blueprint.library.title", defaultValue: "Blueprints") }
+    static var libraryDrafts: String { String(localized: "blueprint.library.drafts", defaultValue: "In Progress") }
+    static var libraryUsed: String { String(localized: "blueprint.library.used", defaultValue: "Used Templates") }
+    static var libraryDraftsEmpty: String { String(localized: "blueprint.library.draftsEmpty", defaultValue: "Start customizing a template in Explore. Your saved setups will be here.") }
+    static var libraryUsedEmpty: String { String(localized: "blueprint.library.usedEmpty", defaultValue: "Templates you install will appear here, alongside the workspaces you created from them.") }
+    static var libraryLocalReadFailed: String { String(localized: "blueprint.library.localReadFailed", defaultValue: "Some saved template activity couldn’t be loaded. Try again to see your saved setups and history.") }
+    static var libraryRefreshFailed: String { String(localized: "blueprint.library.refreshFailed", defaultValue: "Couldn’t refresh used templates. Saved activity is still available on this device.") }
+    static var libraryWorkspaceUnavailable: String { String(localized: "blueprint.library.workspaceUnavailable", defaultValue: "Workspace isn’t available on this device.") }
+    static var libraryOpenWorkspace: String { String(localized: "blueprint.library.openWorkspace", defaultValue: "Open Workspace") }
+    static func libraryUsedFor(_ name: String) -> String {
+        String.localizedStringWithFormat(String(localized: "blueprint.library.usedFor", defaultValue: "Used for %@"), name)
+    }
+    static func libraryVersion(_ revision: Int) -> String {
+        String.localizedStringWithFormat(String(localized: "blueprint.library.version", defaultValue: "Version %lld"), Int64(revision))
+    }
+    static var customizationInvalid: String { String(localized: "blueprint.customizationInvalid", defaultValue: "Couldn’t save these changes. Check the content limits and event selection, then try again.") }
+    static var customize: String { String(localized: "blueprint.customize", defaultValue: "Customize") }
+    static var allIdeas: String { String(localized: "All Ideas") }
+    static func previewPosition(_ position: Int, total: Int) -> String {
+        String.localizedStringWithFormat(String(localized: "blueprint.previewPosition", defaultValue: "%lld / %lld"), Int64(position), Int64(total))
+    }
+    static func previewPositionLabel(_ position: Int, total: Int) -> String {
+        String.localizedStringWithFormat(String(localized: "blueprint.previewPositionLabel", defaultValue: "Idea %lld of %lld"), Int64(position), Int64(total))
+    }
     static var savedPreviewExplanation: String { String(localized: "blueprint.savedPreviewExplanation", defaultValue: "Showing your saved template preview. Connect to verify the link and create your event.") }
     static var previewTitle: String { String(localized: "blueprint.previewTitle", defaultValue: "Template Preview") }
     static var previewExplanation: String { String(localized: "blueprint.previewExplanation", defaultValue: "Make this plan your own. Choose what to include and confirm dates in setup. Your copy is independent of the original event.") }
     static var previewDatesExplanation: String { String(localized: "blueprint.previewDatesExplanation", defaultValue: "You’ll choose and confirm dates when setting up your own event.") }
     static var sharedLinkUnavailable: String { String(localized: "blueprint.sharedLinkUnavailable", defaultValue: "This template link is no longer available. Ask the person who shared it for a new link.") }
     static var saveAsTemplate: String { String(localized: "blueprint.saveAsTemplate", defaultValue: "Save as Template") }
-    static var captureOnWebHint: String { String(localized: "blueprint.captureOnWebHint", defaultValue: "Choose what to reuse and publish on the web.") }
     static var shareTemplate: String { String(localized: "blueprint.shareTemplate", defaultValue: "Share Template") }
     static var manageTemplateLinks: String { String(localized: "blueprint.manageTemplateLinks", defaultValue: "Manage Links") }
     static var templateLinksUnavailable: String { String(localized: "blueprint.templateLinksUnavailable", defaultValue: "Template Links Unavailable") }
@@ -15,7 +54,7 @@ enum BlueprintCopy {
     static var templateLinkSignIn: String { String(localized: "blueprint.templateLinkSignIn", defaultValue: "Sign in to manage template links.") }
     static var shareTemplateExplanation: String { String(localized: "blueprint.shareTemplateExplanation", defaultValue: "Anyone with this link can install an independent copy of the template. It does not invite them to this event.") }
     static var noCapturedTemplates: String { String(localized: "blueprint.noCapturedTemplates", defaultValue: "No templates have been captured from this event yet.") }
-    static var captureBeforeSharing: String { String(localized: "blueprint.captureBeforeSharing", defaultValue: "Create a template from this event here, or open the web editor for advanced authoring.") }
+    static var captureBeforeSharing: String { String(localized: "blueprint.captureBeforeSharing", defaultValue: "Create a reusable template from this event. Your event stays private.") }
     static var createTemplateTitle: String { String(localized: "blueprint.createTemplateTitle", defaultValue: "Create Template") }
     static var templateCaptureExplanation: String { String(localized: "blueprint.templateCaptureExplanation", defaultValue: "Choose the event details to reuse. Nothing is created until you review and share.") }
     static var sourceEvent: String { String(localized: "blueprint.sourceEvent", defaultValue: "Source Event") }
@@ -54,9 +93,8 @@ enum BlueprintCopy {
     static var refreshLinks: String { String(localized: "blueprint.refreshLinks", defaultValue: "Refresh Links") }
     static var retryCreateShareLink: String { String(localized: "blueprint.retryCreateShareLink", defaultValue: "Create a New Share Link") }
     static var createdLinks: String { String(localized: "blueprint.createdLinks", defaultValue: "Created Links") }
-    static var noPublishedTemplate: String { String(localized: "blueprint.noPublishedTemplate", defaultValue: "This template is not published yet. Open the web editor to review and publish it.") }
+    static var noPublishedTemplate: String { String(localized: "blueprint.noPublishedTemplate", defaultValue: "This template is not ready to share yet.") }
     static var chooseTemplateHint: String { String(localized: "blueprint.chooseTemplateHint", defaultValue: "Choose one of the templates captured from this event.") }
-    static var openTemplateEditor: String { String(localized: "blueprint.openTemplateEditor", defaultValue: "Open Web Editor") }
     static var chooseTemplate: String { String(localized: "blueprint.chooseTemplate", defaultValue: "Template") }
     static var publishedRevision: String { String(localized: "blueprint.publishedRevision", defaultValue: "Published version %lld") }
     static var retiredTemplate: String { String(localized: "blueprint.retiredTemplate", defaultValue: "Retired") }

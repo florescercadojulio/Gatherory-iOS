@@ -16,16 +16,25 @@ struct DecisionDeckView: View {
     @Environment(\.currentUserAccount) private var currentUserAccount
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("hasSeenDecideTimelinePrimer") private var hasSeenDecidePrimer = false
-    @State private var dragOffset: CGSize = .zero
+    @State private var drag = DecisionDeckDrag<UUID>()
     @State private var selectedIdeaID: UUID?
     @State private var isShowingDecidePrimer = false
     @State private var decisionScope: DecisionScope = .queue
     @State private var session = DecisionDeckSession()
+    @State private var motionHistory = DecisionDeckMotionHistory<UUID>()
+    @State private var flight = DecisionCardFlightState<PlanningIdea>()
     @Namespace private var decisionTransition
 
-    private var currentIdea: PlanningIdea? {
+    private var visibleQueue: [PlanningIdea] {
         session.queue(in: workspace, eventID: decisionScope.eventID)
-            .first { !safety.isBlocked($0.submittedByUserID) }
+            .filter { !safety.isBlocked($0.submittedByUserID) }
+    }
+
+    private var currentIdea: PlanningIdea? { visibleQueue.first }
+
+    private var dragOffset: CGSize { drag.offset(for: currentIdea?.id) }
+    private var dragBinding: Binding<CGSize> {
+        Binding(get: { dragOffset }, set: { drag.update($0, for: currentIdea?.id) })
     }
 
     private var scopeTitle: String {
@@ -50,103 +59,140 @@ struct DecisionDeckView: View {
 
     var body: some View {
         VStack(spacing: AppTheme.Spacing.compact) {
-            if let idea = currentIdea {
-                DecisionCard(
-                    idea: idea,
-                    currencyCode: workspace.currencyCode,
-                    teamSummary: workspace.teamResponseSummary(for: idea),
-                    dragOffset: dragOffset,
-                    transitionNamespace: decisionTransition
-                )
+            ZStack {
+                DecisionSwipeBackdrop(offset: visibleQueue.count == 1 ? dragOffset : .zero) {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.hero)
+                        .fill(AppTheme.ColorToken.surface)
+                }
+                .opacity(currentIdea == nil ? 0 : 1)
+                ForEach(flight.cards(in: visibleQueue, identifiedBy: { AnyHashable($0.id) })) { cardIdea in
+                    let isCurrent = cardIdea.id == currentIdea?.id
+                    let command = flight.current.flatMap { $0.card.id == cardIdea.id ? $0 : nil }
+                    DecisionCard(
+                        idea: cardIdea,
+                        eventTitle: workspace.eventTitle(for: cardIdea),
+                        currencyCode: workspace.currencyCode,
+                        teamSummary: workspace.teamResponseSummary(for: cardIdea),
+                        dragOffset: dragOffset,
+                        transitionNamespace: decisionTransition
+                    )
                     .frame(maxHeight: .infinity)
-                    .offset(dragOffset)
-                    .rotationEffect(.degrees(Double(dragOffset.width / 24)))
-                    .gesture(dragGesture(for: idea))
+                    .modifier(DecisionCardDepth(depth: isCurrent || command != nil ? 0 : 1))
+                    .overlay {
+                        if !isCurrent && command == nil {
+                            DecisionSwipeBackdrop(offset: dragOffset) { Color.clear }
+                        }
+                    }
+                    .modifier(DecisionCardMotion(flight: command, dragOffset: isCurrent ? dragOffset : .zero,
+                                                 onFinished: finishFlight))
+                    .modifier(
+                        DecisionSwipeInteraction(offset: dragBinding) { choice in
+                            decide(choice, idea: cardIdea)
+                        }
+                    )
                     .onTapGesture {
-                        openDetails(for: idea)
+                        openDetails(for: cardIdea)
                     }
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction(named: Text("Open details")) {
-                        openDetails(for: idea)
+                        openDetails(for: cardIdea)
                     }
                     .accessibilityAction(named: Text("Pass")) {
-                        decide(.pass, idea: idea)
+                        decide(.pass, idea: cardIdea)
                     }
                     .accessibilityAction(named: Text("Maybe")) {
-                        decide(.maybe, idea: idea)
+                        decide(.maybe, idea: cardIdea)
                     }
                     .accessibilityAction(named: Text("Love It")) {
-                        decide(.love, idea: idea)
+                        decide(.love, idea: cardIdea)
                     }
-                    .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82), value: dragOffset)
-            } else {
-                ContentUnavailableView {
-                    if session.filter == .maybes {
-                        Label(count(for: .maybes) > 0 ? "Maybes reviewed" : "No Maybes",
-                              systemImage: "questionmark.circle")
-                    } else if session.filter == .passes {
-                        Label(count(for: .passes) > 0 ? "Passes reviewed" : "No Passes",
-                              systemImage: "hand.thumbsdown")
-                    } else {
-                        Label(
-                            isFilteringToEvent ? "Nothing left for \(scopeTitle)" : "You're all caught up",
-                            systemImage: "checkmark.circle.fill"
-                        )
-                    }
-                } description: {
-                    if session.filter == .maybes {
-                        Text(count(for: .maybes) > 0
-                            ? "Your Maybe responses are kept. Revisit them whenever you're ready."
-                            : "Ideas you mark Maybe will appear here.")
-                    } else if session.filter == .passes {
-                        Text(count(for: .passes) > 0
-                            ? "Your Pass responses are kept. Revisit them whenever you're ready."
-                            : "Ideas you pass on will appear here.")
-                    } else {
-                        Text(
-                            isFilteringToEvent
-                                ? "Continue through the rest of your decision queue."
-                                : "New ideas from your support circle will appear here."
-                        )
-                    }
-                } actions: {
-                    if session.filter != .unanswered {
-                        if count(for: session.filter) > 0 {
-                            Button(session.filter == .maybes ? "Review Maybes Again" : "Review Passes Again",
-                                   systemImage: "arrow.clockwise") {
-                                withAnimation(reduceMotion ? nil : .snappy) { session.restartReview() }
+                    .allowsHitTesting(isCurrent && command == nil)
+                    .accessibilityHidden(!isCurrent || command != nil)
+                    .zIndex(command != nil ? 3 : isCurrent ? 2 : 1)
+                    .transition(.identity)
+                }
+                if currentIdea == nil {
+                    ContentUnavailableView {
+                        if session.filter == .maybes {
+                            Label(
+                                count(for: .maybes) > 0 ? "Maybes reviewed" : "No Maybes",
+                                systemImage: "questionmark.circle")
+                        } else if session.filter == .passes {
+                            Label(
+                                count(for: .passes) > 0 ? "Passes reviewed" : "No Passes",
+                                systemImage: "hand.thumbsdown")
+                        } else {
+                            Label(
+                                isFilteringToEvent ? "Nothing left for \(scopeTitle)" : "You're all caught up",
+                                systemImage: "checkmark.circle.fill"
+                            )
+                        }
+                    } description: {
+                        if session.filter == .maybes {
+                            Text(
+                                count(for: .maybes) > 0
+                                    ? "Your Maybe responses are kept. Revisit them whenever you're ready."
+                                    : "Ideas you mark Maybe will appear here.")
+                        } else if session.filter == .passes {
+                            Text(
+                                count(for: .passes) > 0
+                                    ? "Your Pass responses are kept. Revisit them whenever you're ready."
+                                    : "Ideas you pass on will appear here.")
+                        } else {
+                            Text(
+                                isFilteringToEvent
+                                    ? "Continue through the rest of your decision queue."
+                                    : "New ideas from your support circle will appear here."
+                            )
+                        }
+                    } actions: {
+                        if session.filter != .unanswered {
+                            if count(for: session.filter) > 0 {
+                                Button(
+                                    session.filter == .maybes ? "Review Maybes Again" : "Review Passes Again",
+                                    systemImage: "arrow.clockwise"
+                                ) {
+                                    withAnimation(reduceMotion ? nil : .snappy) {
+                                        drag = .init()
+                                        flight.reset()
+                                        session.restartReview()
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                            Button("Review Unanswered Ideas", systemImage: "tray") {
+                                selectFilter(.unanswered)
                             }
                             .buttonStyle(.bordered)
                         }
-                        Button("Review Unanswered Ideas", systemImage: "tray") {
-                            selectFilter(.unanswered)
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                    if session.filter != .maybes && count(for: .maybes) > 0 {
-                        Button("Review My Maybes", systemImage: "questionmark.circle") {
-                            selectFilter(.maybes)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    if session.filter != .passes && count(for: .passes) > 0 {
-                        Button("Review My Passes", systemImage: "hand.thumbsdown") {
-                            selectFilter(.passes)
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                    if isFilteringToEvent {
-                        Button("Continue deciding", systemImage: "arrow.triangle.branch") {
-                            withAnimation(.snappy) {
-                                decisionScope = .queue
+                        if session.filter != .maybes && count(for: .maybes) > 0 {
+                            Button("Review My Maybes", systemImage: "questionmark.circle") {
+                                selectFilter(.maybes)
                             }
+                            .buttonStyle(.borderedProminent)
                         }
-                        .buttonStyle(.bordered)
-                    }
+                        if session.filter != .passes && count(for: .passes) > 0 {
+                            Button("Review My Passes", systemImage: "hand.thumbsdown") {
+                                selectFilter(.passes)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        if isFilteringToEvent {
+                            Button("Continue deciding", systemImage: "arrow.triangle.branch") {
+                                withAnimation(.snappy) {
+                                    decisionScope = .queue
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                        }
 
+                    }
+                    .frame(maxHeight: .infinity)
+                    .transition(.opacity)
                 }
-                .frame(maxHeight: .infinity)
             }
+            // The artwork is masked by DecisionCard; the deck must not crop
+            // the moving card or its shadow at the layout container's edges.
         }
         .padding(.horizontal, AppTheme.Layout.screenHorizontal)
         .padding(.top, AppTheme.Layout.screenTop)
@@ -165,14 +211,20 @@ struct DecisionDeckView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if workspace.canUndoDecision {
                     Button("Undo last decision", systemImage: "arrow.uturn.backward") {
-                        withAnimation(reduceMotion ? nil : .snappy) {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.24)) {
                             if let ideaID = workspace.undoLastDecision() {
+                                let choice = motionHistory.undo(for: ideaID) ?? .love
                                 let restored = workspace.ideas.first { $0.id == ideaID }
+                                if !reduceMotion, let restored {
+                                    flight.returnCard(restored, choice: choice) { $0.id == ideaID }
+                                } else {
+                                    flight.reset()
+                                }
                                 let filter = DecisionQueueFilter(restoring: restored.flatMap(workspace.response(on:)))
                                 if session.filter != filter { session.selectFilter(filter) }
                                 session.undoDecision(on: ideaID)
                             }
-                            dragOffset = .zero
+                            drag = .init()
                             decisionScope = .queue
                         }
                     }
@@ -210,7 +262,13 @@ struct DecisionDeckView: View {
         .onChange(of: currentUserAccount?.id) { _, _ in
             session = DecisionDeckSession()
             decisionScope = .queue
-            dragOffset = .zero
+            drag = .init()
+            motionHistory = .init()
+            flight.reset()
+        }
+        .onDisappear {
+            flight.reset()
+            drag = .init()
         }
     }
 
@@ -236,9 +294,10 @@ struct DecisionDeckView: View {
     }
 
     private func selectFilter(_ filter: DecisionQueueFilter) {
+        flight.reset()
         withAnimation(reduceMotion ? nil : .snappy) {
             session.selectFilter(filter)
-            dragOffset = .zero
+            drag = .init()
         }
     }
 
@@ -267,14 +326,10 @@ struct DecisionDeckView: View {
                 }
             }
         } label: {
-            HStack(spacing: 5) {
-                Text(scopeTitle)
-                    .lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption.weight(.semibold))
-            }
-            .font(.headline.weight(.semibold))
-            .foregroundStyle(.primary)
+            Label("Decision event filter", systemImage: "calendar")
+                .labelStyle(.iconOnly)
+                .frame(minWidth: AppTheme.Layout.minimumTouchTarget,
+                       minHeight: AppTheme.Layout.minimumTouchTarget)
         }
         .accessibilityLabel("Decision event filter")
         .accessibilityIdentifier("decision-event-filter")
@@ -290,36 +345,29 @@ struct DecisionDeckView: View {
         isShowingDecidePrimer = true
     }
 
-    private func dragGesture(for idea: PlanningIdea) -> some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                dragOffset = value.translation
-            }
-            .onEnded { value in
-                if value.translation.width > 100 {
-                    decide(.love, idea: idea)
-                } else if value.translation.width < -100 {
-                    decide(.pass, idea: idea)
-                } else if value.translation.height < -100 {
-                    decide(.maybe, idea: idea)
-                } else {
-                    dragOffset = .zero
-                }
-            }
-    }
-
     private func decide(_ choice: DecisionChoice, idea: PlanningIdea) {
-        guard workspace.canRespond(to: idea) else { return }
-        withAnimation(reduceMotion ? nil : .snappy) {
+        guard currentIdea?.id == idea.id, workspace.canRespond(to: idea) else { return }
+        flight.reset()
+        if !reduceMotion {
+            flight.start(card: idea, choice: choice, origin: dragOffset)
+        }
+        drag = .init()
+        motionHistory.record(choice, for: idea.id)
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
             workspace.decide(choice, on: idea)
             session.recordDecision(on: idea.id)
             PostHogSDK.shared.capture(
                 "idea_decided",
                 properties: ["choice": String(describing: choice)]
             )
-            dragOffset = .zero
             returnToQueueIfNeeded()
         }
+    }
+
+    private func finishFlight(_ token: UUID) {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { _ = flight.finish(token) }
     }
 
     private func returnToQueueIfNeeded() {
@@ -344,7 +392,7 @@ struct DecisionDeckView: View {
 
     private func openDetails(for idea: PlanningIdea) {
         guard abs(dragOffset.width) < 10, abs(dragOffset.height) < 10 else { return }
-        dragOffset = .zero
+        drag = .init()
         selectedIdeaID = idea.id
     }
 }
@@ -353,27 +401,21 @@ private struct DecisionCard: View {
     @Environment(ImageSafetyStore.self) private var imageSafety
 
     let idea: PlanningIdea
+    let eventTitle: String
     let currencyCode: String
     let teamSummary: TeamResponseSummary
     let dragOffset: CGSize
     let transitionNamespace: Namespace.ID
 
     var body: some View {
-        ZStack {
+        DecisionCardPresentation {
             artwork
-
-            VStack(spacing: 0) {
-                SwipeGuide()
-
-                Spacer(minLength: AppTheme.Spacing.section)
-
-                swipeFeedback
-
-                Spacer(minLength: AppTheme.Spacing.standard)
-
-                ideaDetails
-            }
-            .padding(AppTheme.Spacing.standard)
+        } guide: {
+            DecisionEventHeading(title: eventTitle)
+        } feedback: {
+            EmptyView()
+        } summary: {
+            ideaDetails
         }
         .foregroundStyle(.primary)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
@@ -413,16 +455,6 @@ private struct DecisionCard: View {
         IdeaSummaryCard(idea: idea, currencyCode: currencyCode, teamSummary: teamSummary)
     }
 
-    @ViewBuilder
-    private var swipeFeedback: some View {
-        if dragOffset.width > 35 {
-            SwipeLabel(title: "Love it", symbol: "heart.fill")
-        } else if dragOffset.width < -35 {
-            SwipeLabel(title: "Pass", symbol: "xmark")
-        } else if dragOffset.height < -35 {
-            SwipeLabel(title: "Maybe", symbol: "bookmark.fill")
-        }
-    }
 }
 
 /// The same summary surface in the deck and its expanded detail destination.
@@ -484,54 +516,6 @@ private enum DecisionScope: Hashable {
     }
 }
 
-private struct SwipeLabel: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    let title: String
-    let symbol: String
-
-    var body: some View {
-        Label(title, systemImage: symbol)
-            .font(.title2.bold())
-            .padding(.horizontal, AppTheme.Spacing.standard)
-            .padding(.vertical, AppTheme.Spacing.compact)
-            .background(reduceTransparency ? AnyShapeStyle(Color(uiColor: .secondarySystemBackground)) : AnyShapeStyle(.regularMaterial), in: Capsule())
-            .foregroundStyle(.primary)
-    }
-}
-
-private struct SwipeGuide: View {
-    var body: some View {
-        HStack(spacing: 6) {
-            SwipeGuideLabel(title: "Pass", symbol: "arrow.left")
-            Spacer(minLength: 0)
-            SwipeGuideLabel(title: "Maybe", symbol: "arrow.up")
-            Spacer(minLength: 0)
-            SwipeGuideLabel(title: "Love", symbol: "arrow.right")
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Swipe left to pass, up for maybe, or right to love")
-    }
-}
-
-private struct SwipeGuideLabel: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    let title: String
-    let symbol: String
-
-    var body: some View {
-        Label(title, systemImage: symbol)
-            .font(.caption.weight(.bold))
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 10)
-            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-            .background(reduceTransparency ? AnyShapeStyle(Color(uiColor: .secondarySystemBackground)) : AnyShapeStyle(.regularMaterial), in: Capsule())
-            .overlay {
-                Capsule()
-                    .stroke(Color(uiColor: .separator), lineWidth: 0.5)
-            }
-    }
-}
-
 #if DEBUG
 private struct DecisionCardAppearancePreview: View {
     @Namespace private var transition
@@ -547,7 +531,7 @@ private struct DecisionCardAppearancePreview: View {
             Button { replayID += 1 } label: { Text(verbatim: "Replay entrance") }
                 .buttonStyle(.bordered)
             DecisionCard(
-                idea: idea, currencyCode: "USD",
+                idea: idea, eventTitle: "Wedding reception", currencyCode: "USD",
                 teamSummary: .init(love: 1, unanswered: 1),
                 dragOffset: .zero, transitionNamespace: transition
             )

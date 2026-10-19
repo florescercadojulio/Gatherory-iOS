@@ -37,7 +37,6 @@ private enum PendingTemplateListing: Identifiable {
 struct BlueprintLinkManagementView: View {
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
 
     let eventID: UUID
     let workspace: PlanningWorkspace
@@ -217,24 +216,32 @@ struct BlueprintLinkManagementView: View {
                     retrySection(store)
                 } else {
                     Section {
-                        ContentUnavailableView {
-                            Label(BlueprintCopy.noCapturedTemplates, systemImage: "square.stack.3d.up")
-                        } description: {
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+                            Image(systemName: "square.stack.3d.up")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
+                            Text(BlueprintCopy.noCapturedTemplates)
+                                .font(.headline)
+                                .fixedSize(horizontal: false, vertical: true)
                             Text(BlueprintCopy.captureBeforeSharing)
-                        } actions: {
-                            VStack(spacing: AppTheme.Spacing.standard) {
-                                Button(BlueprintCopy.createTemplateTitle, systemImage: "square.stack.3d.up.badge.plus") {
-                                    isShowingNativeCreation = true
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(store.isLoading || store.isMutating || !hasManagePermission)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
 
-                                Button(BlueprintCopy.openTemplateEditor, systemImage: "safari") {
-                                    openTemplateEditor()
-                                }
-                                .disabled(store.isLoading || store.isMutating || !hasManagePermission)
+                            Button {
+                                isShowingNativeCreation = true
+                            } label: {
+                                Text(BlueprintCopy.createTemplateTitle)
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(store.isLoading || store.isMutating || !hasManagePermission)
+
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, AppTheme.Spacing.standard)
                     }
                 }
             } else {
@@ -322,10 +329,6 @@ struct BlueprintLinkManagementView: View {
                 Text(template.retired ? BlueprintCopy.retiredCannotShare : BlueprintCopy.noPublishedTemplate)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Button(BlueprintCopy.openTemplateEditor, systemImage: "safari") {
-                    openTemplateEditor()
-                }
-                .disabled(store.isLoading || store.isMutating)
             } else if let url = store.createdURL {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
                     Label(BlueprintCopy.newLinkReady, systemImage: "clock")
@@ -579,14 +582,4 @@ struct BlueprintLinkManagementView: View {
         await store.revoke(linkID: linkID)
     }
 
-    private func openTemplateEditor() {
-        guard hasManagePermission else { return }
-        if let templateID = store?.selectedTemplateID ?? (store?.templates.count == 1 ? store?.templates.first?.id : nil) {
-            guard let baseURL = AppRuntimeConfiguration.authenticationBaseURL,
-                  let editorURL = BlueprintCaptureLink.editorURL(baseURL: baseURL, templateID: templateID) else { return }
-            openURL(editorURL)
-        } else {
-            openURL(captureURL)
-        }
-    }
 }

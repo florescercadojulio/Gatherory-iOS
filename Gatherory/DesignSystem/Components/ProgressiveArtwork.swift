@@ -36,6 +36,7 @@ struct ProgressiveArtwork: View {
 
     private var artwork: some View {
         GeometryReader { proxy in
+            let size = LayoutDimensions.size(proxy.size)
             ZStack {
                 MeshGradient(
                     width: 3,
@@ -62,22 +63,22 @@ struct ProgressiveArtwork: View {
                     endPoint: .bottomTrailing
                 )
 
-                decorativeShapes(in: proxy.size)
+                decorativeShapes(in: size)
 
-                artworkBadge(in: proxy.size)
+                artworkBadge(in: size)
                     .offset(
-                        x: proxy.size.width * horizontalBadgeOffset,
-                        y: -proxy.size.height * 0.12
+                        x: size.width * horizontalBadgeOffset,
+                        y: -size.height * 0.12
                     )
 
                 Ellipse()
                     .fill(AppTheme.ColorToken.onMedia.opacity(reduceTransparency ? 0 : 0.14))
-                    .frame(width: proxy.size.width * 0.72, height: proxy.size.height * 0.16)
+                    .frame(width: size.width * 0.72, height: size.height * 0.16)
                     .blur(radius: ambientBlurRadius * 0.34)
                     .rotationEffect(.degrees(-12 + Double(signature % 18)))
-                    .offset(x: -proxy.size.width * 0.25, y: proxy.size.height * 0.42)
+                    .offset(x: -size.width * 0.25, y: size.height * 0.42)
             }
-            .frame(width: proxy.size.width, height: proxy.size.height)
+            .frame(width: size.width, height: size.height)
             .clipped()
         }
         .accessibilityHidden(true)

@@ -365,50 +365,22 @@ private struct IdeaCollectionCard: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        IdeaCollectionPresentation(
+            title: idea.title,
+            category: idea.category,
+            aspectRatio: artworkAspectRatio
+        ) {
             artwork
-
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0.30),
-                    .init(color: .black.opacity(0.14), location: 0.54),
-                    .init(color: .black.opacity(0.74), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Label(idea.category.title, systemImage: idea.category.symbol)
-                    .font(.caption.weight(.semibold))
+        } supporting: {
+            HStack(spacing: 4) {
+                Text(cardSupportingText)
                     .lineLimit(1)
 
-                Text(idea.title)
-                    .font(.headline)
-                    .lineLimit(3)
+                Spacer(minLength: 4)
 
-                HStack(spacing: 4) {
-                    Text(cardSupportingText)
-                        .lineLimit(1)
-
-                    Spacer(minLength: 4)
-
-                    Image(systemName: idea.category == .music ? "person.3.fill" : idea.status.symbol)
-                        .accessibilityHidden(true)
-                }
-                .font(.caption)
+                Image(systemName: idea.category == .music ? "person.3.fill" : idea.status.symbol)
+                    .accessibilityHidden(true)
             }
-            .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.36), radius: 5, y: 2)
-            .padding(AppTheme.Spacing.standard)
-        }
-        .aspectRatio(artworkAspectRatio, contentMode: .fit)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                .stroke(.white.opacity(0.16), lineWidth: 0.5)
         }
         .matchedTransitionSource(id: idea.id, in: transitionNamespace)
         .overlay(alignment: .bottom) {
@@ -468,26 +440,6 @@ private struct IdeaCollectionCard: View {
         guard idea.category == .music else { return "From \(idea.submittedBy)" }
         let count = idea.musicTracks.count
         return "\(count) \(count == 1 ? "song" : "songs") · Shared playlist"
-    }
-}
-
-private extension IdeaCategory {
-    var collectionAspectRatio: CGFloat {
-        switch self {
-        case .event: 0.84
-        case .registry: 0.92
-        case .link: 1.06
-        case .venue: 0.82
-        case .attire: 0.74
-        case .flowers: 1.12
-        case .food: 0.94
-        case .photography: 1.20
-        case .music: 1.0
-        case .decor: 0.78
-        case .invitations: 1.14
-        case .honeymoon: 0.76
-        case .other: 1.06
-        }
     }
 }
 
@@ -2077,37 +2029,11 @@ struct IdeaEditorView: View {
 
     private func selectedCategorySection(for category: IdeaCategory) -> some View {
         Section {
-            Button {
+            BasicIdeaCategoryButton(category: category) {
                 withAnimation(.snappy) {
                     isChoosingCategory = true
                 }
-            } label: {
-                HStack(spacing: AppTheme.Spacing.standard) {
-                    CategoryGlassIcon(category: category, size: 48)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(category.title)
-                            .font(.headline)
-                            .foregroundStyle(AppTheme.ColorToken.textPrimary)
-                    }
-
-                    Spacer(minLength: AppTheme.Spacing.compact)
-
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AppTheme.ColorToken.accent)
-                        .accessibilityHidden(true)
-                }
-                .frame(
-                    maxWidth: .infinity,
-                    minHeight: AppTheme.Layout.minimumTouchTarget,
-                    alignment: .leading
-                )
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Idea type, \(category.title)")
-            .accessibilityHint("Choose a different idea type")
         } header: {
             Text("Idea Type")
         }
@@ -2117,19 +2043,22 @@ struct IdeaEditorView: View {
     private func ideaIdentitySection(for category: IdeaCategory) -> some View {
         Section {
             if category != .event {
-                TextField(titlePrompt(for: category), text: $title)
-                    .textInputAutocapitalization(.sentences)
-            } else {
-                TextField(
-                    IdeaEditingCopy.eventName,
+                BasicEditorNameField(
+                    label: nil,
+                    prompt: Text(titlePrompt(for: category)),
                     text: $title,
-                    prompt: Text(suggestedTitle)
+                    capitalization: .sentences
                 )
-                .textInputAutocapitalization(.words)
+            } else {
+                BasicEditorNameField(
+                    label: nil,
+                    prompt: Text(verbatim: suggestedTitle),
+                    text: $title,
+                    fieldAccessibilityLabel: Text(IdeaEditingCopy.eventName)
+                )
             }
 
-            TextField(notePrompt, text: $note, axis: .vertical)
-                .lineLimit(3...6)
+            BasicEditorNotesField(label: nil, prompt: Text(notePrompt), text: $note)
 
             PhotoAttachmentPicker(
                 imageData: $imageData,
@@ -2288,80 +2217,12 @@ struct IdeaEditorView: View {
     }
 
     private func categoryGrid(selectedCategory: IdeaCategory?) -> some View {
-        TabView(selection: $categoryPage) {
-            ForEach(visibleCategoryPages.indices, id: \.self) { pageIndex in
-                VStack(spacing: 0) {
-                    LazyVGrid(
-                        columns: Array(
-                            repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.compact),
-                            count: 3
-                        ),
-                        spacing: AppTheme.Spacing.compact
-                    ) {
-                        ForEach(visibleCategoryPages[pageIndex]) { option in
-                            categoryTile(option, isSelected: selectedCategory == option)
-                        }
-                    }
-
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 2)
-                .tag(pageIndex)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .always))
-        .frame(height: dynamicTypeSize.isAccessibilitySize ? 500 : 390)
-        .accessibilityLabel("Idea categories")
-    }
-
-    private func categoryTile(_ option: IdeaCategory, isSelected: Bool) -> some View {
-        return Button {
-            select(option)
-        } label: {
-            VStack(spacing: 6) {
-                ZStack(alignment: .topTrailing) {
-                    CategoryGlassIcon(category: option, size: 42)
-                        .scaleEffect(isSelected ? 1.06 : 1)
-                        .opacity(isSelected ? 1 : 0.9)
-
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(AppTheme.ColorToken.onAccent, AppTheme.ColorToken.accent)
-                            .offset(x: 4, y: -4)
-                    }
-                }
-
-                Text(option.title)
-                    .font(.caption2.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(AppTheme.ColorToken.textPrimary)
-                    .lineLimit(2)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 112 : 76)
-            .padding(4)
-            .background(
-                isSelected
-                    ? option.artworkAccent.opacity(0.14)
-                    : AppTheme.ColorToken.elevatedSurface,
-                in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                    .stroke(
-                        isSelected
-                            ? option.artworkAccent
-                            : AppTheme.ColorToken.cardBorder,
-                        lineWidth: isSelected ? 2 : 0.5
-                    )
-            }
-            .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(option.title)
-        .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        .accessibilityHint("Selects the \(option.title.lowercased()) idea form")
+        BasicIdeaCategoryChooser(
+            pageIndex: $categoryPage,
+            selectedCategory: selectedCategory,
+            pages: visibleCategoryPages,
+            onSelect: select
+        )
     }
 
     private func optionStrip<Option: Identifiable & Equatable>(

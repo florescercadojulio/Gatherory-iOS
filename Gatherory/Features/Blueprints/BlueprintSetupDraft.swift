@@ -13,6 +13,39 @@ nonisolated struct BlueprintSetupDraft: Codable, Sendable {
     var selectedIdeas: Set<String>
     var confirmedDates: [String: Date]
     var shareToken: String? = nil
+    var customizations: BlueprintCustomization? = nil
+    /// Personal preview choices, saved only by an explicit preview Save Draft.
+    /// These are inclusion preferences, never live event votes.
+    var previewDecisions: [String: DecisionChoice]? = nil
+    /// Optional for backward-compatible drafts; absent means explicit confirmation is still needed.
+    var mainDateConfirmed: Bool? = nil
+    /// Stable upload identity for this local snapshot; not an installation request.
+    var copyRequestID: UUID? = nil
+    /// Private server pin. The original entry remains local display/storage identity.
+    var copyEntry: BlueprintCatalogEntry? = nil
+
+    var installationEntry: BlueprintCatalogEntry { copyEntry ?? entry }
+    var installationShareToken: String? { copyEntry == nil ? shareToken : nil }
+
+    var installationSnapshot: Self {
+        var snapshot = self
+        snapshot.entry = installationEntry
+        snapshot.shareToken = installationShareToken
+        snapshot.copyEntry = nil
+        snapshot.copyRequestID = nil
+        return snapshot
+    }
+
+    func freshWorkspaceCopy(ownerID: String) throws -> Self {
+        guard !ownerID.isEmpty, ownerUserID == ownerID else {
+            throw BlueprintSetupDraftStore.StoreError.ownerMismatch
+        }
+        var copy = self
+        copy.requestID = UUID()
+        copy.confirmedDates = [:]
+        copy.mainDateConfirmed = false
+        return copy
+    }
 }
 
 nonisolated final class BlueprintSetupDraftStore {
@@ -27,6 +60,8 @@ nonisolated final class BlueprintSetupDraftStore {
         case invalidDate
         case invalidSelectionIdentifier
         case invalidShareToken
+        case invalidCustomization
+        case invalidPreviewDecisions
         case corruptData
     }
 
@@ -132,6 +167,26 @@ nonisolated final class BlueprintSetupDraftStore {
         try data.write(to: fileURL, options: .atomic)
     }
 
+    /// A copy has a new server catalog key, but retains its local source/link
+    /// identity. Match the exact install request before cleanup or history capture.
+    func loadForInstallation(ownerUserID: String, catalogKey: String, requestID: UUID,
+                             shareToken: String? = nil) throws -> BlueprintSetupDraft? {
+        if let direct = try load(ownerUserID: ownerUserID, catalogKey: catalogKey, shareToken: shareToken),
+           direct.requestID == requestID { return direct }
+        return try all(ownerUserID: ownerUserID).first {
+            $0.requestID == requestID && $0.installationEntry.catalogKey == catalogKey
+                && $0.installationShareToken == shareToken
+        }
+    }
+
+    func removeForInstallation(ownerUserID: String, catalogKey: String, requestID: UUID,
+                               shareToken: String? = nil) throws {
+        guard let draft = try loadForInstallation(ownerUserID: ownerUserID, catalogKey: catalogKey,
+                                                  requestID: requestID, shareToken: shareToken) else { return }
+        try remove(ownerUserID: ownerUserID, catalogKey: draft.entry.catalogKey,
+                   requestID: requestID, shareToken: draft.shareToken)
+    }
+
     func remove(ownerUserID: String, catalogKey: String, requestID: UUID, shareToken: String? = nil) throws {
         try validateIdentity(ownerUserID, catalogKey)
         let fileURL = draftURL(ownerUserID: ownerUserID, catalogKey: catalogKey, shareToken: shareToken)
@@ -212,6 +267,23 @@ nonisolated final class BlueprintSetupDraftStore {
               draft.selectedIdeas.allSatisfy({ !$0.isEmpty }),
               draft.confirmedDates.keys.allSatisfy({ !$0.isEmpty })
         else { throw StoreError.invalidSelectionIdentifier }
+        if let decisions = draft.previewDecisions {
+            guard decisions.count <= 100,
+                  decisions.keys.allSatisfy({ !$0.isEmpty && $0.unicodeScalars.count <= 100 })
+            else { throw StoreError.invalidPreviewDecisions }
+        }
+        if let customizations = draft.customizations {
+            do {
+                _ = try customizations.applying(to: draft.entry)
+            } catch {
+                throw StoreError.invalidCustomization
+            }
+        }
+        if let copy = draft.copyEntry {
+            guard draft.copyRequestID != nil, copy.revision > 0,
+                  copy.contentHash.count == 64, copy.contentHash.allSatisfy({ $0.isHexDigit }),
+                  copy.definition.supportsCurrentSchema else { throw StoreError.invalidContentHash }
+        }
     }
 
     private func validateIdentity(_ ownerUserID: String, _ catalogKey: String) throws {

@@ -1,0 +1,3952 @@
+{
+  "entries": [
+    {
+      "catalogKey": "anniversary_supper",
+      "revision": 1,
+      "contentHash": "d72c31c5276d8c053b5cca3bbe14cb97a466ab22ac8f987ac9c47b49870b3834",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "anniversary_supper",
+          "revision": 1,
+          "name": "An Anniversary Around the Table"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Prepare the table",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "15:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "Welcome and catch up",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "17:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "Dinner and memories",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "18:00"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Dessert and farewell",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "20:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "food",
+                "photography",
+                "other",
+                "flowers"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "Revisit a favorite meal",
+                  "category": "food",
+                  "notes": "Adapt a meaningful dish to current dietary needs.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "Then-and-now photo display",
+                  "category": "photography",
+                  "notes": "Use approved photos and avoid revealing personal details.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "A small memory book",
+                  "category": "other",
+                  "notes": "Collect optional notes from guests before the gathering.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "Music from shared milestones",
+                  "category": "other",
+                  "notes": "Gather song suggestions; no music account or playlist is copied.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "Flowers with a story",
+                  "category": "flowers",
+                  "notes": "Choose a simple arrangement connected to a shared memory.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "A favorite dessert",
+                  "category": "food",
+                  "notes": "Offer a small selection instead of an elaborate cake if preferred.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "An intimate anniversary celebration with meaningful food, shared memories and a comfortable pace.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Prepare the table",
+                  "body": "Choose a setting comfortable for the people being celebrated.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "Welcome and catch up",
+                  "body": "Allow unhurried time to reconnect before the meal.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "Dinner and memories",
+                  "body": "Check which stories and photographs the couple wants included.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Dessert and farewell",
+                  "body": "Keep speeches short and leave time for private conversations.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "anniversaries"
+        ],
+        "tags": [
+          "anniversary",
+          "couple",
+          "memories",
+          "dinner"
+        ],
+        "summary": "An intimate anniversary celebration with meaningful food, shared memories and a comfortable pace."
+      }
+    },
+    {
+      "catalogKey": "birthday",
+      "revision": 1,
+      "contentHash": "50c7519d13d6e62b00ee05ea481547175b74047cf3a95aed02546448158bd10d",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "birthday",
+          "revision": 1,
+          "name": "Birthday Party"
+        },
+        "experienceDefaults": {
+          "type": "birthday"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "birthday",
+              "children": [
+                {
+                  "key": "gathering_setup",
+                  "title": "Gathering setup",
+                  "purpose": "planning_scouting",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "10:00"
+                  }
+                },
+                {
+                  "key": "birthday_gathering",
+                  "title": "Games and activities",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "14:00"
+                  }
+                },
+                {
+                  "key": "shared_food",
+                  "title": "Cake and treats",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "16:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "event",
+                "food",
+                "invitations",
+                "decor",
+                "other"
+              ],
+              "ideas": [
+                {
+                  "key": "gathering_plans",
+                  "title": "Gathering plans",
+                  "category": "event",
+                  "notes": "Collect ideas for the kind of birthday gathering that feels right.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "food_and_drinks",
+                  "title": "Food and drinks",
+                  "category": "food",
+                  "notes": "Explore options that work for guests’ preferences and dietary needs.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "invitations",
+                  "title": "Invitations",
+                  "category": "invitations",
+                  "notes": "Gather invitation ideas and add timing or location details once confirmed.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "decor_and_setup",
+                  "title": "Decor and setup",
+                  "category": "decor",
+                  "notes": "Collect optional decor and setup ideas that suit the gathering.",
+                  "target": {
+                    "kind": "child",
+                    "key": "gathering_setup"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "activities",
+                  "title": "Activities",
+                  "category": "other",
+                  "notes": "Share activity ideas for different ages, interests, and ways to take part.",
+                  "target": {
+                    "kind": "child",
+                    "key": "birthday_gathering"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "planning_priorities",
+                  "title": "Planning priorities",
+                  "body": "Collect ideas and decide together which details matter for this gathering. Keep options open until plans are confirmed.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "gathering_details",
+                  "title": "Activity details",
+                  "body": "Add confirmed timing, arrival, and accessibility information here when it is ready to share with participants.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "birthday_gathering"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "birthdays"
+        ],
+        "tags": [
+          "birthday",
+          "party",
+          "cake",
+          "games",
+          "celebration"
+        ],
+        "summary": "Bring a birthday party together with food, activities, and time to celebrate."
+      }
+    },
+    {
+      "catalogKey": "engagement_gathering",
+      "revision": 1,
+      "contentHash": "562df918cc8faae7a01e8075d05a201f000267dbd45df95e2d5c7337b97f2e0d",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "engagement_gathering",
+          "revision": 1,
+          "name": "An Engagement Worth Celebrating"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Set the space",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "14:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "Welcome and introductions",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "17:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "Shared supper",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "18:00"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Stories and toasts",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "19:30"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "food",
+                "photography",
+                "other",
+                "flowers",
+                "invitations"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "A favorite-food supper",
+                  "category": "food",
+                  "notes": "Choose dishes connected to the couple and label dietary alternatives.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "Alcohol-free welcome drinks",
+                  "category": "food",
+                  "notes": "Make a festive nonalcoholic option available to everyone.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "Photo timeline",
+                  "category": "photography",
+                  "notes": "Use only photos the couple is comfortable displaying.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "Short, optional toasts",
+                  "category": "other",
+                  "notes": "Invite a few speakers in advance, with no pressure to participate.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "Simple seasonal flowers",
+                  "category": "flowers",
+                  "notes": "Keep table arrangements low enough for conversation.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "Clear invitation wording",
+                  "category": "invitations",
+                  "notes": "State the time, meal plan and whether gifts are expected; never assume.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "A relaxed engagement gathering centered on the couple, a shared meal and time with loved ones.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Set the space",
+                  "body": "Keep seating and walkways comfortable and leave room for guests to mingle.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "Welcome and introductions",
+                  "body": "Introduce people who have not met; do not assume everyone knows the couple’s families.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "Shared supper",
+                  "body": "Confirm dietary needs and let guests know whether the meal is seated or casual.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Stories and toasts",
+                  "body": "Ask the couple which stories and announcements they want shared.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "engagements"
+        ],
+        "tags": [
+          "engagement",
+          "couple",
+          "celebration",
+          "toast"
+        ],
+        "summary": "A relaxed engagement gathering centered on the couple, a shared meal and time with loved ones."
+      }
+    },
+    {
+      "catalogKey": "family_cottage_escape",
+      "revision": 1,
+      "contentHash": "b415fa236fa167e76f0f24e40fa07def16c7aef54f4346c69c0286abcdd1e9e7",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "family_cottage_escape",
+          "revision": 1,
+          "name": "A Family Cottage Escape"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Arrival and settle in",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "16:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "A relaxed cottage day",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 1,
+                    "localTime": "10:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "Shared supper and games",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 1,
+                    "localTime": "18:00"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Departure handoff",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 2,
+                    "localTime": "10:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "food",
+                "venue",
+                "other"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "A first-night pantry meal",
+                  "category": "food",
+                  "notes": "Choose an easy meal that works if people arrive at different times.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "A local bakery morning",
+                  "category": "food",
+                  "notes": "Add a host-approved recommendation once opening times are checked.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "A gentle lakeside walk",
+                  "category": "venue",
+                  "notes": "Check access, route conditions and a seated alternative.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "A rainy-day game shelf",
+                  "category": "other",
+                  "notes": "Choose options for different ages and attention spans.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "A shared grocery plan",
+                  "category": "other",
+                  "notes": "Coordinate quantities and dietary needs without requiring everyone to contribute equally.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "A departure handoff note",
+                  "category": "other",
+                  "notes": "Record agreed arrangements as guidance; no automated checklist or reminder is created.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "A family cottage stay with shared meals, optional outings and a clear arrival and departure handoff.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Arrival and settle in",
+                  "body": "Confirm arrival with the host privately; do not put entry codes in a reusable template.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "A relaxed cottage day",
+                  "body": "Discuss local conditions and choose activities suitable for the group.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "Shared supper and games",
+                  "body": "Keep the evening flexible and respect agreed quiet hours.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Departure handoff",
+                  "body": "Agree cleanup and key-return arrangements directly with the host.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "cottage_stays"
+        ],
+        "tags": [
+          "cottage",
+          "cabin",
+          "lake",
+          "family",
+          "stay"
+        ],
+        "summary": "A family cottage stay with shared meals, optional outings and a clear arrival and departure handoff."
+      }
+    },
+    {
+      "catalogKey": "family_reunion_weekend",
+      "revision": 1,
+      "contentHash": "1d46717bb2ad3e5f2e97887ba93b51343af0444a388f785f70dcc2dc3c93e381",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "family_reunion_weekend",
+          "revision": 1,
+          "name": "Family Reunion Weekend"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Welcome supper",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "18:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "Choose-your-pace outing",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 1,
+                    "localTime": "10:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "Family meal and stories",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 1,
+                    "localTime": "17:00"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Farewell breakfast",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 2,
+                    "localTime": "09:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "food",
+                "venue",
+                "photography",
+                "other"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "A family recipe table",
+                  "category": "food",
+                  "notes": "Label ingredients and invite contributions without requiring them.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "A park with accessible seating",
+                  "category": "venue",
+                  "notes": "Check toilets, shade and step-free routes.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "Optional family portraits",
+                  "category": "photography",
+                  "notes": "Ask who wants to be photographed and how images may be shared.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "A shared story table",
+                  "category": "other",
+                  "notes": "Bring copies of photos rather than irreplaceable originals.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "Mixed-age lawn games",
+                  "category": "other",
+                  "notes": "Offer seated versions and quieter alternatives.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "A simple contact handoff",
+                  "category": "other",
+                  "notes": "Exchange contact information only with each person’s agreement.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "A multigenerational reunion with flexible activities, shared meals and time to reconnect.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Welcome supper",
+                  "body": "Share an easy meeting point and introduce relatives who have not met.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "Choose-your-pace outing",
+                  "body": "Offer accessible and low-cost options with no pressure to join everything.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "Family meal and stories",
+                  "body": "Ask permission before recording stories or discussing personal family history.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Farewell breakfast",
+                  "body": "Plan around departure times and leave room for final visits.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "reunions"
+        ],
+        "tags": [
+          "family",
+          "reunion",
+          "generations",
+          "weekend"
+        ],
+        "summary": "A multigenerational reunion with flexible activities, shared meals and time to reconnect."
+      }
+    },
+    {
+      "catalogKey": "friends_celebration_weekend",
+      "revision": 1,
+      "contentHash": "bdca0013a0401ae15193535573792b8c4424303fa54c80b669ec907da7095990",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "friends_celebration_weekend",
+          "revision": 1,
+          "name": "A Friends-First Celebration Weekend"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Arrival and easy dinner",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "18:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "Choose-your-pace afternoon",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 1,
+                    "localTime": "13:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "Celebration dinner",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 1,
+                    "localTime": "19:00"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Brunch and departures",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 2,
+                    "localTime": "10:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "food",
+                "venue",
+                "other",
+                "photography"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "Cooking class or shared cooking",
+                  "category": "food",
+                  "notes": "Compare a paid class with a lower-cost meal cooked together.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "A scenic walk",
+                  "category": "venue",
+                  "notes": "Check route accessibility and provide a seated alternative.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "A dinner with a clear price range",
+                  "category": "food",
+                  "notes": "Share expected costs and dietary options before reserving.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "A no-pressure evening in",
+                  "category": "other",
+                  "notes": "Keep games, films or conversation available as an alternative to going out.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "Travel together where practical",
+                  "category": "other",
+                  "notes": "Discuss transport without posting private travel documents.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "Guest-of-honor photo picks",
+                  "category": "photography",
+                  "notes": "Ask permission before taking or sharing celebration photos.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "A bachelor or bachelorette weekend built around shared comfort, clear costs and optional activities.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Arrival and easy dinner",
+                  "body": "Agree on the budget and sleeping arrangements before anyone books.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "Choose-your-pace afternoon",
+                  "body": "Offer a low-cost alternative and make it easy to skip an activity.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "Celebration dinner",
+                  "body": "Confirm the guest of honor’s preferences rather than planning unwanted surprises.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Brunch and departures",
+                  "body": "Leave enough time for travel and agree how shared costs will be settled.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "bachelor_parties"
+        ],
+        "tags": [
+          "bachelor",
+          "bachelorette",
+          "friends",
+          "weekend",
+          "celebration"
+        ],
+        "summary": "A bachelor or bachelorette weekend built around shared comfort, clear costs and optional activities."
+      }
+    },
+    {
+      "catalogKey": "graduation_open_house",
+      "revision": 1,
+      "contentHash": "12f8753b632cad04ec94151a9d8a6d1971c2b6cc1b5fa65eeb107c8fda2ef6b4",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "graduation_open_house",
+          "revision": 1,
+          "name": "Graduation Open House"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Set up the welcome area",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "10:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "First arrivals and lunch",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "12:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "A moment for the graduate",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "14:00"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Last visits and cleanup",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "16:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "food",
+                "photography",
+                "other",
+                "invitations",
+                "decor",
+                "venue"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "Easy-to-refill lunch stations",
+                  "category": "food",
+                  "notes": "Plan safe serving and storage for a longer drop-in gathering.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "A graduate-approved photo board",
+                  "category": "photography",
+                  "notes": "Choose photos together rather than using embarrassing surprises.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "Advice for the next chapter",
+                  "category": "other",
+                  "notes": "Invite encouraging notes without assuming college, work or another path.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "Clear drop-in invitations",
+                  "category": "invitations",
+                  "notes": "Explain that guests can arrive during the stated window.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "Reusable school-color accents",
+                  "category": "decor",
+                  "notes": "Use a few simple decorations rather than single-use extras.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "A quiet conversation corner",
+                  "category": "venue",
+                  "notes": "Make room for guests who prefer a calmer place to catch up.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "A flexible open house that celebrates the graduate without creating a rigid guest schedule.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Set up the welcome area",
+                  "body": "Confirm arrival instructions, parking and accessible entry.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "First arrivals and lunch",
+                  "body": "Share the drop-in window and keep food available for staggered arrivals.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "A moment for the graduate",
+                  "body": "Agree on any toast or presentation with the graduate first.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Last visits and cleanup",
+                  "body": "Arrange a small cleanup group so the graduate can enjoy the event.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "graduations"
+        ],
+        "tags": [
+          "graduation",
+          "school",
+          "milestone",
+          "open house"
+        ],
+        "summary": "A flexible open house that celebrates the graduate without creating a rigid guest schedule."
+      }
+    },
+    {
+      "catalogKey": "neighborhood_gathering",
+      "revision": 1,
+      "contentHash": "1a4d2af11dd3ba1ff953cafc5237ee860d4fe9a588eb667cc1907a4a0c5a070b",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "neighborhood_gathering",
+          "revision": 1,
+          "name": "A Neighborhood Get-Together"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Prepare the shared space",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "10:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "Welcome neighbors",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "11:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "Food and optional activities",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "12:00"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Community cleanup",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "14:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "venue",
+                "decor",
+                "food",
+                "other"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "A shared park or meeting room",
+                  "category": "venue",
+                  "notes": "Check permission and accessibility before announcing a location.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "A welcoming name-tag table",
+                  "category": "decor",
+                  "notes": "Let people choose what name, if any, they want displayed.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "A clearly labeled potluck",
+                  "category": "food",
+                  "notes": "Agree safe serving and ingredient labels with contributors.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "A swap table with simple rules",
+                  "category": "other",
+                  "notes": "Specify acceptable items and who takes home anything left over.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "Optional mixed-age games",
+                  "category": "other",
+                  "notes": "Provide seated and noncompetitive ways to join in.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "A small cleanup team",
+                  "category": "other",
+                  "notes": "Arrange bins and supplies without assuming guests can do physical tasks.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "A friendly local gathering with accessible introductions, shared space and a manageable cleanup plan.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Prepare the shared space",
+                  "body": "Confirm venue permission, access, toilets and any local requirements with the organizer.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "Welcome neighbors",
+                  "body": "Offer name tags without requiring people to share personal contact details.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "Food and optional activities",
+                  "body": "Label food contributions and offer a quiet place to sit.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Community cleanup",
+                  "body": "Assign cleanup tasks in advance and leave the space as agreed.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "community",
+          "events"
+        ],
+        "tags": [
+          "community",
+          "neighbors",
+          "volunteer",
+          "neighborhood",
+          "gathering"
+        ],
+        "summary": "A friendly local gathering with accessible introductions, shared space and a manageable cleanup plan."
+      }
+    },
+    {
+      "catalogKey": "park_picnic",
+      "revision": 1,
+      "contentHash": "3e7a934ad44c48b082b557d078f776a9fa76046d7cc6c9a99dc5fcd42aeada21",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "park_picnic",
+          "revision": 1,
+          "name": "A Low-Key Park Picnic"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Meet at the park",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "11:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "Picnic lunch",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "12:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "Optional games and walks",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "13:00"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Pack up together",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "15:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "venue",
+                "food",
+                "other",
+                "decor"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "A shaded picnic table",
+                  "category": "venue",
+                  "notes": "Check booking rules, seating and step-free access.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "Packable sandwiches and salads",
+                  "category": "food",
+                  "notes": "Label ingredients and keep foods at an appropriate temperature.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "Refillable water station",
+                  "category": "food",
+                  "notes": "Confirm whether drinking water is available nearby.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "A short optional nature walk",
+                  "category": "other",
+                  "notes": "Check the route and keep a seated alternative.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "Blankets and spare cushions",
+                  "category": "decor",
+                  "notes": "Bring chairs too; not everyone can comfortably sit on the ground.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "Indoor weather backup",
+                  "category": "venue",
+                  "notes": "Agree when and how a location change will be communicated.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "An easy outdoor gathering with shade, accessible meeting points and a weather alternative.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Meet at the park",
+                  "body": "Choose a clear meeting point near accessible paths and toilets.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "Picnic lunch",
+                  "body": "Agree who brings what and how perishable food will stay cool.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "Optional games and walks",
+                  "body": "Keep a shaded, seated alternative available.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Pack up together",
+                  "body": "Leave the area clean and check for belongings before leaving.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "picnics"
+        ],
+        "tags": [
+          "picnic",
+          "park",
+          "outdoors",
+          "summer",
+          "friends"
+        ],
+        "summary": "An easy outdoor gathering with shade, accessible meeting points and a weather alternative."
+      }
+    },
+    {
+      "catalogKey": "seasonal_dinner_party",
+      "revision": 1,
+      "contentHash": "a1b6272449b67bca1c5e554f36ad438789524950aa401e8f8cdd23f821e57082",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "seasonal_dinner_party",
+          "revision": 1,
+          "name": "A Seasonal Dinner with Friends"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Kitchen preparation",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "15:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "Welcome drinks",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "18:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "Dinner together",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "19:00"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Dessert and conversation",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "20:30"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "food",
+                "flowers",
+                "other",
+                "invitations"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "One main dish, flexible sides",
+                  "category": "food",
+                  "notes": "Reduce kitchen work with a simple menu and labeled alternatives.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "A shared starter board",
+                  "category": "food",
+                  "notes": "Keep allergy-sensitive ingredients separate.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "A make-ahead dessert",
+                  "category": "food",
+                  "notes": "Choose a dessert that needs little attention during dinner.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "Small table arrangements",
+                  "category": "flowers",
+                  "notes": "Keep scent and height low enough for comfortable dining.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "Conversation without icebreakers",
+                  "category": "other",
+                  "notes": "Leave room for natural conversation rather than mandatory games.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "A clear contribution plan",
+                  "category": "invitations",
+                  "notes": "Avoid duplicate dishes by agreeing optional contributions beforehand.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "A small dinner party with a manageable menu, dietary alternatives and time for conversation.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Kitchen preparation",
+                  "body": "Choose dishes that can mostly be prepared before guests arrive.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "Welcome drinks",
+                  "body": "Offer water and a festive nonalcoholic option alongside other drinks.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "Dinner together",
+                  "body": "Confirm dietary needs and tell guests what, if anything, to bring.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Dessert and conversation",
+                  "body": "Keep the end of the evening flexible and unhurried.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "dinner_parties"
+        ],
+        "tags": [
+          "dinner",
+          "potluck",
+          "friends",
+          "supper",
+          "food"
+        ],
+        "summary": "A small dinner party with a manageable menu, dietary alternatives and time for conversation."
+      }
+    },
+    {
+      "catalogKey": "shared_city_break",
+      "revision": 1,
+      "contentHash": "b7b9e457ce2b18a5c31cff08b6c420eb83b283ae349ca4c8d4c3078c1f751239",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "shared_city_break",
+          "revision": 1,
+          "name": "A Flexible City Break"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Arrival and neighborhood supper",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "18:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "One main outing",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 1,
+                    "localTime": "10:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "Free time and dinner",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 1,
+                    "localTime": "18:00"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Breakfast and departures",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 2,
+                    "localTime": "09:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "venue",
+                "event",
+                "other",
+                "food"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "A walkable home base",
+                  "category": "venue",
+                  "notes": "Compare travel time, accessible transport and accommodation cost.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "One advance-booked attraction",
+                  "category": "event",
+                  "notes": "Keep the itinerary light and confirm cancellation terms before booking.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "A free neighborhood walk",
+                  "category": "other",
+                  "notes": "Offer a low-cost alternative and check route accessibility.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "A shared food market lunch",
+                  "category": "food",
+                  "notes": "Look for multiple dietary options and places to sit.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "An optional evening plan",
+                  "category": "other",
+                  "notes": "Treat nightlife as optional rather than the default group activity.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "A departure transport plan",
+                  "category": "other",
+                  "notes": "Keep private tickets and identity documents outside the template.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "A shared weekend itinerary with budget choices, free time and a realistic travel pace.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Arrival and neighborhood supper",
+                  "body": "Leave room for delayed arrivals and do not share booking codes in public guidance.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "One main outing",
+                  "body": "Check opening hours, access requirements and costs before making commitments.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "Free time and dinner",
+                  "body": "Let people explore separately and agree on a clear dinner meeting point.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Breakfast and departures",
+                  "body": "Allow time for checkout, luggage and travel to the next connection.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "trips"
+        ],
+        "tags": [
+          "travel",
+          "trip",
+          "city",
+          "weekend",
+          "itinerary"
+        ],
+        "summary": "A shared weekend itinerary with budget choices, free time and a realistic travel pace."
+      }
+    },
+    {
+      "catalogKey": "small_team_retreat",
+      "revision": 1,
+      "contentHash": "a758c23c8cb6769491cb57f826317c9ec699a922e3277cd2a8178ec791483e6e",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "small_team_retreat",
+          "revision": 1,
+          "name": "A Focused Team Retreat"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Arrival and shared goals",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "09:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "Focused working session",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "10:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "Lunch and optional outdoor time",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "12:30"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Decisions and next steps",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "15:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "venue",
+                "other",
+                "food",
+                "invitations"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "An accessible meeting space",
+                  "category": "venue",
+                  "notes": "Check step-free access, hearing needs, lighting and quiet space.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "A written-first brainstorm",
+                  "category": "other",
+                  "notes": "Allow silent contributions before group discussion.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "A simple shared lunch",
+                  "category": "food",
+                  "notes": "Ask about dietary requirements without publicly listing medical information.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "An optional short walk",
+                  "category": "other",
+                  "notes": "Offer a seated alternative with equal participation.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "A decision summary",
+                  "category": "other",
+                  "notes": "Record agreed outcomes and owners outside the reusable public template.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "A clear pre-read",
+                  "category": "invitations",
+                  "notes": "Share timing and preparation expectations early, with no confidential attachments in the template.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "A small-team offsite with clear outcomes, real breaks and inclusive optional social time.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Arrival and shared goals",
+                  "body": "State the purpose and let people contribute in writing as well as aloud.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "Focused working session",
+                  "body": "Choose one concrete outcome and build in a real break.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "Lunch and optional outdoor time",
+                  "body": "Make social time optional and provide a comfortable indoor alternative.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Decisions and next steps",
+                  "body": "Agree owners and next steps privately; do not publish confidential business information.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "retreats"
+        ],
+        "tags": [
+          "team",
+          "retreat",
+          "workshop",
+          "offsite",
+          "planning"
+        ],
+        "summary": "A small-team offsite with clear outcomes, real breaks and inclusive optional social time."
+      }
+    },
+    {
+      "catalogKey": "thanksgiving",
+      "revision": 1,
+      "contentHash": "1133e9e24493fdc68a5e15b42740f7ce279b94cb881194ed73a94594b4ef8380",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "thanksgiving",
+          "revision": 1,
+          "name": "Thanksgiving"
+        },
+        "experienceDefaults": {
+          "type": "holiday"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "holiday",
+              "children": [
+                {
+                  "key": "gathering_preparation",
+                  "title": "Gathering preparation",
+                  "purpose": "planning_scouting",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": -1,
+                    "localTime": "16:00"
+                  }
+                },
+                {
+                  "key": "thanksgiving_gathering",
+                  "title": "Time together",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "13:00"
+                  }
+                },
+                {
+                  "key": "shared_meal",
+                  "title": "Shared meal",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "16:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "event",
+                "food",
+                "invitations",
+                "other",
+                "decor"
+              ],
+              "ideas": [
+                {
+                  "key": "gathering_plans",
+                  "title": "Gathering plans",
+                  "category": "event",
+                  "notes": "Collect ideas for how you would like to spend time together.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "food_and_drinks",
+                  "title": "Food and drinks",
+                  "category": "food",
+                  "notes": "Explore dishes and drinks while accounting for preferences and dietary needs.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "invitations",
+                  "title": "Invitations",
+                  "category": "invitations",
+                  "notes": "Gather invitation ideas and share timing or location after those details are confirmed.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "shared_activities",
+                  "title": "Activities",
+                  "category": "other",
+                  "notes": "Collect optional ways to spend time together across ages and interests.",
+                  "target": {
+                    "kind": "child",
+                    "key": "thanksgiving_gathering"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "table_and_space",
+                  "title": "Table and shared space",
+                  "category": "decor",
+                  "notes": "Save optional ideas for making the shared space comfortable and welcoming.",
+                  "target": {
+                    "kind": "child",
+                    "key": "shared_meal"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "planning_priorities",
+                  "title": "Planning priorities",
+                  "body": "Choose the date that works for your group; this template does not assume a national holiday date. Collect menu ideas, dietary needs, and possible contributions without assigning anyone a task until they agree.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "gathering_details",
+                  "title": "Gathering details",
+                  "body": "Share confirmed timing, arrival, and accessibility information here when it is ready for participants.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "thanksgiving_gathering"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "holidays"
+        ],
+        "tags": [
+          "thanksgiving",
+          "friendsgiving",
+          "holiday",
+          "dinner",
+          "potluck"
+        ],
+        "summary": "Plan a Thanksgiving gathering on your chosen date, with shared food and time together."
+      }
+    },
+    {
+      "catalogKey": "thoughtful_guest_stay",
+      "revision": 1,
+      "contentHash": "a9a061c08097fa1a6e69bf736f5ffdfa087f522beaeb54b333ef5fd61e7803b7",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "thoughtful_guest_stay",
+          "revision": 1,
+          "name": "A Welcoming Guest Stay"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Arrival and orientation",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "16:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "Explore the neighborhood",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 1,
+                    "localTime": "10:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "An easy evening nearby",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 1,
+                    "localTime": "18:00"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Checkout and onward travel",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 2,
+                    "localTime": "10:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "food",
+                "venue",
+                "other"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "A nearby breakfast spot",
+                  "category": "food",
+                  "notes": "Replace with a verified local recommendation and dietary options.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "A free self-guided walk",
+                  "category": "venue",
+                  "notes": "Provide an accessible route and realistic duration.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "A rainy-day indoor option",
+                  "category": "venue",
+                  "notes": "Check transport, cost and whether advance booking is needed.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "Dinner for different budgets",
+                  "category": "food",
+                  "notes": "Include an affordable take-away option as well as a sit-down meal.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "A host contact note",
+                  "category": "other",
+                  "notes": "Share contact and access details privately with confirmed guests, not through the public template.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "An agreed checkout handoff",
+                  "category": "other",
+                  "notes": "Describe only general expectations here; confirm property-specific instructions privately.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "A reusable guest experience with local suggestions and a clear handoff, without exposing property access details.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Arrival and orientation",
+                  "body": "Confirm access privately and explain how to contact the host.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "Explore the neighborhood",
+                  "body": "Offer options, not a mandatory itinerary; verify local details before sharing.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "An easy evening nearby",
+                  "body": "Check opening hours and offer options at more than one price point.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Checkout and onward travel",
+                  "body": "Agree departure timing directly and avoid storing security details in this guide.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "guest_stays"
+        ],
+        "tags": [
+          "guest",
+          "rental",
+          "airbnb",
+          "hosting",
+          "local guide"
+        ],
+        "summary": "A reusable guest experience with local suggestions and a clear handoff, without exposing property access details."
+      }
+    },
+    {
+      "catalogKey": "wedding",
+      "revision": 1,
+      "contentHash": "24518a2d4795d62a7d0ed5d349cd0bb7ed7a2883a7dec7bf9c522a8e5119878a",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "wedding",
+          "revision": 1,
+          "name": "Wedding"
+        },
+        "experienceDefaults": {
+          "type": "wedding"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "wedding",
+              "children": [
+                {
+                  "key": "venue_visit",
+                  "title": "Venue visit",
+                  "purpose": "planning_scouting",
+                  "category": "venue",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": -30,
+                    "localTime": "12:00"
+                  }
+                },
+                {
+                  "key": "rehearsal",
+                  "title": "Rehearsal",
+                  "purpose": "part_of_event",
+                  "category": "rehearsal",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": -1,
+                    "localTime": "17:00"
+                  }
+                },
+                {
+                  "key": "ceremony",
+                  "title": "Ceremony",
+                  "purpose": "part_of_event",
+                  "category": "ceremony",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "15:00"
+                  }
+                },
+                {
+                  "key": "reception",
+                  "title": "Reception",
+                  "purpose": "part_of_event",
+                  "category": "reception",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "18:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "venue",
+                "attire",
+                "food",
+                "flowers",
+                "photography"
+              ],
+              "ideas": [
+                {
+                  "key": "venue",
+                  "title": "Venue",
+                  "category": "venue",
+                  "notes": "Collect options and compare capacity, accessibility, and budget.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "attire",
+                  "title": "Attire",
+                  "category": "attire",
+                  "notes": "Gather ideas for outfits, fittings, and any needed alterations.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "food",
+                  "title": "Food and drinks",
+                  "category": "food",
+                  "notes": "Explore menu and drink options, including dietary needs.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "flowers",
+                  "title": "Flowers",
+                  "category": "flowers",
+                  "notes": "Collect floral styles and seasonal ideas.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "photography",
+                  "title": "Photography",
+                  "category": "photography",
+                  "notes": "Compare portfolios, coverage, and delivery options.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "planning_priorities",
+                  "title": "Planning priorities",
+                  "body": "Choose the details that matter most to you, then compare options against your priorities and budget. Add confirmed decisions as they are made.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "ceremony_guidance",
+                  "title": "Ceremony guidance",
+                  "body": "Use this space for ceremony timing, accessibility, and arrival details once they are confirmed. Share guest-facing directions with participants when ready.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "ceremony"
+                  }
+                },
+                {
+                  "key": "reception_guidance",
+                  "title": "Reception guidance",
+                  "body": "Add arrival, meal, and accessibility details after they are confirmed. Keep planning notes separate from information intended for attendees.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "reception"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "weddings"
+        ],
+        "tags": [
+          "wedding",
+          "ceremony",
+          "reception",
+          "celebration"
+        ],
+        "summary": "Plan your wedding, from the first venue visit to the celebration."
+      }
+    },
+    {
+      "catalogKey": "welcome_baby_shower",
+      "revision": 1,
+      "contentHash": "35d9b66cf4551fba061b4886d7afc611aa17bc62ca1d48cbf6ba515a008ede9d",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "welcome_baby_shower",
+          "revision": 1,
+          "name": "A Thoughtful Baby Shower"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Prepare a comfortable space",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "10:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "Welcome brunch",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "11:00"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "Optional shared activities",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "12:00"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "Well-wishes and farewell",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "13:00"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "food",
+                "other",
+                "decor",
+                "photography"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "A brunch everyone can enjoy",
+                  "category": "food",
+                  "notes": "Include clearly labeled alternatives and easy-to-eat portions.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "Advice cards, without pressure",
+                  "category": "other",
+                  "notes": "Offer blank cards for encouragement rather than unsolicited instructions.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "A favorite children’s book",
+                  "category": "other",
+                  "notes": "Invite guests to share a book only if the parents like the idea.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "A practical support calendar idea",
+                  "category": "other",
+                  "notes": "Discuss future meal help privately; this does not schedule reminders.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "Low-key table decor",
+                  "category": "decor",
+                  "notes": "Use reusable decorations in colors chosen by the parents.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "Photo preferences",
+                  "category": "photography",
+                  "notes": "Ask before posting photos or sharing pregnancy or baby details.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "A welcoming shower with flexible activities, practical support and space for the parents’ preferences.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Prepare a comfortable space",
+                  "body": "Provide comfortable seating, a quiet place to rest and an accessible arrival route.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "Welcome brunch",
+                  "body": "Ask about dietary needs and food preferences before choosing the menu.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "Optional shared activities",
+                  "body": "Keep games optional and avoid personal questions or assumptions about family roles.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "Well-wishes and farewell",
+                  "body": "Ask the parents whether they want gifts opened during the event.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "showers"
+        ],
+        "tags": [
+          "baby",
+          "shower",
+          "parents",
+          "family",
+          "welcome"
+        ],
+        "summary": "A welcoming shower with flexible activities, practical support and space for the parents’ preferences."
+      }
+    },
+    {
+      "catalogKey": "welcoming_game_night",
+      "revision": 1,
+      "contentHash": "e8f475a3455d6beee7a31de4e6e6b348b1a7b9e96a4acf2a9cf70d569df094eb",
+      "definition": {
+        "$schema": "https://gatherory.com/schemas/experience-blueprint-v1.json",
+        "kind": "experience_blueprint",
+        "schemaVersion": 1,
+        "blueprint": {
+          "id": "welcoming_game_night",
+          "revision": 1,
+          "name": "Game Night for Every Skill Level"
+        },
+        "experienceDefaults": {
+          "type": "custom"
+        },
+        "roles": [],
+        "modules": [
+          {
+            "key": "event_tree",
+            "type": "experience_tree",
+            "version": 2,
+            "required": true,
+            "config": {
+              "mainEventType": "custom",
+              "children": [
+                {
+                  "key": "activity_1",
+                  "title": "Arrive and choose a table",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "18:00"
+                  }
+                },
+                {
+                  "key": "activity_2",
+                  "title": "A short opening game",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "18:30"
+                  }
+                },
+                {
+                  "key": "activity_3",
+                  "title": "Snack break and table swap",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "19:30"
+                  }
+                },
+                {
+                  "key": "activity_4",
+                  "title": "One final round",
+                  "purpose": "part_of_event",
+                  "category": "other",
+                  "scheduleProposal": {
+                    "anchor": "main_start",
+                    "dayOffset": 0,
+                    "localTime": "20:30"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "starter_ideas",
+            "type": "ideas",
+            "version": 2,
+            "required": true,
+            "config": {
+              "categoryOrder": [
+                "other",
+                "food",
+                "invitations"
+              ],
+              "ideas": [
+                {
+                  "key": "idea_1",
+                  "title": "Cooperative opener",
+                  "category": "other",
+                  "notes": "Choose a short game where newcomers can learn with the group.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_2",
+                  "title": "A quiet puzzle table",
+                  "category": "other",
+                  "notes": "Provide a lower-stimulation alternative to competitive games.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_3",
+                  "title": "Easy-to-read rules",
+                  "category": "other",
+                  "notes": "Offer a spoken explanation and readable reference cards.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_4",
+                  "title": "Low-mess snack bowls",
+                  "category": "food",
+                  "notes": "Keep food away from shared game pieces and label allergens.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_5",
+                  "title": "Team games with flexible roles",
+                  "category": "other",
+                  "notes": "Avoid requiring physical speed, acting or personal disclosure.",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                },
+                {
+                  "key": "idea_6",
+                  "title": "A bring-one-game invitation",
+                  "category": "invitations",
+                  "notes": "Keep contributions optional and confirm player counts beforehand.",
+                  "target": {
+                    "kind": "main"
+                  },
+                  "configuration": {
+                    "version": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": "guest_guidance",
+            "type": "instructions",
+            "version": 1,
+            "required": true,
+            "config": {
+              "sections": [
+                {
+                  "key": "priorities",
+                  "title": "Planning priorities",
+                  "body": "A welcoming game night with quick introductions, flexible tables and plenty of breaks.",
+                  "audience": "planning_only",
+                  "target": {
+                    "kind": "main"
+                  }
+                },
+                {
+                  "key": "guidance_1",
+                  "title": "Arrive and choose a table",
+                  "body": "Ask about experience and preferred pace without putting anyone on the spot.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_1"
+                  }
+                },
+                {
+                  "key": "guidance_2",
+                  "title": "A short opening game",
+                  "body": "Teach the rules together and choose a game with an easy first round.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_2"
+                  }
+                },
+                {
+                  "key": "guidance_3",
+                  "title": "Snack break and table swap",
+                  "body": "Let people change games or simply spend time talking.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_3"
+                  }
+                },
+                {
+                  "key": "guidance_4",
+                  "title": "One final round",
+                  "body": "Agree on an end time and avoid starting a game that runs far beyond it.",
+                  "audience": "event_participants",
+                  "target": {
+                    "kind": "child",
+                    "key": "activity_4"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "discovery": {
+        "categories": [
+          "game_nights"
+        ],
+        "tags": [
+          "games",
+          "board games",
+          "friends",
+          "indoors",
+          "casual"
+        ],
+        "summary": "A welcoming game night with quick introductions, flexible tables and plenty of breaks."
+      }
+    }
+  ]
+}

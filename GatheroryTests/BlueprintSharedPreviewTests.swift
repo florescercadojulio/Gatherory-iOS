@@ -22,7 +22,7 @@ struct BlueprintSharedPreviewTests {
         #expect(model.entry?.catalogKey == entry.catalogKey)
         #expect(model.entry?.revision == entry.revision)
         #expect(model.entry?.contentHash == entry.contentHash)
-        #expect(fetched == 1 && savedReads == 0)
+        #expect(fetched == 1 && savedReads == 1)
         #expect(!model.isLoading && !model.usesSavedPreview && model.errorMessage == nil)
     }
 
@@ -34,12 +34,17 @@ struct BlueprintSharedPreviewTests {
         let draft = try savedDraft()
         try drafts.save(draft)
         let model = BlueprintSharedPreviewModel()
+        var fetched = 0
         await model.load(ownerID: "A", token: token, pendingInstallation: { false }, savedDraft: {
             try drafts.load(ownerUserID: "A", shareToken: token)
-        }, fetch: { throw URLError(.notConnectedToInternet) })
+        }, fetch: {
+            fetched += 1
+            throw URLError(.notConnectedToInternet)
+        })
 
         #expect(model.entry?.contentHash == draft.entry.contentHash)
         #expect(model.usesSavedPreview && model.errorMessage == nil)
+        #expect(fetched == 0)
         let loaded = try drafts.load(ownerUserID: "A", shareToken: token)
         let unchanged = try #require(loaded)
         #expect(unchanged.requestID == draft.requestID)
@@ -62,9 +67,36 @@ struct BlueprintSharedPreviewTests {
         #expect(model.errorMessage == BlueprintCopy.loadFailed)
     }
 
-    @Test("Revocation, auth failures, invalid responses and TLS failures never fall back to cached content")
-    func authoritativeDenialIsNotOffline() async throws {
+    @Test("A valid saved snapshot is preferred without checking whether its source link still works")
+    func savedSnapshotPrecedesRevokedOrUpdatedSource() async throws {
         let draft = try savedDraft()
+        let model = BlueprintSharedPreviewModel()
+        var fetches = 0
+        await model.load(ownerID: "A", token: token, pendingInstallation: { false }, savedDraft: { draft }, fetch: {
+            fetches += 1
+            throw CloudSyncFailure.server("BLUEPRINT_LINK_UNAVAILABLE")
+        })
+        #expect(model.entry?.contentHash == draft.entry.contentHash)
+        #expect(model.usesSavedPreview && model.errorMessage == nil)
+        #expect(fetches == 0)
+
+        let refreshedSource = BlueprintCatalogEntry(
+            catalogKey: draft.entry.catalogKey, revision: draft.entry.revision + 1,
+            contentHash: String(repeating: "b", count: 64), definition: draft.entry.definition,
+            discovery: draft.entry.discovery, description: draft.entry.description
+        )
+        let secondModel = BlueprintSharedPreviewModel()
+        var updatedSourceFetches = 0
+        await secondModel.load(ownerID: "A", token: token, pendingInstallation: { false }, savedDraft: { draft }, fetch: {
+            updatedSourceFetches += 1
+            return refreshedSource
+        })
+        #expect(secondModel.entry?.revision == draft.entry.revision)
+        #expect(secondModel.usesSavedPreview && updatedSourceFetches == 0)
+    }
+
+    @Test("Revocation, auth failures, invalid responses and TLS failures reject when no snapshot is saved")
+    func authoritativeDenialWithoutSavedSnapshot() async throws {
         let failures: [Error] = [
             CloudSyncFailure.server("BLUEPRINT_LINK_UNAVAILABLE"),
             CloudSyncFailure.server("BLUEPRINT_NOT_FOUND"),
@@ -79,12 +111,16 @@ struct BlueprintSharedPreviewTests {
         for failure in failures {
             let model = BlueprintSharedPreviewModel()
             var savedReads = 0
+            var fetches = 0
             await model.load(ownerID: "A", token: token, pendingInstallation: { false }, savedDraft: {
                 savedReads += 1
-                return draft
-            }, fetch: { throw failure })
+                return nil
+            }, fetch: {
+                fetches += 1
+                throw failure
+            })
             #expect(model.entry == nil && !model.usesSavedPreview)
-            #expect(model.errorMessage != nil && savedReads == 0)
+            #expect(model.errorMessage != nil && savedReads >= 1 && fetches == 1)
         }
     }
 
@@ -97,10 +133,13 @@ struct BlueprintSharedPreviewTests {
         wrongLink.shareToken = String(repeating: "b2", count: 32)
         for invalid in [wrongAccount, wrongLink] {
             let model = BlueprintSharedPreviewModel()
+            var fetches = 0
             await model.load(ownerID: "A", token: token, pendingInstallation: { false }, savedDraft: { invalid }, fetch: {
+                fetches += 1
                 throw URLError(.networkConnectionLost)
             })
             #expect(model.entry == nil && !model.usesSavedPreview)
+            #expect(model.errorMessage == BlueprintCopy.loadFailed && fetches == 1)
         }
     }
 
@@ -124,7 +163,7 @@ struct BlueprintSharedPreviewTests {
         await old.value
         #expect(model.entry == nil && !model.isLoading)
         #expect(model.errorMessage == BlueprintCopy.sharedLinkUnavailable)
-        #expect(savedReads == 0)
+        #expect(savedReads == 1)
     }
 
     @Test("Canceling a link resolution prevents late content from being published")

@@ -778,12 +778,15 @@ struct EventDateTimeEditorView: View {
     @State private var timeZoneIdentifier: String
 
     let save: (Date, Date?, Bool, String) -> Void
+    /// Portable blueprint installs currently support a timed start only.
+    let supportsExtendedSchedule: Bool
 
     init(
         startsAt: Date,
         endsAt: Date?,
         isAllDay: Bool,
         timeZoneIdentifier: String,
+        supportsExtendedSchedule: Bool = true,
         save: @escaping (Date, Date?, Bool, String) -> Void
     ) {
         _startsAt = State(initialValue: startsAt)
@@ -791,6 +794,7 @@ struct EventDateTimeEditorView: View {
         _isAllDay = State(initialValue: isAllDay)
         _timeZoneIdentifier = State(initialValue: timeZoneIdentifier)
         self.save = save
+        self.supportsExtendedSchedule = supportsExtendedSchedule
     }
 
     private var selectedTimeZone: TimeZone {
@@ -801,14 +805,14 @@ struct EventDateTimeEditorView: View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle("All-day", isOn: $isAllDay)
+                    if supportsExtendedSchedule { Toggle("All-day", isOn: $isAllDay) }
 
                     datePickerRow(
                         title: "Starts",
                         selection: $startsAt
                     )
 
-                    if endsAt != nil {
+                    if supportsExtendedSchedule, endsAt != nil {
                         datePickerRow(
                             title: "Ends",
                             selection: endDateBinding
@@ -817,7 +821,7 @@ struct EventDateTimeEditorView: View {
                         Button("Remove End", systemImage: "minus.circle", role: .destructive) {
                             endsAt = nil
                         }
-                    } else {
+                    } else if supportsExtendedSchedule {
                         Button("Add End", systemImage: "plus.circle") {
                             endsAt = defaultEndDate
                         }
@@ -953,8 +957,8 @@ struct EventDateTimeEditorView: View {
     private var normalizedSchedule: EventSchedule {
         EventSchedule(
             startsAt: startsAt,
-            endsAt: endsAt,
-            isAllDay: isAllDay,
+            endsAt: supportsExtendedSchedule ? endsAt : nil,
+            isAllDay: supportsExtendedSchedule && isAllDay,
             timeZoneIdentifier: timeZoneIdentifier
         ).normalized
     }

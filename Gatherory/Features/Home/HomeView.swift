@@ -10,6 +10,7 @@ struct HomeView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isComposingNote = false
+    @State private var isSavingBlueprint = false
     @State private var isPresentingInvitationSharing = false
     @State private var editorTarget: HomeEventEditorTarget?
     @State private var isAddingEventIdea = false
@@ -216,6 +217,12 @@ struct HomeView: View {
                     .zoom(sourceID: reference, in: invitationTransition)
                 )
         }
+        .sheet(isPresented: $isSavingBlueprint) {
+            NavigationStack {
+                BlueprintCreateShareView(eventID: workspace.mainEventID, workspace: workspace, publishesToSearch: false)
+            }
+            .presentationDetents([.large])
+        }
         .sheet(isPresented: $isComposingNote) {
             NoteComposerView(event: workspace.selectedEventReference,
                              eventID: workspace.selectedEventID,
@@ -330,82 +337,50 @@ struct HomeView: View {
             Button {
                 openedEventReference = reference
             } label: {
-                ZStack(alignment: .bottom) {
+                WorkspaceEventHero(title: title(for: reference)) {
                     eventArtwork(for: reference)
                         .frame(width: proxy.size.width, height: eventHeroHeight)
                         .clipped()
-
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0.34),
-                            .init(color: .black.opacity(reduceTransparency ? 0.24 : 0.08), location: 0.52),
-                            .init(color: .black.opacity(reduceTransparency ? 0.76 : 0.46), location: 0.76),
-                            .init(color: .black.opacity(reduceTransparency ? 0.90 : 0.70), location: 1)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+                } people: {
+                    if !eventPeople(for: reference).isEmpty {
+                        attendeeSummary(for: reference)
+                    }
+                } metadata: {
+                    Text(
+                        date(for: reference),
+                        format: .dateTime.weekday(.wide).month(.wide).day().year()
                     )
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
 
-                    VStack(spacing: AppTheme.Spacing.standard) {
-                        Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 120 : 220)
-
-                        if !eventPeople(for: reference).isEmpty {
-                            attendeeSummary(for: reference)
-                        }
-
-                        VStack(spacing: 8) {
-                            Text(title(for: reference))
-                                .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                                .multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            Text(
-                                date(for: reference),
-                                format: .dateTime.weekday(.wide).month(.wide).day().year()
-                            )
-                            .font(.headline)
+                    if let eventLocation = location(for: reference) {
+                        Label(eventLocation.title, systemImage: "mappin.and.ellipse")
+                            .font(.caption.weight(.semibold))
                             .multilineTextAlignment(.center)
-
-                            if let eventLocation = location(for: reference) {
-                                Label(eventLocation.title, systemImage: "mappin.and.ellipse")
-                                    .font(.caption.weight(.semibold))
-                                    .multilineTextAlignment(.center)
-                                    .foregroundStyle(.white.opacity(0.88))
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .lineLimit(2)
-                                    .accessibilityLabel("Location, \(eventLocation.formatted)")
-                            }
-
-                            Text(secondaryLabel(for: reference))
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.white.opacity(0.72))
-                        }
-                        .padding(.horizontal, AppTheme.Spacing.compact)
-                        .shadow(color: .black.opacity(0.28), radius: 10, y: 4)
+                            .foregroundStyle(.white.opacity(0.88))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(2)
+                            .accessibilityLabel("Location, \(eventLocation.formatted)")
                     }
-                    .foregroundStyle(.white)
-                    .padding(AppTheme.Spacing.spacious)
 
-                    VStack {
-                        HStack {
-                            EventContextStatusBadge(
-                                title: status(for: reference).title,
-                                symbol: status(for: reference).symbol,
-                                context: reference == .main ? "Main event" : "Subevent"
-                            )
-
-                            Spacer(minLength: 0)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .foregroundStyle(.white)
-                    .padding(AppTheme.Spacing.spacious)
+                    Text(secondaryLabel(for: reference))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.72))
+                } badge: {
+                    EventContextStatusBadge(
+                        title: status(for: reference).title,
+                        symbol: status(for: reference).symbol,
+                        context: reference == .main ? "Main event" : "Subevent"
+                    )
                 }
                 .frame(width: proxy.size.width, height: eventHeroHeight)
                 .clipped()
                 .matchedTransitionSource(id: reference, in: invitationTransition)
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                eventActions(for: reference)
+            }
             .accessibilityHint("Opens event details")
             .accessibilityIdentifier(reference == .main ? "home.event.main" : "home.event.child")
             .accessibilityLabel(
@@ -426,6 +401,12 @@ struct HomeView: View {
 
     @ViewBuilder
     private func eventActions(for reference: EventReference) -> some View {
+        if reference == .main, BlueprintCaptureLink.sharingURL(
+            baseURL: AppRuntimeConfiguration.authenticationBaseURL, workspace: workspace) != nil {
+            Button(BlueprintCopy.saveBlueprint, systemImage: "square.and.arrow.down") {
+                isSavingBlueprint = true
+            }
+        }
         if canEdit(reference) {
             Button("Edit Event", systemImage: "pencil") {
                 editorTarget = editorTarget(for: reference)
@@ -511,15 +492,23 @@ struct HomeView: View {
     }
 
     private var eventContextSwitcher: some View {
-        EventContextSwitcher(
-            references: workspace.visibleEventContexts,
-            selectedReference: visibleEventReference ?? workspace.selectedEventReference,
+        EventContextRail(
+            itemIDs: workspace.visibleEventContexts,
+            selectedID: visibleEventReference ?? workspace.selectedEventReference,
             previewIndex: scrubbedEventIndex,
             title: title(for:),
-            date: date(for:),
-            mainEventHasScheduledDate: workspace.mainEventHasScheduledDate,
-            onPreview: previewEvent(at:),
-            onCommit: commitScrubbedEvent(at:)
+            annotation: { reference in
+                guard reference != .main || workspace.mainEventHasScheduledDate else { return nil }
+                return date(for: reference).formatted(.dateTime.month(.abbreviated).day().year())
+            },
+            onPreview: { reference in
+                guard let index = workspace.visibleEventContexts.firstIndex(of: reference) else { return }
+                previewEvent(at: index)
+            },
+            onCommit: { reference in
+                guard let index = workspace.visibleEventContexts.firstIndex(of: reference) else { return }
+                commitScrubbedEvent(at: index)
+            }
         )
     }
 
@@ -868,248 +857,6 @@ private struct PullToCreateEventIndicator: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isArmed ? "Release to add an event idea" : "Pull to add an event idea")
         .accessibilityValue("\(Int(progress * 100)) percent")
-    }
-}
-
-/// A compact event index inspired by Camera Control. Its tapered housing docks
-/// to the trailing edge, while candle marks communicate the current event and
-/// its neighbors without competing with the invitation artwork.
-private struct EventContextSwitcher: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
-
-    let references: [EventReference]
-    let selectedReference: EventReference
-    let previewIndex: Int?
-    let title: (EventReference) -> String
-    let date: (EventReference) -> Date
-    let mainEventHasScheduledDate: Bool
-    let onPreview: (Int) -> Void
-    let onCommit: (Int) -> Void
-
-    private var currentIndex: Int {
-        if let previewIndex, references.indices.contains(previewIndex) {
-            return previewIndex
-        }
-        return references.firstIndex(of: selectedReference) ?? 0
-    }
-
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .trailing) {
-                ZStack(alignment: .trailing) {
-                    EventIndexDockShape()
-                        .fill(colorScheme == .light ? .thickMaterial : .regularMaterial)
-                        .overlay {
-                            EventIndexDockShape()
-                                .stroke(
-                                    Color.primary.opacity(colorScheme == .light ? 0.26 : 0.18),
-                                    lineWidth: 0.5
-                                )
-                        }
-
-                    VStack(spacing: 0) {
-                        ForEach(references.indices, id: \.self) { index in
-                            let isSelected = index == currentIndex
-
-                            HStack(spacing: 0) {
-                                Spacer(minLength: 0)
-
-                                EventIndexCandle()
-                                    .fill(
-                                        isSelected
-                                            ? AppTheme.ColorToken.accent
-                                            : Color.primary.opacity(candleOpacity(at: index))
-                                    )
-                                    .frame(
-                                        width: candleWidth(at: index),
-                                        height: isSelected ? 6 : 4
-                                    )
-                                    .animation(
-                                        reduceMotion ? nil : .snappy(duration: 0.22),
-                                        value: currentIndex
-                                    )
-                            }
-                            .frame(maxHeight: .infinity)
-                        }
-                    }
-                    .padding(.vertical, 12)
-                    .padding(.trailing, 2)
-                }
-                // Keep the visible control entirely in the page gutter. The
-                // invitation cards use the same horizontal inset, so the dock
-                // meets their outside edge instead of floating over artwork.
-                .frame(width: AppTheme.Layout.screenHorizontal)
-            }
-            // GeometryReader provides the 44-point interaction lane, but a
-            // ZStack otherwise adopts its child's narrow width. Expand it
-            // explicitly so the visible dock is aligned to the lane's—and
-            // therefore the device's—trailing edge.
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                    .onChanged { value in
-                        onPreview(index(at: value.location.y, height: proxy.size.height))
-                    }
-                    .onEnded { value in
-                        onCommit(index(at: value.location.y, height: proxy.size.height))
-                    }
-            )
-        }
-        // The visual dock is deliberately narrow, but this keeps its drag
-        // target at Apple's recommended minimum size.
-        .frame(width: AppTheme.Layout.minimumTouchTarget, height: 196)
-        .overlay(alignment: .trailing) {
-            if let previewIndex, references.indices.contains(previewIndex) {
-                let reference = references[previewIndex]
-                eventDateBubble(for: reference)
-            }
-        }
-        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: previewIndex)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Event switcher")
-        .accessibilityValue(accessibilityValue)
-        .accessibilityHint("Tap or drag along the rail to select an event")
-        .accessibilityAdjustableAction { direction in
-            let nextIndex: Int
-            switch direction {
-            case .increment:
-                nextIndex = min(currentIndex + 1, references.count - 1)
-            case .decrement:
-                nextIndex = max(currentIndex - 1, 0)
-            @unknown default:
-                return
-            }
-            onPreview(nextIndex)
-            onCommit(nextIndex)
-        }
-    }
-
-    private var accessibilityValue: String {
-        guard references.indices.contains(currentIndex) else { return "No event" }
-        let reference = references[currentIndex]
-        return "\(title(reference)), \(currentIndex + 1) of \(references.count)"
-    }
-
-    @ViewBuilder
-    private func eventDateBubble(for reference: EventReference) -> some View {
-        if reference != .main || mainEventHasScheduledDate {
-            Text(date(reference), format: .dateTime.month(.abbreviated).day().year())
-                .font(.caption.weight(.semibold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.9)
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 10)
-                .frame(width: 164)
-                .frame(minHeight: 32)
-                .background(.regularMaterial, in: Capsule())
-                .overlay {
-                    Capsule()
-                        .stroke(Color.primary.opacity(0.18), lineWidth: 0.5)
-                }
-                .offset(x: -AppTheme.Layout.minimumTouchTarget)
-                .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .trailing)))
-                .allowsHitTesting(false)
-        }
-    }
-
-    private func candleWidth(at index: Int) -> CGFloat {
-        switch abs(index - currentIndex) {
-        case 0: AppTheme.Layout.screenHorizontal - 2
-        case 1: 8
-        default: 4
-        }
-    }
-
-    private func candleOpacity(at index: Int) -> Double {
-        abs(index - currentIndex) == 1 ? 0.62 : 0.34
-    }
-
-    private func index(at yPosition: CGFloat, height: CGFloat) -> Int {
-        guard !references.isEmpty, height > 0 else { return 0 }
-        let clampedY = min(max(yPosition, 0), height - 0.001)
-        return min(Int((clampedY / height) * CGFloat(references.count)), references.count - 1)
-    }
-}
-
-/// A horizontal mark that is narrower toward the center of the display and
-/// fuller at the screen edge. The curved ends keep the transition soft.
-private struct EventIndexCandle: Shape {
-    func path(in rect: CGRect) -> Path {
-        let leadingHalfHeight = rect.height * 0.28
-        let midpoint = rect.midY
-        let radius = min(rect.height / 2, 3)
-
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX + radius, y: midpoint - leadingHalfHeight))
-        path.addCurve(
-            to: CGPoint(x: rect.minX, y: midpoint),
-            control1: CGPoint(x: rect.minX, y: midpoint - leadingHalfHeight),
-            control2: CGPoint(x: rect.minX, y: midpoint - leadingHalfHeight / 2)
-        )
-        path.addCurve(
-            to: CGPoint(x: rect.minX + radius, y: midpoint + leadingHalfHeight),
-            control1: CGPoint(x: rect.minX, y: midpoint + leadingHalfHeight / 2),
-            control2: CGPoint(x: rect.minX, y: midpoint + leadingHalfHeight)
-        )
-        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.maxY))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.maxX, y: rect.maxY - radius),
-            control: CGPoint(x: rect.maxX, y: rect.maxY)
-        )
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + radius))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.maxX - radius, y: rect.minY),
-            control: CGPoint(x: rect.maxX, y: rect.minY)
-        )
-        path.closeSubpath()
-        return path
-    }
-}
-
-/// A rounded trapezoid whose full-height side sits at the screen edge and
-/// whose shorter side faces inward toward the event content.
-private struct EventIndexDockShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let taper = min(rect.height * 0.08, 14)
-        let innerRadius = min(rect.width * 0.18, 4)
-        let inverseRadius = min(rect.width * 0.36, 8)
-
-        var path = Path()
-        path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addCurve(
-            to: CGPoint(x: rect.maxX - inverseRadius, y: rect.minY + inverseRadius),
-            control1: CGPoint(x: rect.maxX, y: rect.minY + inverseRadius * 0.55),
-            control2: CGPoint(
-                x: rect.maxX - inverseRadius * 0.45,
-                y: rect.minY + inverseRadius
-            )
-        )
-        path.addLine(to: CGPoint(x: rect.minX + innerRadius, y: rect.minY + taper))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.minX, y: rect.minY + taper + innerRadius),
-            control: CGPoint(x: rect.minX, y: rect.minY + taper)
-        )
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - taper - innerRadius))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.minX + innerRadius, y: rect.maxY - taper),
-            control: CGPoint(x: rect.minX, y: rect.maxY - taper)
-        )
-        path.addLine(
-            to: CGPoint(x: rect.maxX - inverseRadius, y: rect.maxY - inverseRadius)
-        )
-        path.addCurve(
-            to: CGPoint(x: rect.maxX, y: rect.maxY),
-            control1: CGPoint(
-                x: rect.maxX - inverseRadius * 0.45,
-                y: rect.maxY - inverseRadius
-            ),
-            control2: CGPoint(x: rect.maxX, y: rect.maxY - inverseRadius * 0.55)
-        )
-        path.closeSubpath()
-        return path
     }
 }
 

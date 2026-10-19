@@ -1,8 +1,8 @@
 import Foundation
 import Observation
 
-/// Incoming-link resolution is read-only. A cached setup is a viewing fallback
-/// for network loss, never an alternate grant after a server rejection.
+/// Incoming links without a saved draft still require current source access.
+/// A saved setup is already a local snapshot, independent of the entry link.
 @MainActor @Observable
 final class BlueprintSharedPreviewModel {
     private(set) var entry: BlueprintCatalogEntry?
@@ -34,6 +34,12 @@ final class BlueprintSharedPreviewModel {
         }
         do {
             hasPendingInstallation = try pendingInstallation()
+            if let saved = try savedDraft(), saved.ownerUserID == ownerID, saved.shareToken == token,
+               BlueprintPreviewContent(entry: saved.entry) != nil {
+                entry = saved.entry
+                usesSavedPreview = true
+                return
+            }
             let resolved = try await fetch()
             guard generation == attempt, !Task.isCancelled else { return }
             guard BlueprintPreviewContent(entry: resolved) != nil else {

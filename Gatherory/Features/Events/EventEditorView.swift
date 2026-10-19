@@ -61,118 +61,6 @@ private extension TimelineCategory {
     }
 }
 
-/// Shared by event creation and event ideas so choosing an event type feels
-/// identical regardless of where the flow starts.
-struct EventCategoryStrip: View {
-    @Binding var selection: TimelineCategory
-
-    private var orderedCategories: [TimelineCategory] {
-        [.other] + TimelineCategory.allCases.filter { $0 != .other }
-    }
-
-    var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: AppTheme.Spacing.compact) {
-                ForEach(orderedCategories) { option in
-                    let isSelected = selection == option
-
-                    Button {
-                        withAnimation(.snappy) {
-                            selection = option
-                        }
-                    } label: {
-                        VStack(spacing: 6) {
-                            Image(systemName: option == .other ? "circle.slash" : option.symbol)
-                                .symbolRenderingMode(.hierarchical)
-                                .font(.title2)
-
-                            Text(option == .other ? "None" : option.title)
-                                .font(.caption.weight(.semibold))
-                                .multilineTextAlignment(.center)
-                                .lineLimit(2)
-                        }
-                        .foregroundStyle(isSelected ? AppTheme.ColorToken.onAccent : .primary)
-                        .frame(width: 98, height: 76)
-                        .background(
-                            isSelected ? option.artworkAccent : AppTheme.ColorToken.elevatedSurface,
-                            in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                                .strokeBorder(
-                                    isSelected ? option.artworkAccent : AppTheme.ColorToken.cardBorder,
-                                    lineWidth: isSelected ? 2 : 0.5
-                                )
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(option == .other ? "No category" : option.title)
-                    .accessibilityValue(isSelected ? "Selected" : "Not selected")
-                }
-            }
-            .padding(.vertical, 2)
-        }
-        .scrollIndicators(.hidden)
-        .contentMargins(.horizontal, 0, for: .scrollContent)
-        .accessibilityLabel("Event categories")
-    }
-}
-
-struct EventPurposeSelector: View {
-    @Binding var selection: EventPurpose
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(spacing: AppTheme.Spacing.compact) { purposeTiles }
-            } else {
-                HStack(spacing: AppTheme.Spacing.compact) { purposeTiles }
-            }
-        }
-        .padding(2)
-        .accessibilityLabel("Event purpose")
-    }
-
-    private var purposeTiles: some View {
-        ForEach(EventPurpose.allCases) { option in
-            let isSelected = selection == option
-
-            Button {
-                withAnimation(.snappy) {
-                    selection = option
-                }
-            } label: {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label(option.title, systemImage: option.symbol)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(2)
-
-                    Text(option.description)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                }
-                .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
-                .padding(8)
-                .background(
-                    isSelected ? AppTheme.ColorToken.accent.opacity(0.14) : AppTheme.ColorToken.elevatedSurface,
-                    in: RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
-                        .strokeBorder(
-                            isSelected ? AppTheme.ColorToken.accent : AppTheme.ColorToken.cardBorder,
-                            lineWidth: isSelected ? 2 : 0.5
-                        )
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        }
-    }
-}
-
 /// One editor for creating and editing every event in the two-level hierarchy.
 struct EventEditorView: View {
     @Environment(PlanningWorkspace.self) private var workspace
@@ -301,17 +189,11 @@ struct EventEditorView: View {
 
     private var eventIdentitySection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(isMainEvent ? "Event Name" : "Custom Name (Optional)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                TextField(
-                    isMainEvent ? "Name your event" : "Use the suggested name",
-                    text: $title
-                )
-                .textInputAutocapitalization(.words)
-            }
+            BasicEditorNameField(
+                label: isMainEvent ? Text("Event Name") : Text("Custom Name (Optional)"),
+                prompt: isMainEvent ? Text("Name your event") : Text("Use the suggested name"),
+                text: $title
+            )
 
             if isMainEvent {
                 Picker("Status", selection: $mainStatus) {
@@ -398,12 +280,7 @@ struct EventEditorView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            Picker("Purpose", selection: $purpose) {
-                ForEach(EventPurpose.allCases) { option in
-                    Text(option.shortTitle).tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
+            BasicEventPurposePicker(selection: $purpose)
         } header: {
             Text("Event Type")
         } footer: {

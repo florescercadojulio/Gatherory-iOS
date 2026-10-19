@@ -11,40 +11,29 @@ struct BlueprintSharedPreviewView: View {
 
     var body: some View {
         Group {
-            if model.isLoading {
-                VStack(spacing: 20) {
-                    ProgressView(ExploreCopy.loading)
-                    if model.hasPendingInstallation {
-                        Button(BlueprintCopy.retryInstall) { showsRecovery = true }
-                    }
-                }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let entry = model.entry {
+            if !model.isLoading, let entry = model.entry {
                 BlueprintPreviewView(
-                    entry: entry,
-                    sharedToken: token,
+                    entry: entry, sharedToken: token,
                     usesSavedPreview: model.usesSavedPreview,
-                    hasPendingInstallation: model.hasPendingInstallation
+                    hasPendingInstallation: model.hasPendingInstallation,
+                    onClose: { sharedLinks.dismiss() }
                 )
             } else {
-                ContentUnavailableView {
-                    Label(BlueprintCopy.previewTitle, systemImage: "square.stack.3d.up.slash")
-                } description: {
-                    Text(model.errorMessage ?? BlueprintCopy.loadFailed)
-                } actions: {
-                    Button(AppCopy.Common.retry) { Task { await load() } }
-                    if model.hasPendingInstallation {
-                        Button(BlueprintCopy.retryInstall) { showsRecovery = true }
-                    }
+                NavigationStack {
+                    fallback
+                        .background(AppTheme.ColorToken.background)
+                        .navigationTitle(BlueprintCopy.previewTitle)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                WorkspaceLibraryToolbarButton(
+                                    action: { sharedLinks.dismiss() },
+                                    title: BlueprintCopy.libraryTitle,
+                                    hint: BlueprintCopy.returnToTemplates
+                                )
+                            }
+                        }
                 }
-            }
-        }
-        .background(AppTheme.ColorToken.background)
-        .navigationTitle(model.entry == nil ? BlueprintCopy.previewTitle : "")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(AppCopy.Common.close, systemImage: "xmark") { sharedLinks.dismiss() }
             }
         }
         .task(id: account?.id) { await load() }
@@ -54,6 +43,30 @@ struct BlueprintSharedPreviewView: View {
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        }
+    }
+
+    @ViewBuilder
+    private var fallback: some View {
+        if model.isLoading {
+            VStack(spacing: 20) {
+                ProgressView(ExploreCopy.loading)
+                if model.hasPendingInstallation {
+                    Button(BlueprintCopy.retryInstall) { showsRecovery = true }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ContentUnavailableView {
+                Label(BlueprintCopy.previewTitle, systemImage: "square.stack.3d.up.slash")
+            } description: {
+                Text(model.errorMessage ?? BlueprintCopy.loadFailed)
+            } actions: {
+                Button(AppCopy.Common.retry) { Task { await load() } }
+                if model.hasPendingInstallation {
+                    Button(BlueprintCopy.retryInstall) { showsRecovery = true }
+                }
+            }
         }
     }
 

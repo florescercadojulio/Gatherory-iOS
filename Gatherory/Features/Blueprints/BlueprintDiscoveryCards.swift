@@ -133,6 +133,9 @@ extension BlueprintBrowseCategory {
         case .birthdays: 1.06
         case .holidays: 0.92
         case .events: 0.88
+        case .engagements, .anniversaries, .cottageStays, .trips: 0.82
+        case .showers, .graduations, .picnics, .community: 1.06
+        case .bachelorParties, .reunions, .dinnerParties, .gameNights, .guestStays, .retreats: 0.92
         }
     }
 
@@ -142,6 +145,12 @@ extension BlueprintBrowseCategory {
         case .birthdays: .bachelorBachelorette
         case .holidays: .weddingShower
         case .events: .venue
+        case .engagements, .anniversaries: .ceremony
+        case .showers, .reunions: .weddingShower
+        case .bachelorParties, .gameNights: .bachelorBachelorette
+        case .graduations, .dinnerParties, .community: .reception
+        case .picnics, .cottageStays, .guestStays, .retreats: .venue
+        case .trips: .honeymoon
         }
     }
 }

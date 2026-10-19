@@ -4,6 +4,20 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct BlueprintCreateShareStoreTests {
+    @Test("Save Blueprint creates a private copy without listing it or making a share link")
+    func savePrivately() async {
+        let transport = CaptureTestTransport()
+        let store = BlueprintCreateShareStore(eventID: transport.root, accountID: "a", transport: transport,
+            publishesToSearch: false, currentAccountID: { "a" })
+        await store.load()
+        await store.review()
+        await store.createAndShare()
+        #expect(store.created != nil)
+        #expect(transport.reviews.first?.discoverable == false)
+        #expect(transport.creates.first?.discoverable == false)
+        #expect(transport.linkCreates == 0)
+        #expect(store.createdURL == nil)
+    }
     @Test("Opening capture selects all supported content and notes without publishing")
     func defaultSelectionAndNoWrites() async throws {
         let transport = CaptureTestTransport()
@@ -238,7 +252,7 @@ struct BlueprintCreateShareStoreTests {
         reviews.append(input)
         if reviewForbidden { throw CloudSyncFailure.forbidden(nil) }
         return BlueprintCaptureReview(content: .init(name: input.name, description: "", experienceType: "wedding",
-            children: [], ideas: [], instructions: []), sourceHash: input.expectedSourceHash, reviewHash: String(repeating: "b", count: 64), discoverable: true)
+            children: [], ideas: [], instructions: []), sourceHash: input.expectedSourceHash, reviewHash: String(repeating: "b", count: 64), discoverable: input.discoverable)
     }
     func createTemplate(_ input: BlueprintNativeCreateInput) async throws -> BlueprintNativeCreationResult {
         creates.append(input)

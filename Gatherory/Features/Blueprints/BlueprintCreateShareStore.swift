@@ -121,6 +121,7 @@ struct BlueprintNativeReviewInput: Encodable, Equatable, Sendable {
     let selection: BlueprintCaptureSelection
     let expectedSourceHash: String
     let name: String
+    var discoverable = true
 
     private enum CodingKeys: String, CodingKey { case action, eventId, selection, expectedSourceHash, name, discoverable }
     func encode(to encoder: any Encoder) throws {
@@ -130,7 +131,7 @@ struct BlueprintNativeReviewInput: Encodable, Equatable, Sendable {
         try container.encode(selection, forKey: .selection)
         try container.encode(expectedSourceHash, forKey: .expectedSourceHash)
         try container.encode(name, forKey: .name)
-        try container.encode(true, forKey: .discoverable)
+        try container.encode(discoverable, forKey: .discoverable)
     }
 }
 
@@ -141,6 +142,7 @@ struct BlueprintNativeCreateInput: Encodable, Equatable, Sendable {
     let name: String
     let requestId: UUID
     let expectedReviewHash: String
+    var discoverable = true
 
     private enum CodingKeys: String, CodingKey {
         case action, eventId, selection, expectedSourceHash, name, requestId, expectedReviewHash, discoverable
@@ -154,7 +156,7 @@ struct BlueprintNativeCreateInput: Encodable, Equatable, Sendable {
         try container.encode(name, forKey: .name)
         try container.encode(requestId.uuidString.lowercased(), forKey: .requestId)
         try container.encode(expectedReviewHash, forKey: .expectedReviewHash)
-        try container.encode(true, forKey: .discoverable)
+        try container.encode(discoverable, forKey: .discoverable)
     }
 }
 
@@ -169,6 +171,7 @@ protocol BlueprintCreateShareTransport: BlueprintLinkManagementTransport {
 /// entries, installation intents, or account-scoped setup drafts are changed.
 @MainActor @Observable
 final class BlueprintCreateShareStore {
+    let publishesToSearch: Bool
     let eventID: UUID
     let accountID: String
     private(set) var source: BlueprintCaptureSourceResponse?
@@ -196,10 +199,12 @@ final class BlueprintCreateShareStore {
     @ObservationIgnored private var createdLinkID: UUID?
 
     init(eventID: UUID, accountID: String, transport: any BlueprintCreateShareTransport,
+         publishesToSearch: Bool = true,
          currentAccountID: @escaping @MainActor () -> String?) {
         self.eventID = eventID
         self.accountID = accountID
         self.transport = transport
+        self.publishesToSearch = publishesToSearch
         self.currentAccountID = currentAccountID
     }
 
@@ -281,7 +286,8 @@ final class BlueprintCreateShareStore {
     func review() async {
         guard canReview, let source else { return }
         let input = BlueprintNativeReviewInput(eventId: eventID, selection: selection,
-            expectedSourceHash: source.sourceHash, name: name.trimmingCharacters(in: .whitespacesAndNewlines))
+            expectedSourceHash: source.sourceHash, name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+            discoverable: publishesToSearch)
         let current = generation
         isReviewing = true
         reviewed = nil
@@ -289,7 +295,8 @@ final class BlueprintCreateShareStore {
         do {
             let response = try await transport.reviewCapture(input)
             guard accepts(current) else { return }
-            guard response.sourceHash == input.expectedSourceHash, Self.isHash(response.reviewHash), response.discoverable == true,
+            guard response.sourceHash == input.expectedSourceHash, Self.isHash(response.reviewHash),
+                  (response.discoverable == true) == publishesToSearch,
                   response.content.name == input.name else { throw CloudSyncFailure.invalidResponse }
             name = input.name
             reviewed = response
@@ -305,7 +312,7 @@ final class BlueprintCreateShareStore {
         if created == nil {
             let input = pendingCreate ?? BlueprintNativeCreateInput(eventId: eventID,
                 selection: selection, expectedSourceHash: reviewed.sourceHash, name: reviewed.content.name,
-                requestId: UUID(), expectedReviewHash: reviewed.reviewHash)
+                requestId: UUID(), expectedReviewHash: reviewed.reviewHash, discoverable: publishesToSearch)
             pendingCreate = input
             do {
                 let response = try await transport.createTemplate(input)
@@ -318,6 +325,19 @@ final class BlueprintCreateShareStore {
             }
         }
         guard accepts(current), let created else { return }
+        if let personal = transport as? any BlueprintPersonalLibraryTransport {
+            do {
+                let records = try await personal.listPersonalBlueprints()
+                guard accepts(current), records.contains(where: { $0.id == created.templateId }) else {
+                    throw CloudSyncFailure.invalidResponse
+                }
+                try BlueprintPersonalLibraryStore().save(records, ownerID: accountID)
+            } catch {
+                fail(error, generation: current, message: BlueprintCopy.previewSaveFailed)
+                return
+            }
+        }
+        guard publishesToSearch else { errorMessage = nil; return }
         do {
             let link = try await transport.createLink(eventID: eventID, templateID: created.templateId, revision: created.revision)
             guard accepts(current) else { return }

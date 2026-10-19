@@ -45,10 +45,8 @@ struct GatheroryLaunchContainer: View {
                     } else if preparedAccountID != authentication.currentUser?.id {
                         AccountOnboardingLoadingView()
                     } else {
-                        NavigationStack {
-                            BlueprintSharedPreviewView(token: token)
-                                .id("shared-blueprint-\(token)-\(authentication.currentUser?.id ?? "signed-out")")
-                        }
+                        BlueprintSharedPreviewView(token: token)
+                            .id("shared-blueprint-\(token)-\(authentication.currentUser?.id ?? "signed-out")")
                     }
                 } else if let token = invitations.pendingToken {
                     if invitations.requiresAuthentication && !authentication.isAuthenticated {

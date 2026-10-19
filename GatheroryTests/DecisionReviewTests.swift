@@ -5,6 +5,21 @@ import Foundation
 
 @MainActor
 struct DecisionReviewTests {
+    @Test("Decide card headings follow the idea's target event without changing decisions")
+    func targetEventHeading() {
+        let workspace = workspace()
+        let child = TimelineItem(title: "Reception", category: .reception, scheduledAt: .now,
+                                 participantIDs: [], parentEventID: workspace.mainEventID)
+        workspace.addTimelineItem(child)
+        let mainIdea = PlanningIdea(title: "Main idea", note: "", category: .decor, submittedBy: "Host")
+        var childIdea = PlanningIdea(title: "Child idea", note: "", category: .decor, submittedBy: "Host")
+        childIdea.eventID = child.id
+        let mainHeading = DecisionEventHeading(title: workspace.eventTitle(for: mainIdea))
+        let childHeading = DecisionEventHeading(title: workspace.eventTitle(for: childIdea))
+        #expect(mainHeading.title == workspace.title)
+        #expect(childHeading.title == child.title)
+        #expect(workspace.ideaResponses.isEmpty)
+    }
     private func account(_ id: String) -> UserAccount {
         UserAccount(id: id, email: "\(id)@example.test", displayName: id, role: .planner,
                     authenticationProvider: .password, createdAt: .now)
@@ -160,6 +175,52 @@ struct DecisionReviewTests {
             workspace.decide(.love, on: idea)
             #expect(workspace.response(on: idea) == (permission == .viewOnly ? choice : .love))
         }
+    }
+
+    @Test("Immediate animated Undo preserves the response identity and offline outbox payload boundaries",
+          arguments: [DecisionChoice.love, .pass, .maybe])
+    func interruptedFlightOutbox(choice: DecisionChoice) throws {
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false, ownerUserID: "host")
+        library.configureViewer(account("host"))
+        let workspace = workspace()
+        let idea = PlanningIdea(title: "Flowers", note: "", category: .flowers, submittedBy: "Host")
+        workspace.addIdea(idea)
+        library.add(workspace)
+        workspace.decide(.maybe, on: idea)
+        try persistence.saveChanges(in: library)
+        let before = try ModelContext(persistence.container).fetch(FetchDescriptor<PendingMutation>())
+        let original = try #require(before.first { $0.entityType == .ideaResponse })
+        let workspacePayload = try #require(before.first { $0.entityType == .workspace }).payload
+        let originalID = original.id
+
+        var flight = DecisionCardFlightState<PlanningIdea>()
+        var history = DecisionDeckMotionHistory<UUID>()
+        flight.start(card: idea, choice: choice)
+        let exitToken = try #require(flight.current).revision
+        history.record(choice, for: idea.id)
+        workspace.decide(choice, on: idea)
+        try persistence.saveChanges(in: library)
+
+        #expect(workspace.undoLastDecision() == idea.id)
+        let undoneChoice = history.undo(for: idea.id)
+        let direction = try #require(undoneChoice)
+        flight.returnCard(idea, choice: direction) { $0.id == idea.id }
+        let returnToken = try #require(flight.current).revision
+        let staleExitFinished = flight.finish(exitToken)
+        #expect(!staleExitFinished)
+        try persistence.saveChanges(in: library)
+        let after = try ModelContext(persistence.container).fetch(FetchDescriptor<PendingMutation>())
+        let response = try #require(after.first { $0.entityType == .ideaResponse })
+        #expect(response.id == originalID)
+        #expect(after.count == before.count)
+        #expect(after.first { $0.entityType == .workspace }?.payload == workspacePayload)
+        #expect(try JSONDecoder().decode(IdeaResponse.self, from: response.payload).choice == .maybe)
+        #expect(workspace.response(on: idea) == .maybe)
+        let returnFinished = flight.finish(returnToken)
+        #expect(returnFinished)
+        #expect(workspace.response(on: idea) == .maybe)
+        #expect(workspace.ideas.first?.status == .new)
     }
 
     @Test("Switching review filters starts a fresh pass without changing responses")

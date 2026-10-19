@@ -45,7 +45,6 @@ struct ManageEventSummary: Identifiable {
         canSendNote = workspace.canSendNote(to: reference)
     }
 }
-
 private enum ManageDestination: Hashable {
     case budget(EventReference)
 }
@@ -56,6 +55,8 @@ struct ManageView: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.layoutDirection) private var layoutDirection
     @State private var selection: EventReference = .main
     @State private var hasInitializedSelection = false
 
@@ -80,29 +81,22 @@ struct ManageView: View {
         ScrollView {
             VStack(spacing: AppTheme.Spacing.spacious) {
                 if let summary {
-                    Group {
-                        if references.count > 1 {
-                            Picker("Event", selection: $selection) {
-                                ForEach(references) { item in
-                                    if let event = ManageEventSummary(workspace: workspace, reference: item) {
-                                        Text(event.title).tag(item)
-                                    }
-                                }
-                            }
-                            .pickerStyle(.menu)
-                        } else {
-                            Text(summary.title).font(.headline)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, AppTheme.Spacing.compact)
+                    ManageEventSelector(
+                        events: references.compactMap { ManageEventSummary(workspace: workspace, reference: $0) },
+                        selected: summary, selection: $selection
+                    )
 
-                    NavigationLink(value: ManageDestination.budget(reference)) {
-                        ManageMetricPill(title: "Budget", symbol: "chart.bar.xaxis",
-                            leading: ManageMetric(value: summary.spent.formatted(.currency(code: workspace.currencyCode)), label: String(localized: "Spent")),
-                            trailing: .remaining(spent: summary.spent, budget: summary.budget, currencyCode: workspace.currencyCode))
+                    ManageDashboardLayout(isAccessibilitySize: dynamicTypeSize.isAccessibilitySize,
+                                          layoutDirection: layoutDirection) {
+                        NavigationLink(value: ManageDestination.budget(reference)) {
+                            ManageBudgetCard(
+                                spent: ManageMetric(value: summary.spent.formatted(.currency(code: workspace.currencyCode)), label: String(localized: "Spent")),
+                                remaining: .remaining(spent: summary.spent, budget: summary.budget, currencyCode: workspace.currencyCode)
+                            )
+                        }
+                        ManageGuestsCard(summary: summary)
+                        ManageCollaboratorsCard(summary: summary, approval: approvalMetric)
                     }
-                    ManagePeoplePill(summary: summary, approval: approvalMetric)
                     ManageNotesPreview(reference: reference)
                     if !workspace.visibleGuides(for: reference).isEmpty {
                         NavigationLink {
@@ -180,64 +174,5 @@ struct ManageMetric {
             label: remaining < .zero ? String(localized: "Over budget") : String(localized: "Remaining"),
             isWarning: remaining < .zero
         )
-    }
-}
-
-/// Each entire pill remains one navigation target. Values lead visually, while
-/// VoiceOver reads the title and both labeled metrics as one element.
-private struct ManageMetricPill: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    let title: LocalizedStringKey
-    let symbol: String
-    let leading: ManageMetric
-    let trailing: ManageMetric
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            HStack {
-                Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
-                Spacer(minLength: AppTheme.Spacing.compact)
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).accessibilityHidden(true)
-            }
-            .foregroundStyle(.secondary)
-
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(spacing: AppTheme.Spacing.standard) {
-                    metric(leading)
-                    Divider().accessibilityHidden(true)
-                    metric(trailing)
-                }
-            } else {
-                HStack(alignment: .center, spacing: AppTheme.Spacing.standard) {
-                    metric(leading)
-                    Divider().accessibilityHidden(true)
-                    metric(trailing)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.horizontal, 28)
-        .padding(.vertical, AppTheme.Spacing.spacious)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 36, style: .continuous))
-        .accessibilityElement(children: .combine)
-    }
-
-    private func metric(_ metric: ManageMetric) -> some View {
-        VStack(spacing: 5) {
-            Text(metric.value)
-                .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                .monospacedDigit()
-                .foregroundStyle(metric.isWarning ? AppTheme.ColorToken.destructive : AppTheme.ColorToken.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
-            Text(metric.label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
     }
 }

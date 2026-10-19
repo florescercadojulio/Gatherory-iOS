@@ -6,11 +6,65 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct BlueprintInstallationImportTests {
-    @Test("The server Wedding fixture imports through bootstrap and survives a lost response/relaunch")
-    func installUsesFixtureBootstrapAndRecoversReceipt() async throws {
+    @Test("Copied draft import cleans the original local identity and records the independent private pin")
+    func copiedDraftUsesCanonicalImportAndExactCleanup() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let drafts = BlueprintSetupDraftStore(directoryURL: directory.appending(path: "drafts"))
+        let intents = BlueprintInstallationIntentStore(directoryURL: directory.appending(path: "intents"))
+        let history = BlueprintLibraryCache(directoryURL: directory.appending(path: "history"))
+        let archiveData = try weddingFixtureData()
+        let archive = try WorkspaceArchiveCodec().decode(WorkspaceArchiveV1.self, from: archiveData)
+        let ownerID = try #require(archive.members.first?.userID)
+        let fixtureURL = try #require(Bundle(for: BlueprintInstallURLProtocol.self).url(forResource: "wedding-catalog.v1", withExtension: "json"))
+        let source = try #require(JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: fixtureURL)).entries.first)
+        let copied = BlueprintCatalogEntry(catalogKey: "private_independent_copy", revision: 1,
+            contentHash: String(repeating: "b", count: 64), definition: source.definition)
+        let originalInput = weddingInstallInput()
+        let input = BlueprintInstallInput(requestID: originalInput.requestID, catalogKey: copied.catalogKey,
+            revision: copied.revision, contentHash: copied.contentHash, mainEvent: originalInput.mainEvent,
+            selectedChildren: originalInput.selectedChildren, selectedIdeaKeys: originalInput.selectedIdeaKeys,
+            capabilities: originalInput.capabilities)
+        let entryToken = String(repeating: "ab", count: 32)
+        try drafts.save(BlueprintSetupDraft(ownerUserID: ownerID, entry: source, requestID: input.requestID,
+            eventName: input.mainEvent.name, startsAt: input.mainEvent.startsAt, timeZoneIdentifier: input.mainEvent.timeZone,
+            selectedChildren: Set(input.selectedChildren.map(\.key)), selectedIdeas: Set(input.selectedIdeaKeys),
+            confirmedDates: [:], shareToken: entryToken, copyRequestID: UUID(), copyEntry: copied))
+        BlueprintInstallURLProtocol.configure(archiveBytes: archiveData, scopeID: archive.mainEventID, loseInstallResponse: false,
+            expectedContentHashes: [input.requestID.uuidString.lowercased(): copied.contentHash])
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [BlueprintInstallURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let transport = PostgresSyncTransport(baseURL: URL(string: "https://blueprint-install.invalid")!,
+            urlSession: session, tokenStore: BlueprintInstallTokenStore())
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false, ownerUserID: ownerID)
+        let coordinator = BlueprintInstallationCoordinator(baseURL: URL(string: "https://blueprint-install.invalid")!,
+            persistence: persistence, library: library, intents: intents, setupDrafts: drafts,
+            transport: transport, libraryCache: history)
+        let imported = try await coordinator.install(input, ownerUserID: ownerID)
+        #expect(imported.mainEventID == archive.mainEventID)
+        #expect(try drafts.all(ownerUserID: ownerID).isEmpty)
+        #expect(try intents.pending(ownerUserID: ownerID).isEmpty)
+        let receipt = try #require(try history.load(ownerID: ownerID).first)
+        let snapshot = try #require(try receipt.previewSource(ownerID: ownerID))
+        #expect(receipt.catalogKey == copied.catalogKey)
+        #expect(snapshot.entry.catalogKey == copied.catalogKey)
+        #expect(snapshot.copyEntry == nil && snapshot.shareToken == nil)
+        #expect(try ModelContext(persistence.container).fetch(FetchDescriptor<PendingMutation>()).isEmpty)
+        let body = try #require(JSONSerialization.jsonObject(with: BlueprintInstallURLProtocol.lastInstallBody) as? [String: Any])
+        #expect(body["shareToken"] == nil)
+        #expect(body["catalogKey"] as? String == copied.catalogKey)
+    }
+
+    @Test("Plans recover exact requests without outbox edits even when history caching fails", arguments: [false, true], [false, true])
+    func installUsesFixtureBootstrapAndRecoversReceipt(customized: Bool, historyWritesFail: Bool) async throws {
         let storeURL = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).store")
         let intentDirectory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         let setupDrafts = BlueprintSetupDraftStore(directoryURL: intentDirectory.appending(path: "setup-drafts"))
+        let historyURL = intentDirectory.appending(path: "used-history")
+        let historyCache = BlueprintLibraryCache(directoryURL: historyURL)
         defer {
             try? FileManager.default.removeItem(at: storeURL)
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + "-wal"))
@@ -18,8 +72,21 @@ struct BlueprintInstallationImportTests {
             try? FileManager.default.removeItem(at: intentDirectory)
         }
 
-        let fixtureData = try weddingFixtureData()
-        let fixtureArchive = try WorkspaceArchiveCodec().decode(WorkspaceArchiveV1.self, from: fixtureData)
+        var fixtureArchive = try WorkspaceArchiveCodec().decode(WorkspaceArchiveV1.self, from: weddingFixtureData())
+        let venueID = UUID(uuidString: "20000000-0000-4000-8000-000000000001")!
+        let visitID = UUID(uuidString: "10000000-0000-4000-8000-000000000002")!
+        if customized {
+            let ideaIndex = try #require(fixtureArchive.ideas.firstIndex { $0.id == venueID })
+            let childIndex = try #require(fixtureArchive.timeline.firstIndex { $0.id == visitID })
+            fixtureArchive.ideas[ideaIndex].title = "Garden venue"
+            fixtureArchive.ideas[ideaIndex].note = "Our notes"
+            fixtureArchive.timeline[childIndex].title = "Private venue tour"
+        }
+        let fixtureData = try WorkspaceArchiveCodec().encode(fixtureArchive)
+        if historyWritesFail {
+            try FileManager.default.createDirectory(at: intentDirectory, withIntermediateDirectories: true)
+            try Data("Unavailable cache directory".utf8).write(to: historyURL)
+        }
         let ownerID = try #require(fixtureArchive.members.first?.userID)
         let account = UserAccount(
             id: ownerID, email: "riley@example.test", displayName: "Riley Example",
@@ -55,10 +122,17 @@ struct BlueprintInstallationImportTests {
                 library: library,
                 intents: BlueprintInstallationIntentStore(directoryURL: intentDirectory),
                 setupDrafts: setupDrafts,
-                transport: transport
+                transport: transport,
+                libraryCache: historyCache
             )
             let shareToken = String(repeating: "f6", count: 32)
-            let input = weddingInstallInput(shareToken: shareToken)
+            var input = weddingInstallInput(shareToken: shareToken)
+            if customized {
+                input.customizations = BlueprintCustomization(
+                    children: [.init(key: "venue_visit", title: "Private venue tour", purpose: "planning_scouting", category: "venue", scheduleProposal: nil)],
+                    ideas: [.init(key: "venue", title: "Garden venue", category: "venue", notes: "Our notes", target: .main, configuration: ["version": .integer(1)])]
+                )
+            }
             let catalogURL = try #require(Bundle(for: BlueprintInstallURLProtocol.self)
                 .url(forResource: "wedding-catalog.v1", withExtension: "json"))
             let entry = try #require(JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: catalogURL)).entries.first)
@@ -69,7 +143,8 @@ struct BlueprintInstallationImportTests {
                 selectedChildren: Set(input.selectedChildren.map(\.key)),
                 selectedIdeas: Set(input.selectedIdeaKeys),
                 confirmedDates: Dictionary(uniqueKeysWithValues: input.selectedChildren.map { ($0.key, $0.startsAt) }),
-                shareToken: shareToken
+                shareToken: shareToken,
+                customizations: input.customizations
             ))
 
             do {
@@ -86,7 +161,15 @@ struct BlueprintInstallationImportTests {
             #expect(bodyText.hasPrefix("{\"capabilities\""))
             #expect((try JSONSerialization.jsonObject(with: pendingIntent.requestBody) as? [String: Any])?["shareToken"] as? String == shareToken)
             #expect(BlueprintInstallURLProtocol.lastInstallBody == pendingIntent.requestBody)
+            let body = try #require(JSONSerialization.jsonObject(with: pendingIntent.requestBody) as? [String: Any])
+            #expect((body["customizations"] != nil) == customized)
+            if customized {
+                let overlay = try #require(body["customizations"] as? [String: Any])
+                #expect((overlay["ideas"] as? [[String: Any]])?.first?["title"] as? String == "Garden venue")
+                #expect((overlay["children"] as? [[String: Any]])?.first?["title"] as? String == "Private venue tour")
+            }
             #expect(persistedIntents.count == 1)
+            if !historyWritesFail { #expect(try historyCache.load(ownerID: ownerID).isEmpty) }
             #expect(try setupDrafts.load(ownerUserID: ownerID, catalogKey: "wedding", shareToken: shareToken)?.requestID == input.requestID)
 
             // A new coordinator/store instance represents relaunch. The receipt
@@ -98,7 +181,8 @@ struct BlueprintInstallationImportTests {
                 library: library,
                 intents: BlueprintInstallationIntentStore(directoryURL: intentDirectory),
                 setupDrafts: setupDrafts,
-                transport: transport
+                transport: transport,
+                libraryCache: historyCache
             )
             let imported = try await relaunched.resume(pendingIntent)
             importedScopeID = imported.mainEventID
@@ -122,11 +206,25 @@ struct BlueprintInstallationImportTests {
                 UUID(uuidString: "20000000-0000-4000-8000-000000000003")!
             ]))
             #expect(imported.ideas.allSatisfy { $0.status == .new })
+            if customized {
+                #expect(imported.ideas.first { $0.id == venueID }?.title == "Garden venue")
+                #expect(imported.ideas.first { $0.id == venueID }?.note == "Our notes")
+                #expect(imported.timeline.first { $0.id == visitID }?.title == "Private venue tour")
+            }
             #expect(library.selectedWorkspaceID == fixtureArchive.mainEventID)
             #expect(try BlueprintInstallationIntentStore(directoryURL: intentDirectory)
                 .pending(ownerUserID: ownerID).isEmpty)
             #expect(try setupDrafts.load(ownerUserID: ownerID, catalogKey: "wedding", shareToken: shareToken) == nil)
             #expect(try setupDrafts.all(ownerUserID: ownerID).isEmpty)
+            if !historyWritesFail {
+                let history = try historyCache.load(ownerID: ownerID)
+                #expect(history.count == 1)
+                #expect(history.first?.scopeID == importedScopeID)
+                #expect(history.first?.catalogKey == entry.catalogKey)
+                #expect(history.first?.revision == entry.revision)
+                #expect(history.first?.templateName == entry.definition.blueprint.name)
+                #expect(history.first?.eventName == input.mainEvent.name)
+            }
             #expect(try ModelContext(persistence.container).fetch(FetchDescriptor<PendingMutation>()).isEmpty)
             #expect(BlueprintInstallURLProtocol.installRequestCount == 1)
             #expect(BlueprintInstallURLProtocol.lastInstallBody == pendingIntent.requestBody)
@@ -459,34 +557,49 @@ struct BlueprintInstallationImportTests {
                 transport: transport
             )
 
-            for (index, input) in inputs.enumerated() {
-                let imported = try await coordinator.install(input, ownerUserID: ownerID)
-                #expect(imported.mainEventID == archives[index].1.mainEventID)
-                #expect(library.workspaces.count == index + 1)
-                try persistence.saveChanges(in: library)
-                #expect(try ModelContext(persistence.container).fetch(FetchDescriptor<PendingMutation>()).isEmpty)
-            }
-            #expect(library.workspaces.count == 2)
-            #expect(Set(library.workspaces.map(\.mainEventID)) == Set(archives.map { $0.1.mainEventID }))
-            #expect(BlueprintInstallURLProtocol.installRequestCount == 2)
+            let firstImported = try await coordinator.install(inputs[0], ownerUserID: ownerID)
+            #expect(firstImported.mainEventID == archives[0].1.mainEventID)
+            #expect(library.workspaces.count == 1)
+            try persistence.saveChanges(in: library)
+            #expect(try ModelContext(persistence.container).fetch(FetchDescriptor<PendingMutation>()).isEmpty)
 
+            // Queue a normal edit in installation one before installation two
+            // bootstraps. Its scope and frozen request must remain independent.
             let first = try #require(library.workspaces.first { $0.mainEventID == archives[0].1.mainEventID })
-            let secondBeforeEdit = try #require(library.workspaces.first { $0.mainEventID == archives[1].1.mainEventID })
-            let secondTitle = secondBeforeEdit.title
-            let secondDate = secondBeforeEdit.mainEventStartsAt
+            let secondScopeID = archives[1].1.mainEventID
             let firstIdeaIndex = try #require(first.ideas.firstIndex { $0.id == firstIdeaID })
             var editedFirstIdea = first.ideas[firstIdeaIndex]
             editedFirstIdea.title = "Meals for the lake cottage"
             first.updateIdea(editedFirstIdea)
             first.mainEventStartsAt = first.mainEventStartsAt.addingTimeInterval(86_400)
             try persistence.saveChanges(in: library)
+            let outboxBeforeSecondInstall = try ModelContext(persistence.container)
+                .fetch(FetchDescriptor<PendingMutation>())
+            #expect(!outboxBeforeSecondInstall.isEmpty)
+            #expect(Set(outboxBeforeSecondInstall.map(\.scopeID)) == Set([first.mainEventID]))
 
+            let secondImported = try await coordinator.install(inputs[1], ownerUserID: ownerID)
+            #expect(secondImported.mainEventID == secondScopeID)
+            #expect(library.workspaces.count == 2)
+            #expect(Set(library.workspaces.map(\.mainEventID)) == Set(archives.map { $0.1.mainEventID }))
+            #expect(BlueprintInstallURLProtocol.installRequestCount == 2)
+
+            let secondBeforeEdit = try #require(library.workspaces.first { $0.mainEventID == archives[1].1.mainEventID })
+            let secondTitle = secondBeforeEdit.title
+            let secondDate = secondBeforeEdit.mainEventStartsAt
             let queued = try ModelContext(persistence.container).fetch(FetchDescriptor<PendingMutation>())
-            #expect(!queued.isEmpty)
+            #expect(queued.count == outboxBeforeSecondInstall.count)
             #expect(Set(queued.map(\.scopeID)) == Set([first.mainEventID]))
+            #expect(first.mainEventStartsAt == archives[0].1.mainEventStartsAt.addingTimeInterval(86_400))
+            #expect(first.ideas.first { $0.id == firstIdeaID }?.title == "Meals for the lake cottage")
             #expect(secondBeforeEdit.title == secondTitle)
             #expect(secondBeforeEdit.mainEventStartsAt == secondDate)
             #expect(secondBeforeEdit.ideas == expectedSecondIdeas)
+            let requestEncoder = JSONEncoder()
+            requestEncoder.outputFormatting = [.sortedKeys]
+            requestEncoder.dateEncodingStrategy = .iso8601
+            let expectedRequestBodies = try inputs.map { try requestEncoder.encode($0) }
+            #expect(BlueprintInstallURLProtocol.installBodies == expectedRequestBodies)
         }
 
         // A fresh persistence controller and coordinator model relaunch. Replaying
@@ -599,6 +712,7 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
     static let releaseBootstrapResponse = DispatchSemaphore(value: 0)
     private static var lastInstallRequestIDValue: String?
     private static var lastInstallBodyValue = Data()
+    private static var installBodyValues: [Data] = []
     private static var installationID = UUID()
     private static var organizationID = "wedding-org"
     private static var installResultOverrides: [String: [String: Any]] = [:]
@@ -620,6 +734,12 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
         lock.lock()
         defer { lock.unlock() }
         return lastInstallBodyValue
+    }
+
+    static var installBodies: [Data] {
+        lock.lock()
+        defer { lock.unlock() }
+        return installBodyValues
     }
 
     static var hasStartedBootstrapRequest: Bool {
@@ -660,6 +780,7 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
         _ = releaseBootstrapResponse.wait(timeout: .now())
         lastInstallRequestIDValue = nil
         lastInstallBodyValue = Data()
+        installBodyValues = []
         installationID = UUID()
         organizationID = "wedding-org"
         self.installResultOverrides = installResultOverrides
@@ -715,6 +836,7 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
                     Self.committedRequestIDs.insert(bodyRequestID)
                     Self.lastInstallRequestIDValue = idempotencyKey
                     Self.lastInstallBodyValue = bodyBytes
+                    Self.installBodyValues.append(bodyBytes)
                     let loseResponse = Self.loseInstallResponse
                     if loseResponse, body["shareToken"] != nil, Self.revokeSharedTokenAfterLostResponse {
                         Self.sharedTokenRevoked = true

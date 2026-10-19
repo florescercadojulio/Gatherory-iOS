@@ -4,6 +4,59 @@ import Testing
 
 @MainActor
 struct ManageCollaboratorReviewTests {
+    @Test("Caught-up state requires a successful empty load for an authorized account and event")
+    func caughtUpRequiresLoadedAuthorizedEmptyQueue() async {
+        let client = ReviewRequestsTestClient()
+        let store = EventJoinRequestStore(client: client)
+        let workspace = makeWorkspace()
+        workspace.configureViewer(account("host"))
+        func caughtUp(_ accountID: String? = "host") -> Bool {
+            ManageCollaboratorReview.isCaughtUp(in: workspace, store: store,
+                reference: .main, accountID: accountID)
+        }
+        #expect(!caughtUp())
+        await store.refresh(eventID: workspace.mainEventID, accountID: "host")
+        #expect(caughtUp())
+        #expect(!caughtUp("other"))
+        #expect(!caughtUp(nil))
+        workspace.configureViewer(account("reader"))
+        #expect(!caughtUp())
+        workspace.configureViewer(account("host"))
+        client.values = [request("Pending")]
+        await store.refresh(eventID: workspace.mainEventID, accountID: "host", force: true)
+        #expect(!caughtUp())
+        #expect(await ManageCollaboratorReview.review(client.values[0], in: workspace, store: store,
+            reference: .main, accountID: "host", action: .approve))
+        #expect(caughtUp())
+        client.failLoads = true
+        await store.refresh(eventID: workspace.mainEventID, accountID: "host", force: true)
+        #expect(!caughtUp())
+    }
+
+    @Test("Inline review drains the pending queue without reopening or refreshing the people screen")
+    func inlineQueueContinuesUntilEmpty() async {
+        let client = ReviewRequestsTestClient()
+        let store = EventJoinRequestStore(client: client)
+        let workspace = makeWorkspace()
+        workspace.configureViewer(account("host"))
+        let pending = (1...5).map { request("Person \($0)") }
+        client.values = pending
+        await store.refresh(eventID: workspace.mainEventID, accountID: "host")
+
+        for (index, expected) in pending.reversed().enumerated() {
+            let current = ManageCollaboratorReview.latestRequest(
+                in: workspace, store: store, reference: .main, accountID: "host")
+            #expect(current?.id == expected.id)
+            #expect(await ManageCollaboratorReview.review(expected, in: workspace, store: store,
+                reference: .main, accountID: "host", action: index.isMultiple(of: 2) ? .approve : .decline))
+            #expect(store.requestCount(eventID: workspace.mainEventID, accountID: "host") == pending.count - index - 1)
+            #expect(store.reviewingRequestID == nil)
+        }
+        #expect(ManageCollaboratorReview.latestRequest(
+            in: workspace, store: store, reference: .main, accountID: "host") == nil)
+        #expect(client.reviewedRequestIDs == pending.reversed().map(\.id))
+    }
+
     @Test("Latest request is the last pending API entry and stays account and event scoped")
     func latestRequestUsesLastAuthorizedEventRequest() async throws {
         let client = ReviewRequestsTestClient()
@@ -169,8 +222,12 @@ private final class ReviewRequestsTestClient: EventJoinRequestTransport {
     var reviewedEventIDs: [UUID] = []
     var reviewedRequestIDs: [UUID] = []
     var failReviews = false
+    var failLoads = false
 
-    func joinRequests(eventID: UUID) async throws -> [EventJoinRequest] { values }
+    func joinRequests(eventID: UUID) async throws -> [EventJoinRequest] {
+        if failLoads { throw URLError(.notConnectedToInternet) }
+        return values
+    }
 
     func reviewJoinRequest(eventID: UUID, requestID: UUID, action: JoinRequestReviewAction) async throws {
         reviewedEventIDs.append(eventID)

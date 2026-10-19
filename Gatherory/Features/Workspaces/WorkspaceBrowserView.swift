@@ -1,31 +1,15 @@
 import SwiftUI
 
-private struct WorkspaceBlueprintSetupRoute: Identifiable {
-    let catalogKey: String?
-    let shareToken: String?
-    let ownerID: String
-    let id: UUID
-
-    init(catalogKey: String?, shareToken: String?, ownerID: String) {
-        self.catalogKey = catalogKey
-        self.shareToken = shareToken
-        self.ownerID = ownerID
-        id = UUID()
-    }
-}
-
 @MainActor
 private enum WorkspaceBrowserSheet: Identifiable {
     case addWorkspace
-    case blueprintSetup(WorkspaceBlueprintSetupRoute)
-    case blueprintCreateShare(PlanningWorkspace)
+    case blueprintCreateShare(PlanningWorkspace, publishesToSearch: Bool)
     case blueprintLinks(BlueprintLinkManagementRequest)
 
     var id: String {
         switch self {
         case .addWorkspace: "add-workspace"
-        case .blueprintSetup(let route): route.id.uuidString
-        case .blueprintCreateShare(let workspace): "blueprint-create-share-\(workspace.mainEventID.uuidString)"
+        case .blueprintCreateShare(let workspace, let publish): "blueprint-create-share-\(workspace.mainEventID.uuidString)-\(publish)"
         case .blueprintLinks(let request): request.id.uuidString
         }
     }
@@ -38,10 +22,6 @@ struct WorkspaceBrowserView: View {
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var activeSheet: WorkspaceBrowserSheet?
-    @State private var setupDrafts: [BlueprintSetupDraft] = []
-    @State private var hasPendingInstallation = false
-    @State private var recoveryLoadFailed = false
-    @State private var recoveryLoadID = UUID()
     var onExplore: () -> Void = {}
 
     private var columns: [GridItem] {
@@ -81,6 +61,9 @@ struct WorkspaceBrowserView: View {
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
                             .contextMenu {
                                 if sharingURL(for: workspace) != nil {
+                                    Button(BlueprintCopy.saveBlueprint, systemImage: "square.and.arrow.down") {
+                                        activeSheet = .blueprintCreateShare(workspace, publishesToSearch: false)
+                                    }
                                     Button {
                                         presentBlueprintCreateShare(for: workspace)
                                     } label: {
@@ -96,6 +79,9 @@ struct WorkspaceBrowserView: View {
                             }
                             .accessibilityActions {
                                 if sharingURL(for: workspace) != nil {
+                                    Button(BlueprintCopy.saveBlueprint) {
+                                        activeSheet = .blueprintCreateShare(workspace, publishesToSearch: false)
+                                    }
                                     Button(BlueprintCopy.shareTemplate) {
                                         presentBlueprintCreateShare(for: workspace)
                                     }
@@ -118,7 +104,6 @@ struct WorkspaceBrowserView: View {
         .refreshable {
             await guests.refresh(force: true)
             await cloudSync.synchronize(trigger: .manual)
-            await loadRecoveryState(ownerID: authentication.currentUser?.id)
         }
         .safeAreaInset(edge: .bottom) {
             if let message = guests.errorMessage {
@@ -132,57 +117,10 @@ struct WorkspaceBrowserView: View {
         .toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                if hasRecoveryOptions {
-                    Menu {
-                        Button("Add workspace", systemImage: "plus") {
-                            activeSheet = .addWorkspace
-                        }
-
-                        if hasPendingInstallation, let ownerID = authentication.currentUser?.id {
-                            Button(BlueprintCopy.retryInstall, systemImage: "arrow.clockwise") {
-                                activeSheet = .blueprintSetup(WorkspaceBlueprintSetupRoute(
-                                    catalogKey: nil,
-                                    shareToken: nil,
-                                    ownerID: ownerID
-                                ))
-                            }
-                        }
-
-                        if !hasPendingInstallation, !setupDrafts.isEmpty, let ownerID = authentication.currentUser?.id {
-                            Menu {
-                                ForEach(setupDrafts.filter { $0.ownerUserID == ownerID }, id: \.requestID) { draft in
-                                    Button(draft.eventName.isEmpty ? draft.entry.definition.blueprint.name : draft.eventName) {
-                                        guard authentication.currentUser?.id == draft.ownerUserID else { return }
-                                        activeSheet = .blueprintSetup(WorkspaceBlueprintSetupRoute(
-                                            catalogKey: draft.entry.catalogKey,
-                                            shareToken: draft.shareToken,
-                                            ownerID: draft.ownerUserID
-                                        ))
-                                    }
-                                }
-                            } label: {
-                                Label(BlueprintCopy.resumeSetup, systemImage: "square.and.pencil")
-                            }
-                        }
-
-                        if recoveryLoadFailed {
-                            Divider()
-                            Label(BlueprintCopy.draftLoadFailed, systemImage: "exclamationmark.triangle")
-                            Button(BlueprintCopy.retry) {
-                                Task { await loadRecoveryState(ownerID: authentication.currentUser?.id) }
-                            }
-                        }
-
-                    } label: {
-                        Label("Add workspace", systemImage: "plus")
-                    }
-                    .labelStyle(.iconOnly)
-                } else {
-                    Button("Add workspace", systemImage: "plus") {
-                        activeSheet = .addWorkspace
-                    }
-                    .labelStyle(.iconOnly)
+                Button("Add workspace", systemImage: "plus") {
+                    activeSheet = .addWorkspace
                 }
+                .labelStyle(.iconOnly)
             }
             .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .topBarTrailing) {
@@ -190,20 +128,10 @@ struct WorkspaceBrowserView: View {
             }
             .sharedBackgroundVisibility(.hidden)
         }
-        .task {
-            await loadRecoveryState(ownerID: authentication.currentUser?.id)
-        }
-        .onChange(of: authentication.currentUser?.id) { _, ownerID in
-            recoveryLoadID = UUID()
-            setupDrafts = []
-            hasPendingInstallation = false
-            recoveryLoadFailed = false
+        .onChange(of: authentication.currentUser?.id) { _, _ in
             activeSheet = nil
-            Task { await loadRecoveryState(ownerID: ownerID) }
         }
-        .sheet(item: $activeSheet, onDismiss: {
-            Task { await loadRecoveryState(ownerID: authentication.currentUser?.id) }
-        }) { sheet in
+        .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .addWorkspace:
                 NavigationStack {
@@ -211,17 +139,9 @@ struct WorkspaceBrowserView: View {
                 }
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-            case .blueprintSetup(let route):
-                if authentication.currentUser?.id == route.ownerID {
-                    NavigationStack {
-                        BlueprintSetupView(catalogKey: route.catalogKey, sharedToken: route.shareToken)
-                    }
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                }
-            case .blueprintCreateShare(let workspace):
+            case .blueprintCreateShare(let workspace, let publish):
                 NavigationStack {
-                    BlueprintCreateShareView(eventID: workspace.mainEventID, workspace: workspace)
+                    BlueprintCreateShareView(eventID: workspace.mainEventID, workspace: workspace, publishesToSearch: publish)
                 }
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -240,32 +160,6 @@ struct WorkspaceBrowserView: View {
         }
     }
 
-    private var hasRecoveryOptions: Bool {
-        hasPendingInstallation || !setupDrafts.isEmpty || recoveryLoadFailed
-    }
-
-    @MainActor
-    private func loadRecoveryState(ownerID: String?) async {
-        let loadID = UUID()
-        recoveryLoadID = loadID
-        guard let ownerID, !ownerID.isEmpty else {
-            setupDrafts = []
-            hasPendingInstallation = false
-            recoveryLoadFailed = false
-            return
-        }
-
-        let recovery = BlueprintSetupRecovery.load(
-            ownerID: ownerID,
-            readDrafts: { try BlueprintSetupDraftStore().all(ownerUserID: $0) },
-            readPending: { try !BlueprintInstallationIntentStore().pending(ownerUserID: $0).isEmpty }
-        )
-        guard recoveryLoadID == loadID, authentication.currentUser?.id == ownerID else { return }
-        setupDrafts = recovery.drafts
-        hasPendingInstallation = recovery.hasPendingInstallation
-        recoveryLoadFailed = recovery.loadFailed
-    }
-
     private func sharingURL(for workspace: PlanningWorkspace) -> URL? {
         BlueprintCaptureLink.sharingURL(
             baseURL: AppRuntimeConfiguration.authenticationBaseURL,
@@ -275,7 +169,7 @@ struct WorkspaceBrowserView: View {
 
     private func presentBlueprintCreateShare(for workspace: PlanningWorkspace) {
         guard sharingURL(for: workspace) != nil else { return }
-        activeSheet = .blueprintCreateShare(workspace)
+        activeSheet = .blueprintCreateShare(workspace, publishesToSearch: true)
     }
 
     private func presentBlueprintLinks(for workspace: PlanningWorkspace, mode: BlueprintLinkManagementMode) {
@@ -725,10 +619,12 @@ struct NewWorkspaceView: View {
 
 struct WorkspaceLibraryToolbarButton: View {
     let action: () -> Void
+    var title: String = String(localized: "Workspaces")
+    var hint: String = String(localized: "Returns to all workspaces")
 
     var body: some View {
-        Button("Workspaces", systemImage: "rectangle.grid.2x2.fill", action: action)
+        Button(title, systemImage: "rectangle.grid.2x2.fill", action: action)
             .labelStyle(.iconOnly)
-            .accessibilityHint("Returns to all workspaces")
+            .accessibilityHint(hint)
     }
 }

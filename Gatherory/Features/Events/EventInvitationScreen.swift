@@ -266,45 +266,38 @@ struct EventInvitationScreen: View {
     }
 
     private func hero(_ event: EventPresentation, height: CGFloat) -> some View {
-        VStack(spacing: AppTheme.Spacing.standard) {
-            Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 150 : 260)
-
-            VStack(spacing: AppTheme.Spacing.standard) {
-                if event.isCancelled {
-                    Label(AppCopy.Lifecycle.cancelled, systemImage: "calendar.badge.minus")
-                        .font(.headline)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.black.opacity(0.48), in: Capsule())
-                }
-                if let eyebrow = event.eyebrow, !eyebrow.isEmpty {
-                    Text(eyebrow)
-                        .font(.subheadline.weight(.medium))
-                }
-
-                Text(event.title)
-                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                VStack(spacing: 6) {
-                    if let startsAt = event.startsAt {
-                        Text(startsAt, format: .dateTime.weekday(.wide).month(.wide).day().year())
-                            .font(.headline)
-                    } else {
-                        Text("Date to be decided")
-                            .font(.headline)
-                    }
-
-                    if let location = event.location {
-                        Text(location.title)
-                            .font(.subheadline.weight(.semibold))
-                    }
-                }
-                .multilineTextAlignment(.center)
+        EventReadingHero(
+            title: event.title,
+            height: height,
+            topSpacer: dynamicTypeSize.isAccessibilitySize ? 150 : 260
+        ) {
+            if event.isCancelled {
+                Label(AppCopy.Lifecycle.cancelled, systemImage: "calendar.badge.minus")
+                    .font(.headline)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.48), in: Capsule())
             }
-            .accessibilityElement(children: .combine)
+            if let eyebrow = event.eyebrow, !eyebrow.isEmpty {
+                Text(eyebrow)
+                    .font(.subheadline.weight(.medium))
+            }
+        } timingLocation: {
+            VStack(spacing: 6) {
+                if let startsAt = event.startsAt {
+                    Text(startsAt, format: .dateTime.weekday(.wide).month(.wide).day().year())
+                        .font(.headline)
+                } else {
+                    Text("Date to be decided")
+                        .font(.headline)
+                }
 
+                if let location = event.location {
+                    Text(location.title)
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
+        } response: {
             if event.permitsResponse || event.response != nil {
                 EventResponseControl(selection: event.response) { response in
                     withAnimation(.snappy) {
@@ -317,11 +310,6 @@ struct EventInvitationScreen: View {
                 .accessibilityLabel("Attendance response")
             }
         }
-        .foregroundStyle(.white)
-        .shadow(color: .black.opacity(0.34), radius: 10, y: 4)
-        .padding(AppTheme.Spacing.spacious)
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
     }
 
     private func information(_ event: EventPresentation) -> some View {
@@ -1501,7 +1489,7 @@ private struct EventInvitationWeatherView: View {
     }
 }
 
-private struct EventInvitationSection<Content: View>: View {
+struct EventInvitationSection<Content: View>: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let title: String
     let symbol: String

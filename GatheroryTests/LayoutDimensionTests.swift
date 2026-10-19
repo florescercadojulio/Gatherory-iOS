@@ -3,6 +3,14 @@ import Testing
 @testable import Gatherory
 
 struct LayoutDimensionTests {
+    @Test("Artwork and empty-state frame geometry rejects negative, infinite and NaN dimensions")
+    func concreteFrameSizes() {
+        #expect(LayoutDimensions.size(CGSize(width: 390, height: 844)) == CGSize(width: 390, height: 844))
+        #expect(LayoutDimensions.size(CGSize(width: -1, height: CGFloat.infinity)) == .zero)
+        #expect(LayoutDimensions.size(CGSize(width: CGFloat.nan, height: -100)) == .zero)
+        #expect(LayoutDimensions.size(CGSize(width: 320, height: CGFloat.nan)) == CGSize(width: 320, height: 0))
+        #expect(LayoutDimensions.nonnegative(0) == 0)
+    }
     @Test("Masonry layout probes produce finite, nonnegative dimensions")
     func finiteLayoutProposals() {
         #expect(MasonryLayout.resolvedWidth(.infinity, idealWidth: 320) == 320)

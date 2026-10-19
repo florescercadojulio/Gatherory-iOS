@@ -2,14 +2,42 @@ import Foundation
 import Observation
 
 enum BlueprintBrowseCategory: String, CaseIterable, Identifiable {
-    case weddings, birthdays, holidays, events
+    case weddings, birthdays, holidays, engagements, showers
+    case bachelorParties = "bachelor_parties"
+    case anniversaries, graduations, reunions
+    case dinnerParties = "dinner_parties"
+    case picnics
+    case gameNights = "game_nights"
+    case trips
+    case cottageStays = "cottage_stays"
+    case guestStays = "guest_stays"
+    case retreats, community, events
     var id: String { rawValue }
+
+    static func available(in entries: [BlueprintCatalogEntry]) -> [Self] {
+        let populated = Set(entries.flatMap(\.browseCategories))
+        return allCases.filter { populated.contains($0) }
+    }
 
     var title: String {
         switch self {
         case .weddings: String(localized: "explore.weddings", defaultValue: "Weddings")
         case .birthdays: String(localized: "explore.birthdays", defaultValue: "Birthdays")
         case .holidays: String(localized: "explore.holidays", defaultValue: "Holidays")
+        case .engagements: String(localized: "explore.engagements", defaultValue: "Engagements")
+        case .showers: String(localized: "explore.showers", defaultValue: "Showers & Welcomes")
+        case .bachelorParties: String(localized: "explore.bachelorParties", defaultValue: "Bachelor & Bachelorette")
+        case .anniversaries: String(localized: "explore.anniversaries", defaultValue: "Anniversaries")
+        case .graduations: String(localized: "explore.graduations", defaultValue: "Graduations")
+        case .reunions: String(localized: "explore.reunions", defaultValue: "Family Reunions")
+        case .dinnerParties: String(localized: "explore.dinnerParties", defaultValue: "Dinner Parties")
+        case .picnics: String(localized: "explore.picnics", defaultValue: "Picnics & Outdoors")
+        case .gameNights: String(localized: "explore.gameNights", defaultValue: "Game Nights")
+        case .trips: String(localized: "explore.trips", defaultValue: "Trips & Getaways")
+        case .cottageStays: String(localized: "explore.cottageStays", defaultValue: "Cottage & Cabin Stays")
+        case .guestStays: String(localized: "explore.guestStays", defaultValue: "Guest Stays")
+        case .retreats: String(localized: "explore.retreats", defaultValue: "Team Retreats")
+        case .community: String(localized: "explore.community", defaultValue: "Community Gatherings")
         case .events: String(localized: "explore.events", defaultValue: "Other Events")
         }
     }
@@ -19,6 +47,20 @@ enum BlueprintBrowseCategory: String, CaseIterable, Identifiable {
         case .weddings: "heart.circle.fill"
         case .birthdays: "birthday.cake.fill"
         case .holidays: "gift.fill"
+        case .engagements: "heart.fill"
+        case .showers: "gift.circle.fill"
+        case .bachelorParties: "sparkles"
+        case .anniversaries: "heart.text.square.fill"
+        case .graduations: "graduationcap.fill"
+        case .reunions: "person.3.fill"
+        case .dinnerParties: "fork.knife"
+        case .picnics: "sun.max.fill"
+        case .gameNights: "dice.fill"
+        case .trips: "suitcase.rolling.fill"
+        case .cottageStays: "house.lodge.fill"
+        case .guestStays: "bed.double.fill"
+        case .retreats: "person.2.wave.2.fill"
+        case .community: "person.3.sequence.fill"
         case .events: "party.popper.fill"
         }
     }

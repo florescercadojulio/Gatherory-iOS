@@ -6,6 +6,7 @@ struct BlueprintCreateShareView: View {
 
     let eventID: UUID
     let workspace: PlanningWorkspace
+    var publishesToSearch = true
 
     @State private var store: BlueprintCreateShareStore?
     @State private var isShowingReview = false
@@ -20,7 +21,7 @@ struct BlueprintCreateShareView: View {
     }
     private var loadIdentity: String { "\(eventID)|\(accountID ?? "")" }
     private var title: String {
-        guard isShowingReview else { return BlueprintCopy.createTemplateTitle }
+        guard isShowingReview else { return publishesToSearch ? BlueprintCopy.createTemplateTitle : BlueprintCopy.saveBlueprint }
         return store?.created == nil ? BlueprintCopy.reviewTemplate : BlueprintCopy.templateReady
     }
 
@@ -250,7 +251,7 @@ struct BlueprintCreateShareView: View {
                         Section {
                             Label(BlueprintCopy.templateReady, systemImage: "checkmark.circle.fill")
                                 .font(.headline)
-                            Text(BlueprintCopy.templateListedExplanation)
+                            Text(publishesToSearch ? BlueprintCopy.templateListedExplanation : BlueprintCopy.blueprintSavedExplanation)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -340,7 +341,7 @@ struct BlueprintCreateShareView: View {
                     }
 
                     Section {
-                        Text(BlueprintCopy.templateSearchPublicationExplanation)
+                        if publishesToSearch { Text(BlueprintCopy.templateSearchPublicationExplanation) }
                         Text(BlueprintCopy.templatePrivacyExplanation)
                         Text(BlueprintCopy.selectedTextMayBePersonal)
                         Text(BlueprintCopy.independentTemplateCopies)
@@ -380,13 +381,16 @@ struct BlueprintCreateShareView: View {
                         Task { await store.refreshCreatedLinks() }
                     }
                     .disabled(store.isLoading || store.isCreating)
-                } else if store.created != nil, store.createdURL == nil {
+                } else if publishesToSearch, store.created != nil, store.createdURL == nil {
                     Button(BlueprintCopy.retryCreateShareLink) {
                         Task { await store.createAndShare() }
                     }
                     .disabled(!store.canCreate || store.isCreating)
+                } else if !publishesToSearch, store.created != nil, store.errorMessage != nil {
+                    Button(BlueprintCopy.retry) { Task { await store.createAndShare() } }
+                        .disabled(store.isBusy)
                 } else if store.created == nil {
-                    Button(BlueprintCopy.publishToSearch) {
+                    Button(publishesToSearch ? BlueprintCopy.publishToSearch : BlueprintCopy.saveBlueprint) {
                         Task { await store.createAndShare() }
                     }
                     .disabled(!store.canCreate || store.isCreating)
@@ -592,6 +596,7 @@ struct BlueprintCreateShareView: View {
                 eventID: eventID,
                 accountID: accountID,
                 transport: PostgresSyncTransport(baseURL: baseURL),
+                publishesToSearch: publishesToSearch,
                 currentAccountID: { authentication.currentUser?.id }
             )
         }

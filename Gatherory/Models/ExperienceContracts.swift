@@ -34,6 +34,7 @@ nonisolated struct BlueprintCatalogEntry: Codable, Identifiable, Sendable {
     let definition: ExperienceBlueprintDocument
     // Optional while clients and the catalog endpoint roll out independently.
     var discovery: BlueprintDiscoveryMetadata? = nil
+    var description: String? = nil
 
     var id: String { "\(catalogKey):\(revision)" }
 }
@@ -44,7 +45,7 @@ nonisolated struct BlueprintDiscoveryMetadata: Codable, Sendable {
     let summary: String
 }
 
-nonisolated struct BlueprintCatalogChild: Decodable, Identifiable, Sendable {
+nonisolated struct BlueprintCatalogChild: Codable, Equatable, Identifiable, Sendable {
     let key: String
     let title: String
     let purpose: String
@@ -53,7 +54,7 @@ nonisolated struct BlueprintCatalogChild: Decodable, Identifiable, Sendable {
     var id: String { key }
 }
 
-nonisolated struct BlueprintScheduleProposal: Decodable, Sendable {
+nonisolated struct BlueprintScheduleProposal: Codable, Equatable, Sendable {
     let anchor: String
     let dayOffset: Int
     let localTime: String
@@ -93,7 +94,7 @@ nonisolated struct BlueprintScheduleSuggestion: Decodable, Sendable {
     let candidates: [Date]
 }
 
-nonisolated struct BlueprintCatalogIdea: Decodable, Identifiable, Sendable {
+nonisolated struct BlueprintCatalogIdea: Codable, Equatable, Identifiable, Sendable {
     let key: String
     let title: String
     let category: String
@@ -119,12 +120,12 @@ nonisolated struct BlueprintCatalogCapability: Decodable, Identifiable, Sendable
     var id: String { key }
 }
 
-nonisolated struct BlueprintExperienceTreeConfig: Decodable, Sendable {
+nonisolated struct BlueprintExperienceTreeConfig: Decodable, Equatable, Sendable {
     let mainEventType: String
     let children: [BlueprintCatalogChild]
 }
 
-nonisolated struct BlueprintIdeasConfig: Decodable, Sendable {
+nonisolated struct BlueprintIdeasConfig: Decodable, Equatable, Sendable {
     let categoryOrder: [String]
     let ideas: [BlueprintCatalogIdea]
 }
@@ -134,13 +135,13 @@ nonisolated struct BlueprintInstructionsConfig: Decodable, Sendable {
 }
 
 extension ExperienceModuleDefinition {
-    func decodeConfiguration<Value: Decodable>(_ type: Value.Type) -> Value? {
+    nonisolated func decodeConfiguration<Value: Decodable>(_ type: Value.Type) -> Value? {
         guard let data = try? JSONEncoder().encode(configuration) else { return nil }
         return try? JSONDecoder().decode(Value.self, from: data)
     }
 }
 
-nonisolated enum BlueprintTarget: Decodable, Sendable {
+nonisolated enum BlueprintTarget: Codable, Equatable, Sendable {
     case main
     case child(key: String)
 
@@ -157,6 +158,17 @@ nonisolated enum BlueprintTarget: Decodable, Sendable {
                 in: container,
                 debugDescription: "Unsupported blueprint target."
             )
+        }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .main:
+            try container.encode("main", forKey: .kind)
+        case let .child(key):
+            try container.encode("child", forKey: .kind)
+            try container.encode(key, forKey: .key)
         }
     }
 }
@@ -182,6 +194,7 @@ nonisolated struct BlueprintInstallInput: Encodable, Sendable {
     let selectedIdeaKeys: [String]
     let capabilities: [String]
     var shareToken: String? = nil
+    var customizations: BlueprintCustomization? = nil
 
     private enum CodingKeys: String, CodingKey {
         case requestID = "requestId"
@@ -193,6 +206,7 @@ nonisolated struct BlueprintInstallInput: Encodable, Sendable {
         case selectedIdeaKeys
         case capabilities
         case shareToken
+        case customizations
     }
 }
 

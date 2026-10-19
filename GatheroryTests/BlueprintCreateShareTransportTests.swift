@@ -4,6 +4,59 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct BlueprintCreateShareTransportTests {
+    @Test("Saved snapshot copy sends only authored content and a stable copy UUID, never source credentials")
+    func snapshotCopyWireFormat() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [NativeCaptureHTTPProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let transport = PostgresSyncTransport(baseURL: URL(string: "https://example.test")!,
+            urlSession: session, tokenStore: NativeCaptureTokenStore())
+        let url = try #require(Bundle(for: NativeCaptureHTTPProtocol.self).url(forResource: "wedding-catalog.v1", withExtension: "json"))
+        let entry = try #require(JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: url)).entries.first)
+        let record = BlueprintPersonalRecord(id: UUID(), draftVersion: 1, publishedRevision: entry.revision,
+            listedRevision: nil, catalogEntry: entry)
+        let wire = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(record)) as? [String: Any])
+        NativeCaptureHTTPProtocol.configure(wire)
+        let requestID = UUID()
+        let snapshot = try BlueprintDraftContent.snapshot(of: entry)
+        let result = try await transport.copyBlueprintSnapshot(requestID: requestID, content: snapshot)
+        #expect(result.id == record.id)
+        let body = try NativeCaptureHTTPProtocol.lastBody()
+        #expect(Set(body.keys) == ["requestId", "content"])
+        #expect(body["requestId"] as? String == requestID.uuidString.lowercased())
+        #expect((body["content"] as? [String: Any])?["name"] as? String == snapshot.name)
+        #expect(body["shareToken"] == nil && body["plan"] == nil && body["organizationId"] == nil)
+    }
+    @Test("Personal library commands retain template identity and use authenticated lifecycle actions")
+    func personalLibraryActions() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [NativeCaptureHTTPProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let transport = PostgresSyncTransport(baseURL: URL(string: "https://example.test")!,
+            urlSession: session, tokenStore: NativeCaptureTokenStore())
+        let url = try #require(Bundle(for: NativeCaptureHTTPProtocol.self).url(forResource: "wedding-catalog.v1", withExtension: "json"))
+        let entry = try #require(JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: url)).entries.first)
+        let record = BlueprintPersonalRecord(id: UUID(), draftVersion: 2, publishedRevision: 1, listedRevision: nil, catalogEntry: entry)
+        let wire = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(record)) as? [String: Any])
+        NativeCaptureHTTPProtocol.configure(["templates": [wire]])
+        #expect(try await transport.listPersonalBlueprints().first?.id == record.id)
+        #expect(try NativeCaptureHTTPProtocol.lastBody()["action"] as? String == "list")
+        NativeCaptureHTTPProtocol.configure(wire)
+        let saved = try await transport.savePersonalBlueprint(id: record.id, expectedVersion: 2, content: record.draftContent)
+        #expect(saved.id == record.id)
+        let body = try NativeCaptureHTTPProtocol.lastBody()
+        #expect(body["action"] as? String == "save")
+        #expect(body["id"] as? String == record.id.uuidString.lowercased())
+        #expect(body["expectedVersion"] as? Int == 2)
+        #expect((body["content"] as? [String: Any])?["startsAt"] == nil)
+        _ = try await transport.publishPersonalBlueprint(id: record.id, expectedVersion: 2)
+        #expect(try NativeCaptureHTTPProtocol.lastBody()["action"] as? String == "publish")
+        NativeCaptureHTTPProtocol.configure(["deleted": true])
+        try await transport.deletePersonalBlueprint(id: record.id)
+        #expect(try NativeCaptureHTTPProtocol.lastBody()["action"] as? String == "delete")
+    }
     @Test("Native capture sends strict authenticated actions and canonical UUIDs")
     func serializedActions() async throws {
         let config = URLSessionConfiguration.ephemeral
@@ -107,7 +160,7 @@ private final class NativeCaptureHTTPProtocol: URLProtocol, @unchecked Sendable 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func stopLoading() {}
     override func startLoading() {
-        guard request.url?.path == "/api/blueprints/create-template",
+        guard ["/api/blueprints/create-template", "/api/blueprints/personal", "/api/blueprints/copies"].contains(request.url?.path ?? ""),
               request.httpMethod == "POST", request.value(forHTTPHeaderField: "Authorization") == "Bearer capture-test",
               request.value(forHTTPHeaderField: "Content-Type") == "application/json" else {
             client?.urlProtocol(self, didFailWithError: URLError(.badURL))

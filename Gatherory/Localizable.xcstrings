@@ -1,6 +1,36 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "All caught up" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All caught up" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Todo al día" } }
+      }
+    },
+    "blueprint.deletePersonalMessage" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This removes your blueprint from search and revokes its sharing links. Other people's completed copies and existing workspaces stay unchanged." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esto retira tu plano de la búsqueda y revoca sus enlaces. Las copias completadas de otras personas y los espacios de trabajo existentes no cambian." } }
+      }
+    },
+    "Your Blueprint" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your Blueprint" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tu plano" } }
+      }
+    },
+    "blueprint.saveToLibrary" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save Blueprint" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardar plano" } }
+      }
+    },
+    "blueprint.savedToLibrary" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved in Blueprints. Your workspace remains independent." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardado en Planos. Tu espacio de trabajo sigue siendo independiente." } }
+      }
+    },
     "" : {
       "localizations" : {
         "es" : {
@@ -44,6 +74,7 @@
       }
     },
     "%@ %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -976,6 +1007,22 @@
         }
       }
     },
+    "Add context or guidance (optional)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add context or guidance (optional)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade contexto u orientación (opcional)"
+          }
+        }
+      }
+    },
     "Add Cost" : {
       "localizations" : {
         "es" : {
@@ -1032,6 +1079,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agregar idea"
+          }
+        }
+      }
+    },
+    "Add Idea" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Idea"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir idea"
           }
         }
       }
@@ -1113,6 +1176,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agregar canciones"
+          }
+        }
+      }
+    },
+    "Add Sub-event" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Sub-event"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir subevento"
+          }
+        }
+      }
+    },
+    "Add Template Idea" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Template Idea"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir idea a la plantilla"
+          }
+        }
+      }
+    },
+    "Add Template Sub-event" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Template Sub-event"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir subevento a la plantilla"
           }
         }
       }
@@ -1250,82 +1361,18 @@
         }
       }
     },
-    "album.select" : {
+    "album.actions" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Select"
+            "value" : "Photo actions"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seleccionar"
-          }
-        }
-      }
-    },
-    "album.selectAll" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Select All"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seleccionar todo"
-          }
-        }
-      }
-    },
-    "album.deselectAll" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deselect All"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deseleccionar todo"
-          }
-        }
-      }
-    },
-    "album.selected" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Selected"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seleccionada"
-          }
-        }
-      }
-    },
-    "album.notSelected" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not selected"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sin seleccionar"
+            "value" : "Acciones de la foto"
           }
         }
       }
@@ -1346,354 +1393,18 @@
         }
       }
     },
-    "album.selectionHint" : {
+    "album.close" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choose the photos you’d like to keep in Photos."
+            "value" : "Close Album"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elige las fotos que quieras guardar en Fotos."
-          }
-        }
-      }
-    },
-    "album.openPhotoHint" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Opens the full photo."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abre la foto completa."
-          }
-        }
-      }
-    },
-    "album.toggleSelectionHint" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toggles selection for saving to Photos."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Selecciona o deselecciona la foto para guardarla en Fotos."
-          }
-        }
-      }
-    },
-    "album.savePhoto" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save Photo"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Guardar foto"
-          }
-        }
-      }
-    },
-    "album.saving" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saving…"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Guardando…"
-          }
-        }
-      }
-    },
-    "album.savePermissionDenied" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Allow Gatherory to add photos in Settings, then try saving again."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Permite que Gatherory añada fotos en Ajustes y vuelve a intentarlo."
-          }
-        }
-      }
-    },
-    "album.saveInvalidImage" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "One of these photos couldn’t be opened. Nothing was saved. Try another selection."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo abrir una de estas fotos. No se guardó ninguna. Prueba con otra selección."
-          }
-        }
-      }
-    },
-    "album.saveFailed" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Photos couldn’t be saved. Try again."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudieron guardar las fotos. Inténtalo de nuevo."
-          }
-        }
-      }
-    },
-    "album.openSettings" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Settings"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abrir Ajustes"
-          }
-        }
-      }
-    },
-    "album.photoUnavailable" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Photo Unavailable"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Foto no disponible"
-          }
-        }
-      }
-    },
-    "album.photoUnavailableDescription" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This photo couldn’t be opened. Try another photo."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo abrir esta foto. Prueba con otra."
-          }
-        }
-      }
-    },
-    "album.zoomPhotoHint" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pinch or double-tap to zoom. Swipe to see the next photo."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pellizca o toca dos veces para ampliar. Desliza para ver la siguiente foto."
-          }
-        }
-      }
-    },
-    "album.zoomIn" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zoom In"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ampliar"
-          }
-        }
-      }
-    },
-    "album.zoomOut" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zoom Out"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reducir"
-          }
-        }
-      }
-    },
-    "album.previousPhoto" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Previous Photo"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Foto anterior"
-          }
-        }
-      }
-    },
-    "album.nextPhoto" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Next Photo"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Foto siguiente"
-          }
-        }
-      }
-    },
-    "album.deleteFailed" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This photo couldn’t be deleted. Please try again."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo eliminar esta foto. Inténtalo de nuevo."
-          }
-        }
-      }
-    },
-    "album.selectedCount" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld selected"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld seleccionadas"
-          }
-        }
-      }
-    },
-    "album.saveSelection" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save to Photos (%lld)"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Guardar en Fotos (%lld)"
-          }
-        }
-      }
-    },
-    "album.savedPhotos" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld photos saved to Photos."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld fotos guardadas en Fotos."
-          }
-        }
-      }
-    },
-    "album.savedSinglePhoto" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Photo saved to Photos."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Foto guardada en Fotos."
-          }
-        }
-      }
-    },
-    "album.singleSelected" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1 selected"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1 seleccionada"
+            "value" : "Cerrar álbum"
           }
         }
       }
@@ -1710,38 +1421,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cerrar foto"
-          }
-        }
-      }
-    },
-    "album.actions" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Photo actions"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Acciones de la foto"
-          }
-        }
-      }
-    },
-    "album.close" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Close Album"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cerrar álbum"
           }
         }
       }
@@ -1794,6 +1473,38 @@
         }
       }
     },
+    "album.deleteFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This photo couldn’t be deleted. Please try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo eliminar esta foto. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "album.deselectAll" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deselect All"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deseleccionar todo"
+          }
+        }
+      }
+    },
     "album.empty" : {
       "localizations" : {
         "en" : {
@@ -1806,6 +1517,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Las fotos compartidas durante el evento aparecerán aquí."
+          }
+        }
+      }
+    },
+    "album.nextPhoto" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next Photo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto siguiente"
+          }
+        }
+      }
+    },
+    "album.notSelected" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not selected"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin seleccionar"
+          }
+        }
+      }
+    },
+    "album.openPhotoHint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the full photo."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la foto completa."
+          }
+        }
+      }
+    },
+    "album.openSettings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Settings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir Ajustes"
           }
         }
       }
@@ -1858,6 +1633,262 @@
         }
       }
     },
+    "album.photoUnavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photo Unavailable"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto no disponible"
+          }
+        }
+      }
+    },
+    "album.photoUnavailableDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This photo couldn’t be opened. Try another photo."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo abrir esta foto. Prueba con otra."
+          }
+        }
+      }
+    },
+    "album.previousPhoto" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous Photo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto anterior"
+          }
+        }
+      }
+    },
+    "album.savedPhotos" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld photos saved to Photos."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld fotos guardadas en Fotos."
+          }
+        }
+      }
+    },
+    "album.savedSinglePhoto" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photo saved to Photos."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto guardada en Fotos."
+          }
+        }
+      }
+    },
+    "album.saveFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photos couldn’t be saved. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar las fotos. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "album.saveInvalidImage" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One of these photos couldn’t be opened. Nothing was saved. Try another selection."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo abrir una de estas fotos. No se guardó ninguna. Prueba con otra selección."
+          }
+        }
+      }
+    },
+    "album.savePermissionDenied" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow Gatherory to add photos in Settings, then try saving again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permite que Gatherory añada fotos en Ajustes y vuelve a intentarlo."
+          }
+        }
+      }
+    },
+    "album.savePhoto" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save Photo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar foto"
+          }
+        }
+      }
+    },
+    "album.saveSelection" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save to Photos (%lld)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar en Fotos (%lld)"
+          }
+        }
+      }
+    },
+    "album.saving" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saving…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardando…"
+          }
+        }
+      }
+    },
+    "album.select" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seleccionar"
+          }
+        }
+      }
+    },
+    "album.selectAll" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select All"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seleccionar todo"
+          }
+        }
+      }
+    },
+    "album.selected" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seleccionada"
+          }
+        }
+      }
+    },
+    "album.selectedCount" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld selected"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld seleccionadas"
+          }
+        }
+      }
+    },
+    "album.selectionHint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose the photos you’d like to keep in Photos."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige las fotos que quieras guardar en Fotos."
+          }
+        }
+      }
+    },
     "album.singlePhoto" : {
       "localizations" : {
         "en" : {
@@ -1870,6 +1901,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "1 foto"
+          }
+        }
+      }
+    },
+    "album.singleSelected" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 selected"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 seleccionada"
           }
         }
       }
@@ -1890,6 +1937,22 @@
         }
       }
     },
+    "album.toggleSelectionHint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toggles selection for saving to Photos."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selecciona o deselecciona la foto para guardarla en Fotos."
+          }
+        }
+      }
+    },
     "album.viewAll" : {
       "localizations" : {
         "en" : {
@@ -1906,12 +1969,92 @@
         }
       }
     },
+    "album.zoomIn" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoom In"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ampliar"
+          }
+        }
+      }
+    },
+    "album.zoomOut" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoom Out"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reducir"
+          }
+        }
+      }
+    },
+    "album.zoomPhotoHint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinch or double-tap to zoom. Swipe to see the next photo."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pellizca o toca dos veces para ampliar. Desliza para ver la siguiente foto."
+          }
+        }
+      }
+    },
+    "All" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todas"
+          }
+        }
+      }
+    },
     "All Ideas" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Todas las ideas"
+          }
+        }
+      }
+    },
+    "All Ideas Reviewed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Ideas Reviewed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todas las ideas revisadas"
           }
         }
       }
@@ -2147,6 +2290,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Manzana"
+          }
+        }
+      }
+    },
+    "Applies To" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applies To"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se aplica a"
           }
         }
       }
@@ -2558,13 +2717,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Create a template from this event here, or open the web editor for advanced authoring."
+            "value" : "Create a reusable template from this event. Your event stays private."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Crea una plantilla a partir de este evento aquí o abre el editor web para la edición avanzada."
+            "value" : "Crea una plantilla reutilizable de este evento. Tu evento sigue siendo privado."
           }
         }
       }
@@ -2613,22 +2772,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ideas"
-          }
-        }
-      }
-    },
-    "blueprint.captureOnWebHint" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose what to reuse and publish on the web."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige qué reutilizar y publicar en la web."
           }
         }
       }
@@ -3001,6 +3144,54 @@
         }
       }
     },
+    "blueprint.customizationInvalid" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t save these changes. Check the content limits and event selection, then try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar estos cambios. Comprueba los límites de contenido y el evento seleccionado e inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "blueprint.customize" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Customize"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personalizar"
+          }
+        }
+      }
+    },
+    "blueprint.dates.rowHint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap to edit. Swipe to confirm."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca para editar. Desliza para confirmar."
+          }
+        }
+      }
+    },
     "blueprint.datesKept" : {
       "localizations" : {
         "en" : {
@@ -3353,6 +3544,379 @@
         }
       }
     },
+    "blueprint.library.allCategories" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Categories"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todas las categorías"
+          }
+        }
+      }
+    },
+    "blueprint.library.categoryFilter" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter blueprints by category"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtrar plantillas por categoría"
+          }
+        }
+      }
+    },
+    "blueprint.library.drafts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Progress"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En curso"
+          }
+        }
+      }
+    },
+    "blueprint.library.draftsEmpty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start customizing a template in Explore. Your saved setups will be here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empieza a personalizar una plantilla en Explorar. Tus configuraciones guardadas aparecerán aquí."
+          }
+        }
+      }
+    },
+    "blueprint.library.empty.draftsMessage" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find a template in Explore and make it yours. Save a draft to pick up here later."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encuentra una plantilla en Explorar y personalízala. Guarda un borrador para retomarlo aquí más tarde."
+          }
+        }
+      }
+    },
+    "blueprint.library.empty.draftsTitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Drafts Yet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no hay borradores"
+          }
+        }
+      }
+    },
+    "blueprint.library.empty.installedMessage" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install a template to start your own event plan. Your template history will be here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instala una plantilla para crear tu propio plan de evento. Aquí verás tu historial de plantillas."
+          }
+        }
+      }
+    },
+    "blueprint.library.empty.installedTitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Installed Templates"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay plantillas instaladas"
+          }
+        }
+      }
+    },
+    "blueprint.library.empty.viewDrafts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View In Progress"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ver en curso"
+          }
+        }
+      }
+    },
+    "blueprint.library.empty.viewInstalled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View Installed Templates"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ver plantillas instaladas"
+          }
+        }
+      }
+    },
+    "blueprint.library.installedTemplates" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installed Templates"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plantillas instaladas"
+          }
+        }
+      }
+    },
+    "blueprint.library.localReadFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some saved template activity couldn’t be loaded. Try again to see your saved setups and history."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo cargar parte de la actividad guardada de las plantillas. Inténtalo de nuevo para ver tus configuraciones y tu historial."
+          }
+        }
+      }
+    },
+    "blueprint.library.noMatchingDrafts" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No drafts in this category. Try another category or choose All Categories."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay borradores en esta categoría. Prueba otra categoría o elige Todas las categorías."
+          }
+        }
+      }
+    },
+    "blueprint.library.noMatchingUsed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No used templates in this category. Try another category or choose All Categories."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay plantillas utilizadas en esta categoría. Prueba otra categoría o elige Todas las categorías."
+          }
+        }
+      }
+    },
+    "blueprint.library.noSavedDrafts" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your saved setups will appear here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las configuraciones que guardes aparecerán aquí."
+          }
+        }
+      }
+    },
+    "blueprint.library.openWorkspace" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Workspace"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir espacio de trabajo"
+          }
+        }
+      }
+    },
+    "blueprint.library.refreshFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t refresh used templates. Saved activity is still available on this device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron actualizar las plantillas usadas. La actividad guardada sigue disponible en este dispositivo."
+          }
+        }
+      }
+    },
+    "blueprint.library.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blueprints"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blueprints"
+          }
+        }
+      }
+    },
+    "blueprint.library.used" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Used Templates"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plantillas usadas"
+          }
+        }
+      }
+    },
+    "blueprint.library.usedEmpty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Templates you install will appear here, alongside the workspaces you created from them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las plantillas que instales aparecerán aquí junto con los espacios de trabajo que creaste a partir de ellas."
+          }
+        }
+      }
+    },
+    "blueprint.library.usedFor" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Used for %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usada para %@"
+          }
+        }
+      }
+    },
+    "blueprint.library.version" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versión %lld"
+          }
+        }
+      }
+    },
+    "blueprint.library.workspaceUnavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Workspace isn’t available on this device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El espacio de trabajo no está disponible en este dispositivo."
+          }
+        }
+      }
+    },
     "blueprint.listedInSearch" : {
       "localizations" : {
         "en" : {
@@ -3566,13 +4130,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This template is not published yet. Open the web editor to review and publish it."
+            "value" : "This template is not ready to share yet."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta plantilla aún no está publicada. Abre el editor web para revisarla y publicarla."
+            "value" : "Esta plantilla aún no está lista para compartir."
           }
         }
       }
@@ -3641,22 +4205,6 @@
         }
       }
     },
-    "blueprint.openTemplateEditor" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Web Editor"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abrir editor web"
-          }
-        }
-      }
-    },
     "blueprint.parentEvent" : {
       "localizations" : {
         "en" : {
@@ -3721,6 +4269,282 @@
         }
       }
     },
+    "blueprint.preview.choicesExplanation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Love includes an idea, Pass leaves it out, and Maybe keeps its current inclusion. Save Draft to keep your choices."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Me encanta incluye una idea, Pasar la deja fuera y Tal vez conserva su inclusión actual. Guarda el borrador para conservar tus elecciones."
+          }
+        }
+      }
+    },
+    "blueprint.preview.confirmInstall" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install this template?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Instalar esta plantilla?"
+          }
+        }
+      }
+    },
+    "blueprint.preview.confirmInstallMessage" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue with your current choices? Any unsaved edits will be saved. You’ll confirm dates before creating your independent event plan."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Continuar con tus opciones actuales? Se guardarán los cambios pendientes. Confirmarás las fechas antes de crear tu plan de evento independiente."
+          }
+        }
+      }
+    },
+    "blueprint.preview.discard" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard Changes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descartar cambios"
+          }
+        }
+      }
+    },
+    "blueprint.preview.discardAndCustomize" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard & Customize"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descartar y personalizar"
+          }
+        }
+      }
+    },
+    "blueprint.preview.discardAndReview" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard & Review"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descartar y revisar"
+          }
+        }
+      }
+    },
+    "blueprint.preview.install" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instalar"
+          }
+        }
+      }
+    },
+    "blueprint.preview.noIdeas" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no ideas to decide on in this preview."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ideas sobre las que decidir en esta vista previa."
+          }
+        }
+      }
+    },
+    "blueprint.preview.return" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Returns to templates"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a las plantillas"
+          }
+        }
+      }
+    },
+    "blueprint.preview.reviewInstall" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review & Install"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisar e instalar"
+          }
+        }
+      }
+    },
+    "blueprint.preview.saveAndCustomize" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save & Customize"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar y personalizar"
+          }
+        }
+      }
+    },
+    "blueprint.preview.saveAndReview" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save & Review"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar y revisar"
+          }
+        }
+      }
+    },
+    "blueprint.preview.saveBeforeCustomize" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save your choices before customizing?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Guardar tus elecciones antes de personalizar?"
+          }
+        }
+      }
+    },
+    "blueprint.preview.saveBeforeReview" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save your changes before review?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Quieres guardar los cambios antes de revisarlos?"
+          }
+        }
+      }
+    },
+    "blueprint.preview.saveDraft" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save Draft"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar borrador"
+          }
+        }
+      }
+    },
+    "blueprint.preview.saveFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t save this draft. Finish any pending installation or reopen the latest saved setup and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar este borrador. Finaliza cualquier instalación pendiente o vuelve a abrir la última configuración guardada e inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "blueprint.preview.unsaved" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save your template choices?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Guardar tus elecciones de la plantilla?"
+          }
+        }
+      }
+    },
     "blueprint.previewDatesExplanation" : {
       "localizations" : {
         "en" : {
@@ -3749,6 +4573,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Haz tuyo este plan. Elige qué incluir y confirma las fechas durante la configuración. Tu copia es independiente del evento original."
+          }
+        }
+      }
+    },
+    "blueprint.previewPosition" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld / %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld / %lld"
+          }
+        }
+      }
+    },
+    "blueprint.previewPositionLabel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idea %lld of %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idea %lld de %lld"
           }
         }
       }
@@ -5877,6 +6733,16 @@
         }
       }
     },
+    "Create Workspace" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crear espacio de trabajo"
+          }
+        }
+      }
+    },
     "Current Allocation" : {
       "localizations" : {
         "es" : {
@@ -6150,6 +7016,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eliminar cuenta"
+          }
+        }
+      }
+    },
+    "Delete Blueprint" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar plantilla"
+          }
+        }
+      }
+    },
+    "Delete Blueprint?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Eliminar plantilla?"
           }
         }
       }
@@ -6464,6 +7350,38 @@
         }
       }
     },
+    "Edit Template Idea" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Template Idea"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editar idea de la plantilla"
+          }
+        }
+      }
+    },
+    "Edit Template Sub-event" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Template Sub-event"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editar subevento de la plantilla"
+          }
+        }
+      }
+    },
     "Edits this cost" : {
       "localizations" : {
         "es" : {
@@ -6521,6 +7439,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ingresa un presupuesto mayor que cero o déjalo vacío."
+          }
+        }
+      }
+    },
+    "Enter a title to save this idea." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a title to save this idea."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduce un título para guardar esta idea."
+          }
+        }
+      }
+    },
+    "Enter a title to save this sub-event." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a title to save this sub-event."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduce un título para guardar este subevento."
           }
         }
       }
@@ -7164,6 +8114,38 @@
         }
       }
     },
+    "explore.anniversaries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anniversaries"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aniversarios"
+          }
+        }
+      }
+    },
+    "explore.bachelorParties" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bachelor & Bachelorette"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Despedidas de soltería"
+          }
+        }
+      }
+    },
     "explore.birthdays" : {
       "localizations" : {
         "en" : {
@@ -7212,6 +8194,22 @@
         }
       }
     },
+    "explore.community" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community Gatherings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encuentros comunitarios"
+          }
+        }
+      }
+    },
     "explore.connection" : {
       "localizations" : {
         "en" : {
@@ -7224,6 +8222,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Conéctate a internet e inicia sesión para explorar plantillas. Tus espacios de trabajo siguen disponibles sin conexión."
+          }
+        }
+      }
+    },
+    "explore.cottageStays" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cottage & Cabin Stays"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estancias en cabañas"
+          }
+        }
+      }
+    },
+    "explore.dinnerParties" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dinner Parties"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cenas con amigos"
           }
         }
       }
@@ -7244,6 +8274,22 @@
         }
       }
     },
+    "explore.engagements" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Engagements"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compromisos"
+          }
+        }
+      }
+    },
     "explore.events" : {
       "localizations" : {
         "en" : {
@@ -7256,6 +8302,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Otros eventos"
+          }
+        }
+      }
+    },
+    "explore.gameNights" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Game Nights"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noches de juegos"
+          }
+        }
+      }
+    },
+    "explore.graduations" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Graduations"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Graduaciones"
+          }
+        }
+      }
+    },
+    "explore.guestStays" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guest Stays"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estancias de huéspedes"
           }
         }
       }
@@ -7340,6 +8434,22 @@
         }
       }
     },
+    "explore.picnics" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Picnics & Outdoors"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pícnics y aire libre"
+          }
+        }
+      }
+    },
     "explore.recent" : {
       "localizations" : {
         "en" : {
@@ -7388,6 +8498,38 @@
         }
       }
     },
+    "explore.retreats" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Team Retreats"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retiros de equipo"
+          }
+        }
+      }
+    },
+    "explore.reunions" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Family Reunions"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reuniones familiares"
+          }
+        }
+      }
+    },
     "explore.search" : {
       "localizations" : {
         "en" : {
@@ -7420,6 +8562,22 @@
         }
       }
     },
+    "explore.showers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Showers & Welcomes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fiestas de bienvenida"
+          }
+        }
+      }
+    },
     "explore.title" : {
       "localizations" : {
         "en" : {
@@ -7432,6 +8590,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Explorar"
+          }
+        }
+      }
+    },
+    "explore.trips" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trips & Getaways"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viajes y escapadas"
           }
         }
       }
@@ -8155,6 +9329,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Detalles de la idea"
+          }
+        }
+      }
+    },
+    "Idea Details" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idea Details"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detalles de la idea"
+          }
+        }
+      }
+    },
+    "Idea name" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idea name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre de la idea"
           }
         }
       }
@@ -9051,6 +10257,17 @@
         }
       }
     },
+    "Love" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Me encanta"
+          }
+        }
+      }
+    },
     "Love an idea to approve it. Dated event ideas appear on Home, while ideas without a date stay here until you schedule them." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9058,6 +10275,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Me encanta una idea para aprobarla. Las ideas de eventos con fecha aparecen en Inicio, mientras que las ideas sin fecha permanecen aquí hasta que las programe."
+          }
+        }
+      }
+    },
+    "Love it" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Me encanta"
           }
         }
       }
@@ -9482,6 +10709,22 @@
         }
       }
     },
+    "No Ideas" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Ideas"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ideas"
+          }
+        }
+      }
+    },
     "No Join Requests" : {
       "localizations" : {
         "es" : {
@@ -9688,6 +10931,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Notas"
+          }
+        }
+      }
+    },
+    "Notes can be up to 2,000 characters." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes can be up to 2,000 characters."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las notas pueden tener hasta 2.000 caracteres."
           }
         }
       }
@@ -10072,6 +11331,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Abre la lista de reproducción completa del evento"
+          }
+        }
+      }
+    },
+    "Opens the idea preview." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the idea preview."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la vista previa de la idea."
+          }
+        }
+      }
+    },
+    "Opens the idea preview. Swipe left to pass, right to love it, or up to save for later." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the idea preview. Swipe left to pass, right to love it, or up to save for later."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la vista previa de la idea. Desliza a la izquierda para pasar, a la derecha si te encanta o hacia arriba para dejarla para después."
           }
         }
       }
@@ -10729,6 +12021,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Preparando tu cuenta…"
+          }
+        }
+      }
+    },
+    "Previous" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anterior"
           }
         }
       }
@@ -11663,6 +12972,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vuelve a todos los espacios de trabajo"
+          }
+        }
+      }
+    },
+    "Review All Ideas" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review All Ideas"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisar todas las ideas"
+          }
+        }
+      }
+    },
+    "Review All Ideas Again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review All Ideas Again"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a revisar todas las ideas"
           }
         }
       }
@@ -12936,6 +14277,22 @@
         }
       }
     },
+    "Sub-event Details" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sub-event Details"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detalles del subevento"
+          }
+        }
+      }
+    },
     "Suggested" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12969,6 +14326,7 @@
       }
     },
     "Swipe left to pass, up for maybe, or right to love" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -13109,6 +14467,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Toca para cambiar"
+          }
+        }
+      }
+    },
+    "Target" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Target"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Destino"
           }
         }
       }
@@ -13523,6 +14897,16 @@
         }
       }
     },
+    "This removes the blueprint from your library. Created workspaces will not be deleted." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto elimina la plantilla de tu biblioteca. Los espacios de trabajo creados no se eliminarán."
+          }
+        }
+      }
+    },
     "This removes the draft main event and its sub-events from planning Home, and deletes their costs and shared moments. This cannot be undone here." : {
       "localizations" : {
         "es" : {
@@ -13603,6 +14987,22 @@
         }
       }
     },
+    "Titles can be up to 120 characters." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Titles can be up to 120 characters."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los títulos pueden tener hasta 120 caracteres."
+          }
+        }
+      }
+    },
     "Total Spent" : {
       "localizations" : {
         "es" : {
@@ -13669,6 +15069,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escribe DELETE para confirmar"
+          }
+        }
+      }
+    },
+    "Unable to update blueprint" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo actualizar la plantilla"
           }
         }
       }
@@ -14138,6 +15548,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu círculo puede enviar inspiración."
+          }
+        }
+      }
+    },
+    "Your decisions are kept. Review all ideas again whenever you're ready." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your decisions are kept. Review all ideas again whenever you're ready."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus decisiones se conservan. Vuelve a revisar todas las ideas cuando quieras."
           }
         }
       }

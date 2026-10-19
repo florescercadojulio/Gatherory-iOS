@@ -109,6 +109,7 @@ final class BlueprintInstallationCoordinator {
     private let library: WorkspaceLibrary
     private let intents: BlueprintInstallationIntentStore
     private let setupDrafts: BlueprintSetupDraftStore
+    private let libraryCache: BlueprintLibraryCache
     private let boundOwnerUserID: String?
     private let boundAccountGeneration: UUID
     private let encoder: JSONEncoder
@@ -120,13 +121,15 @@ final class BlueprintInstallationCoordinator {
         library: WorkspaceLibrary,
         intents: BlueprintInstallationIntentStore? = nil,
         setupDrafts: BlueprintSetupDraftStore? = nil,
-        transport: PostgresSyncTransport? = nil
+        transport: PostgresSyncTransport? = nil,
+        libraryCache: BlueprintLibraryCache? = nil
     ) {
         self.transport = transport ?? PostgresSyncTransport(baseURL: baseURL)
         self.persistence = persistence
         self.library = library
         self.intents = intents ?? BlueprintInstallationIntentStore()
         self.setupDrafts = setupDrafts ?? BlueprintSetupDraftStore()
+        self.libraryCache = libraryCache ?? BlueprintLibraryCache()
         self.boundOwnerUserID = persistence.activeUserID
         self.boundAccountGeneration = persistence.activeUserGeneration
         let encoder = JSONEncoder()
@@ -141,6 +144,24 @@ final class BlueprintInstallationCoordinator {
     func catalog() async throws -> BlueprintCatalogResponse {
         try requireBoundAccount()
         let response = try await transport.blueprintCatalog()
+        try requireBoundAccount()
+        return response
+    }
+
+    func prepareDraftCopy(_ draft: BlueprintSetupDraft) async throws -> BlueprintSetupDraft {
+        try requireBoundAccount()
+        let generation = boundAccountGeneration
+        return try await BlueprintSavedCopyResolver.resolve(draft: draft, ownerID: draft.ownerUserID,
+            store: setupDrafts, transport: transport,
+            currentOwnerID: {
+                self.persistence.activeUserGeneration == generation ? self.persistence.activeUserID : nil
+            },
+            hasPendingInstallation: { try !self.intents.pending(ownerUserID: draft.ownerUserID).isEmpty })
+    }
+
+    func usedTemplates() async throws -> BlueprintLibraryResponse {
+        try requireBoundAccount()
+        let response = try await transport.blueprintLibrary()
         try requireBoundAccount()
         return response
     }
@@ -255,13 +276,32 @@ final class BlueprintInstallationCoordinator {
         // If cleanup fails, retain the install intent so retry recovers the same
         // receipt rather than offering another creation from the old draft.
         let source = try decoder.decode(SetupDraftSource.self, from: intent.requestBody)
-        try setupDrafts.remove(
+        let savedDraft = try? setupDrafts.loadForInstallation(
+            ownerUserID: intent.ownerUserID,
+            catalogKey: source.catalogKey,
+            requestID: intent.requestID,
+            shareToken: source.shareToken
+        )
+        try setupDrafts.removeForInstallation(
             ownerUserID: intent.ownerUserID,
             catalogKey: source.catalogKey,
             requestID: intent.requestID,
             shareToken: source.shareToken
         )
         try intents.complete(ownerUserID: intent.ownerUserID, requestID: intent.requestID)
+        // This activity cache is recoverable from the server library endpoint.
+        // Its failure must not turn a completed, imported installation into a
+        // failed attempt or add work to the ordinary workspace outbox.
+        try? libraryCache.record(BlueprintUsedTemplate(
+            installationID: result.installationID,
+            scopeID: result.scopeID,
+            catalogKey: source.catalogKey,
+            revision: source.revision,
+            templateName: savedDraft?.entry.definition.blueprint.name ?? source.catalogKey,
+            eventName: source.mainEvent.name,
+            installedAt: ISO8601DateFormatter().string(from: .now),
+            sourceDraftData: savedDraft.flatMap { try? JSONEncoder().encode($0.installationSnapshot) }
+        ), ownerID: intent.ownerUserID)
         return workspace
     }
 
@@ -273,7 +313,10 @@ final class BlueprintInstallationCoordinator {
     }
 
     private struct SetupDraftSource: Decodable {
+        struct MainEvent: Decodable { let name: String }
         let catalogKey: String
+        let revision: Int
+        let mainEvent: MainEvent
         let shareToken: String?
     }
 

@@ -3,7 +3,7 @@ import SwiftUI
 struct BlueprintExploreView: View {
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.blueprintPreviewPresented) private var previewPresented
     @Namespace private var blueprintTransition
     @State private var model: BlueprintDiscoveryModel
     @State private var query = ""
@@ -43,15 +43,8 @@ struct BlueprintExploreView: View {
         .toolbarTitleDisplayMode(.inlineLarge)
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: ExploreCopy.search)
         .searchFocused($isFocused)
-        .navigationDestination(item: $navigation.selection) { selection in
-            Group {
-                if reduceMotion {
-                    BlueprintPreviewView(entry: selection.entry)
-                } else {
-                    BlueprintPreviewView(entry: selection.entry)
-                        .navigationTransition(.zoom(sourceID: selection.id, in: blueprintTransition))
-                }
-            }
+        .fullScreenCover(item: $navigation.selection, onDismiss: { previewPresented.wrappedValue = false }) { selection in
+            BlueprintPreviewView(entry: selection.entry)
             .onAppear { model.recordAccess(selection.entry) }
         }
         .onChange(of: navigation.selection?.id) { _, selected in
@@ -89,7 +82,7 @@ struct BlueprintExploreView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: 16) {
-                    ForEach(BlueprintBrowseCategory.allCases) { category in
+                    ForEach(BlueprintBrowseCategory.available(in: model.entries)) { category in
                         NavigationLink {
                             BlueprintCategoryResultsView(
                                 category: category,
@@ -129,6 +122,7 @@ struct BlueprintExploreView: View {
                                emptyTitle: String, emptyMessage: String) -> some View {
         let displayed = navigation.entries(for: source, fallback: entries)
         return BlueprintCatalogGrid(entries: displayed, source: source, transitionNamespace: blueprintTransition) { entry in
+            previewPresented.wrappedValue = true
             navigation.open(entry, from: source, entries: displayed, mode: mode, query: query)
         }
         .background(AppTheme.ColorToken.background)

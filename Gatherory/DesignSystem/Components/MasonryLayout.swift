@@ -1,5 +1,17 @@
 import SwiftUI
 
+/// Concrete SwiftUI frames require finite, nonnegative sizes. Layout probes and
+/// interrupted transitions may temporarily provide unusable geometry.
+nonisolated enum LayoutDimensions {
+    static func nonnegative(_ value: CGFloat) -> CGFloat {
+        value.isFinite ? max(value, 0) : 0
+    }
+
+    static func size(_ value: CGSize) -> CGSize {
+        CGSize(width: nonnegative(value.width), height: nonnegative(value.height))
+    }
+}
+
 /// A compact Pinterest-style layout that fills the shortest available column.
 /// Callers can collapse it to one column for larger accessibility text sizes.
 struct MasonryLayout: Layout {
@@ -79,7 +91,7 @@ struct MasonryLayout: Layout {
     }
 
     nonisolated static func finiteDimension(_ value: CGFloat) -> CGFloat {
-        value.isFinite ? max(value, 0) : 0
+        LayoutDimensions.nonnegative(value)
     }
 
     nonisolated static func resolvedWidth(_ proposed: CGFloat?, idealWidth: CGFloat) -> CGFloat {

@@ -134,6 +134,12 @@ struct PostgresSyncTransport: WorkspaceSnapshotTransport {
         }
     }
 
+    func blueprintLibrary() async throws -> BlueprintLibraryResponse {
+        var request = try authenticatedRequest(path: ["api", "blueprints", "library"])
+        request.httpMethod = "GET"
+        return try await perform(request)
+    }
+
     func blueprintSchedule(_ input: BlueprintScheduleInput) async throws -> BlueprintScheduleResponse {
         var request = try authenticatedRequest(path: ["api", "blueprints", "schedule"])
         request.httpMethod = "POST"
@@ -296,6 +302,57 @@ extension PostgresSyncTransport: BlueprintCreateShareTransport {
     private struct BlueprintCaptureReadAction: Encodable {
         let action: String
         let eventId: String
+    }
+}
+
+extension PostgresSyncTransport: BlueprintPersonalLibraryTransport {
+    private struct PersonalCommand: Encodable {
+        let action: String
+        var id: String? = nil
+        var expectedVersion: Int? = nil
+        var content: BlueprintDraftContent? = nil
+    }
+    private struct PersonalDeletion: Decodable { let deleted: Bool }
+
+    func listPersonalBlueprints() async throws -> [BlueprintPersonalRecord] {
+        let response: BlueprintPersonalListResponse = try await personalCommand(.init(action: "list"))
+        return response.templates
+    }
+    func savePersonalBlueprint(id: UUID, expectedVersion: Int, content: BlueprintDraftContent) async throws -> BlueprintPersonalRecord {
+        try await personalCommand(.init(action: "save", id: id.uuidString.lowercased(), expectedVersion: expectedVersion, content: content))
+    }
+    func deletePersonalBlueprint(id: UUID) async throws {
+        let response: PersonalDeletion = try await personalCommand(.init(action: "delete", id: id.uuidString.lowercased()))
+        guard response.deleted else { throw CloudSyncFailure.invalidResponse }
+    }
+    func publishPersonalBlueprint(id: UUID, expectedVersion: Int) async throws -> BlueprintPersonalRecord {
+        try await personalCommand(.init(action: "publish", id: id.uuidString.lowercased(), expectedVersion: expectedVersion))
+    }
+    private func personalCommand<Output: Decodable>(_ command: PersonalCommand) async throws -> Output {
+        var request = try authenticatedRequest(path: ["api", "blueprints", "personal"])
+        request.httpMethod = "POST"
+        request.httpBody = try encoder.encode(command)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard let data = try await performData(request, operation: "blueprints/personal") else {
+            throw CloudSyncFailure.invalidResponse
+        }
+        return try decoder.decode(Output.self, from: data)
+    }
+}
+
+extension PostgresSyncTransport: BlueprintSavedCopyTransport {
+    private struct SnapshotCopyRequest: Encodable {
+        let requestId: String
+        let content: BlueprintDraftContent
+    }
+
+    func copyBlueprintSnapshot(requestID: UUID, content: BlueprintDraftContent) async throws -> BlueprintPersonalRecord {
+        var request = try authenticatedRequest(path: ["api", "blueprints", "copies"])
+        request.httpMethod = "POST"
+        request.httpBody = try encoder.encode(SnapshotCopyRequest(requestId: requestID.uuidString.lowercased(), content: content))
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard let data = try await performData(request, operation: "blueprints/copies") else { throw CloudSyncFailure.invalidResponse }
+        return try decoder.decode(BlueprintPersonalRecord.self, from: data)
     }
 }
 

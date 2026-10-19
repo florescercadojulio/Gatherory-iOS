@@ -81,6 +81,54 @@ struct BlueprintPreviewContentTests {
         #expect(entry.definition == original)
     }
 
+    @Test("Preview event IDs distinguish the main event from a child named main")
+    func eventIdentifiersAndScopedIdeas() throws {
+        let entry = try fixture { document in
+            var modules = document["modules"] as! [[String: Any]]
+            let treeIndex = modules.firstIndex { $0["type"] as? String == "experience_tree" }!
+            var treeConfig = modules[treeIndex]["config"] as! [String: Any]
+            var children = treeConfig["children"] as! [[String: Any]]
+            children[0]["key"] = "main"
+            treeConfig["children"] = children
+            modules[treeIndex]["config"] = treeConfig
+
+            let ideasIndex = modules.firstIndex { $0["type"] as? String == "ideas" }!
+            var ideasConfig = modules[ideasIndex]["config"] as! [String: Any]
+            var ideas = ideasConfig["ideas"] as! [[String: Any]]
+            ideas[1]["target"] = ["kind": "child", "key": "main"]
+            ideas[2]["target"] = ["kind": "child", "key": "ceremony"]
+            ideas[3]["target"] = ["kind": "child", "key": "main"]
+            ideas[4]["target"] = ["kind": "child", "key": "reception"]
+            ideasConfig["ideas"] = ideas
+            modules[ideasIndex]["config"] = ideasConfig
+            document["modules"] = modules
+        }
+        let original = entry.definition
+        let content = try #require(BlueprintPreviewContent(entry: entry))
+
+        #expect(content.eventIDs == [
+            .main, .child("main"), .child("rehearsal"), .child("ceremony"), .child("reception")
+        ])
+        #expect(Set(content.eventIDs).count == content.eventIDs.count)
+
+        #expect(content.ideas(in: .all).map(\.key) == ["venue", "attire", "food", "flowers", "photography"])
+        #expect(content.ideas(in: .main).map(\.key) == ["venue"])
+        #expect(content.ideas(in: .child("main")).map(\.key) == ["attire", "flowers"])
+        #expect(content.ideas(in: .child("ceremony")).map(\.key) == ["food"])
+        #expect(content.ideas(in: .child("missing")).isEmpty)
+
+        let rootEvent = try #require(content.event(for: .main))
+        let childNamedMain = try #require(content.event(for: .child("main")))
+        #expect(rootEvent.title == content.title)
+        #expect(rootEvent.ideas.map(\.key) == ["venue"])
+        #expect(childNamedMain.title == "Venue visit")
+        #expect(childNamedMain.ideas.map(\.key) == ["attire", "flowers"])
+        #expect(content.event(for: .child("missing")) == nil)
+
+        #expect(content.ideas.map(\.key) == ["venue", "attire", "food", "flowers", "photography"])
+        #expect(entry.definition == original)
+    }
+
     @Test("A leaf event's shared presentation retains only its authored ideas and guidance")
     func leafEventContent() throws {
         let entry = try fixture { document in
@@ -104,6 +152,82 @@ struct BlueprintPreviewContentTests {
         #expect(ceremony.guidance.first?.audience == .eventParticipants)
         #expect(content.event(for: "reception")?.ideas.isEmpty == true)
         #expect(content.event()?.ideas.contains { $0.key == idea.key } == false)
+    }
+
+    @Test("Home browsing cannot narrow Decide and every main/child idea is visited once")
+    func homeDoesNotFilterDecide() throws {
+        let content = try mixedTargetContent()
+        var navigation = BlueprintPreviewNavigation()
+        var responses: [String: DecisionChoice] = [:]
+        var visited: [String] = []
+        for event in content.eventIDs {
+            navigation.homeEvent = event
+            #expect(navigation.decisionScope == .all)
+        }
+        while let idea = BlueprintDecisionQueue.nextIdea(
+            in: content.ideas(in: navigation.decisionScope), responses: responses,
+            filter: .unanswered, reviewedKeys: []) {
+            visited.append(idea.key)
+            responses[idea.key] = .love
+            navigation.homeEvent = content.homeContent(responses: responses).eventIDs.last ?? .main
+            #expect(visited.count <= content.ideas.count)
+            if visited.count > content.ideas.count { break }
+        }
+        #expect(visited == content.ideas.map(\.key))
+        #expect(Set(visited).count == content.ideas.count)
+        // Explicit event filters still work and are not changed by Home.
+        navigation.decisionScope = .child("ceremony")
+        navigation.homeEvent = .main
+        #expect(navigation.decisionScope == .child("ceremony"))
+        #expect(content.ideas(in: navigation.decisionScope).map(\.key) == ["venue", "attire"])
+    }
+
+    @Test("Home starts at the main event and Love reveals only its target activity")
+    func decisionDrivenHome() throws {
+        let content = try mixedTargetContent()
+        let initial = content.homeContent(responses: [:])
+        #expect(initial.eventIDs == [.main])
+        #expect(initial.ideas.isEmpty)
+        #expect(initial.guidance().map(\.key) == content.guidance().map(\.key))
+        let home = content.homeContent(responses: ["venue": .love, "attire": .maybe,
+                                                  "food": .pass, "flowers": .love,
+                                                  "unknown": .love])
+        #expect(home.eventIDs == [.main, .child("ceremony")])
+        #expect(home.ideas().map(\.key) == ["flowers"])
+        #expect(home.ideas(for: "ceremony").map(\.key) == ["venue"])
+        #expect(home.event(for: "reception") == nil)
+        #expect(home.event()?.children.map(\.key) == ["ceremony"])
+        // The full catalog remains available to Ideas and Decide.
+        #expect(content.ideas.count == 5)
+        #expect(content.children.count == 4)
+    }
+
+    @Test("Changing the last Love removes its activity; other Loves keep it visible in authored order")
+    func revisingHomeDecisions() throws {
+        let content = try mixedTargetContent()
+        let both = content.homeContent(responses: ["food": .love, "venue": .love])
+        #expect(both.eventIDs == [.main, .child("ceremony"), .child("reception")])
+        let one = content.homeContent(responses: ["venue": .pass, "attire": .love, "food": .maybe])
+        #expect(one.eventIDs == [.main, .child("ceremony")])
+        let none = content.homeContent(responses: ["venue": .pass, "attire": .maybe, "food": .pass])
+        #expect(none.eventIDs == [.main])
+    }
+
+    private func mixedTargetContent() throws -> BlueprintPreviewContent {
+        let entry = try fixture { document in
+            var modules = document["modules"] as! [[String: Any]]
+            let index = modules.firstIndex { $0["type"] as? String == "ideas" }!
+            var config = modules[index]["config"] as! [String: Any]
+            var ideas = config["ideas"] as! [[String: Any]]
+            ideas[0]["target"] = ["kind": "child", "key": "ceremony"]
+            ideas[1]["target"] = ["kind": "child", "key": "ceremony"]
+            ideas[2]["target"] = ["kind": "child", "key": "reception"]
+            ideas[4]["target"] = ["kind": "child", "key": "rehearsal"]
+            config["ideas"] = ideas
+            modules[index]["config"] = config
+            document["modules"] = modules
+        }
+        return try #require(BlueprintPreviewContent(entry: entry))
     }
 
     private func fixture(edit: ((inout [String: Any]) -> Void)? = nil) throws -> BlueprintCatalogEntry {

@@ -3,6 +3,15 @@ import Foundation
 /// Quick review shares the existing transient store, never the offline outbox.
 @MainActor
 enum ManageCollaboratorReview {
+    static func isCaughtUp(in workspace: PlanningWorkspace, store: EventJoinRequestStore,
+                           reference: EventReference, accountID: String?) -> Bool {
+        guard let summary = ManageEventSummary(workspace: workspace, reference: reference),
+              summary.canManageInvitations,
+              !store.isLoading(eventID: summary.eventID),
+              store.error(eventID: summary.eventID, accountID: accountID) == nil else { return false }
+        return store.requestCount(eventID: summary.eventID, accountID: accountID) == 0
+    }
+
     static func latestRequest(in workspace: PlanningWorkspace, store: EventJoinRequestStore,
                               reference: EventReference, accountID: String?) -> EventJoinRequest? {
         guard let summary = ManageEventSummary(workspace: workspace, reference: reference),

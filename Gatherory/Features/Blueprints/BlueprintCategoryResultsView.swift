@@ -6,7 +6,7 @@ struct BlueprintCategoryResultsView: View {
     let entries: [BlueprintCatalogEntry]
     let onAccess: (BlueprintCatalogEntry) -> Void
     let onRefresh: () async -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.blueprintPreviewPresented) private var previewPresented
     @Namespace private var blueprintTransition
     @State private var navigation = BlueprintDiscoveryNavigation()
 
@@ -20,6 +20,7 @@ struct BlueprintCategoryResultsView: View {
             entries: displayedEntries, source: source,
             transitionNamespace: blueprintTransition
         ) { entry in
+            previewPresented.wrappedValue = true
             navigation.open(entry, from: source, entries: displayedEntries, mode: .browse, query: "")
         }
         .background(AppTheme.ColorToken.background)
@@ -35,15 +36,8 @@ struct BlueprintCategoryResultsView: View {
         .navigationTitle(category.title)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await onRefresh() }
-        .navigationDestination(item: $navigation.selection) { selection in
-            Group {
-                if reduceMotion {
-                    BlueprintPreviewView(entry: selection.entry)
-                } else {
-                    BlueprintPreviewView(entry: selection.entry)
-                        .navigationTransition(.zoom(sourceID: selection.id, in: blueprintTransition))
-                }
-            }
+        .fullScreenCover(item: $navigation.selection, onDismiss: { previewPresented.wrappedValue = false }) { selection in
+            BlueprintPreviewView(entry: selection.entry)
             .onAppear { onAccess(selection.entry) }
         }
         .onChange(of: navigation.selection?.id) { _, selected in

@@ -7,26 +7,20 @@
 
 import SwiftUI
 
-private enum AppTab: Hashable {
-    case home
-    case ideas
-    case decide
-    case manage
-}
-
-private enum LibraryTab: Hashable { case workspaces, explore }
+private enum LibraryTab: Hashable { case workspaces, blueprints, explore }
 
 struct AppRootView: View {
     @State private var selectedTab = LibraryTab.workspaces
+    @State private var isPreviewingBlueprint = false
     @Environment(WorkspaceLibrary.self) private var workspaceLibrary
     @Environment(\.currentUserAccount) private var currentUserAccount
     @Environment(GuestInvitationStore.self) private var guests
 
     private var isPresentingWorkspace: Binding<Bool> {
         Binding(
-            get: { workspaceLibrary.selectedWorkspace != nil || guests.selectedPresentation != nil },
+            get: { !isPreviewingBlueprint && (workspaceLibrary.selectedWorkspace != nil || guests.selectedPresentation != nil) },
             set: { isPresented in
-                if !isPresented {
+                if !isPresented && !isPreviewingBlueprint {
                     workspaceLibrary.closeWorkspace()
                     guests.selectedEventID = nil
                 }
@@ -41,6 +35,15 @@ struct AppRootView: View {
                     WorkspaceBrowserView(onExplore: { selectedTab = .explore })
                 }
             }
+            Tab(BlueprintCopy.libraryTitle, systemImage: "square.stack.3d.up.fill", value: .blueprints) {
+                NavigationStack {
+                    BlueprintLibraryView(
+                        ownerID: currentUserAccount?.id ?? "",
+                        isActive: selectedTab == .blueprints
+                    )
+                }
+                .id(currentUserAccount?.id)
+            }
             Tab(ExploreCopy.title, systemImage: "magnifyingglass", value: .explore) {
                 NavigationStack {
                     BlueprintExploreView(ownerID: currentUserAccount?.id ?? "")
@@ -50,6 +53,7 @@ struct AppRootView: View {
         }
         .tabViewStyle(.sidebarAdaptable)
         .tint(AppTheme.ColorToken.accent)
+        .environment(\.blueprintPreviewPresented, $isPreviewingBlueprint)
         .fullScreenCover(isPresented: isPresentingWorkspace) {
             if let eventID = guests.selectedEventID {
                 GuestEventInvitationView(eventID: eventID)
@@ -63,7 +67,10 @@ struct AppRootView: View {
         .task(id: currentUserAccount) {
             workspaceLibrary.configureViewer(currentUserAccount)
         }
-        .onChange(of: currentUserAccount?.id) { _, _ in selectedTab = .workspaces }
+        .onChange(of: currentUserAccount?.id) { _, _ in
+            selectedTab = .workspaces
+            isPreviewingBlueprint = false
+        }
     }
 }
 
@@ -90,14 +97,14 @@ struct ContentView: View {
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync: WorkspaceCloudSyncController?
     @Environment(\.scenePhase) private var scenePhase
     var onExitWorkspace: (() -> Void)?
-    @State private var selectedTab = AppTab.home
+    @State private var selectedTab = WorkspaceTab.home
     @State private var homeReselectionTrigger = 0
 
     init(onExitWorkspace: (() -> Void)? = nil) {
         self.onExitWorkspace = onExitWorkspace
     }
 
-    private var tabSelection: Binding<AppTab> {
+    private var tabSelection: Binding<WorkspaceTab> {
         Binding(
             get: { selectedTab },
             set: { newValue in
@@ -134,44 +141,30 @@ struct ContentView: View {
     }
 
     private var planningTabs: some View {
-        TabView(selection: tabSelection) {
-            Tab(AppCopy.Tab.home, systemImage: "house.fill", value: .home) {
-                NavigationStack {
-                    HomeView(
-                        homeReselectionTrigger: homeReselectionTrigger,
-                        onExitWorkspace: onExitWorkspace
-                    )
-                }
+        WorkspaceTabShell(selection: tabSelection, showsManage: true) {
+            NavigationStack {
+                HomeView(
+                    homeReselectionTrigger: homeReselectionTrigger,
+                    onExitWorkspace: onExitWorkspace
+                )
             }
-
-            Tab(AppCopy.Tab.ideas, systemImage: "sparkles.rectangle.stack.fill", value: .ideas) {
-                NavigationStack {
-                    IdeasView(onExitWorkspace: onExitWorkspace)
-                }
+        } ideas: {
+            NavigationStack {
+                IdeasView(onExitWorkspace: onExitWorkspace)
             }
-
-            Tab(AppCopy.Tab.decide, systemImage: "rectangle.on.rectangle.angled", value: .decide) {
-                NavigationStack {
-                    DecisionDeckView(
-                        isActive: selectedTab == .decide,
-                        onExitWorkspace: onExitWorkspace
-                    )
-                }
+        } decide: {
+            NavigationStack {
+                DecisionDeckView(
+                    isActive: selectedTab == .decide,
+                    onExitWorkspace: onExitWorkspace
+                )
             }
-
-            Tab(AppCopy.Tab.manage, systemImage: "slider.horizontal.3", value: .manage) {
-                NavigationStack {
-                    ManageView(isActive: selectedTab == .manage, onExitWorkspace: onExitWorkspace)
-                }
-                .id("\(workspace.mainEventID)|\(currentUserAccount?.id ?? "")")
+        } manage: {
+            NavigationStack {
+                ManageView(isActive: selectedTab == .manage, onExitWorkspace: onExitWorkspace)
             }
+            .id("\(workspace.mainEventID)|\(currentUserAccount?.id ?? "")")
         }
-        .tabViewStyle(.sidebarAdaptable)
-        .tabBarMinimizeBehavior(
-            selectedTab == .home || selectedTab == .decide
-                ? .never
-                : .onScrollDown
-        )
     }
 }
 

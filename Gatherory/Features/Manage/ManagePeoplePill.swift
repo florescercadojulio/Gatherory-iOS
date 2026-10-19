@@ -16,88 +16,154 @@ struct ManageAttendanceSummary {
     }
 }
 
-/// Two distinct actions share one surface, without making the bar interactive.
-struct ManagePeoplePill: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+/// Guest attendance stays independent of planning role and collaborator approval.
+struct ManageGuestsCard: View {
+    let summary: ManageEventSummary
+
+    var body: some View {
+        NavigationLink {
+            EventPeopleView(reference: summary.reference, section: .guests)
+        } label: {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+                HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.compact) {
+                    Text("Guests")
+                        .font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Text(summary.attendance.total.formatted())
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                        .accessibilityHidden(true)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .accessibilityHidden(true)
+                }
+                RSVPOverviewBar(summary: summary.attendance)
+            }
+            .foregroundStyle(AppTheme.ColorToken.textPrimary)
+            .padding(18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(AppTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Collaborator navigation and the existing transient join-request review.
+struct ManageCollaboratorsCard: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     let summary: ManageEventSummary
     let approval: ManageMetric
+    @ScaledMetric(relativeTo: .largeTitle) private var countSize = 48
 
     private var latestRequest: EventJoinRequest? {
         ManageCollaboratorReview.latestRequest(in: workspace, store: workspace.joinRequestStore, reference: summary.reference,
                                               accountID: authentication.currentUser?.id)
     }
 
+    private var isCaughtUp: Bool {
+        ManageCollaboratorReview.isCaughtUp(in: workspace, store: workspace.joinRequestStore,
+            reference: summary.reference, accountID: authentication.currentUser?.id)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            NavigationLink {
-                EventPeopleView(reference: summary.reference, section: .guests)
-            } label: {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                    heading("Guests", symbol: "person.3.fill")
-                    RSVPOverviewBar(summary: summary.attendance)
-                }
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-            }
-            .accessibilityElement(children: .combine)
-            Divider().accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
             NavigationLink {
                 EventPeopleView(reference: summary.reference, section: .collaborators)
             } label: {
-                heading("Collaborators", symbol: "person.crop.circle.badge.clock", count: approval.value)
-                .frame(minHeight: 44)
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                    heading
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(approval.value)
+                            .font(.system(size: countSize, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppTheme.ColorToken.accent)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.65)
+                        Text(approval.label)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(2, reservesSpace: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(approval.label)
+                    .accessibilityValue(approval.value)
+                }
+                .foregroundStyle(AppTheme.ColorToken.textPrimary)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .accessibilityElement(children: .combine)
-            .accessibilityValue("\(approval.value) \(approval.label)")
 
-            if let request = latestRequest {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-                        Text(request.name).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-                        reviewButtons(request)
-                    }
-                } else {
-                    HStack(spacing: AppTheme.Spacing.compact) {
-                        Text(request.name).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
-                        reviewButtons(request)
-                    }
+            // Status changes must not resize the dashboard or move the review actions.
+            let error = summary.canManageInvitations
+                ? workspace.joinRequestStore.error(eventID: summary.eventID, accountID: authentication.currentUser?.id) : nil
+            Text(error ?? " ").font(.footnote).foregroundStyle(.secondary)
+                .lineLimit(2, reservesSpace: true)
+                .accessibilityHidden(error == nil)
+            Spacer(minLength: 16)
+            Divider()
+                .padding(.bottom, 4)
+            Text(latestRequest?.name ?? (isCaughtUp ? String(localized: "All caught up") : " "))
+                .font(.subheadline)
+                .foregroundStyle(latestRequest == nil ? .secondary : .primary)
+                .lineLimit(2, reservesSpace: true)
+                .accessibilityHidden(latestRequest == nil && !isCaughtUp)
+            HStack(alignment: .bottom, spacing: 0) {
+                reviewButtons(latestRequest)
+                Spacer(minLength: 0)
+                NavigationLink {
+                    EventPeopleView(reference: summary.reference, section: .collaborators)
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.body.weight(.semibold))
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
-            }
-            if summary.canManageInvitations,
-               let error = workspace.joinRequestStore.error(eventID: summary.eventID, accountID: authentication.currentUser?.id) {
-                Text(error).font(.footnote).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel("Collaborators")
             }
         }
         .buttonStyle(.plain)
         .foregroundStyle(AppTheme.ColorToken.textPrimary)
-        .padding(.horizontal, 28)
-        .padding(.vertical, AppTheme.Spacing.spacious)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
+        .padding(18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AppTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
-    private func reviewButtons(_ request: EventJoinRequest) -> some View {
-        HStack(spacing: AppTheme.Spacing.compact) {
-            if workspace.joinRequestStore.reviewingRequestID == request.id { ProgressView() }
-            Button(role: .destructive) { review(request, action: .decline) } label: {
-                Image(systemName: "xmark.circle").font(.title2)
-                    .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+    private func reviewButtons(_ request: EventJoinRequest?) -> some View {
+        ZStack {
+            HStack(spacing: AppTheme.Spacing.compact) {
+                Button(role: .destructive) { if let request { review(request, action: .decline) } } label: {
+                    Image(systemName: "xmark.circle").font(.title2)
+                        .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                }
+                .accessibilityLabel(String(format: String(localized: "Decline %@"), request?.name ?? ""))
+                Button { if let request { review(request, action: .approve) } } label: {
+                    Image(systemName: "checkmark.circle.fill").font(.title2)
+                        .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                }
+                .accessibilityLabel(String(format: String(localized: "Approve %@"), request?.name ?? ""))
             }
-            .accessibilityLabel(String(format: String(localized: "Decline %@"), request.name))
-            Button { review(request, action: .approve) } label: {
-                Image(systemName: "checkmark.circle.fill").font(.title2)
-                    .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+            .buttonStyle(.borderless)
+            .disabled(request == nil || workspace.joinRequestStore.reviewingRequestID != nil)
+            .opacity(request == nil || isReviewing(request) ? 0 : 1)
+            .accessibilityHidden(request == nil || isReviewing(request))
+            if isReviewing(request) {
+                ProgressView().controlSize(.small)
             }
-            .accessibilityLabel(String(format: String(localized: "Approve %@"), request.name))
         }
-        .buttonStyle(.borderless)
-        .disabled(workspace.joinRequestStore.reviewingRequestID != nil)
+    }
+
+    private func isReviewing(_ request: EventJoinRequest?) -> Bool {
+        guard let request else { return false }
+        return workspace.joinRequestStore.reviewingRequestID == request.id
     }
 
     private func review(_ request: EventJoinRequest, action: JoinRequestReviewAction) {
@@ -112,14 +178,11 @@ struct ManagePeoplePill: View {
         }
     }
 
-    private func heading(_ title: LocalizedStringKey, symbol: String, count: String? = nil) -> some View {
-        HStack {
-            Label(title, systemImage: symbol).font(.headline)
-            Spacer(minLength: 8)
-            if let count {
-                Text(count).font(.subheadline.weight(.semibold)).monospacedDigit().accessibilityHidden(true)
-            }
-            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).accessibilityHidden(true)
+    private var heading: some View {
+        HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.compact) {
+            Text("Collaborators")
+                .font(.headline)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

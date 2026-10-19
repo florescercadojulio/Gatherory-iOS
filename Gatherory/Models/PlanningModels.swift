@@ -149,7 +149,7 @@ enum IdeaStatus: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum DecisionChoice: String, Codable, CaseIterable, Hashable {
+nonisolated enum DecisionChoice: String, Codable, CaseIterable, Hashable, Sendable {
     case pass
     case maybe
     case love

@@ -36,10 +36,11 @@ struct MediaArtwork: View {
     @ViewBuilder
     private func photo(_ image: Image) -> some View {
         GeometryReader { proxy in
+            let size = LayoutDimensions.size(proxy.size)
             let artwork = image
                 .resizable()
                 .scaledToFill()
-                .frame(width: proxy.size.width, height: proxy.size.height)
+                .frame(width: size.width, height: size.height)
 
             if reduceTransparency || progressiveBlurRadius == 0 {
                 artwork
@@ -61,7 +62,7 @@ struct MediaArtwork: View {
                         ),
                         noise: 0.035
                     )
-                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .frame(width: size.width, height: size.height)
                     .clipped()
             }
         }
