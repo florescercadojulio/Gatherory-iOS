@@ -44,18 +44,22 @@ struct AuthenticationSessionTests {
     func failedDeletionPreservesSession() async throws {
         let client = StubAuthenticationClient()
         client.deletionFailure = .reauthenticationRequired
-        let authentication = AuthenticationSession(environment: .production, skipsAuthentication: false, client: client)
+        var removedSharingAccounts: [String] = []
+        let authentication = AuthenticationSession(environment: .production, skipsAuthentication: false, client: client,
+            removeSavedShareLinks: { removedSharingAccounts.append($0) })
         await authentication.restoreSession()
 
         await #expect(throws: AuthenticationFailure.reauthenticationRequired) {
             try await authentication.deleteAccount()
         }
         #expect(client.didRequestAccountDeletion)
+        #expect(removedSharingAccounts.isEmpty)
         #expect(authentication.currentUser?.id == StubAuthenticationClient.user.id)
         #expect(!authentication.isProcessing)
 
         client.deletionFailure = nil
         try await authentication.deleteAccount()
+        #expect(removedSharingAccounts == [StubAuthenticationClient.user.id])
         #expect(authentication.currentUser == nil)
         #expect(!authentication.isProcessing)
     }
@@ -70,6 +74,20 @@ struct AuthenticationSessionTests {
         }
         #expect(!client.didRequestAccountDeletion)
         #expect(!authentication.isProcessing)
+    }
+
+    @Test("Sign out retains account-scoped sharing credentials for later authorized reopening")
+    @MainActor
+    func signOutRetainsSavedSharing() async {
+        let client = StubAuthenticationClient()
+        var removedSharingAccounts: [String] = []
+        let authentication = AuthenticationSession(environment: .production, skipsAuthentication: false, client: client,
+            removeSavedShareLinks: { removedSharingAccounts.append($0) })
+        await authentication.restoreSession()
+        let signedOut = await authentication.signOut()
+        #expect(signedOut)
+        #expect(authentication.currentUser == nil)
+        #expect(removedSharingAccounts.isEmpty)
     }
 
     @Test("Sign out waits for sync and client teardown before clearing the account")

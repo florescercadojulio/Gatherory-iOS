@@ -14,6 +14,7 @@ struct BlueprintPreviewSession {
     let ownerID: String
     let entry: BlueprintCatalogEntry
     let shareToken: String?
+    let creatorName: String?
     private(set) var draft: BlueprintSetupDraft?
     private(set) var responses: [String: DecisionChoice]
     private var savedResponses: [String: DecisionChoice]
@@ -28,9 +29,11 @@ struct BlueprintPreviewSession {
 
     init(ownerID: String, entry: BlueprintCatalogEntry, shareToken: String?,
          savedDraft: BlueprintSetupDraft?, defaultEventName: String,
-         dateContext: BlueprintSetupDateContext? = nil, sourceDraft: BlueprintSetupDraft? = nil) {
+         dateContext: BlueprintSetupDateContext? = nil, sourceDraft: BlueprintSetupDraft? = nil,
+         creatorName: String? = nil) {
         self.ownerID = ownerID
         self.shareToken = shareToken
+        self.creatorName = creatorName ?? entry.creator?.displayName
         // A saved setup stays pinned instead of silently upgrading to a newer publication.
         let saved = savedDraft.flatMap {
             $0.ownerUserID == ownerID && $0.entry.catalogKey == entry.catalogKey && $0.shareToken == shareToken ? $0 : nil
@@ -70,7 +73,8 @@ struct BlueprintPreviewSession {
 
     var content: BlueprintPreviewContent? {
         BlueprintPreviewContent(entry: entry, customizations: customizations,
-                                eventName: editedMainEvent?.name ?? draft?.eventName ?? sourceDraft?.eventName)
+                                eventName: editedMainEvent?.name ?? draft?.eventName ?? sourceDraft?.eventName,
+                                creatorNameOverride: creatorName)
     }
 
     mutating func decide(_ choice: DecisionChoice, key: String) {

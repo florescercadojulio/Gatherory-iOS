@@ -23,7 +23,6 @@ struct BlueprintPreviewView: View {
     @State private var saveError: String?
     @State private var loadFailed = false
     @State private var confirmsClose = false
-    @State private var confirmsCustomize = false
     @State private var editorRoute: BlueprintPreviewEditorRoute?
     @State private var generation = UUID()
     @State private var alreadyInstalled = false
@@ -107,20 +106,6 @@ struct BlueprintPreviewView: View {
             Button(BlueprintCopy.discardPreviewChanges, role: .destructive) { closePreview() }
             Button(AppCopy.Common.cancel, role: .cancel) {}
         }
-        .confirmationDialog(BlueprintCopy.confirmInstallTitle, isPresented: $confirmsCustomize, titleVisibility: .visible) {
-            Button(reviewTitle) {
-                guard !isInstalledPreview, let account, session?.ownerID == account.id else { return }
-                installationOwnerID = account.id
-                do {
-                    let pending = try BlueprintInstallationIntentStore().pending(ownerUserID: account.id)
-                    if hasPendingInstallation || !pending.isEmpty { showsSetup = true }
-                    else { saveDraft { showsSetup = true } }
-                } catch { saveError = BlueprintCopy.previewSaveFailed }
-            }
-            Button(AppCopy.Common.cancel, role: .cancel) {}
-        } message: {
-            Text(BlueprintCopy.confirmInstallMessage)
-        }
         .sheet(isPresented: $showsSetup, onDismiss: {
             if installationCompleted { closePreview() }
             else { loadSession() }
@@ -203,7 +188,7 @@ struct BlueprintPreviewView: View {
         }
     }
 
-    private var reviewTitle: String {
+    private var workspaceActionTitle: String {
         hasPendingInstallation ? BlueprintCopy.retryInstall
             : BlueprintCopy.previewInstall
     }
@@ -223,16 +208,21 @@ struct BlueprintPreviewView: View {
             .disabled(hasPendingInstallation || loadFailed)
             if !isInstalledPreview {
                 Divider()
-                Button(reviewTitle, systemImage: "checklist") { openReview() }
+                Button(workspaceActionTitle, systemImage: "checklist") { openSetup() }
             }
         } label: {
             Label(AppCopy.Common.edit, systemImage: "ellipsis").labelStyle(.iconOnly)
         }
     }
 
-    private func openReview() {
-        guard !isInstalledPreview else { return }
-        confirmsCustomize = true
+    private func openSetup() {
+        guard !isInstalledPreview, let account, session?.ownerID == account.id else { return }
+        installationOwnerID = account.id
+        do {
+            let pending = try BlueprintInstallationIntentStore().pending(ownerUserID: account.id)
+            if hasPendingInstallation || !pending.isEmpty { showsSetup = true }
+            else { saveDraft { showsSetup = true } }
+        } catch { saveError = BlueprintCopy.previewSaveFailed }
     }
 
     private func editEvent(_ id: BlueprintPreviewEventID) {
@@ -355,14 +345,16 @@ struct BlueprintPreviewView: View {
                 ownerID: account.id, entry: entry, shareToken: sharedToken, savedDraft: saved,
                 defaultEventName: entry.definition.experienceDefaults.type == "wedding"
                     ? BlueprintCopy.defaultEventName(for: account.displayName) : entry.definition.blueprint.name,
-                sourceDraft: installedSource
+                sourceDraft: installedSource,
+                creatorName: (savedPersonalSource ?? personalSource)?.creatorName
             )
             loadFailed = false
             saveError = nil
         } catch {
             alreadyInstalled = true // A failed history read must not offer a duplicate install.
             session = BlueprintPreviewSession(ownerID: account.id, entry: entry, shareToken: sharedToken, savedDraft: nil,
-                                             defaultEventName: entry.definition.blueprint.name)
+                                             defaultEventName: entry.definition.blueprint.name,
+                                             creatorName: (savedPersonalSource ?? personalSource)?.creatorName)
             loadFailed = true
             saveError = BlueprintCopy.draftLoadFailed
         }
@@ -413,7 +405,8 @@ struct BlueprintPreviewView: View {
                     working.customizations = nil
                     try drafts.save(working)
                     self.session = BlueprintPreviewSession(ownerID: account.id, entry: saved.catalogEntry,
-                        shareToken: nil, savedDraft: working, defaultEventName: saved.catalogEntry.definition.blueprint.name)
+                        shareToken: nil, savedDraft: working, defaultEventName: saved.catalogEntry.definition.blueprint.name,
+                        creatorName: saved.creatorName)
                     self.saveError = nil
                     completion()
                 } catch { self.saveError = BlueprintCopy.previewSaveFailed }

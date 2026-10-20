@@ -53,6 +53,35 @@ struct BlueprintCreateShareTransportTests {
         #expect((body["content"] as? [String: Any])?["startsAt"] == nil)
         _ = try await transport.publishPersonalBlueprint(id: record.id, expectedVersion: 2)
         #expect(try NativeCaptureHTTPProtocol.lastBody()["action"] as? String == "publish")
+        var unlistWire = wire
+        unlistWire["listedRevision"] = NSNull()
+        NativeCaptureHTTPProtocol.configure(unlistWire)
+        let unlisted = try await transport.unlistPersonalBlueprint(
+            id: record.id,
+            expectedVersion: 2,
+            expectedListedRevision: 1
+        )
+        #expect(unlisted.id == record.id)
+        #expect(unlisted.listedRevision == nil)
+        let unlistBody = try NativeCaptureHTTPProtocol.lastBody()
+        #expect(Set(unlistBody.keys) == ["action", "id", "expectedVersion", "expectedListedRevision"])
+        #expect(unlistBody["action"] as? String == "unlist")
+        #expect(unlistBody["id"] as? String == record.id.uuidString.lowercased())
+        #expect(unlistBody["expectedVersion"] as? Int == 2)
+        #expect(unlistBody["expectedListedRevision"] as? Int == 1)
+
+        var missingListingField = wire
+        missingListingField.removeValue(forKey: "listedRevision")
+        NativeCaptureHTTPProtocol.configure(missingListingField)
+        do {
+            _ = try await transport.unlistPersonalBlueprint(
+                id: record.id,
+                expectedVersion: 2,
+                expectedListedRevision: 1
+            )
+            Issue.record("An unlist acknowledgement without listedRevision must be rejected")
+        } catch {}
+
         NativeCaptureHTTPProtocol.configure(["deleted": true])
         try await transport.deletePersonalBlueprint(id: record.id)
         #expect(try NativeCaptureHTTPProtocol.lastBody()["action"] as? String == "delete")

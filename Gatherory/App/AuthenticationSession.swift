@@ -58,6 +58,7 @@ final class AuthenticationSession {
 
     private var developmentPasswords: [String: String]
     private let client: (any AuthenticationClient)?
+    @ObservationIgnored private let removeSavedShareLinks: (@MainActor (String) -> Void)?
 
     var isAuthenticated: Bool {
         currentUser != nil
@@ -66,10 +67,12 @@ final class AuthenticationSession {
     init(
         environment: AppRuntimeConfiguration.Environment,
         skipsAuthentication: Bool,
-        client: (any AuthenticationClient)? = nil
+        client: (any AuthenticationClient)? = nil,
+        removeSavedShareLinks: (@MainActor (String) -> Void)? = nil
     ) {
         self.environment = environment
         self.client = client
+        self.removeSavedShareLinks = removeSavedShareLinks
 
         if environment == .development {
             let planner = DevelopmentAccountFixtures.planner
@@ -96,7 +99,10 @@ final class AuthenticationSession {
         return AuthenticationSession(
             environment: AppRuntimeConfiguration.environment,
             skipsAuthentication: AppRuntimeConfiguration.skipsAuthentication,
-            client: client
+            client: client,
+            removeSavedShareLinks: { accountID in
+                try? KeychainBlueprintShareLinkCredentialStore().removeAll(accountID: accountID)
+            }
         )
     }
 
@@ -317,6 +323,9 @@ final class AuthenticationSession {
             developmentPasswords.removeValue(forKey: account.email.lowercased())
         }
 
+        // The account must be deleted remotely before its local sharing
+        // credentials are removed. Normal sign-out keeps them account scoped.
+        removeSavedShareLinks?(account.id)
         PostHogSDK.shared.reset()
         currentUser = nil
         registrationNotice = nil

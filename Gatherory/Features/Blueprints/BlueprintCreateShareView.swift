@@ -1,16 +1,39 @@
 import SwiftUI
 
 struct BlueprintCreateShareView: View {
+    private struct PendingSearchChange {
+        let templateID: UUID
+        let revision: Int
+        let shouldPublish: Bool
+    }
+    private struct PendingReplacement {
+        let templateID: UUID
+        let revision: Int
+        let hasLiveURL: Bool
+    }
+    private struct PendingCreatorNameChange: Identifiable {
+        let templateID: UUID
+        let revision: Int
+        var id: UUID { templateID }
+    }
+
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.dismiss) private var dismiss
 
     let eventID: UUID
     let workspace: PlanningWorkspace
-    var publishesToSearch = true
+    var publishesToSearch = false
+    var createsShareLink = true
+    var startsWithReview = false
+    var onClose: (() -> Void)? = nil
 
     @State private var store: BlueprintCreateShareStore?
     @State private var isShowingReview = false
+    @State private var didAttemptInitialReview = false
     @State private var pendingRevokeID: UUID?
+    @State private var pendingSearchChange: PendingSearchChange?
+    @State private var pendingCreatorNameChange: PendingCreatorNameChange?
+    @State private var pendingReplacement: PendingReplacement?
 
     private var accountID: String? { authentication.currentUser?.id }
     private var canManageSource: Bool {
@@ -21,8 +44,8 @@ struct BlueprintCreateShareView: View {
     }
     private var loadIdentity: String { "\(eventID)|\(accountID ?? "")" }
     private var title: String {
-        guard isShowingReview else { return publishesToSearch ? BlueprintCopy.createTemplateTitle : BlueprintCopy.saveBlueprint }
-        return store?.created == nil ? BlueprintCopy.reviewTemplate : BlueprintCopy.templateReady
+        guard store?.created == nil else { return BlueprintCopy.templateReady }
+        return createsShareLink ? BlueprintCopy.shareTemplate : BlueprintCopy.saveBlueprint
     }
 
     var body: some View {
@@ -40,8 +63,20 @@ struct BlueprintCreateShareView: View {
                     description: Text(BlueprintCopy.templateLinkSignIn)
                 )
             } else if let store {
-                if isShowingReview && !store.sourceReloadRequired { reviewView(store) }
-                else { selectionView(store) }
+                if startsWithReview, store.isLoading || store.isReviewing {
+                    ProgressView(BlueprintCopy.preparingTemplateReview)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if startsWithReview {
+                    if store.sourceReloadRequired || (store.reviewed == nil && store.created == nil) {
+                        preparationRetryView(store)
+                    } else {
+                        reviewView(store)
+                    }
+                } else if isShowingReview && !store.sourceReloadRequired {
+                    reviewView(store)
+                } else {
+                    selectionView(store)
+                }
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -51,9 +86,9 @@ struct BlueprintCreateShareView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarLeading) {
-                Button("Close") { dismiss() }
-                if isShowingReview, let store, store.canEdit {
-                    Button(BlueprintCopy.editTemplate) { isShowingReview = false }
+                Button("Close") {
+                    if let onClose { onClose() }
+                    else { dismiss() }
                 }
             }
         }
@@ -62,12 +97,18 @@ struct BlueprintCreateShareView: View {
         }
         .onChange(of: authentication.currentUser?.id) { oldValue, newValue in
             guard oldValue != newValue else { return }
+            pendingSearchChange = nil
+            pendingCreatorNameChange = nil
+            pendingReplacement = nil
             store?.invalidate()
             store = nil
             dismiss()
         }
         .onChange(of: canManageSource) { _, allowed in
             guard !allowed else { return }
+            pendingSearchChange = nil
+            pendingCreatorNameChange = nil
+            pendingReplacement = nil
             store?.invalidate()
             store = nil
             dismiss()
@@ -77,6 +118,9 @@ struct BlueprintCreateShareView: View {
         }
         .onDisappear {
             pendingRevokeID = nil
+            pendingSearchChange = nil
+            pendingCreatorNameChange = nil
+            pendingReplacement = nil
             store?.invalidate()
             store = nil
         }
@@ -93,6 +137,78 @@ struct BlueprintCreateShareView: View {
             Button("Cancel", role: .cancel) { pendingRevokeID = nil }
         } message: {
             Text(BlueprintCopy.confirmRevokeMessage)
+        }
+        .confirmationDialog(
+            pendingSearchChange?.shouldPublish == true
+                ? BlueprintCopy.confirmListInSearchTitle
+                : BlueprintCopy.confirmRemoveFromSearchTitle,
+            isPresented: searchVisibilityConfirmationIsPresented,
+            titleVisibility: .visible
+        ) {
+            if let pendingSearchChange {
+                Button(
+                    pendingSearchChange.shouldPublish ? BlueprintCopy.listInSearch : BlueprintCopy.removeFromSearch,
+                    role: pendingSearchChange.shouldPublish ? nil : .destructive
+                ) {
+                    self.pendingSearchChange = nil
+                    guard let store,
+                          store.created?.templateId == pendingSearchChange.templateID,
+                          store.created?.revision == pendingSearchChange.revision else { return }
+                    Task { await store.setDiscoverable(pendingSearchChange.shouldPublish) }
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingSearchChange = nil }
+        } message: {
+            Text(pendingSearchChange?.shouldPublish == true
+                ? BlueprintCopy.confirmListInSearchMessage
+                : BlueprintCopy.confirmRemoveFromSearchMessage)
+        }
+        .sheet(item: $pendingCreatorNameChange) { candidate in
+            BlueprintCreatorNameSheet(
+                isSubmitting: store?.isCreating == true,
+                onPublish: { name in
+                    guard let store, canManageSource,
+                          store.created?.templateId == candidate.templateID,
+                          store.created?.revision == candidate.revision,
+                          !store.requiresLinkRefresh else {
+                        pendingCreatorNameChange = nil
+                        return
+                    }
+                    pendingCreatorNameChange = nil
+                    Task { await store.setDiscoverable(true, creatorName: name) }
+                },
+                onCancel: { pendingCreatorNameChange = nil }
+            )
+        }
+        .confirmationDialog(
+            BlueprintCopy.confirmReplaceShareLinkTitle,
+            isPresented: Binding(
+                get: { pendingReplacement != nil },
+                set: { if !$0 { pendingReplacement = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(BlueprintCopy.replaceShareLink) {
+                guard let pendingReplacement, let store,
+                      canManageSource,
+                      store.created?.templateId == pendingReplacement.templateID,
+                      store.created?.revision == pendingReplacement.revision else {
+                    self.pendingReplacement = nil
+                    return
+                }
+                guard pendingReplacement.hasLiveURL ? store.canReplaceShareLink : store.canCreate else {
+                    self.pendingReplacement = nil
+                    return
+                }
+                self.pendingReplacement = nil
+                Task {
+                    if pendingReplacement.hasLiveURL { await store.replaceShareLink() }
+                    else { await store.createAndShare() }
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingReplacement = nil }
+        } message: {
+            Text(BlueprintCopy.confirmReplaceShareLinkMessage)
         }
     }
 
@@ -122,14 +238,7 @@ struct BlueprintCreateShareView: View {
                     Section {
                         ForEach(source.source.children, id: \.id) { child in
                             Toggle(isOn: childBinding(child.id, store: store)) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(child.title)
-                                    if !child.purpose.isEmpty {
-                                        Text(child.purpose)
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
+                                Text(child.title)
                             }
                             .disabled(!store.canEdit || store.sourceReloadRequired)
                         }
@@ -187,13 +296,25 @@ struct BlueprintCreateShareView: View {
                     }
                 }
 
-                Section {
-                    Text(BlueprintCopy.templateSearchPublicationExplanation)
-                    Text(BlueprintCopy.templatePrivacyExplanation)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text(BlueprintCopy.searchPublication)
+                if createsShareLink || publishesToSearch {
+                    Section {
+                        if publishesToSearch {
+                            Text(BlueprintCopy.templateSearchPublicationExplanation)
+                        } else {
+                            Text(BlueprintCopy.unlistedSharingExplanation)
+                        }
+                        Text(BlueprintCopy.templatePrivacyExplanation)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } header: {
+                        Text(publishesToSearch ? BlueprintCopy.searchPublication : BlueprintCopy.shareTemplate)
+                    }
+                } else {
+                    Section {
+                        Text(BlueprintCopy.templatePrivacyExplanation)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 if store.sourceReloadRequired {
@@ -214,7 +335,7 @@ struct BlueprintCreateShareView: View {
                     Text(store.errorMessage ?? BlueprintCopy.templateCreationLoadFailed)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    Button(BlueprintCopy.retry) { Task { await store.load() } }
+                    Button(BlueprintCopy.retry) { Task { await loadSourceAndMaybeReview(store) } }
                         .disabled(store.isLoading || !store.canEdit)
                 }
             }
@@ -245,226 +366,177 @@ struct BlueprintCreateShareView: View {
         Group {
             if let createdURL = store.createdURL, store.created != nil {
                 shareSuccessView(createdURL, store: store)
+            } else if createsShareLink, store.created != nil {
+                linkRecoveryView(store)
             } else if let reviewed = store.reviewed {
                 List {
-                    if store.created != nil {
-                        Section {
-                            Label(BlueprintCopy.templateReady, systemImage: "checkmark.circle.fill")
-                                .font(.headline)
-                            Text(publishesToSearch ? BlueprintCopy.templateListedExplanation : BlueprintCopy.blueprintSavedExplanation)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
                     Section {
-                        Text(reviewed.content.name)
-                            .font(.headline)
-                        if !reviewed.content.description.isEmpty {
-                            Text(reviewed.content.description)
-                                .foregroundStyle(.secondary)
-                        }
-                    } header: {
-                        Text(BlueprintCopy.templateDetails)
-                    }
-
-                    if !reviewed.content.children.isEmpty {
-                        Section {
-                            ForEach(reviewed.content.children, id: \.key) { child in
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(child.title)
-                                    if !child.purpose.isEmpty {
-                                        Text(child.purpose).font(.subheadline).foregroundStyle(.secondary)
-                                    }
-                                    if let category = localizedIdeaCategory(child.category) {
-                                        Text(category).font(.footnote).foregroundStyle(.secondary)
-                                    }
-                                    if let proposal = child.scheduleProposal {
-                                        Text(String.localizedStringWithFormat(
-                                            BlueprintCopy.scheduleProposalExplanation,
-                                            proposal.localTime,
-                                            Int64(proposal.dayOffset)
-                                        ))
-                                            .font(.footnote)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                .padding(.vertical, 3)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(reviewed.content.name)
+                                .font(.title2.bold())
+                                .fixedSize(horizontal: false, vertical: true)
+                            if store.created == nil {
+                                Text(reviewSummary)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Label(BlueprintCopy.blueprintSavedExplanation, systemImage: "checkmark.circle.fill")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
                             }
-                        } header: {
-                            Text(BlueprintCopy.captureChildren)
                         }
                     }
-
-                    if !reviewed.content.ideas.isEmpty {
-                        Section {
-                            ForEach(reviewed.content.ideas, id: \.key) { idea in
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(idea.title)
-                                    if let category = localizedIdeaCategory(idea.category) {
-                                        Text(category).font(.subheadline).foregroundStyle(.secondary)
-                                    }
-                                    if let note = idea.notes, !note.isEmpty {
-                                        Text(note).font(.body)
-                                    }
-                                    Text(contextTitle(for: idea.target, reviewed: reviewed))
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.vertical, 3)
-                            }
-                        } header: {
-                            Text(BlueprintCopy.captureIdeas)
-                        }
-                    }
-
-                    if !reviewed.content.instructions.isEmpty {
-                        Section {
-                            ForEach(reviewed.content.instructions, id: \.key) { instruction in
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(instruction.title)
-                                    Text(instruction.body)
-                                    if let audience = localizedAudience(instruction.audience) {
-                                        Text(audience)
-                                            .font(.footnote)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Text(contextTitle(for: instruction.target, reviewed: reviewed))
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.vertical, 3)
-                            }
-                        } header: {
-                            Text(BlueprintCopy.captureGuidance)
-                        }
-                    }
-
-                    Section {
-                        if publishesToSearch { Text(BlueprintCopy.templateSearchPublicationExplanation) }
-                        Text(BlueprintCopy.templatePrivacyExplanation)
-                        Text(BlueprintCopy.selectedTextMayBePersonal)
-                        Text(BlueprintCopy.independentTemplateCopies)
-                    } header: {
-                        Text(BlueprintCopy.beforeYouShare)
-                    }
-
-                    createdLinksSection(store)
-
-                    if store.sourceReloadRequired {
-                        Section {
-                            Text(BlueprintCopy.templateCreationSourceChanged)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Button(BlueprintCopy.reloadEvent) {
-                                Task { await store.load() }
-                            }
-                            .disabled(store.isLoading)
-                        }
-                    } else if let message = store.errorMessage {
+                    if let message = store.errorMessage {
                         Section { Text(message).font(.subheadline).foregroundStyle(.secondary) }
                     }
                 }
                 .listStyle(.insetGrouped)
             } else {
-                ContentUnavailableView(
-                    BlueprintCopy.templateCreationReviewFailed,
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(BlueprintCopy.templateCreationReviewFailed)
-                )
+                preparationRetryView(store)
             }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                if store.created != nil, store.requiresLinkRefresh {
-                    Button(BlueprintCopy.refreshLinks) {
-                        Task { await store.refreshCreatedLinks() }
+                if store.created != nil, createsShareLink {
+                    if store.requiresLinkRefresh || store.errorMessage == BlueprintCopy.shareLinkStorageFailed {
+                        Button(BlueprintCopy.refreshLinks) {
+                            Task { await store.refreshCreatedLinks() }
+                        }
+                        .disabled(store.isLoading || store.isCreating)
+                    } else {
+                        sharingActionsMenu(store)
                     }
-                    .disabled(store.isLoading || store.isCreating)
-                } else if publishesToSearch, store.created != nil, store.createdURL == nil {
-                    Button(BlueprintCopy.retryCreateShareLink) {
-                        Task { await store.createAndShare() }
-                    }
-                    .disabled(!store.canCreate || store.isCreating)
-                } else if !publishesToSearch, store.created != nil, store.errorMessage != nil {
+                } else if store.created != nil, !createsShareLink, store.errorMessage != nil {
                     Button(BlueprintCopy.retry) { Task { await store.createAndShare() } }
-                        .disabled(store.isBusy)
-                } else if store.created == nil {
-                    Button(publishesToSearch ? BlueprintCopy.publishToSearch : BlueprintCopy.saveBlueprint) {
-                        Task { await store.createAndShare() }
-                    }
-                    .disabled(!store.canCreate || store.isCreating)
+                        .disabled(store.isBusy || !canManageSource)
                 }
             }
         }
         .safeAreaInset(edge: .bottom) {
             if store.isCreating {
-                ProgressView(BlueprintCopy.creatingTemplate)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical)
-                    .background(.bar)
+                Group {
+                    if store.created == nil {
+                        ProgressView(BlueprintCopy.creatingTemplate)
+                    } else {
+                        ProgressView()
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical)
+                .background(.bar)
+            } else if store.created == nil, store.reviewed != nil {
+                Button {
+                    Task { await store.createAndShare() }
+                } label: {
+                    Text(createsShareLink ? BlueprintCopy.createShareLink : BlueprintCopy.saveBlueprint)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(.bar)
+                .disabled(!store.canCreate)
+            } else if createsShareLink,
+                      store.created != nil,
+                      store.createdURL == nil,
+                      !store.requiresLinkRefresh,
+                      !store.createdLinks.contains(where: { $0.revokedAt == nil }) {
+                Button {
+                    Task { await store.createAndShare() }
+                } label: {
+                    Text(BlueprintCopy.createShareLink)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(.bar)
+                .disabled(!store.canCreate)
             }
         }
     }
 
-    private func shareSuccessView(_ url: URL, store: BlueprintCreateShareStore) -> some View {
+    private var reviewSummary: String {
+        if !createsShareLink { return BlueprintCopy.reviewPrivateSummary }
+        if publishesToSearch { return BlueprintCopy.templateSearchPublicationExplanation }
+        return BlueprintCopy.reviewSharingSummary
+    }
+
+    private func preparationRetryView(_ store: BlueprintCreateShareStore) -> some View {
+        let message = store.sourceReloadRequired
+            ? BlueprintCopy.templateCreationSourceChanged
+            : (store.errorMessage ?? BlueprintCopy.templateCreationReviewFailed)
+        return ContentUnavailableView {
+            Label(message, systemImage: "exclamationmark.triangle")
+        } description: {
+            Text(store.sourceReloadRequired ? BlueprintCopy.templateCreationSourceChanged : BlueprintCopy.templateCreationLoadFailed)
+        } actions: {
+            Button(store.sourceReloadRequired ? BlueprintCopy.reloadEvent : BlueprintCopy.retry) {
+                Task { await retryInitialPreparation() }
+            }
+            .disabled(store.isBusy || !canManageSource || accountID == nil)
+        }
+    }
+
+    private func retryInitialPreparation() async {
+        guard canManageSource, accountID != nil else { return }
+        store?.invalidate()
+        store = nil
+        didAttemptInitialReview = false
+        isShowingReview = false
+        await loadInitialState()
+    }
+
+    private func linkRecoveryView(_ store: BlueprintCreateShareStore) -> some View {
         List {
             Section {
                 Label(BlueprintCopy.templateReady, systemImage: "checkmark.circle.fill")
                     .font(.headline)
-                Text(BlueprintCopy.templateListedExplanation)
+                Text(store.errorMessage ?? recoveryMessage(store))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                ShareLink(
-                    item: url,
-                    subject: Text(store.reviewed?.content.name ?? BlueprintCopy.shareTemplate),
-                    message: Text(BlueprintCopy.independentTemplateCopies)
-                ) {
-                    Label(BlueprintCopy.shareTemplate, systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(store.isBusy || !canManageSource)
-                .privacySensitive()
             }
+        }
+        .listStyle(.insetGrouped)
+        .privacySensitive()
+    }
 
-            Section {
-                Text(BlueprintCopy.templatePrivacyExplanation)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text(BlueprintCopy.selectedTextMayBePersonal)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text(BlueprintCopy.independentTemplateCopies)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } header: {
-                Text(BlueprintCopy.beforeYouShare)
-            }
+    private func recoveryMessage(_ store: BlueprintCreateShareStore) -> String {
+        if store.requiresLinkRefresh { return BlueprintCopy.templateCreationLinkUncertain }
+        if store.createdLinks.contains(where: { $0.revokedAt == nil }) { return BlueprintCopy.savedLinkUnavailable }
+        return BlueprintCopy.shareTemplateExplanation
+    }
 
-            if store.requiresLinkRefresh {
+    private func shareSuccessView(_ url: URL, store: BlueprintCreateShareStore) -> some View {
+        List {
+            if store.accountID == accountID, canManageSource {
                 Section {
-                    Text(BlueprintCopy.templateCreationLinkUncertain)
+                    BlueprintShareQRCodeView(
+                        url: url,
+                        baseURL: AppRuntimeConfiguration.authenticationBaseURL,
+                        templateTitle: store.reviewed?.content.name,
+                        creatorName: store.publicCreatorName,
+                        activeShareLinkCount: (store.errorMessage == nil || store.errorMessage == BlueprintCopy.shareLinkSaveFailed)
+                            && store.createdLinks.contains(where: { $0.revokedAt == nil }) ? 1 : nil,
+                        listedRevision: store.errorMessage == nil ? store.listedRevision : nil
+                    )
+                }
+            }
+            if store.credentialSaveFailed {
+                Section {
+                    Text(BlueprintCopy.shareLinkSaveFailed)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    Button(BlueprintCopy.refreshLinks) {
-                        Task { await store.refreshCreatedLinks() }
-                    }
-                    .disabled(store.isLoading || store.isCreating)
-                }
-            } else if store.createdURL == nil {
-                Section {
-                    Text(store.errorMessage ?? BlueprintCopy.templateCreationLinkUncertain)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Button(BlueprintCopy.retryCreateShareLink) {
-                        Task { await store.createAndShare() }
-                    }
-                    .disabled(!store.canCreate || store.isCreating)
+                    Button(BlueprintCopy.retrySavingShareLink) { store.retrySavingLink() }
+                        .disabled(store.isBusy || !canManageSource)
                 }
             }
-
-            createdLinksSection(store)
+            if let message = store.errorMessage,
+               message != BlueprintCopy.shareLinkSaveFailed {
+                Section { Text(message).font(.subheadline).foregroundStyle(.secondary) }
+            }
         }
         .listStyle(.insetGrouped)
         .privacySensitive()
@@ -472,49 +544,72 @@ struct BlueprintCreateShareView: View {
     }
 
     @ViewBuilder
-    private func createdLinksSection(_ store: BlueprintCreateShareStore) -> some View {
-        if !store.createdLinks.isEmpty {
-            Section {
-                ForEach(store.createdLinks) { link in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(link.createdAt.formatted(date: .abbreviated, time: .shortened))
-                            Text(String.localizedStringWithFormat(
-                                BlueprintCopy.publishedRevision,
-                                Int64(link.revision)
-                            ))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            Label(
-                                link.revokedAt == nil ? BlueprintCopy.activeShareLink : BlueprintCopy.revokedShareLink,
-                                systemImage: link.revokedAt == nil ? "checkmark.circle.fill" : "slash.circle"
-                            )
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if link.revokedAt == nil {
-                            Button(BlueprintCopy.revokeShareLink, systemImage: "xmark.circle", role: .destructive) {
-                                pendingRevokeID = link.id
-                            }
-                            .labelStyle(.iconOnly)
-                            .accessibilityLabel(BlueprintCopy.revokeShareLink)
-                            .disabled(store.isBusy || !canManageSource)
-                        }
+    private func sharingActionsMenu(_ store: BlueprintCreateShareStore) -> some View {
+        Menu {
+            if let created = store.created,
+               store.createdURL != nil || store.createdLinks.contains(where: { $0.revokedAt == nil }) {
+                Button(BlueprintCopy.replaceShareLink) {
+                    pendingReplacement = PendingReplacement(
+                        templateID: created.templateId,
+                        revision: created.revision,
+                        hasLiveURL: store.createdURL != nil
+                    )
+                }
+                .disabled(store.isBusy || store.requiresLinkRefresh || !canManageSource ||
+                    (store.createdURL != nil ? !store.canReplaceShareLink : !store.canCreate))
+            }
+
+            if let created = store.created {
+                Button(store.listedRevision == nil ? BlueprintCopy.listInSearch : BlueprintCopy.removeFromSearch) {
+                    if store.listedRevision == nil && store.publicCreatorName == nil {
+                        pendingCreatorNameChange = PendingCreatorNameChange(
+                            templateID: created.templateId, revision: created.revision
+                        )
+                    } else {
+                        pendingSearchChange = PendingSearchChange(
+                            templateID: created.templateId,
+                            revision: created.revision,
+                            shouldPublish: store.listedRevision == nil
+                        )
                     }
                 }
-            } header: {
-                Text(BlueprintCopy.createdLinks)
-            } footer: {
-                Text(BlueprintCopy.existingLinksCannotBeRecovered)
+                .disabled(store.isBusy || store.requiresLinkRefresh || !canManageSource)
             }
+
+            let activeLinks = store.createdLinks.filter { $0.revokedAt == nil }
+            if activeLinks.count == 1, let link = activeLinks.first {
+                Button(BlueprintCopy.revokeShareLink, role: .destructive) {
+                    pendingRevokeID = link.id
+                }
+            } else if !activeLinks.isEmpty {
+                Menu(BlueprintCopy.revokeShareLink) {
+                    ForEach(activeLinks) { link in
+                        Button {
+                            pendingRevokeID = link.id
+                        } label: {
+                            Text(link.createdAt.formatted(date: .abbreviated, time: .shortened))
+                        }
+                        .disabled(store.isBusy || !canManageSource)
+                    }
+                }
+            }
+        } label: {
+            Label(BlueprintCopy.manageSharing, systemImage: "ellipsis")
         }
+        .disabled(store.isBusy || !canManageSource)
     }
 
     private var revokeConfirmationIsPresented: Binding<Bool> {
         Binding(
             get: { pendingRevokeID != nil },
             set: { if !$0 { pendingRevokeID = nil } }
+        )
+    }
+
+    private var searchVisibilityConfirmationIsPresented: Binding<Bool> {
+        Binding(
+            get: { pendingSearchChange != nil },
+            set: { if !$0 { pendingSearchChange = nil } }
         )
     }
 
@@ -543,18 +638,6 @@ struct BlueprintCreateShareView: View {
     private func contextTitle(for eventID: UUID, source: BlueprintCaptureSourceResponse) -> String {
         if eventID == source.source.event.id { return BlueprintCopy.mainEvent }
         return source.source.children.first(where: { $0.id == eventID })?.title ?? BlueprintCopy.mainEvent
-    }
-
-    private func contextTitle(for target: BlueprintCapturedContent.Target, reviewed: BlueprintCaptureReview) -> String {
-        switch target.kind {
-        case "main":
-            return BlueprintCopy.mainEvent
-        case "child":
-            guard let key = target.key else { return BlueprintCopy.mainEvent }
-            return reviewed.content.children.first(where: { $0.key == key })?.title ?? BlueprintCopy.mainEvent
-        default:
-            return BlueprintCopy.mainEvent
-        }
     }
 
     private func nameBinding(_ store: BlueprintCreateShareStore) -> Binding<String> {
@@ -591,16 +674,34 @@ struct BlueprintCreateShareView: View {
               let baseURL = AppRuntimeConfiguration.authenticationBaseURL else { return }
         if store?.accountID != accountID || store?.eventID != eventID {
             store?.invalidate()
+            didAttemptInitialReview = false
+            isShowingReview = false
             let authentication = authentication
             store = BlueprintCreateShareStore(
                 eventID: eventID,
                 accountID: accountID,
                 transport: PostgresSyncTransport(baseURL: baseURL),
                 publishesToSearch: publishesToSearch,
+                createsShareLink: createsShareLink,
+                credentialStore: KeychainBlueprintShareLinkCredentialStore(),
                 currentAccountID: { authentication.currentUser?.id }
             )
         }
         guard let store else { return }
+        await loadSourceAndMaybeReview(store)
+    }
+
+    private func loadSourceAndMaybeReview(_ store: BlueprintCreateShareStore) async {
         await store.load()
+        guard !Task.isCancelled, canManageSource, accountID == store.accountID,
+              startsWithReview,
+              !didAttemptInitialReview,
+              store.source != nil,
+              store.reviewed == nil,
+              store.created == nil else { return }
+
+        didAttemptInitialReview = true
+        await store.review()
+        if store.reviewed != nil { isShowingReview = true }
     }
 }

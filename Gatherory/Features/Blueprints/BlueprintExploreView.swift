@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BlueprintExploreView: View {
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.blueprintPreviewPresented) private var previewPresented
     @Namespace private var blueprintTransition
@@ -9,12 +10,17 @@ struct BlueprintExploreView: View {
     @State private var query = ""
     @State private var navigation = BlueprintDiscoveryNavigation()
     @FocusState private var isFocused: Bool
+    let isActive: Bool
 
-    init(ownerID: String) {
+    init(ownerID: String, isActive: Bool = true) {
+        self.isActive = isActive
         _model = State(initialValue: BlueprintDiscoveryModel(ownerID: ownerID))
     }
 
     private var mode: BlueprintSearchMode { navigation.mode(isFocused: isFocused, query: query) }
+    private var loadTaskID: String {
+        "\(isActive)|\(scenePhase == .active)|\(String(describing: cloudSync.accountOnboardingState))"
+    }
 
     var body: some View {
         Group {
@@ -75,7 +81,10 @@ struct BlueprintExploreView: View {
                 .padding().background(.regularMaterial)
             }
         }
-        .task(id: String(describing: cloudSync.accountOnboardingState)) { await load() }
+        .task(id: loadTaskID) {
+            guard isActive, scenePhase == .active else { return }
+            await load()
+        }
     }
 
     private var categories: some View {
@@ -136,6 +145,7 @@ struct BlueprintExploreView: View {
     }
 
     private func load() async {
+        guard isActive, scenePhase == .active else { return }
         await model.load {
             guard let coordinator = cloudSync.makeBlueprintInstallationCoordinator() else {
                 throw CloudSyncFailure.invalidSession

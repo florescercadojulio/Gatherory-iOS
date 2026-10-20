@@ -25,7 +25,37 @@ nonisolated struct BlueprintPersonalRecord: Codable, Identifiable, Sendable {
     var draftVersion: Int
     var publishedRevision: Int?
     var listedRevision: Int?
+    var creatorName: String? = nil
+    var activeShareLinkCount: Int? = nil
     var catalogEntry: BlueprintCatalogEntry
+}
+
+nonisolated enum BlueprintPersonalPublishAcknowledgement {
+    static func isValid(
+        _ updated: BlueprintPersonalRecord,
+        expectedID: UUID,
+        expectedCatalogKey: String,
+        expectedDraftVersion: Int,
+        previousPublishedRevision: Int?,
+        expectedCreatorName: String
+    ) -> Bool {
+        guard updated.id == expectedID,
+              updated.catalogEntry.catalogKey == expectedCatalogKey,
+              updated.draftVersion == expectedDraftVersion,
+              let publishedRevision = updated.publishedRevision,
+              publishedRevision > 0,
+              updated.catalogEntry.revision == publishedRevision,
+              updated.listedRevision == publishedRevision,
+              updated.creatorName.flatMap(BlueprintCreatorNameValidation.normalized) == expectedCreatorName else {
+            return false
+        }
+
+        if let previousPublishedRevision {
+            return publishedRevision == previousPublishedRevision
+                || (previousPublishedRevision < Int.max && publishedRevision == previousPublishedRevision + 1)
+        }
+        return publishedRevision == 1
+    }
 }
 
 nonisolated struct BlueprintPersonalListResponse: Decodable, Sendable {
@@ -37,6 +67,18 @@ nonisolated struct BlueprintPersonalListResponse: Decodable, Sendable {
     func savePersonalBlueprint(id: UUID, expectedVersion: Int, content: BlueprintDraftContent) async throws -> BlueprintPersonalRecord
     func deletePersonalBlueprint(id: UUID) async throws
     func publishPersonalBlueprint(id: UUID, expectedVersion: Int) async throws -> BlueprintPersonalRecord
+    func publishPersonalBlueprint(id: UUID, expectedVersion: Int, creatorName: String?) async throws -> BlueprintPersonalRecord
+    func unlistPersonalBlueprint(id: UUID, expectedVersion: Int, expectedListedRevision: Int) async throws -> BlueprintPersonalRecord
+}
+
+extension BlueprintPersonalLibraryTransport {
+    func publishPersonalBlueprint(id: UUID, expectedVersion: Int, creatorName: String?) async throws -> BlueprintPersonalRecord {
+        try await publishPersonalBlueprint(id: id, expectedVersion: expectedVersion)
+    }
+
+    func unlistPersonalBlueprint(id: UUID, expectedVersion: Int, expectedListedRevision: Int) async throws -> BlueprintPersonalRecord {
+        throw CloudSyncFailure.invalidResponse
+    }
 }
 
 nonisolated enum BlueprintPersonalLibraryError: Error, Equatable {

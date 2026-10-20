@@ -15,11 +15,13 @@ enum BlueprintPreviewScope: Hashable {
 struct BlueprintPreviewContent {
     let title: String
     let summary: String?
+    let creatorName: String?
     let children: [BlueprintCatalogChild]
     let ideas: [BlueprintCatalogIdea]
     let guidance: [BlueprintCatalogInstruction]
 
-    init?(entry: BlueprintCatalogEntry, customizations: BlueprintCustomization? = nil, eventName: String? = nil) {
+    init?(entry: BlueprintCatalogEntry, customizations: BlueprintCustomization? = nil, eventName: String? = nil,
+          creatorNameOverride: String? = nil) {
         guard entry.definition.supportsCurrentSchema,
               let tree = entry.definition.modules.first(where: { $0.type == "experience_tree" })?
             .decodeConfiguration(BlueprintExperienceTreeConfig.self),
@@ -30,6 +32,7 @@ struct BlueprintPreviewContent {
         children = effective?.tree.children ?? tree.children
         title = eventName.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } ?? entry.definition.blueprint.name
         summary = entry.discovery?.summary
+        creatorName = creatorNameOverride ?? entry.creator?.displayName
         self.ideas = effective?.ideas.ideas ?? ideas.ideas
         guidance = entry.definition.modules.filter { $0.type == "instructions" }.flatMap {
             $0.decodeConfiguration(BlueprintInstructionsConfig.self)?.sections ?? []
@@ -50,15 +53,16 @@ struct BlueprintPreviewContent {
             guard case .child(let key) = idea.target else { return nil }
             return key
         })
-        return Self(title: title, summary: summary,
+        return Self(title: title, summary: summary, creatorName: creatorName,
                     children: children.filter { childKeys.contains($0.key) },
                     ideas: lovedIdeas, guidance: guidance)
     }
 
-    private init(title: String, summary: String?, children: [BlueprintCatalogChild],
+    private init(title: String, summary: String?, creatorName: String?, children: [BlueprintCatalogChild],
                  ideas: [BlueprintCatalogIdea], guidance: [BlueprintCatalogInstruction]) {
         self.title = title
         self.summary = summary
+        self.creatorName = creatorName
         self.children = children
         self.ideas = ideas
         self.guidance = guidance

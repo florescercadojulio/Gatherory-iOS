@@ -1,36 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "All caught up" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "All caught up" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Todo al día" } }
-      }
-    },
-    "blueprint.deletePersonalMessage" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "This removes your blueprint from search and revokes its sharing links. Other people's completed copies and existing workspaces stay unchanged." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esto retira tu plano de la búsqueda y revoca sus enlaces. Las copias completadas de otras personas y los espacios de trabajo existentes no cambian." } }
-      }
-    },
-    "Your Blueprint" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your Blueprint" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tu plano" } }
-      }
-    },
-    "blueprint.saveToLibrary" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save Blueprint" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardar plano" } }
-      }
-    },
-    "blueprint.savedToLibrary" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved in Blueprints. Your workspace remains independent." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardado en Planos. Tu espacio de trabajo sigue siendo independiente." } }
-      }
-    },
     "" : {
       "localizations" : {
         "es" : {
@@ -1201,13 +1171,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add Template Idea"
+            "value" : "Add Idea"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Añadir idea a la plantilla"
+            "value" : "Añadir idea"
           }
         }
       }
@@ -1217,13 +1187,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add Template Sub-event"
+            "value" : "Add Event"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Añadir subevento a la plantilla"
+            "value" : "Añadir evento"
           }
         }
       }
@@ -2033,6 +2003,22 @@
         }
       }
     },
+    "All caught up" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All caught up"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todo al día"
+          }
+        }
+      }
+    },
     "All Ideas" : {
       "localizations" : {
         "es" : {
@@ -2295,6 +2281,7 @@
       }
     },
     "Applies To" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2717,13 +2704,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Create a reusable template from this event. Your event stays private."
+            "value" : "Create a reusable blueprint from this event. Your event stays private."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Crea una plantilla reutilizable de este evento. Tu evento sigue siendo privado."
+            "value" : "Crea un plano reutilizable de este evento. Tu evento sigue siendo privado."
           }
         }
       }
@@ -2787,7 +2774,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta plantilla devolvió un plan no compatible."
+            "value" : "Este plano generó un plan no compatible."
           }
         }
       }
@@ -2829,13 +2816,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choose a date and time to include this sub-event."
+            "value" : "Choose a date and time to include this event."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elige una fecha y hora para incluir este subevento."
+            "value" : "Elige una fecha y hora para incluir este evento."
           }
         }
       }
@@ -2845,13 +2832,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Optional sub-events"
+            "value" : "Events to Include"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Subeventos opcionales"
+            "value" : "Eventos para incluir"
           }
         }
       }
@@ -2877,13 +2864,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Template"
+            "value" : "Blueprint"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Plantilla"
+            "value" : "Plano"
           }
         }
       }
@@ -2893,13 +2880,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choose one of the templates captured from this event."
+            "value" : "Choose one of the blueprints captured from this event."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elige una de las plantillas capturadas de este evento."
+            "value" : "Elige uno de los planos capturados de este evento."
           }
         }
       }
@@ -2909,13 +2896,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Update Gatherory to sync this blueprint. Your pending changes remain saved and will retry after updating."
+            "value" : "Update Gatherory to continue. Your saved changes will be kept."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Actualiza Gatherory para sincronizar esta plantilla. Tus cambios pendientes se conservarán y se reintentará la sincronización."
+            "value" : "Actualiza Gatherory para continuar. Tus cambios guardados se conservarán."
           }
         }
       }
@@ -2925,13 +2912,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Configuration"
+            "value" : "Settings"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Configuración"
+            "value" : "Ajustes"
           }
         }
       }
@@ -2973,13 +2960,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "People will be able to find this published version and install independent copies."
+            "value" : "People will be able to find this blueprint and make their own copies."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Otras personas podrán encontrar esta versión publicada e instalar copias independientes."
+            "value" : "Las personas podrán encontrar este plano y hacer sus propias copias."
           }
         }
       }
@@ -2989,13 +2976,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "List This Template in Search?"
+            "value" : "List This Blueprint in Search?"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Publicar esta plantilla en Buscar?"
+            "value" : "¿Publicar este plano en Buscar?"
           }
         }
       }
@@ -3005,13 +2992,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This hides the template from Search. Existing share links stay active, and installed copies are unchanged."
+            "value" : "This hides the blueprint from Search. Share links and saved copies stay unchanged."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La plantilla dejará de aparecer en Buscar. Los enlaces existentes seguirán activos y las copias instaladas no cambiarán."
+            "value" : "Esto oculta el plano de Buscar. Los enlaces y las copias guardadas no cambian."
           }
         }
       }
@@ -3021,13 +3008,45 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove This Template from Search?"
+            "value" : "Remove This Blueprint from Search?"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Quitar esta plantilla de Buscar?"
+            "value" : "¿Quitar este plano de Buscar?"
+          }
+        }
+      }
+    },
+    "blueprint.confirmReplaceShareLinkMessage" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This creates a new link and QR code. Existing links stay active until you revoke them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto crea un enlace y un código QR nuevos. Los enlaces existentes siguen activos hasta que los revoques."
+          }
+        }
+      }
+    },
+    "blueprint.confirmReplaceShareLinkTitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create a Replacement Link?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Crear un enlace de reemplazo?"
           }
         }
       }
@@ -3037,13 +3056,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "People can no longer use this link to install the template. Existing copies are not affected."
+            "value" : "People can no longer use this link to save the blueprint. Existing copies are not affected."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Las personas ya no podrán usar este enlace para instalar la plantilla. Las copias existentes no se verán afectadas."
+            "value" : "Este enlace ya no permitirá guardar el plano. Las copias existentes no se verán afectadas."
           }
         }
       }
@@ -3101,13 +3120,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Create Template"
+            "value" : "Create Blueprint"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Crear plantilla"
+            "value" : "Crear plano"
           }
         }
       }
@@ -3133,13 +3152,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Creating template…"
+            "value" : "Creating blueprint…"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Creando plantilla…"
+            "value" : "Creando plano…"
           }
         }
       }
@@ -3149,13 +3168,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn’t save these changes. Check the content limits and event selection, then try again."
+            "value" : "Couldn’t save your changes. Check your choices and try again."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pudieron guardar estos cambios. Comprueba los límites de contenido y el evento seleccionado e inténtalo de nuevo."
+            "value" : "No se pudieron guardar los cambios. Revisa tus opciones e inténtalo de nuevo."
           }
         }
       }
@@ -3197,13 +3216,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your confirmed dates have been kept. Changing the time zone changes how they are displayed, not when they happen."
+            "value" : "Your confirmed dates are unchanged."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se han conservado tus fechas confirmadas. Cambiar la zona horaria modifica cómo se muestran, no cuándo ocurren."
+            "value" : "Las fechas confirmadas no han cambiado."
           }
         }
       }
@@ -3252,6 +3271,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Boda de %@"
+          }
+        }
+      }
+    },
+    "blueprint.deletePersonalMessage" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This removes your blueprint from search and revokes its sharing links. Other people's completed copies and existing workspaces stay unchanged."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto retira tu plano de la búsqueda y revoca sus enlaces. Las copias completadas de otras personas y los espacios de trabajo existentes no cambian."
           }
         }
       }
@@ -3336,6 +3371,22 @@
         }
       }
     },
+    "blueprint.editIncludedContent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Content"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editar contenido"
+          }
+        }
+      }
+    },
     "blueprint.editTemplate" : {
       "localizations" : {
         "en" : {
@@ -3405,13 +3456,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Previously created URLs can’t be recovered. Create a replacement link if you no longer have one."
+            "value" : "Only links saved on this device can be reopened here. Create a replacement if needed."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pueden recuperar las URL creadas anteriormente. Crea un enlace de reemplazo si ya no tienes una."
+            "value" : "Solo se pueden volver a abrir los enlaces guardados en este dispositivo. Crea un reemplazo si lo necesitas."
           }
         }
       }
@@ -3437,13 +3488,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Finish the previous creation before starting another. Its request is kept for a safe retry."
+            "value" : "Finish this workspace before starting another."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Finaliza la creación anterior antes de empezar otra. Conservamos su solicitud para reintentarla de forma segura."
+            "value" : "Termina este espacio de trabajo antes de comenzar otro."
           }
         }
       }
@@ -3517,13 +3568,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Create event plan"
+            "value" : "Create Workspace"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Crear plan de evento"
+            "value" : "Crear espacio de trabajo"
           }
         }
       }
@@ -3573,7 +3624,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Filtrar plantillas por categoría"
+            "value" : "Filtrar planos por categoría"
           }
         }
       }
@@ -3583,13 +3634,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "In Progress"
+            "value" : "Drafts"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "En curso"
+            "value" : "Borradores"
           }
         }
       }
@@ -3599,13 +3650,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Start customizing a template in Explore. Your saved setups will be here."
+            "value" : "Save a draft to continue working on it here later."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empieza a personalizar una plantilla en Explorar. Tus configuraciones guardadas aparecerán aquí."
+            "value" : "Guarda un borrador para continuar aquí más tarde."
           }
         }
       }
@@ -3615,13 +3666,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Find a template in Explore and make it yours. Save a draft to pick up here later."
+            "value" : "Save a draft while editing a blueprint to continue here later."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Encuentra una plantilla en Explorar y personalízala. Guarda un borrador para retomarlo aquí más tarde."
+            "value" : "Guarda un borrador al editar un plano para continuar aquí después."
           }
         }
       }
@@ -3647,13 +3698,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Install a template to start your own event plan. Your template history will be here."
+            "value" : "Save a blueprint or use one from Explore. You’ll find it here."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Instala una plantilla para crear tu propio plan de evento. Aquí verás tu historial de plantillas."
+            "value" : "Guarda un plano o usa uno de Explorar. Lo encontrarás aquí."
           }
         }
       }
@@ -3663,13 +3714,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No Installed Templates"
+            "value" : "No Blueprints Yet"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No hay plantillas instaladas"
+            "value" : "Aún no hay planos"
           }
         }
       }
@@ -3679,13 +3730,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "View In Progress"
+            "value" : "View Drafts"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ver en curso"
+            "value" : "Ver borradores"
           }
         }
       }
@@ -3695,29 +3746,30 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "View Installed Templates"
+            "value" : "View Blueprints"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ver plantillas instaladas"
+            "value" : "Ver planos"
           }
         }
       }
     },
     "blueprint.library.installedTemplates" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Installed Templates"
+            "value" : "Blueprints"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Plantillas instaladas"
+            "value" : "Planos"
           }
         }
       }
@@ -3727,13 +3779,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Some saved template activity couldn’t be loaded. Try again to see your saved setups and history."
+            "value" : "Some saved blueprints couldn’t be opened. Try again."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pudo cargar parte de la actividad guardada de las plantillas. Inténtalo de nuevo para ver tus configuraciones y tu historial."
+            "value" : "No se pudieron abrir algunos planos guardados. Inténtalo de nuevo."
           }
         }
       }
@@ -3761,13 +3813,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No used templates in this category. Try another category or choose All Categories."
+            "value" : "No used blueprints in this category. Try another category or choose All Categories."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No hay plantillas utilizadas en esta categoría. Prueba otra categoría o elige Todas las categorías."
+            "value" : "No se han usado planos en esta categoría. Prueba otra categoría o elige Todas las categorías."
           }
         }
       }
@@ -3810,13 +3862,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn’t refresh used templates. Saved activity is still available on this device."
+            "value" : "Couldn’t refresh your blueprints. Your saved copies are still on this device."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pudieron actualizar las plantillas usadas. La actividad guardada sigue disponible en este dispositivo."
+            "value" : "No se pudieron actualizar tus planos. Las copias guardadas siguen en este dispositivo."
           }
         }
       }
@@ -3842,13 +3894,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Used Templates"
+            "value" : "Blueprints"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Plantillas usadas"
+            "value" : "Planos"
           }
         }
       }
@@ -3858,13 +3910,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Templates you install will appear here, alongside the workspaces you created from them."
+            "value" : "Save a blueprint or choose one in Explore to get started."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Las plantillas que instales aparecerán aquí junto con los espacios de trabajo que creaste a partir de ellas."
+            "value" : "Guarda un plano o elige uno en Explorar para comenzar."
           }
         }
       }
@@ -3938,13 +3990,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Search visibility is separate from share links. Revoking a link doesn’t remove this template from Search, and removing it from Search doesn’t revoke links or affect existing copies."
+            "value" : "Search visibility is separate from share links. Revoking a link doesn’t remove this blueprint from Search, and removing it from Search doesn’t revoke links or affect existing copies."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La visibilidad en Buscar es independiente de los enlaces. Revocar un enlace no quita la plantilla de Buscar, y quitarla de Buscar no revoca sus enlaces ni afecta las copias existentes."
+            "value" : "La visibilidad en Buscar es independiente de los enlaces. Revocar un enlace no quita el plano de Buscar, y quitarlo de Buscar no revoca sus enlaces ni afecta las copias existentes."
           }
         }
       }
@@ -3976,7 +4028,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta plantilla no está disponible en este momento."
+            "value" : "Este plano no está disponible en este momento."
           }
         }
       }
@@ -4002,13 +4054,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You no longer have permission to manage templates for this event."
+            "value" : "You no longer have permission to manage blueprints for this event."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ya no tienes permiso para administrar las plantillas de este evento."
+            "value" : "Ya no tienes permiso para administrar los planos de este evento."
           }
         }
       }
@@ -4029,18 +4081,34 @@
         }
       }
     },
-    "blueprint.manageTemplateLinks" : {
+    "blueprint.manageSharing" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Manage Links"
+            "value" : "Manage Sharing"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Administrar enlaces"
+            "value" : "Gestionar uso compartido"
+          }
+        }
+      }
+    },
+    "blueprint.manageTemplateLinks" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manage Sharing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestionar uso compartido"
           }
         }
       }
@@ -4066,13 +4134,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No templates have been captured from this event yet."
+            "value" : "No blueprints have been captured from this event yet."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aún no se han capturado plantillas de este evento."
+            "value" : "Aún no se han capturado planos de este evento."
           }
         }
       }
@@ -4082,13 +4150,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No links have been created for this template."
+            "value" : "No links have been created for this blueprint."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aún no se han creado enlaces para esta plantilla."
+            "value" : "Aún no se han creado enlaces para este plano."
           }
         }
       }
@@ -4130,13 +4198,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This template is not ready to share yet."
+            "value" : "This blueprint is not ready to share yet."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta plantilla aún no está lista para compartir."
+            "value" : "Este plano aún no está listo para compartir."
           }
         }
       }
@@ -4146,13 +4214,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Review is only a preview. Nothing is created or approved until you install the plan."
+            "value" : "Your workspace is created only when you choose Create Workspace."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La revisión es solo una vista previa. No se crea ni se aprueba nada hasta que instales el plan."
+            "value" : "Tu espacio de trabajo se crea solo al elegir Crear espacio de trabajo."
           }
         }
       }
@@ -4205,6 +4273,38 @@
         }
       }
     },
+    "blueprint.omittedUnselectedContent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Content for events you didn’t choose isn’t included."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se incluye el contenido de los eventos que no elegiste."
+          }
+        }
+      }
+    },
+    "blueprint.omittedUnsupportedContent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some optional content isn’t supported in this version of Gatherory."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta versión de Gatherory no admite parte del contenido opcional."
+          }
+        }
+      }
+    },
     "blueprint.parentEvent" : {
       "localizations" : {
         "en" : {
@@ -4226,13 +4326,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An installation is waiting to finish"
+            "value" : "Finish Creating Your Workspace"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hay una instalación pendiente de finalizar"
+            "value" : "Termina de crear tu espacio de trabajo"
           }
         }
       }
@@ -4258,13 +4358,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Preparing review…"
+            "value" : "Getting blueprint ready…"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Preparando revisión…"
+            "value" : "Preparando el plano…"
           }
         }
       }
@@ -4274,13 +4374,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Love includes an idea, Pass leaves it out, and Maybe keeps its current inclusion. Save Draft to keep your choices."
+            "value" : "Choose the ideas you like. Save Draft to continue later."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Me encanta incluye una idea, Pasar la deja fuera y Tal vez conserva su inclusión actual. Guarda el borrador para conservar tus elecciones."
+            "value" : "Elige las ideas que te gusten. Guarda un borrador para continuar después."
           }
         }
       }
@@ -4290,13 +4390,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Install this template?"
+            "value" : "Use This Blueprint?"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Instalar esta plantilla?"
+            "value" : "¿Usar este plano?"
           }
         }
       }
@@ -4306,13 +4406,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Continue with your current choices? Any unsaved edits will be saved. You’ll confirm dates before creating your independent event plan."
+            "value" : "Continue with these choices? You’ll choose dates before creating your workspace."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Continuar con tus opciones actuales? Se guardarán los cambios pendientes. Confirmarás las fechas antes de crear tu plan de evento independiente."
+            "value" : "¿Continuar con estas opciones? Elegirás las fechas antes de crear tu espacio de trabajo."
           }
         }
       }
@@ -4371,13 +4471,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Install"
+            "value" : "Use Blueprint"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Instalar"
+            "value" : "Usar plano"
           }
         }
       }
@@ -4403,13 +4503,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Returns to templates"
+            "value" : "Returns to blueprints"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vuelve a las plantillas"
+            "value" : "Vuelve a los planos"
           }
         }
       }
@@ -4518,13 +4618,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn’t save this draft. Finish any pending installation or reopen the latest saved setup and try again."
+            "value" : "Couldn’t save your changes. Finish any pending workspace, or reopen your saved blueprint and try again."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pudo guardar este borrador. Finaliza cualquier instalación pendiente o vuelve a abrir la última configuración guardada e inténtalo de nuevo."
+            "value" : "No se pudieron guardar los cambios. Termina el espacio de trabajo pendiente o vuelve a abrir el plano guardado e inténtalo de nuevo."
           }
         }
       }
@@ -4534,13 +4634,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save your template choices?"
+            "value" : "Save your blueprint choices?"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Guardar tus elecciones de la plantilla?"
+            "value" : "¿Guardar tus elecciones del plano?"
           }
         }
       }
@@ -4550,13 +4650,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You’ll choose and confirm dates when setting up your own event."
+            "value" : "Choose dates when you create your workspace."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elegirás y confirmarás las fechas al configurar tu propio evento."
+            "value" : "Elige las fechas al crear tu espacio de trabajo."
           }
         }
       }
@@ -4566,13 +4666,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Make this plan your own. Choose what to include and confirm dates in setup. Your copy is independent of the original event."
+            "value" : "Choose what you want to use. Your workspace will be a separate copy."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Haz tuyo este plan. Elige qué incluir y confirma las fechas durante la configuración. Tu copia es independiente del evento original."
+            "value" : "Elige lo que quieras usar. Tu espacio de trabajo será una copia independiente."
           }
         }
       }
@@ -4609,18 +4709,34 @@
         }
       }
     },
-    "blueprint.previewTitle" : {
+    "blueprint.previewSuggestedScheduleFormat" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Template Preview"
+            "value" : "Suggested · %@"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vista previa de la plantilla"
+            "value" : "Sugerencia · %@"
+          }
+        }
+      }
+    },
+    "blueprint.previewTitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blueprint Preview"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vista previa del plano"
           }
         }
       }
@@ -4721,6 +4837,22 @@
         }
       }
     },
+    "blueprint.replaceShareLink" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create Replacement Link"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crear enlace de reemplazo"
+          }
+        }
+      }
+    },
     "blueprint.resumeSetup" : {
       "localizations" : {
         "en" : {
@@ -4742,13 +4874,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This template is retired. Existing links can still be reviewed and revoked in Manage Links."
+            "value" : "This blueprint is no longer available to share. You can still revoke its links in the menu."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta plantilla está retirada. Aún puedes revisar y revocar los enlaces existentes en Administrar enlaces."
+            "value" : "Este plano ya no se puede compartir. Aún puedes revocar sus enlaces desde el menú."
           }
         }
       }
@@ -4806,13 +4938,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Resume installation"
+            "value" : "Continue Creating Workspace"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reanudar instalación"
+            "value" : "Continuar creando el espacio de trabajo"
           }
         }
       }
@@ -4822,13 +4954,29 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Retry this exact request"
+            "value" : "Try Again"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reintentar esta misma solicitud"
+            "value" : "Intentar de nuevo"
+          }
+        }
+      }
+    },
+    "blueprint.retrySavingShareLink" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry Saving Link"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a guardar el enlace"
           }
         }
       }
@@ -4838,13 +4986,109 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Review plan"
+            "value" : "Your Plan"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Revisar el plan"
+            "value" : "Tu plan"
+          }
+        }
+      }
+    },
+    "blueprint.reviewDayAfterFormat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The next day · %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El día siguiente · %@"
+          }
+        }
+      }
+    },
+    "blueprint.reviewDayBeforeFormat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The day before · %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El día anterior · %@"
+          }
+        }
+      }
+    },
+    "blueprint.reviewDaysAfterFormat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld days after · %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld días después · %@"
+          }
+        }
+      }
+    },
+    "blueprint.reviewDaysBeforeFormat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld days before · %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld días antes · %@"
+          }
+        }
+      }
+    },
+    "blueprint.reviewEvents" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Events"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eventos"
+          }
+        }
+      }
+    },
+    "blueprint.reviewGuidance" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tips & Instructions"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consejos e instrucciones"
           }
         }
       }
@@ -4854,13 +5098,77 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Preparing review…"
+            "value" : "Getting blueprint ready…"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Preparando la revisión…"
+          }
+        }
+      }
+    },
+    "blueprint.reviewPersonalTextWarning" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the included text for personal details. Guest lists, chats, and photos aren’t included."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisa si el texto incluido contiene datos personales. No se incluyen listas de invitados, chats ni fotos."
+          }
+        }
+      }
+    },
+    "blueprint.reviewPrivateSummary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save a reusable copy of this plan. Your workspace stays unchanged."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarda una copia reutilizable de este plan. Tu espacio de trabajo no cambia."
+          }
+        }
+      }
+    },
+    "blueprint.reviewSameDayFormat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same day · %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El mismo día · %@"
+          }
+        }
+      }
+    },
+    "blueprint.reviewSharingSummary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share a reusable copy of this plan by link. It won’t appear in Search."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comparte una copia reutilizable de este plan mediante un enlace. No aparecerá en Buscar."
           }
         }
       }
@@ -4934,13 +5242,29 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save as Template"
+            "value" : "Save as Blueprint"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Guardar como plantilla"
+            "value" : "Guardar como plano"
+          }
+        }
+      }
+    },
+    "blueprint.savedLinkUnavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This link isn’t saved on this device. Use the menu to create a replacement."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este enlace no está guardado en este dispositivo. Usa el menú para crear uno de reemplazo."
           }
         }
       }
@@ -4950,13 +5274,45 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Showing your saved template preview. Connect to verify the link and create your event."
+            "value" : "Showing your saved copy. Connect to create a workspace."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se muestra la vista previa guardada de tu plantilla. Conéctate para verificar el enlace y crear tu evento."
+            "value" : "Se muestra tu copia guardada. Conéctate para crear un espacio de trabajo."
+          }
+        }
+      }
+    },
+    "blueprint.savedToLibrary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved in Blueprints. Your workspace remains independent."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado en Planos. Tu espacio de trabajo sigue siendo independiente."
+          }
+        }
+      }
+    },
+    "blueprint.saveToLibrary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save Blueprint"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar plano"
           }
         }
       }
@@ -5014,13 +5370,29 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This template link is no longer available. Ask the person who shared it for a new link."
+            "value" : "This link is no longer available. Ask the sender for a new one."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Este enlace de plantilla ya no está disponible. Pídele un enlace nuevo a la persona que lo compartió."
+            "value" : "Este enlace ya no está disponible. Pide uno nuevo a quien lo compartió."
+          }
+        }
+      }
+    },
+    "blueprint.shareLink" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Link"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir enlace"
           }
         }
       }
@@ -5046,13 +5418,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The request may have created a link, but its one-time URL wasn’t received. Refresh the list before trying again."
+            "value" : "The link may have been created. Refresh links before trying again."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Es posible que la solicitud haya creado un enlace, pero no se recibió su URL de un solo uso. Actualiza la lista antes de intentarlo de nuevo."
+            "value" : "Es posible que el enlace se haya creado. Actualiza los enlaces antes de intentarlo de nuevo."
           }
         }
       }
@@ -5073,18 +5445,66 @@
         }
       }
     },
-    "blueprint.shareLinksLoadFailed" : {
+    "blueprint.shareLinkRestoreFailed" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn’t load template links. Check your connection and try again."
+            "value" : "Couldn’t reopen the saved link. Try again."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pudieron cargar los enlaces de plantilla. Comprueba tu conexión e inténtalo de nuevo."
+            "value" : "No se pudo volver a abrir el enlace guardado. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "blueprint.shareLinkSaveFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This link couldn’t be saved on this device. Share it now or retry saving."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar este enlace en este dispositivo. Compártelo ahora o vuelve a intentar guardarlo."
+          }
+        }
+      }
+    },
+    "blueprint.shareLinksLoadFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t load blueprint links. Check your connection and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron cargar los enlaces de los planos. Comprueba tu conexión e inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "blueprint.shareLinkStorageFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t update this device’s saved link. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo actualizar el enlace guardado en este dispositivo. Inténtalo de nuevo."
           }
         }
       }
@@ -5105,18 +5525,242 @@
         }
       }
     },
-    "blueprint.shareTemplate" : {
+    "blueprint.shareQRCodeAccessibilityHint" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Share Template"
+            "value" : "Scan to preview this blueprint. Saving and creating a copy are separate steps."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Compartir plantilla"
+            "value" : "Escanéalo para ver una vista previa del plano. Guardar y crear una copia son pasos independientes."
+          }
+        }
+      }
+    },
+    "blueprint.shareQRCodeAccessibilityLabel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QR code for the blueprint sharing link"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Código QR del enlace para compartir el plano"
+          }
+        }
+      }
+    },
+    "blueprint.shareQRCodeImageWarning" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The QR image contains this access link and can be forwarded. Revoking the link stops future access through it, but cannot remove copies already saved."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La imagen QR contiene este enlace de acceso y se puede reenviar. Revocar el enlace impide el acceso futuro, pero no elimina las copias ya guardadas."
+          }
+        }
+      }
+    },
+    "blueprint.shareQRCodeRenderFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This QR code couldn’t be prepared. Try again or share the link instead."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo preparar este código QR. Inténtalo de nuevo o comparte el enlace."
+          }
+        }
+      }
+    },
+    "blueprint.shareQRCodeScanGuidance" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scanning opens a preview of this blueprint. The person scanning chooses whether to save and create an independent copy."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al escanearlo se abre una vista previa de este plano. La persona decide si quiere guardarlo y crear una copia independiente."
+          }
+        }
+      }
+    },
+    "blueprint.shareQRCodeTitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share QR Code"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir código QR"
+          }
+        }
+      }
+    },
+    "blueprint.shareTemplate" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Blueprint"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir plano"
+          }
+        }
+      }
+    },
+    "blueprint.creator.name" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Creator name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre del creador"
+          }
+        }
+      }
+    },
+    "blueprint.creator.publicNameExplanation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This name will appear with your blueprint in Search and shared previews."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este nombre aparecerá con tu plano en Buscar y en las vistas previas compartidas."
+          }
+        }
+      }
+    },
+    "blueprint.status.linkActive" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link active"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enlace activo"
+          }
+        }
+      }
+    },
+    "blueprint.status.inSearch" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Search"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En Buscar"
+          }
+        }
+      }
+    },
+    "blueprint.status.private" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Private"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privado"
+          }
+        }
+      }
+    },
+    "blueprint.creatorName.invalid" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a name up to 80 characters."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduce un nombre de hasta 80 caracteres."
+          }
+        }
+      }
+    },
+    "blueprint.publishingToSearch" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publishing…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publicando…"
+          }
+        }
+      }
+    },
+    "blueprint.creator.byline" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "By %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Por %@"
           }
         }
       }
@@ -5126,13 +5770,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Anyone with this link can install an independent copy of the template. It does not invite them to this event."
+            "value" : "Anyone with this link can preview and save their own copy."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cualquier persona con este enlace puede instalar una copia independiente de la plantilla. No es una invitación a este evento."
+            "value" : "Cualquier persona con este enlace puede ver la vista previa y guardar su propia copia."
           }
         }
       }
@@ -5174,13 +5818,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn’t update template links. Check your connection and try again."
+            "value" : "Couldn’t update blueprint links. Check your connection and try again."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pudieron actualizar los enlaces de plantilla. Comprueba tu conexión e inténtalo de nuevo."
+            "value" : "No se pudieron actualizar los enlaces de los planos. Comprueba tu conexión e inténtalo de nuevo."
           }
         }
       }
@@ -5201,6 +5845,22 @@
         }
       }
     },
+    "blueprint.showShareQRCode" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show QR Code"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar código QR"
+          }
+        }
+      }
+    },
     "blueprint.signInRequired" : {
       "localizations" : {
         "en" : {
@@ -5212,7 +5872,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inicia sesión para usar plantillas."
+            "value" : "Inicia sesión para usar planos."
           }
         }
       }
@@ -5254,13 +5914,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Use Template"
+            "value" : "Use Blueprint"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usar plantilla"
+            "value" : "Usar plano"
           }
         }
       }
@@ -5286,13 +5946,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Discard this saved setup and start again with the latest template?"
+            "value" : "Discard this saved setup and start again with the latest blueprint?"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Descartar esta configuración guardada y empezar de nuevo con la plantilla más reciente?"
+            "value" : "¿Descartar esta configuración guardada y empezar de nuevo con el plano más reciente?"
           }
         }
       }
@@ -5318,13 +5978,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Suggested dates use the main event’s calendar date and time zone. Confirm each date before including a sub-event."
+            "value" : "Confirm a date for each event you include."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Las fechas sugeridas usan la fecha y la zona horaria del evento principal. Confirma cada fecha antes de incluir un subevento."
+            "value" : "Confirma una fecha para cada evento que incluyas."
           }
         }
       }
@@ -5366,13 +6026,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The server returned an unexpected template response. Try refreshing the event."
+            "value" : "The server returned an unexpected blueprint response. Try refreshing the event."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El servidor devolvió una respuesta inesperada de la plantilla. Actualiza el evento."
+            "value" : "El servidor devolvió una respuesta inesperada para el plano. Actualiza el evento."
           }
         }
       }
@@ -5382,13 +6042,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your template is ready, but the link may have been created. Refresh links before trying again."
+            "value" : "Your blueprint is ready, but the link may have been created. Refresh links before trying again."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La plantilla está lista, pero es posible que se haya creado el enlace. Actualiza los enlaces antes de volver a intentarlo."
+            "value" : "Tu plano está listo, pero es posible que se haya creado el enlace. Actualiza los enlaces antes de volver a intentarlo."
           }
         }
       }
@@ -5414,13 +6074,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You no longer have permission to create a template from this event."
+            "value" : "You no longer have permission to create a blueprint from this event."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ya no tienes permiso para crear una plantilla a partir de este evento."
+            "value" : "Ya no tienes permiso para crear un plano a partir de este evento."
           }
         }
       }
@@ -5430,13 +6090,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn’t prepare the template review. Try again."
+            "value" : "Couldn’t prepare the blueprint. Try again."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pudo preparar la revisión de la plantilla. Inténtalo de nuevo."
+            "value" : "No se pudo preparar el plano. Inténtalo de nuevo."
           }
         }
       }
@@ -5446,13 +6106,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This event changed. Reload it and review your selections again."
+            "value" : "This event changed. Reload it before saving or sharing."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Este evento cambió. Actualízalo y revisa tus selecciones de nuevo."
+            "value" : "Este evento cambió. Vuelve a cargarlo antes de guardar o compartir."
           }
         }
       }
@@ -5462,13 +6122,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The template may already have been created. Retry to recover the same template."
+            "value" : "The blueprint may already have been created. Retry to recover the same blueprint."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Es posible que la plantilla ya se haya creado. Vuelve a intentarlo para recuperar la misma plantilla."
+            "value" : "Es posible que el plano ya se haya creado. Vuelve a intentarlo para recuperar el mismo plano."
           }
         }
       }
@@ -5478,13 +6138,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Template Details"
+            "value" : "Blueprint Details"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Detalles de la plantilla"
+            "value" : "Detalles del plano"
           }
         }
       }
@@ -5494,13 +6154,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sign in to manage template links."
+            "value" : "Sign in to manage blueprint links."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inicia sesión para administrar enlaces de plantilla."
+            "value" : "Inicia sesión para administrar los enlaces de los planos."
           }
         }
       }
@@ -5510,13 +6170,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Template Links Unavailable"
+            "value" : "Blueprint Links Unavailable"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enlaces de plantilla no disponibles"
+            "value" : "Enlaces de planos no disponibles"
           }
         }
       }
@@ -5526,13 +6186,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This template is published in Search. People can find it and install independent copies."
+            "value" : "This blueprint is published in Search. People can find it and install independent copies."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta plantilla está publicada en Buscar. Las personas pueden encontrarla e instalar copias independientes."
+            "value" : "Este plano está publicado en Buscar. Las personas pueden encontrarlo e instalar copias independientes."
           }
         }
       }
@@ -5542,13 +6202,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Template name"
+            "value" : "Blueprint name"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nombre de la plantilla"
+            "value" : "Nombre del plano"
           }
         }
       }
@@ -5574,13 +6234,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Template Ready"
+            "value" : "Blueprint Ready"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Plantilla lista"
+            "value" : "Plano listo"
           }
         }
       }
@@ -5590,13 +6250,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Publishing adds this template to Search, where people can find it and install independent copies. The source event stays private; only the content you selected is published."
+            "value" : "Publishing adds this blueprint to Search, where people can find it and install independent copies. The source event stays private; only the content you selected is published."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Al publicar, esta plantilla aparece en Buscar para que otras personas puedan encontrarla e instalar copias independientes. El evento de origen sigue siendo privado; solo se publica el contenido que seleccionaste."
+            "value" : "Al publicar, este plano aparece en Buscar para que otras personas puedan encontrarlo e instalar copias independientes. El evento de origen sigue siendo privado; solo se publica el contenido que seleccionaste."
           }
         }
       }
@@ -5633,6 +6293,22 @@
         }
       }
     },
+    "blueprint.unlistedSharingExplanation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anyone with the link can preview and save a copy. This blueprint won’t appear in Search unless you publish it there."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cualquier persona con el enlace puede ver la vista previa y guardar una copia. Este plano no aparecerá en Buscar a menos que lo publiques allí."
+          }
+        }
+      }
+    },
     "blueprint.useDeviceTimeZone" : {
       "localizations" : {
         "en" : {
@@ -5665,18 +6341,34 @@
         }
       }
     },
-    "blueprint.workspaceNotInBootstrap" : {
+    "blueprint.viewIncludedContent" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The installed event is still being prepared. Retry to finish syncing it to this device."
+            "value" : "View Included Content"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El evento instalado aún se está preparando. Reintenta para terminar de sincronizarlo con este dispositivo."
+            "value" : "Ver contenido incluido"
+          }
+        }
+      }
+    },
+    "blueprint.workspaceNotInBootstrap" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your workspace hasn’t finished loading. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu espacio de trabajo no ha terminado de cargar. Inténtalo de nuevo."
           }
         }
       }
@@ -7022,20 +7714,33 @@
     },
     "Delete Blueprint" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Blueprint"
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Eliminar plantilla"
+            "value" : "Eliminar plano"
           }
         }
       }
     },
     "Delete Blueprint?" : {
+      "extractionState" : "stale",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Blueprint?"
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Eliminar plantilla?"
+            "value" : "¿Eliminar el plano?"
           }
         }
       }
@@ -7355,13 +8060,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Edit Template Idea"
+            "value" : "Edit Idea"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Editar idea de la plantilla"
+            "value" : "Editar idea"
           }
         }
       }
@@ -7371,13 +8076,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Edit Template Sub-event"
+            "value" : "Edit Event"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Editar subevento de la plantilla"
+            "value" : "Editar evento"
           }
         }
       }
@@ -7444,6 +8149,7 @@
       }
     },
     "Enter a title to save this idea." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7460,6 +8166,7 @@
       }
     },
     "Enter a title to save this sub-event." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8173,7 +8880,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aún no hay plantillas en esta categoría. Explora otra categoría o crea un espacio de trabajo en blanco."
+            "value" : "Aún no hay planos en esta categoría. Explora otra categoría o crea un espacio de trabajo en blanco."
           }
         }
       }
@@ -8221,7 +8928,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Conéctate a internet e inicia sesión para explorar plantillas. Tus espacios de trabajo siguen disponibles sin conexión."
+            "value" : "Conéctate a internet e inicia sesión para explorar planos. Tus espacios de trabajo siguen disponibles sin conexión."
           }
         }
       }
@@ -8269,7 +8976,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aún no hay plantillas"
+            "value" : "Aún no hay planos"
           }
         }
       }
@@ -8381,7 +9088,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cargando plantillas…"
+            "value" : "Cargando planos…"
           }
         }
       }
@@ -8397,7 +9104,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No hay plantillas vistas recientemente"
+            "value" : "No hay planos vistos recientemente"
           }
         }
       }
@@ -8413,7 +9120,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se encontraron plantillas"
+            "value" : "No se encontraron planos"
           }
         }
       }
@@ -8429,7 +9136,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Explora las actividades, ideas e indicaciones de la plantilla. No se crea nada hasta que confirmes."
+            "value" : "Explora las actividades, ideas e indicaciones del plano. No se crea nada hasta que confirmes."
           }
         }
       }
@@ -8477,7 +9184,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Las plantillas que abras aparecerán aquí. Busca para encontrar la primera."
+            "value" : "Los planos que abras aparecerán aquí. Busca para encontrar el primero."
           }
         }
       }
@@ -8493,7 +9200,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pudo actualizar. Se muestran las últimas plantillas cargadas."
+            "value" : "No se pudo actualizar. Se muestran los últimos planos cargados."
           }
         }
       }
@@ -8541,7 +9248,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Buscar plantillas"
+            "value" : "Buscar planos"
           }
         }
       }
@@ -8637,7 +9344,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pueden cargar las plantillas"
+            "value" : "No se pueden cargar los planos"
           }
         }
       }
@@ -14278,6 +14985,7 @@
       }
     },
     "Sub-event Details" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14472,6 +15180,7 @@
       }
     },
     "Target" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14899,10 +15608,16 @@
     },
     "This removes the blueprint from your library. Created workspaces will not be deleted." : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This removes the blueprint from your library. Created workspaces will not be deleted."
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esto elimina la plantilla de tu biblioteca. Los espacios de trabajo creados no se eliminarán."
+            "value" : "Esto elimina el plano de tu biblioteca. Los espacios de trabajo creados no se eliminarán."
           }
         }
       }
@@ -15075,10 +15790,16 @@
     },
     "Unable to update blueprint" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to update blueprint"
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pudo actualizar la plantilla"
+            "value" : "No se pudo actualizar el plano"
           }
         }
       }
@@ -15538,6 +16259,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu invitación es como %arg."
+          }
+        }
+      }
+    },
+    "Your Blueprint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your Blueprint"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu plano"
           }
         }
       }

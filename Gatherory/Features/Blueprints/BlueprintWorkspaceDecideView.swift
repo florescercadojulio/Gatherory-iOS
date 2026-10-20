@@ -101,12 +101,12 @@ struct BlueprintWorkspaceDecideView: View {
                         }
                     }
                 } label: {
-                    Label("Decision event filter", systemImage: "calendar")
+                    Label("Event", systemImage: "calendar")
                         .labelStyle(.iconOnly)
                         .frame(minWidth: AppTheme.Layout.minimumTouchTarget,
                                minHeight: AppTheme.Layout.minimumTouchTarget)
                 }
-                .accessibilityLabel("Decision event filter")
+                .accessibilityLabel("Event")
                 .accessibilityValue(BlueprintDecideContext.title(content: content, scope: scope, ideaTarget: nil))
             }
             ToolbarItem(placement: .topBarLeading) {
@@ -148,7 +148,7 @@ struct BlueprintWorkspaceDecideView: View {
                     )
                         .labelStyle(.iconOnly)
                 }
-                .accessibilityLabel("Decision response filter")
+                .accessibilityLabel("Filter ideas")
                 .accessibilityValue(reviewsAllIdeas ? "All Ideas" : filter.title)
             }
             ToolbarItem(placement: .topBarTrailing) { AccountToolbarButton() }

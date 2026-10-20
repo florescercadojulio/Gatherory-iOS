@@ -35,8 +35,13 @@ nonisolated struct BlueprintCatalogEntry: Codable, Identifiable, Sendable {
     // Optional while clients and the catalog endpoint roll out independently.
     var discovery: BlueprintDiscoveryMetadata? = nil
     var description: String? = nil
+    var creator: BlueprintCreatorMetadata? = nil
 
     var id: String { "\(catalogKey):\(revision)" }
+}
+
+nonisolated struct BlueprintCreatorMetadata: Codable, Equatable, Sendable {
+    let displayName: String
 }
 
 nonisolated struct BlueprintDiscoveryMetadata: Codable, Sendable {

@@ -141,7 +141,7 @@ struct BlueprintIdeaDraftEditor: View {
         }
         .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
-        .navigationTitle(idea == nil ? Text("Add Template Idea") : Text("Edit Template Idea"))
+        .navigationTitle(idea == nil ? Text(String(localized: "Add Template Idea", defaultValue: "Add Idea")) : Text(String(localized: "Edit Template Idea", defaultValue: "Edit Idea")))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden()
         .appKeyboardDismissal()
@@ -182,8 +182,8 @@ struct BlueprintIdeaDraftEditor: View {
                 }
             }
 
-            Section("Applies To") {
-                Picker("Target", selection: $targetKey) {
+            Section {
+                Picker(BlueprintCopy.target, selection: $targetKey) {
                     ForEach(targetOptions) { option in
                         Text(option.title).tag(option.key)
                     }
@@ -194,11 +194,7 @@ struct BlueprintIdeaDraftEditor: View {
 
     @ViewBuilder
     private var validationHint: some View {
-        if trimmedTitle.isEmpty {
-            Text("Enter a title to save this idea.")
-                .font(.footnote)
-                .foregroundStyle(AppTheme.ColorToken.destructive)
-        } else if trimmedTitle.unicodeScalars.count > 120 {
+        if trimmedTitle.unicodeScalars.count > 120 {
             Text("Titles can be up to 120 characters.")
                 .font(.footnote)
                 .foregroundStyle(AppTheme.ColorToken.destructive)
@@ -277,17 +273,13 @@ struct BlueprintChildDraftEditor: View {
         Form {
             Section {
                 BasicEditorNameField(label: Text("Title"), prompt: Text("Event name"), text: $title)
-                if trimmedTitle.isEmpty {
-                    Text("Enter a title to save this sub-event.")
-                        .font(.footnote)
-                        .foregroundStyle(AppTheme.ColorToken.destructive)
-                } else if trimmedTitle.unicodeScalars.count > 120 {
+                if trimmedTitle.unicodeScalars.count > 120 {
                     Text("Titles can be up to 120 characters.")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.ColorToken.destructive)
                 }
             } header: {
-                Text("Sub-event Details")
+                Text(BlueprintCopy.eventName)
             }
 
             Section("Category") {
@@ -306,7 +298,7 @@ struct BlueprintChildDraftEditor: View {
         }
         .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
-        .navigationTitle(child == nil ? Text("Add Template Sub-event") : Text("Edit Template Sub-event"))
+        .navigationTitle(child == nil ? Text(String(localized: "Add Template Sub-event", defaultValue: "Add Event")) : Text(String(localized: "Edit Template Sub-event", defaultValue: "Edit Event")))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden()
         .appKeyboardDismissal()

@@ -52,6 +52,12 @@ struct BlueprintCatalogTile: View {
                 Text(entry.definition.blueprint.name)
                     .font(.headline)
                     .lineLimit(3)
+                if let creatorName = entry.creator?.displayName,
+                   !creatorName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(BlueprintCopy.creatorByline(creatorName))
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                }
                 if let summary = entry.discovery?.summary,
                    !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(summary).font(.caption).lineLimit(2)

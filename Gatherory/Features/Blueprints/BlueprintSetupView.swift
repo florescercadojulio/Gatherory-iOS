@@ -67,7 +67,6 @@ struct BlueprintSetupView: View {
     @State private var selectedChildren: Set<String> = []
     @State private var scheduleDraft = BlueprintScheduleDraft()
     @State private var scheduleRequest: ScheduleRequest?
-    @State private var datesKept = false
     @State private var selectedIdeas: Set<String> = []
     @State private var eventName = ""
     @State private var dateContext = BlueprintSetupDateContext()
@@ -199,19 +198,10 @@ struct BlueprintSetupView: View {
                 } header: {
                     Text(BlueprintCopy.mainEvent)
                 } footer: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(catalogEntry?.discovery?.summary ?? BlueprintCopy.description)
-                        Text(BlueprintCopy.deviceTimeZoneHint)
-                    }
+                    Text(catalogEntry?.discovery?.summary ?? BlueprintCopy.description)
                 }
 
                 Section(BlueprintCopy.children) {
-                    Text(BlueprintCopy.suggestionConfirmation)
-                        .font(.footnote).foregroundStyle(.secondary)
-                    if datesKept {
-                        Text(BlueprintCopy.datesKept)
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
                     if scheduleDraft.isRefreshing {
                         ProgressView(BlueprintCopy.loadingDates)
                     } else if scheduleDraft.refreshFailed {
@@ -279,20 +269,17 @@ struct BlueprintSetupView: View {
                 }
 
                 Section {
-                    Text(BlueprintCopy.nothingCreatedYet)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                     Button {
                         Task { await requestPlanReview() }
                     } label: {
                         if busy {
                             ProgressView { Text(BlueprintCopy.reviewing) }
                         } else {
-                            Text(BlueprintCopy.review)
+                            Text(AppCopy.Common.continueAction)
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .disabled(busy || trimmedEventName.isEmpty || trimmedEventName.unicodeScalars.count > 120 || !selectedChildrenHaveDates || draftSaveError != nil)
+                    .disabled(busy || !mainDateConfirmed || trimmedEventName.isEmpty || trimmedEventName.unicodeScalars.count > 120 || !selectedChildrenHaveDates || draftSaveError != nil)
                     .buttonStyle(.borderedProminent)
                 }
                 }
@@ -493,6 +480,8 @@ struct BlueprintSetupView: View {
                     Text(BlueprintCopy.dateTime).font(.headline)
                     Text(formattedChildDate(startsAt)).font(.subheadline).foregroundStyle(.secondary)
                         .lineLimit(2, reservesSpace: true)
+                    Text(mainDateConfirmed ? BlueprintCopy.confirmedDate : BlueprintCopy.confirmDate)
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
@@ -675,7 +664,6 @@ struct BlueprintSetupView: View {
 
     private func scheduleAnchorChanged() {
         invalidateReview()
-        datesKept = !scheduleDraft.confirmedDates.isEmpty
         persistDraft()
         refreshSuggestions()
     }
@@ -811,7 +799,8 @@ struct BlueprintSetupView: View {
 
     @MainActor
     private func requestPlanReview() async {
-        guard !busy, installationOwnerID == nil || (mainDateConfirmed && installationOwnerID == account?.id),
+        guard !busy, mainDateConfirmed,
+              installationOwnerID == nil || installationOwnerID == account?.id,
               let entry = catalogEntry, let coordinator, selectedChildrenHaveDates,
               draftOwnerUserID == account?.id, persistDraft() else { return }
         let ownerID = draftOwnerUserID
@@ -928,7 +917,6 @@ struct BlueprintSetupView: View {
         pendingIntents = []
         installAttemptStarted = false
         busy = false
-        datesKept = false
         dateSheetChild = nil
         showsMainDate = false
         showReview = false
@@ -991,7 +979,6 @@ struct BlueprintSetupView: View {
             selectedIdeas = Set(plan?.ideas.map(\.key) ?? [])
         }
         scheduleDraft = BlueprintScheduleDraft(confirmedDates: saved.confirmedDates)
-        datesKept = !saved.confirmedDates.isEmpty
     }
 
     private func configure(
@@ -1061,11 +1048,6 @@ private struct BlueprintPlanReviewView: View {
                 eventRow(plan.main)
             }
 
-            Section(BlueprintCopy.planningSetup) {
-                LabeledContent(BlueprintCopy.experienceType, value: plan.experienceType)
-                LabeledContent(BlueprintCopy.categoryOrder, value: plan.categoryOrder.joined(separator: ", "))
-            }
-
             if !plan.children.isEmpty {
                 Section(BlueprintCopy.children) {
                     ForEach(plan.children) { eventRow($0) }
@@ -1077,17 +1059,6 @@ private struct BlueprintPlanReviewView: View {
                     ForEach(plan.ideas) { idea in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(idea.title)
-                            LabeledContent(BlueprintCopy.category, value: idea.category)
-                            LabeledContent(BlueprintCopy.status, value: idea.status)
-                            LabeledContent(BlueprintCopy.target, value: targetName(for: idea.targetSourceKey))
-                            if let configuration = configurationText(idea.configuration) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(BlueprintCopy.configuration)
-                                    Text(configuration).font(.caption.monospaced())
-                                }
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                            }
                             if let notes = idea.notes, !notes.isEmpty {
                                 Text(notes).font(.footnote).foregroundStyle(.secondary)
                             }
@@ -1105,8 +1076,6 @@ private struct BlueprintPlanReviewView: View {
                             Text(guide.body)
                             Text(guide.audience == .planningOnly ? "Planning team only" : "Shared with event guests")
                                 .font(.caption).foregroundStyle(.secondary)
-                            Text(targetName(for: guide.targetSourceKey))
-                                .font(.caption).foregroundStyle(.secondary)
                         }
                         .padding(.vertical, 4)
                     }
@@ -1116,12 +1085,15 @@ private struct BlueprintPlanReviewView: View {
             }
 
             if !plan.omissions.isEmpty {
-                Section(BlueprintCopy.omitted) {
-                    ForEach(plan.omissions) { omission in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(omission.sourceKey)
-                            Text(BlueprintCopy.omissionReason)
-                            Text(omission.reason)
+                DisclosureGroup("Details") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(BlueprintCopy.omitted).font(.headline)
+                        ForEach(Array(Set(plan.omissions.map { omission in
+                            omission.reason == "child_not_selected"
+                                ? BlueprintCopy.omittedUnselectedContent
+                                : BlueprintCopy.omittedUnsupportedContent
+                        })).sorted(), id: \.self) { explanation in
+                            Text(explanation)
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                     }
@@ -1129,11 +1101,6 @@ private struct BlueprintPlanReviewView: View {
             }
 
             Section {
-                Text(isInstalling || !pendingIntents.isEmpty
-                     ? BlueprintCopy.pendingInstall
-                     : BlueprintCopy.nothingCreatedYet)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
                 if let pending = pendingIntents.first(where: { $0.requestID == requestID }) {
                     Button(BlueprintCopy.retryInstall, systemImage: "arrow.clockwise") {
                         onResume(pending)
@@ -1142,7 +1109,7 @@ private struct BlueprintPlanReviewView: View {
                 } else {
                     Button(action: onInstall) {
                         if isInstalling { ProgressView { Text(BlueprintCopy.installing) } }
-                        else { Text(BlueprintCopy.install).frame(maxWidth: .infinity) }
+                        else { Text("Create Workspace").frame(maxWidth: .infinity) }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(isInstalling)
@@ -1162,19 +1129,6 @@ private struct BlueprintPlanReviewView: View {
             Text(event.name).font(.headline)
             Text(formattedDate(event.startsAt, timeZone: event.timeZone))
                 .font(.footnote).foregroundStyle(.secondary)
-            LabeledContent(BlueprintCopy.eventType, value: event.eventType)
-            if let parentSourceKey = event.parentSourceKey {
-                LabeledContent(BlueprintCopy.parentEvent, value: targetName(for: parentSourceKey))
-            }
-            if let purpose = event.purpose {
-                LabeledContent(BlueprintCopy.eventPurpose, value: purpose)
-            }
-            if let category = event.category {
-                LabeledContent(BlueprintCopy.category, value: category)
-            }
-            if let status = event.planningStatus {
-                LabeledContent(BlueprintCopy.status, value: status)
-            }
         }
         .padding(.vertical, 3)
     }
@@ -1184,21 +1138,8 @@ private struct BlueprintPlanReviewView: View {
         formatter.dateStyle = .full
         formatter.timeStyle = .short
         formatter.timeZone = TimeZone(identifier: identifier)
-        return "\(formatter.string(from: date)) · \(identifier)"
-    }
-
-    private func targetName(for sourceKey: String) -> String {
-        if plan.main.sourceKey == sourceKey { return plan.main.name }
-        return plan.children.first(where: { $0.sourceKey == sourceKey })?.name ?? sourceKey
-    }
-
-    private func configurationText(_ configuration: [String: ExperienceJSONValue]) -> String? {
-        guard let data = try? JSONEncoder().encode(configuration),
-              let json = try? JSONSerialization.jsonObject(with: data),
-              let formatted = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) else {
-            return nil
-        }
-        return String(data: formatted, encoding: .utf8)
+        let zone = formatter.timeZone.abbreviation(for: date) ?? identifier
+        return "\(formatter.string(from: date)) · \(zone)"
     }
 }
 

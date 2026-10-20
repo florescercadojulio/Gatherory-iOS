@@ -3,6 +3,37 @@ import Testing
 @testable import Gatherory
 
 struct BlueprintPersonalLibraryTests {
+    @Test("Older personal records decode without the optional sharing metadata")
+    func optionalSharingMetadataDecodes() throws {
+        let url = try #require(Bundle(for: PersonalBlueprintFixtureBundle.self).url(forResource: "wedding-catalog.v1", withExtension: "json"))
+        let entry = try #require(JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: url)).entries.first)
+        let encodedEntry = try JSONEncoder().encode(entry)
+        let catalogEntry = try #require(JSONSerialization.jsonObject(with: encodedEntry) as? [String: Any])
+        let legacy: [String: Any] = [
+            "id": UUID().uuidString,
+            "draftVersion": 1,
+            "publishedRevision": 1,
+            "listedRevision": NSNull(),
+            "catalogEntry": catalogEntry
+        ]
+        let legacyRecord = try JSONDecoder().decode(
+            BlueprintPersonalRecord.self,
+            from: JSONSerialization.data(withJSONObject: legacy)
+        )
+        #expect(legacyRecord.creatorName == nil)
+        #expect(legacyRecord.activeShareLinkCount == nil)
+
+        var current = legacy
+        current["creatorName"] = "Garden Hosts"
+        current["activeShareLinkCount"] = 2
+        let currentRecord = try JSONDecoder().decode(
+            BlueprintPersonalRecord.self,
+            from: JSONSerialization.data(withJSONObject: current)
+        )
+        #expect(currentRecord.creatorName == "Garden Hosts")
+        #expect(currentRecord.activeShareLinkCount == 2)
+    }
+
     @Test("Owned publication saves include edited content but never installation dates")
     @MainActor func editsArePortableAndCopiesIndependent() throws {
         let url = try #require(Bundle(for: PersonalBlueprintFixtureBundle.self).url(forResource: "wedding-catalog.v1", withExtension: "json"))
@@ -54,3 +85,58 @@ struct BlueprintPersonalLibraryTests {
 }
 
 private final class PersonalBlueprintFixtureBundle: NSObject {}
+
+struct BlueprintPublicProfileTests {
+    @Test("Creator names are trimmed and limited by Unicode scalar count")
+    func creatorNameValidation() {
+        #expect(BlueprintCreatorNameValidation.normalized("  Rae 🌿  ") == "Rae 🌿")
+        #expect(BlueprintCreatorNameValidation.normalized(" \n ") == nil)
+        #expect(BlueprintCreatorNameValidation.normalized(String(repeating: "🌿", count: 80)) != nil)
+        #expect(BlueprintCreatorNameValidation.normalized(String(repeating: "🌿", count: 81)) == nil)
+    }
+
+    @Test("Sharing status never calls unknown server state private")
+    func sharingStatusRequiresKnownCount() {
+        #expect(BlueprintSharingStatus.badges(activeShareLinkCount: 0, listedRevision: nil) == [.privateBlueprint])
+        #expect(BlueprintSharingStatus.badges(activeShareLinkCount: 3, listedRevision: nil) == [.linkActive])
+        #expect(BlueprintSharingStatus.badges(activeShareLinkCount: 0, listedRevision: 4) == [.inSearch])
+        #expect(BlueprintSharingStatus.badges(activeShareLinkCount: 3, listedRevision: 4) == [.linkActive, .inSearch])
+        #expect(BlueprintSharingStatus.badges(activeShareLinkCount: nil, listedRevision: nil).isEmpty)
+        #expect(BlueprintSharingStatus.badges(activeShareLinkCount: -1, listedRevision: nil).isEmpty)
+    }
+
+    @Test("Publish acknowledgements accept only the same or next published revision")
+    func publishAcknowledgementRevisionRules() throws {
+        let url = try #require(Bundle(for: PersonalBlueprintFixtureBundle.self).url(forResource: "wedding-catalog.v1", withExtension: "json"))
+        let baseEntry = try #require(JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: url)).entries.first)
+        let recordID = UUID()
+
+        func acknowledgement(_ revision: Int, name: String = "Garden Hosts", id: UUID = recordID,
+                             catalogKey: String = baseEntry.catalogKey, draftVersion: Int = 3,
+                             listedRevision: Int? = nil) -> BlueprintPersonalRecord {
+            let entry = BlueprintCatalogEntry(catalogKey: catalogKey, revision: revision,
+                contentHash: baseEntry.contentHash, definition: baseEntry.definition,
+                discovery: baseEntry.discovery, description: baseEntry.description, creator: baseEntry.creator)
+            return BlueprintPersonalRecord(id: id, draftVersion: draftVersion,
+                publishedRevision: revision, listedRevision: listedRevision ?? revision,
+                creatorName: name, activeShareLinkCount: 0, catalogEntry: entry)
+        }
+
+        func valid(_ record: BlueprintPersonalRecord, previous: Int?) -> Bool {
+            BlueprintPersonalPublishAcknowledgement.isValid(record, expectedID: recordID,
+                expectedCatalogKey: baseEntry.catalogKey, expectedDraftVersion: 3,
+                previousPublishedRevision: previous, expectedCreatorName: "Garden Hosts")
+        }
+
+        #expect(valid(acknowledgement(1), previous: nil))
+        #expect(valid(acknowledgement(2), previous: 2))
+        #expect(valid(acknowledgement(3), previous: 2))
+        #expect(!valid(acknowledgement(4), previous: 2))
+        #expect(!valid(acknowledgement(1), previous: 2))
+        #expect(!valid(acknowledgement(2, name: "Different Name"), previous: 1))
+        #expect(!valid(acknowledgement(2, id: UUID()), previous: 1))
+        #expect(!valid(acknowledgement(2, catalogKey: "different-key"), previous: 1))
+        #expect(!valid(acknowledgement(2, draftVersion: 4), previous: 1))
+        #expect(!valid(acknowledgement(2, listedRevision: 1), previous: 1))
+    }
+}

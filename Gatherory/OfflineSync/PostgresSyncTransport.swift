@@ -310,9 +310,28 @@ extension PostgresSyncTransport: BlueprintPersonalLibraryTransport {
         let action: String
         var id: String? = nil
         var expectedVersion: Int? = nil
+        var expectedListedRevision: Int? = nil
         var content: BlueprintDraftContent? = nil
+        var creatorName: String? = nil
     }
     private struct PersonalDeletion: Decodable { let deleted: Bool }
+    private struct PersonalUnlistAcknowledgement: Decodable {
+        let record: BlueprintPersonalRecord
+
+        private enum CodingKeys: String, CodingKey { case listedRevision }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            guard try container.decode(Int?.self, forKey: .listedRevision) == nil else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .listedRevision,
+                    in: container,
+                    debugDescription: "An unlist acknowledgement must clear listedRevision."
+                )
+            }
+            record = try BlueprintPersonalRecord(from: decoder)
+        }
+    }
 
     func listPersonalBlueprints() async throws -> [BlueprintPersonalRecord] {
         let response: BlueprintPersonalListResponse = try await personalCommand(.init(action: "list"))
@@ -327,6 +346,19 @@ extension PostgresSyncTransport: BlueprintPersonalLibraryTransport {
     }
     func publishPersonalBlueprint(id: UUID, expectedVersion: Int) async throws -> BlueprintPersonalRecord {
         try await personalCommand(.init(action: "publish", id: id.uuidString.lowercased(), expectedVersion: expectedVersion))
+    }
+    func publishPersonalBlueprint(id: UUID, expectedVersion: Int, creatorName: String?) async throws -> BlueprintPersonalRecord {
+        try await personalCommand(.init(
+            action: "publish", id: id.uuidString.lowercased(),
+            expectedVersion: expectedVersion, creatorName: creatorName
+        ))
+    }
+    func unlistPersonalBlueprint(id: UUID, expectedVersion: Int, expectedListedRevision: Int) async throws -> BlueprintPersonalRecord {
+        let acknowledgement: PersonalUnlistAcknowledgement = try await personalCommand(.init(
+            action: "unlist", id: id.uuidString.lowercased(),
+            expectedVersion: expectedVersion, expectedListedRevision: expectedListedRevision
+        ))
+        return acknowledgement.record
     }
     private func personalCommand<Output: Decodable>(_ command: PersonalCommand) async throws -> Output {
         var request = try authenticatedRequest(path: ["api", "blueprints", "personal"])
@@ -383,19 +415,15 @@ extension PostgresSyncTransport: BlueprintLinkManagementTransport {
     }
 
     func setTemplateListing(eventID: UUID, templateID: UUID, revision: Int?) async throws -> Int? {
-        let data = try await postSharing(.listing(eventID: eventID, templateID: templateID, revision: revision))
-        struct Acknowledgement: Decodable {
-            let listedRevision: Int?
+        try await setTemplateListing(eventID: eventID, templateID: templateID, revision: revision, creatorName: nil)
+            .listedRevision
+    }
 
-            enum CodingKeys: String, CodingKey { case listedRevision }
-
-            init(from decoder: Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                // Explicit null acknowledges withdrawal; an absent key does not.
-                listedRevision = try container.decode(Int?.self, forKey: .listedRevision)
-            }
-        }
-        return try decodeSharing(Acknowledgement.self, from: data).listedRevision
+    func setTemplateListing(eventID: UUID, templateID: UUID, revision: Int?, creatorName: String?) async throws -> BlueprintTemplateListingResult {
+        let data = try await postSharing(.listing(
+            eventID: eventID, templateID: templateID, revision: revision, creatorName: creatorName
+        ))
+        return try decodeSharing(BlueprintTemplateListingResult.self, from: data)
     }
 
     func shareURL(token: String) -> URL? {

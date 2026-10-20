@@ -3,13 +3,13 @@ import SwiftUI
 @MainActor
 private enum WorkspaceBrowserSheet: Identifiable {
     case addWorkspace
-    case blueprintCreateShare(PlanningWorkspace, publishesToSearch: Bool)
+    case blueprintCreateShare(PlanningWorkspace, createsShareLink: Bool)
     case blueprintLinks(BlueprintLinkManagementRequest)
 
     var id: String {
         switch self {
         case .addWorkspace: "add-workspace"
-        case .blueprintCreateShare(let workspace, let publish): "blueprint-create-share-\(workspace.mainEventID.uuidString)-\(publish)"
+        case .blueprintCreateShare(let workspace, let createsShareLink): "blueprint-create-share-\(workspace.mainEventID.uuidString)-\(createsShareLink)"
         case .blueprintLinks(let request): request.id.uuidString
         }
     }
@@ -62,31 +62,22 @@ struct WorkspaceBrowserView: View {
                             .contextMenu {
                                 if sharingURL(for: workspace) != nil {
                                     Button(BlueprintCopy.saveBlueprint, systemImage: "square.and.arrow.down") {
-                                        activeSheet = .blueprintCreateShare(workspace, publishesToSearch: false)
+                                        activeSheet = .blueprintCreateShare(workspace, createsShareLink: false)
                                     }
                                     Button {
-                                        presentBlueprintCreateShare(for: workspace)
+                                        presentBlueprintLinks(for: workspace, mode: .share)
                                     } label: {
                                         Label(BlueprintCopy.shareTemplate, systemImage: "square.and.arrow.up")
-                                    }
-
-                                    Button {
-                                        presentBlueprintLinks(for: workspace, mode: .manage)
-                                    } label: {
-                                        Label(BlueprintCopy.manageTemplateLinks, systemImage: "link")
                                     }
                                 }
                             }
                             .accessibilityActions {
                                 if sharingURL(for: workspace) != nil {
                                     Button(BlueprintCopy.saveBlueprint) {
-                                        activeSheet = .blueprintCreateShare(workspace, publishesToSearch: false)
+                                        activeSheet = .blueprintCreateShare(workspace, createsShareLink: false)
                                     }
                                     Button(BlueprintCopy.shareTemplate) {
-                                        presentBlueprintCreateShare(for: workspace)
-                                    }
-                                    Button(BlueprintCopy.manageTemplateLinks) {
-                                        presentBlueprintLinks(for: workspace, mode: .manage)
+                                        presentBlueprintLinks(for: workspace, mode: .share)
                                     }
                                 }
                             }
@@ -139,9 +130,15 @@ struct WorkspaceBrowserView: View {
                 }
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-            case .blueprintCreateShare(let workspace, let publish):
+            case .blueprintCreateShare(let workspace, let createsShareLink):
                 NavigationStack {
-                    BlueprintCreateShareView(eventID: workspace.mainEventID, workspace: workspace, publishesToSearch: publish)
+                    BlueprintCreateShareView(
+                        eventID: workspace.mainEventID,
+                        workspace: workspace,
+                        publishesToSearch: false,
+                        createsShareLink: createsShareLink,
+                        startsWithReview: true
+                    )
                 }
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -154,7 +151,7 @@ struct WorkspaceBrowserView: View {
                         captureURL: request.captureURL
                     )
                 }
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
         }
@@ -167,14 +164,9 @@ struct WorkspaceBrowserView: View {
         )
     }
 
-    private func presentBlueprintCreateShare(for workspace: PlanningWorkspace) {
-        guard sharingURL(for: workspace) != nil else { return }
-        activeSheet = .blueprintCreateShare(workspace, publishesToSearch: true)
-    }
-
     private func presentBlueprintLinks(for workspace: PlanningWorkspace, mode: BlueprintLinkManagementMode) {
         // The card always targets its root event, regardless of the selected child.
-        guard mode == .manage, let captureURL = sharingURL(for: workspace) else { return }
+        guard let captureURL = sharingURL(for: workspace) else { return }
         let request = BlueprintLinkManagementRequest(
             eventID: workspace.mainEventID,
             mode: mode,

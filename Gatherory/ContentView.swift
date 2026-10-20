@@ -46,7 +46,10 @@ struct AppRootView: View {
             }
             Tab(ExploreCopy.title, systemImage: "magnifyingglass", value: .explore) {
                 NavigationStack {
-                    BlueprintExploreView(ownerID: currentUserAccount?.id ?? "")
+                    BlueprintExploreView(
+                        ownerID: currentUserAccount?.id ?? "",
+                        isActive: selectedTab == .explore
+                    )
                 }
                 .id(currentUserAccount?.id)
             }

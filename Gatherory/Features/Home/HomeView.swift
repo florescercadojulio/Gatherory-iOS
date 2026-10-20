@@ -219,7 +219,12 @@ struct HomeView: View {
         }
         .sheet(isPresented: $isSavingBlueprint) {
             NavigationStack {
-                BlueprintCreateShareView(eventID: workspace.mainEventID, workspace: workspace, publishesToSearch: false)
+                BlueprintCreateShareView(
+                    eventID: workspace.mainEventID,
+                    workspace: workspace,
+                    createsShareLink: false,
+                    startsWithReview: true
+                )
             }
             .presentationDetents([.large])
         }

@@ -172,6 +172,7 @@ protocol BlueprintCreateShareTransport: BlueprintLinkManagementTransport {
 @MainActor @Observable
 final class BlueprintCreateShareStore {
     let publishesToSearch: Bool
+    let createsShareLink: Bool
     let eventID: UUID
     let accountID: String
     private(set) var source: BlueprintCaptureSourceResponse?
@@ -184,27 +185,37 @@ final class BlueprintCreateShareStore {
     private(set) var created: BlueprintNativeCreationResult?
     private(set) var createdURL: URL?
     private(set) var createdLinks: [BlueprintManagedShareLink] = []
+    private(set) var listedRevision: Int?
+    private(set) var publicCreatorName: String?
     private(set) var requiresLinkRefresh = false
     private(set) var sourceReloadRequired = false
     private(set) var isLoading = false
     private(set) var isReviewing = false
     private(set) var isCreating = false
+    private(set) var credentialSaveFailed = false
     private(set) var errorMessage: String?
 
     @ObservationIgnored private let transport: any BlueprintCreateShareTransport
+    @ObservationIgnored private let credentialStore: (any BlueprintShareLinkCredentialStore)?
     @ObservationIgnored private let currentAccountID: @MainActor () -> String?
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
     @ObservationIgnored private var pendingCreate: BlueprintNativeCreateInput?
     @ObservationIgnored private var createdLinkID: UUID?
+    @ObservationIgnored private var createdCredentialScope: BlueprintShareLinkCredentialScope?
+    @ObservationIgnored private var credentialPendingSave: BlueprintShareLinkCredential?
 
     init(eventID: UUID, accountID: String, transport: any BlueprintCreateShareTransport,
-         publishesToSearch: Bool = true,
+         publishesToSearch: Bool = false,
+         createsShareLink: Bool = true,
+         credentialStore: (any BlueprintShareLinkCredentialStore)? = nil,
          currentAccountID: @escaping @MainActor () -> String?) {
         self.eventID = eventID
         self.accountID = accountID
         self.transport = transport
         self.publishesToSearch = publishesToSearch
+        self.createsShareLink = createsShareLink
+        self.credentialStore = credentialStore
         self.currentAccountID = currentAccountID
     }
 
@@ -217,6 +228,10 @@ final class BlueprintCreateShareStore {
     }
     var canCreate: Bool {
         isCurrent && !isBusy && reviewed != nil && !requiresLinkRefresh && createdURL == nil
+    }
+    var canReplaceShareLink: Bool {
+        createsShareLink && isCurrent && !isBusy && !requiresLinkRefresh &&
+            created != nil && reviewed != nil && createdURL != nil
     }
     var eligibleIdeas: [BlueprintCaptureSource.Idea] {
         source?.source.ideas.filter { isEligible($0.eventId) } ?? []
@@ -305,7 +320,18 @@ final class BlueprintCreateShareStore {
     }
 
     func createAndShare() async {
-        guard canCreate, let reviewed else { return }
+        guard canCreate else { return }
+        await performCreateAndShare(replacingCurrentLink: false)
+    }
+
+    func replaceShareLink() async {
+        guard canReplaceShareLink else { return }
+        await performCreateAndShare(replacingCurrentLink: true)
+    }
+
+    private func performCreateAndShare(replacingCurrentLink: Bool) async {
+        guard isCurrent, !isBusy, !requiresLinkRefresh, let reviewed,
+              replacingCurrentLink ? canReplaceShareLink : canCreate else { return }
         let current = generation
         isCreating = true
         defer { if current == generation { isCreating = false } }
@@ -319,6 +345,7 @@ final class BlueprintCreateShareStore {
                 guard accepts(current) else { return }
                 guard response.revision > 0 else { throw CloudSyncFailure.invalidResponse }
                 created = response
+                listedRevision = publishesToSearch ? response.revision : nil
             } catch {
                 fail(error, generation: current, message: BlueprintCopy.templateCreationUncertain)
                 return
@@ -337,7 +364,7 @@ final class BlueprintCreateShareStore {
                 return
             }
         }
-        guard publishesToSearch else { errorMessage = nil; return }
+        guard createsShareLink else { errorMessage = nil; return }
         do {
             let link = try await transport.createLink(eventID: eventID, templateID: created.templateId, revision: created.revision)
             guard accepts(current) else { return }
@@ -345,15 +372,85 @@ final class BlueprintCreateShareStore {
                   link.link.revision == created.revision, let url = transport.shareURL(token: link.token) else {
                 throw CloudSyncFailure.invalidResponse
             }
+            // Keep any current URL and cached credential until the server returns
+            // a valid replacement. An uncertain response can then continue to
+            // show the old link while requiring an explicit links refresh.
             createdLinkID = link.link.id
             createdURL = url
+            requiresLinkRefresh = false
+            let credential = BlueprintShareLinkCredential(
+                linkID: link.link.id,
+                revision: link.link.revision,
+                token: link.token
+            )
+            createdCredentialScope = BlueprintShareLinkCredentialScope.make(
+                accountID: accountID,
+                eventID: eventID,
+                templateID: created.templateId,
+                shareURL: url
+            )
             createdLinks.removeAll { $0.id == link.link.id }
             createdLinks.insert(link.link, at: 0)
             errorMessage = nil
+            credentialSaveFailed = false
+            credentialPendingSave = credentialStore == nil ? nil : credential
+            if let credentialStore, let scope = createdCredentialScope {
+                do {
+                    try credentialStore.save(credential, for: scope)
+                    credentialPendingSave = nil
+                } catch {
+                    credentialSaveFailed = true
+                    errorMessage = BlueprintCopy.shareLinkSaveFailed
+                }
+            } else if credentialStore != nil {
+                credentialSaveFailed = true
+                errorMessage = BlueprintCopy.shareLinkSaveFailed
+            }
         } catch {
             guard accepts(current) else { return }
             requiresLinkRefresh = true
             fail(error, generation: current, message: BlueprintCopy.templateCreationLinkUncertain)
+        }
+    }
+
+    func setDiscoverable(_ enabled: Bool, creatorName: String? = nil) async {
+        guard createsShareLink, isCurrent, !isBusy, !requiresLinkRefresh, let created else { return }
+        let requestedRevision = enabled ? created.revision : nil
+        guard listedRevision != requestedRevision else { return }
+        let requestedCreatorName: String?
+        if enabled {
+            if let normalized = publicCreatorName.flatMap(BlueprintCreatorNameValidation.normalized) {
+                requestedCreatorName = normalized
+            } else if let normalized = creatorName.flatMap(BlueprintCreatorNameValidation.normalized) {
+                requestedCreatorName = normalized
+            } else {
+                errorMessage = BlueprintCopy.creatorNameInvalid
+                return
+            }
+        } else {
+            requestedCreatorName = nil
+        }
+
+        let current = generation
+        isCreating = true
+        defer { if current == generation { isCreating = false } }
+        do {
+            let acknowledgement = try await transport.setTemplateListing(
+                eventID: eventID, templateID: created.templateId, revision: requestedRevision,
+                creatorName: requestedCreatorName
+            )
+            guard accepts(current), self.created?.templateId == created.templateId,
+                  self.created?.revision == created.revision else { return }
+            guard acknowledgement.listedRevision == requestedRevision,
+                  !enabled || acknowledgement.creatorName.flatMap(BlueprintCreatorNameValidation.normalized) == requestedCreatorName else {
+                errorMessage = BlueprintLinkManagementMessage.listingFailed
+                return
+            }
+            listedRevision = acknowledgement.listedRevision
+            if enabled { publicCreatorName = requestedCreatorName }
+            errorMessage = credentialSaveFailed ? BlueprintCopy.shareLinkSaveFailed : nil
+        } catch {
+            fail(error, generation: current, message: BlueprintLinkManagementMessage.listingFailed)
         }
     }
 
@@ -368,11 +465,53 @@ final class BlueprintCreateShareStore {
             createdLinks = links
             if let createdLinkID, !links.contains(where: { $0.id == createdLinkID && $0.revokedAt == nil }) {
                 createdURL = nil
+                credentialPendingSave = nil
+                requiresLinkRefresh = false
+                let removalSucceeded = removeSavedCredential(linkID: createdLinkID)
+                if !removalSucceeded {
+                    errorMessage = BlueprintCopy.shareLinkStorageFailed
+                    return
+                }
                 self.createdLinkID = nil
             }
             requiresLinkRefresh = false
-            errorMessage = nil
+            errorMessage = credentialSaveFailed && createdURL != nil
+                ? BlueprintCopy.shareLinkSaveFailed
+                : nil
         } catch { fail(error, generation: current, message: BlueprintCopy.templateCreationLinkUncertain) }
+    }
+
+    /// Retries only the local credential write for the already acknowledged link.
+    /// It never calls the sharing API or creates another server link.
+    func retrySavingLink() {
+        guard isCurrent, !isBusy,
+              let credentialStore,
+              let credential = credentialPendingSave,
+              let scope = createdCredentialScope,
+              let createdURL,
+              let createdLinkID,
+              let created,
+              credential.isValid,
+              credential.linkID == createdLinkID,
+              credential.revision == created.revision,
+              transport.shareURL(token: credential.token) == createdURL else { return }
+
+        isCreating = true
+        defer { isCreating = false }
+        do {
+            try credentialStore.save(credential, for: scope)
+            guard isCurrent,
+                  self.createdURL == createdURL,
+                  self.createdLinkID == credential.linkID,
+                  self.created?.templateId == created.templateId else { return }
+            credentialPendingSave = nil
+            credentialSaveFailed = false
+            if errorMessage == BlueprintCopy.shareLinkSaveFailed { errorMessage = nil }
+        } catch {
+            guard isCurrent else { return }
+            credentialSaveFailed = true
+            errorMessage = BlueprintCopy.shareLinkSaveFailed
+        }
     }
 
     func revokeCreatedLink(_ linkID: UUID) async {
@@ -385,7 +524,16 @@ final class BlueprintCreateShareStore {
             try await transport.revokeLink(eventID: eventID, templateID: created.templateId, linkID: linkID)
             guard accepts(current), let index = createdLinks.firstIndex(where: { $0.id == linkID }) else { return }
             createdLinks[index].revokedAt = Date()
-            if createdLinkID == linkID { createdLinkID = nil; createdURL = nil }
+            if createdLinkID == linkID {
+                createdURL = nil
+                credentialPendingSave = nil
+                let removalSucceeded = removeSavedCredential(linkID: linkID)
+                if !removalSucceeded {
+                    errorMessage = BlueprintCopy.shareLinkStorageFailed
+                    return
+                }
+                createdLinkID = nil
+            }
             errorMessage = nil
         } catch { fail(error, generation: current, message: BlueprintCopy.templateCreationLinkUncertain) }
     }
@@ -402,6 +550,8 @@ final class BlueprintCreateShareStore {
         reviewed = nil
         pendingCreate = nil
         created = nil
+        listedRevision = nil
+        publicCreatorName = nil
         createdURL = nil
         createdLinkID = nil
         createdLinks = []
@@ -410,6 +560,9 @@ final class BlueprintCreateShareStore {
         isLoading = false
         isReviewing = false
         isCreating = false
+        credentialSaveFailed = false
+        createdCredentialScope = nil
+        credentialPendingSave = nil
         errorMessage = nil
     }
 
@@ -434,10 +587,26 @@ final class BlueprintCreateShareStore {
     }
     private func fail(_ error: Error, generation value: UUID, message: String) {
         guard accepts(value) else { return }
-        if case CloudSyncFailure.forbidden = error {
-            invalidate()
-            errorMessage = BlueprintCopy.templateCreationPermissionLost
-        } else if case CloudSyncFailure.server("BLUEPRINT_CAPTURE_SOURCE_CHANGED") = error {
+        if let failure = error as? CloudSyncFailure {
+            switch failure {
+            case .invalidSession:
+                invalidate()
+                errorMessage = BlueprintCopy.templateLinkSignIn
+                return
+            case .forbidden, .server("BLUEPRINT_NOT_FOUND"), .server("HTTP_404"):
+                let credentialRemovalFailed = createdLinkID.map { !removeSavedCredential(linkID: $0) } ?? false
+                invalidate()
+                if credentialRemovalFailed {
+                    errorMessage = BlueprintCopy.shareLinkStorageFailed
+                } else {
+                    errorMessage = BlueprintCopy.templateCreationPermissionLost
+                }
+                return
+            default:
+                break
+            }
+        }
+        if case CloudSyncFailure.server("BLUEPRINT_CAPTURE_SOURCE_CHANGED") = error {
             // A definitive conflict rolls back creation. A fresh source review
             // is required; this differs from an uncertain network response.
             pendingCreate = nil
@@ -446,6 +615,25 @@ final class BlueprintCreateShareStore {
             errorMessage = BlueprintCopy.templateCreationSourceChanged
         } else {
             errorMessage = message
+        }
+    }
+
+    /// Removes only the cached credential for the expected server link. A failed
+    /// Keychain removal never restores or retains the revoked live URL.
+    private func removeSavedCredential(linkID: UUID) -> Bool {
+        guard let credentialStore, let scope = createdCredentialScope else { return true }
+        do {
+            guard let saved = try credentialStore.load(scope), saved.linkID == linkID else {
+                credentialSaveFailed = false
+                return true
+            }
+            try credentialStore.remove(scope)
+            credentialSaveFailed = false
+            return true
+        } catch {
+            credentialSaveFailed = false
+            errorMessage = BlueprintCopy.shareLinkStorageFailed
+            return false
         }
     }
 }

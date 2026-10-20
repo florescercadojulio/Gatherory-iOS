@@ -30,12 +30,12 @@ struct BlueprintWorkspaceEventDetail: View {
                             Text(artwork.category.title)
                                 .font(.subheadline.weight(.medium))
                         } timingLocation: {
-                            if let proposal = event.scheduleProposal {
-                                Text(String.localizedStringWithFormat(
-                                    BlueprintCopy.scheduleProposalExplanation,
-                                    proposal.localTime,
-                                    Int64(proposal.dayOffset)
-                                ))
+                            if let proposal = event.scheduleProposal,
+                               let schedule = BlueprintReviewPresentation.schedule(
+                                    dayOffset: proposal.dayOffset,
+                                    localTime: proposal.localTime
+                               ) {
+                                Text(String.localizedStringWithFormat(BlueprintCopy.previewSuggestedScheduleFormat, schedule))
                                 .font(.headline)
                                 .fixedSize(horizontal: false, vertical: true)
                             }

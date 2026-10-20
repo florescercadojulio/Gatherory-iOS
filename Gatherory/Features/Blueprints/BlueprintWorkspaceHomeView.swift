@@ -138,28 +138,27 @@ struct BlueprintWorkspaceHomeView: View {
                 } people: {
                     EmptyView()
                 } metadata: {
-                    if let proposal = event.scheduleProposal {
-                        Text(String.localizedStringWithFormat(
-                            BlueprintCopy.scheduleProposalExplanation, proposal.localTime, Int64(proposal.dayOffset)
-                        ))
+                    if id == .main,
+                       let creatorName = content.creatorName,
+                       !creatorName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(BlueprintCopy.creatorByline(creatorName))
+                            .font(.subheadline.weight(.medium))
+                            .multilineTextAlignment(.center)
+                    }
+                    if let proposal = event.scheduleProposal,
+                       let schedule = BlueprintReviewPresentation.schedule(
+                            dayOffset: proposal.dayOffset,
+                            localTime: proposal.localTime
+                       ) {
+                        Text(String.localizedStringWithFormat(BlueprintCopy.previewSuggestedScheduleFormat, schedule))
                         .font(.headline)
                         .multilineTextAlignment(.center)
-                    } else {
-                        Text(BlueprintCopy.previewDatesExplanation)
-                            .font(.subheadline)
-                            .multilineTextAlignment(.center)
                     }
                     if let summary = event.summary, !summary.isEmpty {
                         Text(summary).font(.subheadline).lineLimit(3)
                             .multilineTextAlignment(.center)
                     }
-                } badge: {
-                    Label(id == .main ? BlueprintCopy.mainEvent : BlueprintCopy.captureChildren,
-                          systemImage: id == .main ? "calendar" : artwork.symbol)
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(.ultraThinMaterial, in: Capsule())
-                }
+                } badge: { EmptyView() }
                 .frame(width: LayoutDimensions.nonnegative(proxy.size.width), height: heroHeight)
                 .clipped()
                 .matchedTransitionSource(id: id, in: eventTransition)

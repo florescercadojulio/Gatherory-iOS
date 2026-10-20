@@ -55,6 +55,10 @@ struct BlueprintLibraryView: View {
     @State private var personalLoadFailed = false
     @State private var personalCacheFailed = false
     @State private var publishCandidate: BlueprintPersonalRecord?
+    @State private var unlistCandidate: BlueprintPersonalRecord?
+    @State private var personalVisibilityMutationTokens: [UUID: UUID] = [:]
+    @State private var visibilityGeneration = UUID()
+    @State private var creatorNameCandidate: BlueprintPersonalRecord?
     @State private var actionFailed = false
 
     private var visibleInstallations: [BlueprintUsedTemplate] {
@@ -102,28 +106,14 @@ struct BlueprintLibraryView: View {
                             draftsContent
                         }
 
-                        if recovery.loadFailed || model.cacheFailed {
+                        if recovery.loadFailed || model.cacheFailed || personalCacheFailed {
                             VStack(alignment: .leading, spacing: 8) {
                                 Label(BlueprintCopy.libraryLocalReadFailed, systemImage: "exclamationmark.triangle")
                                 Button(AppCopy.Common.retry) { Task { await reload() } }
                             }
                             .font(.footnote).librarySurface()
                         }
-                        if personalCacheFailed {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label(BlueprintCopy.libraryLocalReadFailed, systemImage: "exclamationmark.triangle")
-                                Button(AppCopy.Common.retry) { Task { await reload() } }
-                            }
-                            .font(.footnote).librarySurface()
-                        }
-                        if selectedCollection == .installedTemplates && model.refreshFailed {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label(BlueprintCopy.libraryRefreshFailed, systemImage: "wifi.exclamationmark")
-                                Button(AppCopy.Common.retry) { Task { await reload() } }
-                            }
-                            .font(.footnote).librarySurface()
-                        }
-                        if selectedCollection == .installedTemplates && personalLoadFailed {
+                        if selectedCollection == .installedTemplates && (model.refreshFailed || personalLoadFailed) {
                             VStack(alignment: .leading, spacing: 8) {
                                 Label(BlueprintCopy.libraryRefreshFailed, systemImage: "wifi.exclamationmark")
                                 Button(AppCopy.Common.retry) { Task { await reload() } }
@@ -145,21 +135,42 @@ struct BlueprintLibraryView: View {
             }
         }
         .background(AppTheme.ColorToken.background)
-        .confirmationDialog(publishCandidate == nil ? "Delete Blueprint?" : BlueprintCopy.confirmListInSearchTitle,
+        .confirmationDialog(
+            publishCandidate != nil ? BlueprintCopy.confirmListInSearchTitle
+                : unlistCandidate != nil ? BlueprintCopy.confirmRemoveFromSearchTitle : "Delete Blueprint?",
                             isPresented: Binding(
-            get: { deletion != nil || draftDeletion != nil || personalDeletion != nil || publishCandidate != nil },
-            set: { if !$0 { deletion = nil; draftDeletion = nil; personalDeletion = nil; publishCandidate = nil } }
+            get: { deletion != nil || draftDeletion != nil || personalDeletion != nil || publishCandidate != nil || unlistCandidate != nil },
+            set: { if !$0 { deletion = nil; draftDeletion = nil; personalDeletion = nil; publishCandidate = nil; unlistCandidate = nil } }
         ), titleVisibility: .visible) {
             if let publishCandidate {
                 Button(BlueprintCopy.publishToSearch) { Task { await publishToSearch(publishCandidate) } }
+                    .disabled(personalLoading || personalLoadFailed || personalVisibilityMutationTokens[publishCandidate.id] != nil)
+            } else if let unlistCandidate {
+                Button(BlueprintCopy.removeFromSearch, role: .destructive) {
+                    Task { await removeFromSearch(unlistCandidate) }
+                }
+                .disabled(personalVisibilityMutationTokens[unlistCandidate.id] != nil)
             } else {
                 Button("Delete Blueprint", role: .destructive) { deleteSelectedBlueprint() }
             }
-            Button(AppCopy.Common.cancel, role: .cancel) { deletion = nil; draftDeletion = nil; personalDeletion = nil; publishCandidate = nil }
+            Button(AppCopy.Common.cancel, role: .cancel) {
+                deletion = nil
+                draftDeletion = nil
+                personalDeletion = nil
+                publishCandidate = nil
+                unlistCandidate = nil
+            }
         } message: {
             if publishCandidate != nil { Text(BlueprintCopy.confirmListInSearchMessage) }
+            else if unlistCandidate != nil { Text(BlueprintCopy.confirmRemoveFromSearchMessage) }
             else if personalDeletion != nil { Text(BlueprintCopy.deletePersonalBlueprintMessage) }
             else { Text("This removes the blueprint from your library. Created workspaces will not be deleted.") }
+        }
+        .sheet(item: $creatorNameCandidate) { record in
+            BlueprintCreatorNameSheet(
+                onPublish: { name in Task { await publishToSearch(record, creatorName: name) } },
+                onCancel: { creatorNameCandidate = nil }
+            )
         }
         .alert("Unable to update blueprint", isPresented: $actionFailed) {
             Button(AppCopy.Common.cancel, role: .cancel) {}
@@ -199,6 +210,11 @@ struct BlueprintLibraryView: View {
             if phase == .active && isActive { Task { await reload() } }
         }
         .onChange(of: account?.id) { _, activeID in
+            visibilityGeneration = UUID()
+            personalVisibilityMutationTokens.removeAll()
+            creatorNameCandidate = nil
+            publishCandidate = nil
+            unlistCandidate = nil
             if activeID != ownerID {
                 model.invalidate()
                 personalRecords = []
@@ -312,8 +328,7 @@ struct BlueprintLibraryView: View {
                             BlueprintLibraryTile(
                                 category: category,
                                 title: installation.templateName,
-                                subtitle: BlueprintCopy.libraryUsedFor(installation.eventName),
-                                detail: BlueprintCopy.libraryVersion(installation.revision)
+                                subtitle: BlueprintCopy.libraryUsedFor(installation.eventName)
                             )
                         }
                         .buttonStyle(.plain)
@@ -336,7 +351,9 @@ struct BlueprintLibraryView: View {
                                 ),
                                 title: record.catalogEntry.definition.blueprint.name,
                                 subtitle: String(localized: "Your Blueprint"),
-                                detail: "v\(record.draftVersion)"
+                                creatorName: record.creatorName ?? record.catalogEntry.creator?.displayName,
+                                activeShareLinkCount: personalLoading || personalLoadFailed ? nil : record.activeShareLinkCount,
+                                listedRevision: personalLoading || personalLoadFailed ? nil : record.listedRevision
                             )
                         }
                         .buttonStyle(.plain)
@@ -350,8 +367,18 @@ struct BlueprintLibraryView: View {
                             }
                             if record.listedRevision == nil {
                                 Button(BlueprintCopy.publishToSearch, systemImage: "globe") {
-                                    publishCandidate = record
+                                    if record.creatorName.flatMap(BlueprintCreatorNameValidation.normalized) == nil {
+                                        creatorNameCandidate = record
+                                    } else {
+                                        publishCandidate = record
+                                    }
                                 }
+                                .disabled(personalLoading || personalLoadFailed || personalVisibilityMutationTokens[record.id] != nil)
+                            } else {
+                                Button(BlueprintCopy.removeFromSearch, systemImage: "globe.slash", role: .destructive) {
+                                    unlistCandidate = record
+                                }
+                                .disabled(personalLoading || personalLoadFailed || personalVisibilityMutationTokens[record.id] != nil)
                             }
                         }
                         .accessibilityHint(BlueprintCopy.previewTitle)
@@ -447,22 +474,52 @@ struct BlueprintLibraryView: View {
     }
 
     @MainActor
-    private func publishToSearch(_ record: BlueprintPersonalRecord) async {
+    private func publishToSearch(_ record: BlueprintPersonalRecord, creatorName: String? = nil) async {
+        let expectedCreatorName = record.creatorName.flatMap(BlueprintCreatorNameValidation.normalized)
+            ?? creatorName.flatMap(BlueprintCreatorNameValidation.normalized)
         publishCandidate = nil
-        guard account?.id == ownerID,
+        creatorNameCandidate = nil
+        guard account?.id == ownerID, !personalLoading, !personalLoadFailed,
+              personalVisibilityMutationTokens[record.id] == nil,
               record.listedRevision == nil,
-              personalRecords.contains(where: { $0.id == record.id }),
+              personalRecords.contains(where: { isCurrentPersonalRecord($0, matching: record) }),
+              let expectedCreatorName,
               let baseURL = AppRuntimeConfiguration.authenticationBaseURL else {
             if account?.id == ownerID { actionFailed = true }
             return
+        }
+        let generation = visibilityGeneration
+        let expectedVersion = record.draftVersion
+        let expectedPublishedRevision = record.publishedRevision
+        let expectedCatalogKey = record.catalogEntry.catalogKey
+        let mutationToken = UUID()
+        personalVisibilityMutationTokens[record.id] = mutationToken
+        defer {
+            if personalVisibilityMutationTokens[record.id] == mutationToken {
+                personalVisibilityMutationTokens.removeValue(forKey: record.id)
+            }
         }
         do {
             let transport = PostgresSyncTransport(baseURL: baseURL)
             let updated = try await transport.publishPersonalBlueprint(
                 id: record.id,
-                expectedVersion: record.draftVersion
+                expectedVersion: expectedVersion,
+                creatorName: expectedCreatorName
             )
-            guard account?.id == ownerID else { return }
+            guard account?.id == ownerID, visibilityGeneration == generation,
+                  !personalLoading, !personalLoadFailed,
+                  BlueprintPersonalPublishAcknowledgement.isValid(
+                    updated,
+                    expectedID: record.id,
+                    expectedCatalogKey: expectedCatalogKey,
+                    expectedDraftVersion: expectedVersion,
+                    previousPublishedRevision: expectedPublishedRevision,
+                    expectedCreatorName: expectedCreatorName
+                  ),
+                  personalRecords.contains(where: { isCurrentPersonalRecord($0, matching: record) }) else {
+                if account?.id == ownerID, visibilityGeneration == generation { actionFailed = true }
+                return
+            }
             personalRecords = personalRecords.map { $0.id == updated.id ? updated : $0 }
             do {
                 try BlueprintPersonalLibraryStore().upsert(updated, ownerID: ownerID)
@@ -471,7 +528,73 @@ struct BlueprintLibraryView: View {
                 personalCacheFailed = true
                 actionFailed = true
             }
-        } catch { if account?.id == ownerID { actionFailed = true } }
+        } catch {
+            if account?.id == ownerID, visibilityGeneration == generation { actionFailed = true }
+        }
+    }
+
+    @MainActor
+    private func removeFromSearch(_ record: BlueprintPersonalRecord) async {
+        unlistCandidate = nil
+        guard account?.id == ownerID, !personalLoading, !personalLoadFailed,
+              personalVisibilityMutationTokens[record.id] == nil,
+              let expectedListedRevision = record.listedRevision,
+              expectedListedRevision > 0,
+              let baseURL = AppRuntimeConfiguration.authenticationBaseURL,
+              personalRecords.contains(where: { isCurrentPersonalRecord($0, matching: record) }) else { return }
+
+        let generation = visibilityGeneration
+        let expectedVersion = record.draftVersion
+        let expectedCatalogKey = record.catalogEntry.catalogKey
+        let expectedPublishedRevision = record.publishedRevision
+        let expectedCreatorName = record.creatorName
+        let mutationToken = UUID()
+        personalVisibilityMutationTokens[record.id] = mutationToken
+        defer {
+            if personalVisibilityMutationTokens[record.id] == mutationToken {
+                personalVisibilityMutationTokens.removeValue(forKey: record.id)
+            }
+        }
+
+        do {
+            let transport = PostgresSyncTransport(baseURL: baseURL)
+            let updated = try await transport.unlistPersonalBlueprint(
+                id: record.id,
+                expectedVersion: expectedVersion,
+                expectedListedRevision: expectedListedRevision
+            )
+            guard account?.id == ownerID, visibilityGeneration == generation,
+                  !personalLoading, !personalLoadFailed,
+                  updated.id == record.id,
+                  updated.catalogEntry.catalogKey == expectedCatalogKey,
+                  updated.draftVersion == expectedVersion,
+                  updated.publishedRevision == expectedPublishedRevision,
+                  updated.creatorName == expectedCreatorName,
+                  updated.listedRevision == nil,
+                  personalRecords.contains(where: { isCurrentPersonalRecord($0, matching: record) }) else {
+                if account?.id == ownerID, visibilityGeneration == generation { actionFailed = true }
+                return
+            }
+            personalRecords = personalRecords.map { $0.id == updated.id ? updated : $0 }
+            do {
+                try BlueprintPersonalLibraryStore().upsert(updated, ownerID: ownerID)
+                personalCacheFailed = false
+            } catch {
+                personalCacheFailed = true
+                actionFailed = true
+            }
+        } catch {
+            if account?.id == ownerID, visibilityGeneration == generation { actionFailed = true }
+        }
+    }
+
+    private func isCurrentPersonalRecord(_ current: BlueprintPersonalRecord, matching expected: BlueprintPersonalRecord) -> Bool {
+        current.id == expected.id
+            && current.catalogEntry.catalogKey == expected.catalogEntry.catalogKey
+            && current.draftVersion == expected.draftVersion
+            && current.publishedRevision == expected.publishedRevision
+            && current.listedRevision == expected.listedRevision
+            && current.creatorName == expected.creatorName
     }
 
     private func createWorkspace(from record: BlueprintPersonalRecord) {
@@ -559,7 +682,7 @@ struct BlueprintLibraryView: View {
     private func title(for collection: Collection) -> String {
         switch collection {
         case .installedTemplates:
-            String(localized: "blueprint.library.installedTemplates", defaultValue: "Installed Templates")
+            BlueprintCopy.libraryTitle
         case .inProgress:
             BlueprintCopy.libraryDrafts
         }
@@ -672,6 +795,9 @@ private struct BlueprintLibraryTile: View {
     let title: String
     let subtitle: String
     var detail: String? = nil
+    var creatorName: String? = nil
+    var activeShareLinkCount: Int? = nil
+    var listedRevision: Int? = nil
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -694,6 +820,15 @@ private struct BlueprintLibraryTile: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.headline).lineLimit(3)
                 Text(subtitle).font(.subheadline.weight(.medium)).lineLimit(2)
+                if let creatorName, !creatorName.isEmpty {
+                    Text(BlueprintCopy.creatorByline(creatorName)).font(.caption).lineLimit(1)
+                }
+                if activeShareLinkCount != nil || listedRevision != nil {
+                    BlueprintSharingStatusBadges(
+                        activeShareLinkCount: activeShareLinkCount,
+                        listedRevision: listedRevision
+                    )
+                }
                 if let detail { Text(detail).font(.caption).lineLimit(2) }
             }
             .foregroundStyle(.white)

@@ -21,6 +21,15 @@ struct BlueprintLinkManagementTransportTests {
         #expect(templates == [BlueprintManagedTemplate(id: templateID, title: "Wedding", publishedRevision: 3, retired: false, listedRevision: 3)])
         #expect(lastRequest(action: "templates", expected: ["action", "eventId"], eventID: eventID))
 
+        BlueprintSharingHTTPProtocol.configure(body: try json(["templates": [[
+            "id": templateID.uuidString, "title": "Wedding", "publishedRevision": 3,
+            "retired": false, "listedRevision": 3, "creatorName": "Garden Hosts",
+            "activeShareLinkCount": 2
+        ]]]))
+        let attributedTemplates = try await transport.templates(eventID: eventID)
+        #expect(attributedTemplates.first?.creatorName == "Garden Hosts")
+        #expect(attributedTemplates.first?.activeShareLinkCount == 2)
+
         BlueprintSharingHTTPProtocol.configure(body: try json(["links": [[
             "id": linkID.uuidString, "revision": 3,
             "createdAt": "2026-10-15T18:30:12.125Z", "revokedAt": NSNull()
@@ -52,6 +61,17 @@ struct BlueprintLinkManagementTransportTests {
         #expect(Set(listingBody?.keys.map { $0 } ?? []) == ["action", "eventId", "templateId", "revision"])
         #expect(listingBody?["action"] as? String == "listing")
         #expect(listingBody?["revision"] as? Int == 4)
+
+        BlueprintSharingHTTPProtocol.configure(body: try json(["listedRevision": 5, "creatorName": "Garden Hosts"]))
+        let attributedListing = try await transport.setTemplateListing(
+            eventID: eventID,
+            templateID: templateID,
+            revision: 5,
+            creatorName: "Garden Hosts"
+        )
+        #expect(attributedListing == BlueprintTemplateListingResult(listedRevision: 5, creatorName: "Garden Hosts"))
+        listingBody = try JSONSerialization.jsonObject(with: BlueprintSharingHTTPProtocol.lastBody) as? [String: Any]
+        #expect(listingBody?["creatorName"] as? String == "Garden Hosts")
 
         BlueprintSharingHTTPProtocol.configure(body: try json(["listedRevision": NSNull()]))
         let withdrawnRevision = try await transport.setTemplateListing(eventID: eventID, templateID: templateID, revision: nil)

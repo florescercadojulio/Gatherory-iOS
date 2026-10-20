@@ -27,7 +27,7 @@ struct BlueprintLibraryEmptyState: View {
     var title: String {
         switch collection {
         case .installedTemplates:
-            String(localized: "blueprint.library.empty.installedTitle", defaultValue: "No Installed Templates")
+            String(localized: "blueprint.library.empty.installedTitle", defaultValue: "No Blueprints Yet")
         case .inProgress:
             String(localized: "blueprint.library.empty.draftsTitle", defaultValue: "No Drafts Yet")
         }
@@ -36,18 +36,18 @@ struct BlueprintLibraryEmptyState: View {
     var message: String {
         switch collection {
         case .installedTemplates:
-            String(localized: "blueprint.library.empty.installedMessage", defaultValue: "Install a template to start your own event plan. Your template history will be here.")
+            String(localized: "blueprint.library.empty.installedMessage", defaultValue: "Save a blueprint or use one from Explore. You’ll find it here.")
         case .inProgress:
-            String(localized: "blueprint.library.empty.draftsMessage", defaultValue: "Find a template in Explore and make it yours. Save a draft to pick up here later.")
+            String(localized: "blueprint.library.empty.draftsMessage", defaultValue: "Save a draft while editing a blueprint to continue here later.")
         }
     }
 
     var actionTitle: String {
         switch collection {
         case .installedTemplates:
-            String(localized: "blueprint.library.empty.viewDrafts", defaultValue: "View In Progress")
+            String(localized: "blueprint.library.empty.viewDrafts", defaultValue: "View Drafts")
         case .inProgress:
-            String(localized: "blueprint.library.empty.viewInstalled", defaultValue: "View Installed Templates")
+            String(localized: "blueprint.library.empty.viewInstalled", defaultValue: "View Blueprints")
         }
     }
 

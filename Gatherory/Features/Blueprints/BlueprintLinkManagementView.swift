@@ -24,14 +24,21 @@ struct BlueprintLinkManagementRequest: Identifiable {
 
 private enum PendingTemplateListing: Identifiable {
     case publish(Int)
-    case unlist
+    case unlist(Int)
 
     var id: String {
         switch self {
         case .publish(let revision): "publish-\(revision)"
-        case .unlist: "unlist"
+        case .unlist(let revision): "unlist-\(revision)"
         }
     }
+}
+
+private struct CreatorNameCandidate: Identifiable {
+    let templateID: UUID
+    let revision: Int
+    let initialName: String
+    var id: UUID { templateID }
 }
 
 struct BlueprintLinkManagementView: View {
@@ -44,15 +51,13 @@ struct BlueprintLinkManagementView: View {
     let captureURL: URL
 
     @State private var store: BlueprintLinkManagementStore?
+    @State private var pendingReplacementTemplateID: UUID?
     @State private var pendingRevokeID: UUID?
     @State private var pendingListing: PendingTemplateListing?
-    @State private var isManagingLinks = false
+    @State private var creatorNameCandidate: CreatorNameCandidate?
     @State private var isShowingNativeCreation = false
 
     private var accountID: String? { authentication.currentUser?.id }
-    private var visibleMode: BlueprintLinkManagementMode {
-        isManagingLinks || (store?.createRequiresRefresh ?? false) ? .manage : mode
-    }
     private var hasManagePermission: Bool {
         BlueprintCaptureLink.sharingURL(
             baseURL: AppRuntimeConfiguration.authenticationBaseURL,
@@ -87,11 +92,62 @@ struct BlueprintLinkManagementView: View {
 
     var body: some View {
         content
-        .navigationTitle(visibleMode.title)
+        .navigationTitle(BlueprintCopy.shareTemplate)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Close") { dismiss() }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                if let store, !store.templates.isEmpty, hasManagePermission,
+                   let template = selectedTemplate(in: store) {
+                    Menu {
+                        if !template.retired, template.publishedRevision != nil,
+                           store.createdURL != nil || hasActiveLinks(store) {
+                            Button(BlueprintCopy.replaceShareLink, systemImage: "arrow.triangle.2.circlepath") {
+                                pendingReplacementTemplateID = store.selectedTemplateID
+                            }
+                            .disabled(!store.canCreate)
+                        }
+
+                        let activeLinks = store.links.filter { $0.revokedAt == nil }
+                        if activeLinks.count == 1, let link = activeLinks.first {
+                            Button(BlueprintCopy.revokeShareLink, systemImage: "xmark.circle", role: .destructive) {
+                                pendingRevokeID = link.id
+                            }
+                        } else if !activeLinks.isEmpty {
+                            Menu(BlueprintCopy.revokeShareLink, systemImage: "xmark.circle") {
+                                ForEach(activeLinks) { link in
+                                    Button(linkMenuTitle(link), role: .destructive) {
+                                        pendingRevokeID = link.id
+                                    }
+                                    .disabled(store.isLoading || store.isMutating || !hasManagePermission)
+                                }
+                            }
+                        }
+
+                        if !template.retired, let revision = template.publishedRevision {
+                            if let listedRevision = template.listedRevision {
+                                Button(BlueprintCopy.removeFromSearch, systemImage: "globe") {
+                                    pendingListing = .unlist(listedRevision)
+                                }
+                            } else {
+                                Button(BlueprintCopy.listInSearch, systemImage: "globe") {
+                                    if template.creatorName != nil {
+                                        pendingListing = .publish(revision)
+                                    } else {
+                                        creatorNameCandidate = CreatorNameCandidate(
+                                            templateID: template.id, revision: revision, initialName: ""
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Label(BlueprintCopy.manageSharing, systemImage: "ellipsis")
+                    }
+                    .disabled(store.isLoading || store.isMutating)
+                }
             }
         }
         .task(id: loadIdentity) {
@@ -102,22 +158,25 @@ struct BlueprintLinkManagementView: View {
             store?.invalidate()
             store = nil
             pendingRevokeID = nil
+            pendingReplacementTemplateID = nil
             pendingListing = nil
+            creatorNameCandidate = nil
             dismiss()
         }
         .onChange(of: store?.selectedTemplateID) { _, _ in
             pendingRevokeID = nil
+            pendingReplacementTemplateID = nil
             pendingListing = nil
-        }
-        .onChange(of: store?.createRequiresRefresh) { _, required in
-            if required == true { isManagingLinks = true }
+            creatorNameCandidate = nil
         }
         .onChange(of: hasManagePermission) { _, allowed in
             if !allowed {
                 store?.invalidate()
                 store = nil
                 pendingRevokeID = nil
+                pendingReplacementTemplateID = nil
                 pendingListing = nil
+                creatorNameCandidate = nil
                 dismiss()
             }
         }
@@ -126,7 +185,44 @@ struct BlueprintLinkManagementView: View {
             store?.invalidate()
             store = nil
             pendingRevokeID = nil
+            pendingReplacementTemplateID = nil
             pendingListing = nil
+            creatorNameCandidate = nil
+        }
+        .sheet(item: $creatorNameCandidate) { candidate in
+            BlueprintCreatorNameSheet(
+                initialName: candidate.initialName,
+                isSubmitting: store?.isMutating == true,
+                onPublish: { name in
+                    guard let store, hasManagePermission,
+                          store.selectedTemplateID == candidate.templateID,
+                          store.templates.first(where: { $0.id == candidate.templateID })?.publishedRevision == candidate.revision else {
+                        creatorNameCandidate = nil
+                        return
+                    }
+                    creatorNameCandidate = nil
+                    Task { await store.setDiscoverable(true, creatorName: name) }
+                },
+                onCancel: { creatorNameCandidate = nil }
+            )
+        }
+        .confirmationDialog(
+            BlueprintCopy.confirmReplaceShareLinkTitle,
+            isPresented: Binding(
+                get: { pendingReplacementTemplateID != nil },
+                set: { if !$0 { pendingReplacementTemplateID = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(BlueprintCopy.replaceShareLink) {
+                guard let templateID = pendingReplacementTemplateID, let store,
+                      templateID == store.selectedTemplateID else { return }
+                pendingReplacementTemplateID = nil
+                Task { await createLink(store) }
+            }
+            Button("Cancel", role: .cancel) { pendingReplacementTemplateID = nil }
+        } message: {
+            Text(BlueprintCopy.confirmReplaceShareLinkMessage)
         }
         .confirmationDialog(
             BlueprintCopy.confirmRevokeTitle,
@@ -190,15 +286,26 @@ struct BlueprintLinkManagementView: View {
         case .publish(let revision):
             shouldPublish = true
             confirmedRevision = revision
-        case .unlist:
+        case .unlist(let revision):
             shouldPublish = false
-            confirmedRevision = nil
+            confirmedRevision = revision
         }
         self.pendingListing = nil
+        if shouldPublish,
+           store.templates.first(where: { $0.id == templateID })?.creatorName == nil {
+            creatorNameCandidate = CreatorNameCandidate(
+                templateID: templateID,
+                revision: confirmedRevision ?? -1,
+                initialName: ""
+            )
+            return
+        }
         Task {
             guard store.selectedTemplateID == templateID else { return }
             if shouldPublish {
                 guard store.templates.first(where: { $0.id == templateID })?.publishedRevision == confirmedRevision else { return }
+            } else {
+                guard store.templates.first(where: { $0.id == templateID })?.listedRevision == confirmedRevision else { return }
             }
             await store.setDiscoverable(shouldPublish)
         }
@@ -248,12 +355,7 @@ struct BlueprintLinkManagementView: View {
                 templateSection(store)
 
                 if let template = selectedTemplate(in: store) {
-                    if visibleMode == .share {
-                        shareSection(template, store: store)
-                    } else {
-                        searchListingSection(template, store: store)
-                        manageSection(template, store: store)
-                    }
+                    shareSection(template, store: store)
                 } else if store.templates.count > 1 {
                     Section {
                         ContentUnavailableView(
@@ -264,7 +366,7 @@ struct BlueprintLinkManagementView: View {
                     }
                 }
 
-                if store.errorMessage != nil {
+                if store.errorMessage != nil || store.createRequiresRefresh {
                     retrySection(store)
                 }
             }
@@ -272,7 +374,13 @@ struct BlueprintLinkManagementView: View {
         .listStyle(.insetGrouped)
         .refreshable { await refresh(store) }
         .navigationDestination(isPresented: $isShowingNativeCreation) {
-            BlueprintCreateShareView(eventID: eventID, workspace: workspace)
+            BlueprintCreateShareView(
+                eventID: eventID,
+                workspace: workspace,
+                startsWithReview: true,
+                onClose: { dismiss() }
+            )
+            .navigationBarBackButtonHidden(true)
         }
     }
 
@@ -292,64 +400,64 @@ struct BlueprintLinkManagementView: View {
             }
 
             if let template = selectedTemplate(in: store) {
-                templateStatus(template)
+                if let creatorName = template.creatorName, !creatorName.isEmpty {
+                    Text(BlueprintCopy.creatorByline(creatorName))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
                 if template.retired {
                     Label(BlueprintCopy.retiredTemplate, systemImage: "archivebox")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                } else if template.publishedRevision == nil {
-                    Label(BlueprintCopy.draftTemplate, systemImage: "pencil")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
             }
-
-            Button(BlueprintCopy.createTemplateTitle, systemImage: "square.stack.3d.up.badge.plus") {
-                isShowingNativeCreation = true
-            }
-            .disabled(store.isLoading || store.isMutating || !hasManagePermission)
         } header: {
-            Text(BlueprintCopy.chooseTemplate)
+            if store.templates.count > 1 {
+                Text(BlueprintCopy.chooseTemplate)
+            }
         }
     }
 
     @ViewBuilder
     private func shareSection(_ template: BlueprintManagedTemplate, store: BlueprintLinkManagementStore) -> some View {
         Section {
-            Text(BlueprintCopy.shareTemplateExplanation)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Button(BlueprintCopy.manageTemplateLinks, systemImage: "link") {
-                isManagingLinks = true
+            if store.createdURL == nil, !template.retired, store.errorMessage == nil {
+                BlueprintSharingStatusBadges(
+                    activeShareLinkCount: template.activeShareLinkCount,
+                    listedRevision: template.listedRevision
+                )
             }
-            .disabled(store.isLoading || store.isMutating)
-
             if template.retired || template.publishedRevision == nil {
                 Text(template.retired ? BlueprintCopy.retiredCannotShare : BlueprintCopy.noPublishedTemplate)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else if let url = store.createdURL {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                    Label(BlueprintCopy.newLinkReady, systemImage: "clock")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    ShareLink(
-                        item: url,
-                        subject: Text(template.title),
-                        message: Text(BlueprintCopy.shareTemplateExplanation)
-                    ) {
-                        Label(BlueprintCopy.shareNewLink, systemImage: "square.and.arrow.up")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityLabel(BlueprintCopy.shareNewLink)
-                    .disabled(store.isLoading || store.isMutating || !hasManagePermission)
-                    .privacySensitive()
+                if store.accountID == accountID, hasManagePermission {
+                    BlueprintShareQRCodeView(
+                        url: url,
+                        baseURL: AppRuntimeConfiguration.authenticationBaseURL,
+                        templateTitle: template.title,
+                        creatorName: template.creatorName,
+                        activeShareLinkCount: store.errorMessage == nil ? template.activeShareLinkCount : nil,
+                        listedRevision: store.errorMessage == nil ? template.listedRevision : nil,
+                        isRetired: template.retired
+                    )
+                    .disabled(store.isLoading || store.isMutating)
                 }
-                .privacySensitive()
+            } else if store.isLoading || !store.hasLoadedLinks {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppTheme.Spacing.standard)
+            } else if store.createRequiresRefresh {
+                EmptyView() // Recovery stays visible below the QR or empty state.
+            } else if hasActiveLinks(store) {
+                Text(BlueprintCopy.savedLinkUnavailable)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             } else {
+                Text(BlueprintCopy.shareTemplateExplanation)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 Button {
                     Task { await createLink(store) }
                 } label: {
@@ -364,136 +472,13 @@ struct BlueprintLinkManagementView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(!store.canCreate || !hasManagePermission)
             }
-
-            Text(BlueprintCopy.shareLinkOffline)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
     }
 
-    @ViewBuilder
-    private func searchListingSection(_ template: BlueprintManagedTemplate, store: BlueprintLinkManagementStore) -> some View {
-        if !template.retired, let revision = template.publishedRevision {
-            Section {
-                if let listedRevision = template.listedRevision {
-                    Label(BlueprintCopy.listedInSearch, systemImage: "globe")
-                        .font(.subheadline)
-                    Text(String.localizedStringWithFormat(BlueprintCopy.publishedRevision, Int64(listedRevision)))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Button(BlueprintCopy.removeFromSearch, role: .destructive) {
-                        pendingListing = .unlist
-                    }
-                    .disabled(store.isLoading || store.isMutating || !hasManagePermission)
-                } else {
-                    Label(BlueprintCopy.notListedInSearch, systemImage: "globe")
-                        .font(.subheadline)
-                    Button(BlueprintCopy.listInSearch) {
-                        pendingListing = .publish(revision)
-                    }
-                    .disabled(store.isLoading || store.isMutating || !hasManagePermission)
-                }
-            } header: {
-                Text(BlueprintCopy.searchPublication)
-            } footer: {
-                Text(BlueprintCopy.listingDoesNotChangeLinks)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func manageSection(_ template: BlueprintManagedTemplate, store: BlueprintLinkManagementStore) -> some View {
-        Section {
-            if mode == .share && !store.createRequiresRefresh {
-                Button(BlueprintCopy.shareTemplate, systemImage: "square.and.arrow.up") {
-                    isManagingLinks = false
-                }
-                .disabled(store.isLoading || store.isMutating)
-            }
-
-            Text(BlueprintCopy.existingLinksCannotBeRecovered)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            if !store.hasLoadedLinks && store.errorMessage == nil {
-                ProgressView().frame(maxWidth: .infinity)
-            } else if store.hasLoadedLinks && store.links.isEmpty && store.errorMessage == nil {
-                ContentUnavailableView(
-                    BlueprintCopy.noLinksCreated,
-                    systemImage: "link",
-                    description: Text(BlueprintCopy.noLinksCreatedHint)
-                )
-            } else {
-                ForEach(store.links) { link in
-                    shareLinkRow(link, store: store)
-                }
-            }
-
-            if !template.retired, template.publishedRevision != nil, store.createdURL == nil {
-                Button {
-                    Task { await createLink(store) }
-                } label: {
-                    if store.isMutating {
-                        ProgressView(BlueprintCopy.creatingShareLink)
-                    } else {
-                        Label(BlueprintCopy.createShareLink, systemImage: "plus")
-                    }
-                }
-                .disabled(!store.canCreate || !hasManagePermission)
-            }
-
-            if let url = store.createdURL {
-                ShareLink(
-                    item: url,
-                    subject: Text(template.title),
-                    message: Text(BlueprintCopy.shareTemplateExplanation)
-                ) {
-                    Label(BlueprintCopy.shareNewLink, systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityLabel(BlueprintCopy.shareNewLink)
-                .disabled(store.isLoading || store.isMutating || !hasManagePermission)
-                .privacySensitive()
-                Text(BlueprintCopy.newLinkReady)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .privacySensitive()
-            }
-
-            Text(BlueprintCopy.shareLinkOffline)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        } header: {
-            Text(BlueprintCopy.manageTemplateLinks)
-        }
-    }
-
-    private func shareLinkRow(_ link: BlueprintManagedShareLink, store: BlueprintLinkManagementStore) -> some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(link.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.subheadline)
-                Spacer()
-                Label(
-                    link.revokedAt == nil ? BlueprintCopy.activeShareLink : BlueprintCopy.revokedShareLink,
-                    systemImage: link.revokedAt == nil ? "checkmark.circle.fill" : "slash.circle"
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            }
-            Text(String.localizedStringWithFormat(BlueprintCopy.publishedRevision, Int64(link.revision)))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            if link.revokedAt == nil {
-                Button(BlueprintCopy.revokeShareLink, systemImage: "xmark.circle", role: .destructive) {
-                    pendingRevokeID = link.id
-                }
-                .disabled(store.isLoading || store.isMutating || !hasManagePermission)
-            }
-        }
-        .padding(.vertical, AppTheme.Spacing.compact)
+    private func linkMenuTitle(_ link: BlueprintManagedShareLink) -> String {
+        let date = link.createdAt.formatted(date: .abbreviated, time: .shortened)
+        let revision = String.localizedStringWithFormat(BlueprintCopy.publishedRevision, Int64(link.revision))
+        return "\(date) · \(revision)"
     }
 
     @ViewBuilder
@@ -505,23 +490,16 @@ struct BlueprintLinkManagementView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            Button(BlueprintCopy.retry) {
-                Task { await refresh(store) }
-            }
-            .disabled(store.isLoading || store.isMutating || !hasManagePermission)
-        }
-    }
-
-    private func templateStatus(_ template: BlueprintManagedTemplate) -> some View {
-        Group {
-            if let revision = template.publishedRevision {
-                Text(String.localizedStringWithFormat(BlueprintCopy.publishedRevision, Int64(revision)))
+            if store.credentialSaveFailed, !store.createRequiresRefresh {
+                Button(BlueprintCopy.retrySavingShareLink) { store.retrySavingLink() }
+                    .disabled(store.isLoading || store.isMutating || !hasManagePermission)
             } else {
-                Text(BlueprintCopy.draftTemplate)
+                Button(store.createRequiresRefresh ? BlueprintCopy.refreshLinks : BlueprintCopy.retry) {
+                    Task { await refresh(store) }
+                }
+                .disabled(store.isLoading || store.isMutating || !hasManagePermission)
             }
         }
-        .font(.footnote)
-        .foregroundStyle(.secondary)
     }
 
     private func selectionBinding(_ store: BlueprintLinkManagementStore) -> Binding<UUID?> {
@@ -553,6 +531,7 @@ struct BlueprintLinkManagementView: View {
                 eventID: eventID,
                 accountID: accountID,
                 transport: PostgresSyncTransport(baseURL: baseURL),
+                credentialStore: KeychainBlueprintShareLinkCredentialStore(),
                 currentAccountID: { authentication.currentUser?.id }
             )
         }
@@ -563,13 +542,24 @@ struct BlueprintLinkManagementView: View {
     private func refresh(_ store: BlueprintLinkManagementStore) async {
         guard hasManagePermission, accountID == store.accountID else { return }
         await store.loadTemplates()
-        guard store.errorMessage == nil else { return }
+        guard store.errorMessage == nil ||
+                (store.credentialSaveFailed && store.errorMessage == BlueprintCopy.shareLinkSaveFailed) else { return }
+        guard hasManagePermission, accountID == store.accountID, !Task.isCancelled else { return }
+        if store.templates.isEmpty {
+            // Load and verify the source before showing the explicit create/share action.
+            isShowingNativeCreation = true
+            return
+        }
         if store.selectedTemplateID == nil, store.templates.count == 1,
            let templateID = store.templates.first?.id {
             await store.select(templateID: templateID)
         } else if store.selectedTemplateID != nil {
             await store.loadLinks()
         }
+    }
+
+    private func hasActiveLinks(_ store: BlueprintLinkManagementStore) -> Bool {
+        store.links.contains { $0.revokedAt == nil }
     }
 
     private func createLink(_ store: BlueprintLinkManagementStore) async {

@@ -36,6 +36,7 @@ struct BlueprintCatalogContractTests {
         let entry = try #require(catalog.entries.first)
         #expect(entry.catalogKey == "wedding")
         #expect(entry.discovery?.categories == ["weddings"])
+        #expect(entry.creator == nil)
         #expect(entry.discovery?.tags.contains("ceremony") == true)
         #expect(entry.definition.supportsCurrentSchema)
         let treeModule = try #require(entry.definition.modules.first { $0.type == "experience_tree" })
@@ -53,6 +54,16 @@ struct BlueprintCatalogContractTests {
         #expect(preview.plan.instructions.map(\.audience) == [.planningOnly, .eventParticipants])
         let venue = try #require(preview.plan.children.first { $0.sourceKey == "venue_visit" })
         #expect(venue.startsAt == ISO8601DateFormatter().date(from: "2027-06-14T20:00:00Z"))
+
+        var attributedPayload = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: catalogURL)) as? [String: Any])
+        var attributedEntries = try #require(attributedPayload["entries"] as? [[String: Any]])
+        attributedEntries[0]["creator"] = ["displayName": "Garden Hosts"]
+        attributedPayload["entries"] = attributedEntries
+        let attributedCatalog = try JSONDecoder().decode(
+            BlueprintCatalogResponse.self,
+            from: JSONSerialization.data(withJSONObject: attributedPayload)
+        )
+        #expect(attributedCatalog.entries.first?.creator == BlueprintCreatorMetadata(displayName: "Garden Hosts"))
     }
 }
 
