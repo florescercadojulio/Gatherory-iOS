@@ -53,16 +53,31 @@ struct ManageView: View {
     var isActive = true
     var onExitWorkspace: (() -> Void)?
     @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(WorkspaceLibrary.self) private var library
+    @Environment(WorkspacePersistenceController.self) private var persistence
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.layoutDirection) private var layoutDirection
     @State private var selection: EventReference = .main
     @State private var hasInitializedSelection = false
+    @State private var successfulTakeHaptic = 0
+    @State private var todoTakeFailed = false
 
     private var references: [EventReference] { ManageEventSummary.references(in: workspace) }
     private var reference: EventReference { references.contains(selection) ? selection : references.first ?? .main }
     private var summary: ManageEventSummary? { ManageEventSummary(workspace: workspace, reference: reference) }
+    private var nextTodo: EventTodo? { workspace.nextTodo(for: reference) }
+    private var todoTimeZone: TimeZone {
+        let identifier: String
+        if case .subevent(let id) = reference {
+            identifier = workspace.timeline.first { $0.id == id }?.timeZoneIdentifier
+                ?? workspace.mainEventTimeZoneIdentifier
+        } else {
+            identifier = workspace.mainEventTimeZoneIdentifier
+        }
+        return TimeZone(identifier: identifier) ?? .current
+    }
     private var approvalMetric: ManageMetric {
         guard let summary, summary.canManageInvitations else {
             return ManageMetric(value: "—", label: String(localized: "Manager only"))
@@ -96,6 +111,77 @@ struct ManageView: View {
                         }
                         ManageGuestsCard(summary: summary)
                         ManageCollaboratorsCard(summary: summary, approval: approvalMetric)
+                    }
+                    if workspace.canReadTodos(for: reference) {
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                            NavigationLink {
+                                ManageTodosView(reference: reference)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        Label(TodoCopy.title, systemImage: "checklist")
+                                            .font(.headline)
+                                        Spacer()
+                                        Image(systemName: "chevron.right").accessibilityHidden(true)
+                                    }
+                                    if let nextTodo {
+                                        Divider().padding(.vertical, 4)
+                                        Text(todoPreviewHeading(for: nextTodo))
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.secondary)
+                                        HStack(alignment: .top, spacing: 10) {
+                                            if let assignee = workspace.todoAssignee(for: nextTodo) {
+                                                ParticipantAvatarView(member: assignee, size: 32)
+                                            }
+                                            Text(nextTodo.title)
+                                                .font(.body)
+                                                .foregroundStyle(AppTheme.ColorToken.textPrimary)
+                                                .lineLimit(2)
+                                        }
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            if let dueDate = nextTodo.dueDate,
+                                               let date = TodoDatePresentation.date(dueDate, timeZone: todoTimeZone) {
+                                                Text(TodoCopy.due(TodoDatePresentation.display(date, timeZone: todoTimeZone)))
+                                            }
+                                        }
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    } else {
+                                        Text(TodoCopy.previewEmpty)
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            if let nextTodo, workspace.canTakeTodo(id: nextTodo.id) {
+                                Button {
+                                    takeTodo(nextTodo.id)
+                                } label: {
+                                    Label {
+                                        Text(TodoCopy.takeShort)
+                                    } icon: {
+                                        if let viewer = workspace.currentViewerMember(for: reference) {
+                                            ParticipantAvatarView(member: viewer, size: 22)
+                                        } else {
+                                            Image(systemName: "person.badge.plus")
+                                        }
+                                    }
+                                        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.borderless)
+                                .tint(AppTheme.ColorToken.accent)
+                                .accessibilityLabel(TodoCopy.take)
+                                .disabled(!workspace.canEditTodos(for: reference) || !library.workspaces.contains { $0 === workspace })
+                            }
+                        }
+                        .padding(AppTheme.Spacing.spacious)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: AppTheme.Radius.card))
                     }
                     ManageNotesPreview(reference: reference)
                     if !workspace.visibleGuides(for: reference).isEmpty {
@@ -150,12 +236,35 @@ struct ManageView: View {
             await refreshRequests()
         }
         .refreshable { await refreshRequests(force: true) }
+        .sensoryFeedback(.success, trigger: successfulTakeHaptic)
+        .alert(TodoCopy.saveFailed, isPresented: $todoTakeFailed) {
+            Button(AppCopy.Common.close, role: .cancel) {}
+        } message: { Text(TodoCopy.saveFailedHelp) }
     }
 
     private func refreshRequests(force: Bool = false) async {
         guard isActive, scenePhase == .active, let summary, summary.canManageInvitations,
               let accountID = authentication.currentUser?.id else { return }
         await workspace.joinRequestStore.refresh(eventID: summary.eventID, accountID: accountID, force: force)
+    }
+
+    private func todoPreviewHeading(for todo: EventTodo) -> String {
+        guard let viewerID = workspace.currentViewerMember(for: reference)?.id else { return TodoCopy.availableToTake }
+        return todo.assigneePersonID == viewerID ? TodoCopy.yourNext : TodoCopy.availableToTake
+    }
+
+    private func takeTodo(_ id: UUID) {
+        guard workspace.canEditTodos(for: reference), library.workspaces.contains(where: { $0 === workspace }),
+              workspace.canTakeTodo(id: id) else { return }
+        let previous = workspace.todos
+        guard workspace.takeTodo(id: id) else { return }
+        do {
+            try persistence.saveChanges(in: library)
+            successfulTakeHaptic &+= 1
+        } catch {
+            workspace.todos = previous
+            todoTakeFailed = true
+        }
     }
 }
 

@@ -1,14 +1,9 @@
 {
   "plan": {
+    "todos": [],
     "plannerVersion": 1,
     "experienceType": "wedding",
-    "categoryOrder": [
-      "venue",
-      "attire",
-      "food",
-      "flowers",
-      "photography"
-    ],
+    "categoryOrder": ["venue", "attire", "food", "flowers", "photography"],
     "main": {
       "sourceKey": "main",
       "name": "Riley and Jordan",

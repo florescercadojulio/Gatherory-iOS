@@ -1,6 +1,528 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "blueprint.includeTodos" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Include To-dos" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Incluir tareas" } }
+      }
+    },
+    "blueprint.todoCopyExplanation" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Copies start unfinished. Dates and people aren't included." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Las copias empiezan sin completar. No se incluyen fechas ni personas." } }
+      }
+    },
+    "todo.add" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a To-do"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir tarea"
+          }
+        }
+      }
+    },
+    "todo.addingToEventFormat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Adding this to-do to %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Añadiendo esta tarea a %@" } }
+      }
+    },
+    "todo.addDueDate" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Due Date"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir fecha límite"
+          }
+        }
+      }
+    },
+    "todo.assignee" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Assigned To" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Asignado a" } }
+      }
+    },
+    "todo.assigneeUnavailable" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Assignee unavailable" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Persona asignada no disponible" } }
+      }
+    },
+    "todo.assignedToFormat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Assigned to %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Asignado a %@" } }
+      }
+    },
+    "todo.completed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completadas"
+          }
+        }
+      }
+    },
+    "todo.listFilter" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "To-do list" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Lista de tareas" } }
+      }
+    },
+    "todo.upcoming" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Upcoming" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Próximas" } }
+      }
+    },
+    "todo.upcomingEmpty" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Upcoming To-dos" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay tareas pendientes" } }
+      }
+    },
+    "todo.upcomingEmptyHelp" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "You're all caught up." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Estás al día." } }
+      }
+    },
+    "todo.completedEmpty" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Completed To-dos Yet" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Aún no hay tareas completadas" } }
+      }
+    },
+    "todo.collapsed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Collapsed" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Contraído" } }
+      }
+    },
+    "todo.expanded" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Expanded" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Expandido" } }
+      }
+    },
+    "todo.yourNext" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your Next" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tu próxima tarea" } }
+      }
+    },
+    "todo.availableToTake" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Available to Take" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Disponible para asumir" } }
+      }
+    },
+    "todo.confirmDelete" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete This To-do?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Eliminar esta tarea?"
+          }
+        }
+      }
+    },
+    "todo.delete" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete To-do"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar tarea"
+          }
+        }
+      }
+    },
+    "todo.deleteHelp" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This removes it for everyone planning this event."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se eliminará para todas las personas que organizan este evento."
+          }
+        }
+      }
+    },
+    "todo.dueDate" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Due Date"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fecha límite"
+          }
+        }
+      }
+    },
+    "todo.changeDueDate" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Change Due Date" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cambiar fecha límite" } }
+      }
+    },
+    "todo.dueFormat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Due %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fecha límite: %@"
+          }
+        }
+      }
+    },
+    "todo.edit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit To-do"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editar tarea"
+          }
+        }
+      }
+    },
+    "todo.empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No To-dos Yet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no hay tareas"
+          }
+        }
+      }
+    },
+    "todo.emptyHelp" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add something you want to get done for this event."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade algo que quieras hacer para este evento."
+          }
+        }
+      }
+    },
+    "todo.emptyReadOnly" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your planning team's to-dos will appear here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las tareas del equipo organizador aparecerán aquí."
+          }
+        }
+      }
+    },
+    "todo.done" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Done" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Listo" } }
+      }
+    },
+    "todo.invalidTitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a title up to 200 characters."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduce un título de hasta 200 caracteres."
+          }
+        }
+      }
+    },
+    "todo.itemChangedHelp" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Close and reopen it to see the latest changes before editing." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cierra y vuelve a abrirla para ver los cambios más recientes antes de editarla." } }
+      }
+    },
+    "todo.itemChangedTitle" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This To-do Changed" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esta tarea ha cambiado" } }
+      }
+    },
+    "todo.invalidWebsite" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a valid website address." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Introduce una dirección web válida." } }
+      }
+    },
+    "todo.markComplete" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark Complete"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marcar como completada"
+          }
+        }
+      }
+    },
+    "todo.markIncomplete" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark Incomplete"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marcar como pendiente"
+          }
+        }
+      }
+    },
+    "todo.newTitle" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New To-do" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Nueva tarea" } }
+      }
+    },
+    "todo.openWebsite" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open Website" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Abrir sitio web" } }
+      }
+    },
+    "todo.previewEmpty" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No to-dos for you right now" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No tienes tareas pendientes ahora" } }
+      }
+    },
+    "todo.removeDueDate" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove Due Date" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Quitar fecha límite" } }
+      }
+    },
+    "todo.name" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What needs doing?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué hay que hacer?"
+          }
+        }
+      }
+    },
+    "todo.saveFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't Save To-do"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar la tarea"
+          }
+        }
+      }
+    },
+    "todo.saveFailedHelp" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your change wasn't saved. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se guardó el cambio. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "todo.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To-dos"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tareas"
+          }
+        }
+      }
+    },
+    "todo.unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To-dos Unavailable"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tareas no disponibles"
+          }
+        }
+      }
+    },
+    "todo.unavailableHelp" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You don't have planning access to this event."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No tienes acceso a la planificación de este evento."
+          }
+        }
+      }
+    },
+    "todo.unassigned" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unassigned" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sin asignar" } }
+      }
+    },
+    "todo.take" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Take This To-do" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Encargarme de esta tarea" } }
+      }
+    },
+    "todo.takeShort" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Take" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Me encargo" } }
+      }
+    },
+    "todo.undo" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Undo" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Deshacer" } }
+      }
+    },
+    "todo.taskSection" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "To-do" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tarea" } }
+      }
+    },
+    "todo.website" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Website" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sitio web" } }
+      }
+    },
+    "todo.websitePlaceholder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "https://example.com" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "https://ejemplo.com" } }
+      }
+    },
     "" : {
       "localizations" : {
         "es" : {

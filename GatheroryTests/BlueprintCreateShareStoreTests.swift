@@ -36,12 +36,47 @@ struct BlueprintCreateShareStoreTests {
         #expect(store.selectedChildIDs == Set(transport.source.source.children.map(\.id)))
         #expect(store.selectedIdeaIDs == Set(transport.source.source.ideas.map(\.id)))
         #expect(store.selectedInstructionIDs == Set(transport.source.source.instructions.map(\.id)))
+        #expect(store.selectedTodoIDs.isEmpty)
+        #expect(store.eligibleTodos.count == 2)
         #expect(store.includeIdeaNotes)
         #expect(store.canReview)
         #expect(store.reviewed == nil)
         #expect(transport.creates.isEmpty && transport.linkCreates == 0)
         await store.createAndShare()
         #expect(transport.creates.isEmpty)
+    }
+
+    @Test("To-do selection is explicit, exact-event scoped, and pruned with a deselected child")
+    func todoSelectionIsExplicitAndScoped() async throws {
+        let transport = CaptureTestTransport()
+        let store = makeStore(transport)
+        await store.load()
+
+        #expect(store.selectedTodoIDs.isEmpty)
+        let allTodoIDs = Set(transport.source.source.todos.map(\.id))
+        store.setIncludeTodos(true)
+        #expect(store.selectedTodoIDs == allTodoIDs)
+        #expect(store.reviewed == nil)
+
+        let rootTodo = try #require(transport.source.source.todos.first { $0.eventId == transport.root })
+        let childTodo = try #require(transport.source.source.todos.first { $0.eventId == transport.child })
+        store.setChild(transport.child, included: false)
+        #expect(store.selectedTodoIDs == [rootTodo.id])
+        store.setTodo(childTodo.id, included: true)
+        #expect(store.selectedTodoIDs == [rootTodo.id])
+        store.setIncludeTodos(false)
+        #expect(store.selectedTodoIDs.isEmpty)
+
+        store.setChild(transport.child, included: true)
+        store.setTodo(childTodo.id, included: true)
+        await store.review()
+        #expect(transport.reviews.last?.selection.todoIds == [childTodo.id])
+
+        let emptySelection = BlueprintCaptureSelection(childIds: [], ideaIds: [], instructionIds: [], includeIdeaNotes: true)
+        let emptyWire = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(emptySelection)) as? [String: Any])
+        #expect(emptyWire["todoIds"] == nil)
+        let selectedWire = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(transport.reviews.last!.selection)) as? [String: Any])
+        #expect((selectedWire["todoIds"] as? [String]) == [childTodo.id.uuidString.lowercased()])
     }
 
     @Test("A reviewed share stays unlisted and creates its link only after explicit create")
@@ -784,8 +819,12 @@ struct BlueprintCreateShareStoreTests {
         children: [.init(id: child, title: "Dinner", purpose: "part_of_event", category: "food", startsAt: nil)],
         ideas: [.init(id: UUID(), eventId: root, title: "Flowers", category: "decoration", notes: "Private florist details"),
                 .init(id: UUID(), eventId: child, title: "Cake", category: "food", notes: nil)],
-        instructions: [.init(id: UUID(), eventId: child, title: "Arrival", body: "Use side entrance", audience: "event_participants")]),
+        instructions: [.init(id: UUID(), eventId: child, title: "Arrival", body: "Use side entrance", audience: "event_participants")],
+        todos: [.init(id: rootTodo, eventId: root, title: "Confirm venue", websiteURL: nil),
+                .init(id: childTodo, eventId: child, title: "Pack supplies", websiteURL: "https://example.com")]),
         sourceHash: String(repeating: "a", count: 64))
+    let rootTodo = UUID()
+    let childTodo = UUID()
 
     func captureSource(eventID: UUID) async throws -> BlueprintCaptureSourceResponse {
         sourceReads += 1

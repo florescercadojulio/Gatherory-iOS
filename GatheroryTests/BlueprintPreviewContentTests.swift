@@ -213,6 +213,27 @@ struct BlueprintPreviewContentTests {
         #expect(none.eventIDs == [.main])
     }
 
+    @Test("A child with an authored to-do remains available in Home even without loved ideas")
+    func todoOnlyChildRemainsInHome() throws {
+        let entry = try fixture { document in
+            var modules = document["modules"] as! [[String: Any]]
+            modules.append([
+                "key": "starter_todos", "type": "todos", "version": 1, "required": false,
+                "config": ["todos": [[
+                    "key": "book-transport", "title": "Book transport", "target": ["kind": "child", "key": "ceremony"]
+                ]]]
+            ])
+            document["modules"] = modules
+        }
+        let content = try #require(BlueprintPreviewContent(entry: entry))
+        #expect(content.event(for: "ceremony")?.todos.map(\.key) == ["book-transport"])
+
+        let home = content.homeContent(responses: [:])
+        #expect(home.eventIDs == [.main, .child("ceremony")])
+        #expect(home.event(for: "ceremony")?.todos.map(\.key) == ["book-transport"])
+        #expect(home.ideas().isEmpty)
+    }
+
     private func mixedTargetContent() throws -> BlueprintPreviewContent {
         let entry = try fixture { document in
             var modules = document["modules"] as! [[String: Any]]

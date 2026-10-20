@@ -5,6 +5,36 @@ import Testing
 
 @MainActor
 struct BlueprintSavedCopyResolverTests {
+    @Test("Saved-copy snapshots preserve main and child to-dos with their stable targets")
+    func snapshotPreservesTodos() throws {
+        let source = try weddingEntry()
+        let decoder = JSONDecoder()
+        let encoder = JSONEncoder()
+        var root = try #require(JSONSerialization.jsonObject(with: encoder.encode(source)) as? [String: Any])
+        var definition = try #require(root["definition"] as? [String: Any])
+        var modules = try #require(definition["modules"] as? [[String: Any]])
+        modules.append([
+            "key": "starter_todos", "type": "todos", "version": 1, "required": false,
+            "config": ["todos": [
+                ["key": "confirm-venue", "title": "Confirm venue", "target": ["kind": "main"]],
+                ["key": "book-transport", "title": "Book transport", "websiteURL": "https://example.com",
+                 "target": ["kind": "child", "key": "ceremony"]]
+            ]]
+        ])
+        definition["modules"] = modules
+        root["definition"] = definition
+        let entry = try decoder.decode(BlueprintCatalogEntry.self, from: JSONSerialization.data(withJSONObject: root))
+
+        let snapshot = try BlueprintDraftContent.snapshot(of: entry)
+        #expect(snapshot.todos.map(\.key) == ["confirm-venue", "book-transport"])
+        #expect(snapshot.todos[0].target == .main)
+        #expect(snapshot.todos[1].target == .child(key: "ceremony"))
+        #expect(snapshot.todos[1].websiteURL == "https://example.com")
+
+        let decodedCopy = try decoder.decode(BlueprintCatalogEntry.self, from: encoder.encode(entry))
+        #expect(try BlueprintDraftContent.snapshot(of: decodedCopy).todos == snapshot.todos)
+    }
+
     @Test("Copies the original snapshot and attaches a differently keyed private catalog entry")
     func copiesOriginalSnapshotAndAttachesPrivateEntry() async throws {
         let context = try makeContext()

@@ -195,6 +195,136 @@ struct WorkspaceRemoteMergerTests {
         try expectNoSyncSideEffects(in: context)
     }
 
+    @Test("To-do pulls record remote versions without rebasing a queued local edit")
+    func todoPullKeepsQueuedEditAndOriginalCASVersion() throws {
+        let context = try makeContext()
+        var local = makeArchive()
+        let assigneeID = UUID()
+        let todo = EventTodo(
+            eventID: local.mainEventID, title: "Confirm the cake",
+            websiteURL: "https://example.test/vendor", assigneePersonID: assigneeID,
+            createdAt: date
+        )
+        local.todos = [todo]
+        let record = makeRecord(local, payload: try codec.encode(local), owner: "owner")
+        context.insert(record)
+
+        var pendingTodo = todo
+        pendingTodo.isCompleted = true
+        pendingTodo.websiteURL = nil
+        pendingTodo.assigneePersonID = nil
+        let pending = PendingMutation(
+            scopeID: local.mainEventID,
+            entityType: .todo,
+            entityID: todo.id,
+            operation: .update,
+            payload: try codec.encode(pendingTodo),
+            baseVersion: 1,
+            ownerUserID: "owner"
+        )
+        context.insert(pending)
+        var remoteTodo = todo
+        remoteTodo.title = "Confirm the cake with the venue"
+        let remoteWorkspace = local.makeWorkspace()
+        remoteWorkspace.title = "Remote event title"
+        var remoteArchive = WorkspaceArchiveV1(workspace: remoteWorkspace)
+        remoteArchive.todos = []
+        let workspaceChange = try change(remoteArchive, version: 8)
+        let todoChange = RemoteChangeEnvelope(
+            id: UUID(), scopeID: local.mainEventID, entityType: .todo,
+            entityID: todo.id, operation: .update, payload: try codec.encode(remoteTodo),
+            serverVersion: 2, occurredAt: date.addingTimeInterval(20)
+        )
+
+        let result = try WorkspaceRemoteMerger(context: context, codec: codec, ownerUserID: "owner")
+            .stagePage(.init(changes: [workspaceChange, todoChange], nextCursor: "todo-cursor", hasMore: false),
+                scopeID: local.mainEventID, existingWorkspaceCount: 1)
+        guard case let .merged(merged, _) = result, let merged else {
+            Issue.record("Expected the to-do entity to merge")
+            return
+        }
+        #expect(merged.title == "Remote event title")
+        #expect(merged.todos == [pendingTodo])
+        #expect(merged.todos?.first?.websiteURL == nil)
+        #expect(merged.todos?.first?.assigneePersonID == nil)
+        #expect(pending.baseVersion == 1)
+        #expect(try RemoteEntityVersionRecord.version(
+            in: context, scopeID: local.mainEventID, entityType: .todo,
+            entityID: todo.id, ownerUserID: "owner"
+        ) == 2)
+        let durable = try codec.decode(WorkspaceArchiveV1.self, from: record.payload)
+        #expect(durable.todos == [pendingTodo])
+
+        let projectionOnlyWorkspace = local.makeWorkspace()
+        projectionOnlyWorkspace.title = "Projection-only refresh"
+        var projectionOnlyArchive = WorkspaceArchiveV1(workspace: projectionOnlyWorkspace)
+        projectionOnlyArchive.todos = []
+        let projectionOnlyResult = try WorkspaceRemoteMerger(
+            context: context, codec: codec, ownerUserID: "owner"
+        ).stagePage(
+            .init(changes: [try change(projectionOnlyArchive, version: 9)],
+                  nextCursor: "projection-only", hasMore: false),
+            scopeID: local.mainEventID, existingWorkspaceCount: 1
+        )
+        guard case let .merged(projectionOnlyMerged, _) = projectionOnlyResult,
+              let projectionOnlyMerged else {
+            Issue.record("Expected the projection-only workspace update to merge")
+            return
+        }
+        #expect(projectionOnlyMerged.todos == [pendingTodo])
+    }
+
+    @Test("Bootstrap records exact to-do server versions per account")
+    func todoBootstrapStoresServerVersion() throws {
+        let context = try makeContext()
+        let archive = makeArchive()
+        let todo = EventTodo(eventID: archive.mainEventID, title: "Confirm the cake", createdAt: date)
+        var remoteArchive = archive
+        remoteArchive.todos = []
+        let entity = RemoteEntitySnapshot(
+            scopeID: archive.mainEventID, entityType: .todo, entityID: todo.id,
+            payload: try codec.encode(todo), serverVersion: 7,
+            updatedAt: date.addingTimeInterval(10)
+        )
+        _ = try WorkspaceRemoteMerger(context: context, codec: codec, ownerUserID: "owner")
+            .stageBootstrap(
+                [try snapshot(remoteArchive)], entities: [entity], pendingScopes: [],
+                existingWorkspaceCount: 0
+            )
+        #expect(try RemoteEntityVersionRecord.version(
+            in: context, scopeID: archive.mainEventID, entityType: .todo,
+            entityID: todo.id, ownerUserID: "owner"
+        ) == 7)
+        #expect(try RemoteEntityVersionRecord.version(
+            in: context, scopeID: archive.mainEventID, entityType: .todo,
+            entityID: todo.id, ownerUserID: "another-account"
+        ) == nil)
+    }
+
+    @Test("Child bootstrap retains embedded to-dos and stores their supplemental entity versions")
+    func childTodoBootstrapRetainsProjectionAndVersion() throws {
+        let context = try makeContext()
+        var archive = makeArchive()
+        archive.isScopedEvent = true
+        let todo = EventTodo(eventID: archive.mainEventID, title: "Confirm the cake", createdAt: date)
+        archive.todos = [todo]
+        let entity = RemoteEntitySnapshot(
+            scopeID: archive.mainEventID, entityType: .todo, entityID: todo.id,
+            payload: try codec.encode(todo), serverVersion: 9,
+            updatedAt: date.addingTimeInterval(10)
+        )
+        let workspaces = try WorkspaceRemoteMerger(context: context, codec: codec, ownerUserID: "owner")
+            .stageBootstrap(
+                [try snapshot(archive)], entities: [entity], pendingScopes: [], existingWorkspaceCount: 0
+            )
+
+        #expect(workspaces.first?.todos == [todo])
+        #expect(try RemoteEntityVersionRecord.version(
+            in: context, scopeID: archive.mainEventID, entityType: .todo,
+            entityID: todo.id, ownerUserID: "owner"
+        ) == 9)
+    }
+
     @Test("Scoped pulls overlay pending edits queued while the authoritative page was in flight")
     func scopedPullPreservesPendingEntityEdit() throws {
         let context = try makeContext()

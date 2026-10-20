@@ -1,6 +1,8 @@
 import Foundation
 
 enum BlueprintCopy {
+    static var includeTodos: String { String(localized: "blueprint.includeTodos", defaultValue: "Include To-dos") }
+    static var todoCopyExplanation: String { String(localized: "blueprint.todoCopyExplanation", defaultValue: "Copies start unfinished. Dates and people aren't included.") }
     static var creatorNameLabel: String { String(localized: "blueprint.creator.name", defaultValue: "Creator name") }
     static var creatorNameExplanation: String { String(localized: "blueprint.creator.publicNameExplanation", defaultValue: "This name will appear with your blueprint in Search and shared previews.") }
     static var statusLinkActive: String { String(localized: "blueprint.status.linkActive", defaultValue: "Link active") }

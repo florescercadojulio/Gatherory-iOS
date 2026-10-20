@@ -23,6 +23,7 @@ nonisolated struct SyncEntityType: RawRepresentable, Codable, Hashable, Sendable
     static let registryItem = Self(rawValue: "registry_item")
     static let note = Self(rawValue: "note")
     static let moment = Self(rawValue: "moment")
+    static let todo = Self(rawValue: "todo")
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -324,6 +325,7 @@ enum SyncOutbox {
 enum OfflineSyncSchema {
     static let schema = Schema([
         WorkspaceRecord.self,
+        RemoteEntityVersionRecord.self,
         PendingMutation.self,
         SyncCheckpoint.self,
         AppliedSyncEnvelope.self,

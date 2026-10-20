@@ -1068,6 +1068,18 @@ private struct BlueprintPlanReviewView: View {
                 }
             }
 
+            if !plan.todos.isEmpty {
+                Section {
+                    ForEach(plan.todos) { todo in
+                        BlueprintTodoDefinitionRow(title: todo.title, websiteURL: todo.websiteURL)
+                    }
+                } header: {
+                    Text(TodoCopy.title)
+                } footer: {
+                    Text(BlueprintCopy.todoCopyExplanation)
+                }
+            }
+
             if !plan.instructions.isEmpty {
                 Section {
                     ForEach(plan.instructions) { guide in

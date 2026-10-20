@@ -36,6 +36,12 @@ struct WorkspaceRemoteMerger {
                 )
             }
             var archive = try codec.decode(WorkspaceArchiveV1.self, from: snapshot.payload)
+            // The workspace snapshot can carry the authorized canonical todo
+            // projection (including direct child events). Supplemental todo
+            // entities below provide the entity versions used for later CAS.
+            try RemoteEntityVersionRecord.remove(
+                scopeID: snapshot.scopeID, ownerUserID: ownerUserID, in: context
+            )
             for entity in entitiesByScope[snapshot.scopeID] ?? [] {
                 guard entity.effectivePayloadSchemaVersion == SyncPayloadContract.currentVersion else {
                     throw WorkspacePersistenceError.unsupportedSyncPayloadVersion(
@@ -49,6 +55,13 @@ struct WorkspaceRemoteMerger {
                     payload: entity.payload,
                     codec: codec
                 )
+                if entity.entityType == .todo {
+                    try RemoteEntityVersionRecord.upsert(
+                        in: context, scopeID: entity.scopeID, entityType: .todo,
+                        entityID: entity.entityID, serverVersion: entity.serverVersion,
+                        ownerUserID: ownerUserID
+                    )
+                }
             }
             archive.enforceScopedIsolation()
             let record = try context.fetch(FetchDescriptor<WorkspaceRecord>())
@@ -151,6 +164,13 @@ struct WorkspaceRemoteMerger {
                         }
                     }
                     archive = remoteArchive
+                    if var currentArchive = archive {
+                        try overlayPendingTodoMutations(
+                            scopeID: scopeID,
+                            on: &currentArchive
+                        )
+                        archive = currentArchive
+                    }
                     workspaceServerVersion = change.serverVersion
                     shouldDeleteWorkspace = false
                 }
@@ -163,6 +183,19 @@ struct WorkspaceRemoteMerger {
                     codec: codec
                 )
                 archive = currentArchive
+                if change.entityType == .todo {
+                    try RemoteEntityVersionRecord.upsert(
+                        in: context, scopeID: change.scopeID, entityType: .todo,
+                        entityID: change.entityID, serverVersion: change.serverVersion,
+                        ownerUserID: ownerUserID
+                    )
+                    try overlayPendingTodoMutations(
+                        entityID: change.entityID,
+                        scopeID: scopeID,
+                        on: &currentArchive
+                    )
+                    archive = currentArchive
+                }
             }
             latestUpdatedAt = max(latestUpdatedAt, change.occurredAt)
 
@@ -236,6 +269,7 @@ struct WorkspaceRemoteMerger {
 
         if shouldDeleteWorkspace {
             if let record { context.delete(record) }
+            try RemoteEntityVersionRecord.remove(scopeID: scopeID, ownerUserID: ownerUserID, in: context)
         } else if let archive {
             let payload = try codec.encode(archive)
             if let record {
@@ -292,6 +326,55 @@ struct WorkspaceRemoteMerger {
             repaired = true
         }
         return repaired
+    }
+
+    /// Keep the local optimistic value visible while a todo mutation is still
+    /// queued. Its original baseVersion remains unchanged so a concurrent
+    /// server edit is surfaced as a CAS conflict instead of silently rebasing.
+    private func overlayPendingTodoMutations(
+        entityID: UUID,
+        scopeID: UUID,
+        on archive: inout WorkspaceArchiveV1
+    ) throws {
+        let mutations = try context.fetch(FetchDescriptor<PendingMutation>())
+            .filter {
+                $0.ownerUserID == ownerUserID
+                    && $0.scopeID == scopeID
+                    && $0.entityType == .todo
+                    && $0.entityID == entityID
+            }
+            .sorted { $0.createdAt < $1.createdAt }
+        for mutation in mutations {
+            try archive.applyEntity(
+                type: .todo,
+                id: entityID,
+                operation: mutation.operation,
+                payload: mutation.payload,
+                codec: codec
+            )
+        }
+    }
+
+    private func overlayPendingTodoMutations(
+        scopeID: UUID,
+        on archive: inout WorkspaceArchiveV1
+    ) throws {
+        let mutations = try context.fetch(FetchDescriptor<PendingMutation>())
+            .filter {
+                $0.ownerUserID == ownerUserID
+                    && $0.scopeID == scopeID
+                    && $0.entityType == .todo
+            }
+            .sorted { $0.createdAt < $1.createdAt }
+        for mutation in mutations {
+            try archive.applyEntity(
+                type: .todo,
+                id: mutation.entityID,
+                operation: mutation.operation,
+                payload: mutation.payload,
+                codec: codec
+            )
+        }
     }
 
     private func discardWorkspaceMutations(scopeID: UUID) throws {

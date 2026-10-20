@@ -44,6 +44,7 @@ final class PlanningWorkspace {
     /// The main event owns the portion that hasn't been allocated to child events.
     var mainEventBudgetCap: Decimal?
     var notes: [EventNote]
+    var todos: [EventTodo]
     var ideaResponses: [IdeaResponse]
     var mainEventStatus: MainEventStatus
     var mainEventResponse: EventResponse?
@@ -105,6 +106,7 @@ final class PlanningWorkspace {
         currencyCode: String = Locale.current.currency?.identifier ?? "USD",
         mainEventBudgetCap: Decimal? = nil,
         notes: [EventNote] = [],
+        todos: [EventTodo] = [],
         ideaResponses: [IdeaResponse] = [],
         mainEventStatus: MainEventStatus = .draft,
         mainEventResponse: EventResponse? = nil,
@@ -212,6 +214,17 @@ final class PlanningWorkspace {
             childAllocations: scopedTimeline.map(\.budgetCap)
         )
         self.ideaResponses = ideaResponses
+        let validTodoEventIDs = Set([mainEventID] + (isScopedEvent ? [] : scopedTimeline.map(\.id)))
+        var normalizedTodos: [EventTodo] = []
+        for var todo in todos {
+            guard validTodoEventIDs.contains(todo.eventID),
+                  let normalizedTitle = EventTodo.normalizedTitle(todo.title),
+                  EventTodo.isValidDueDate(todo.dueDate),
+                  !normalizedTodos.contains(where: { $0.id == todo.id }) else { continue }
+            todo.title = normalizedTitle
+            normalizedTodos.append(todo)
+        }
+        self.todos = normalizedTodos
         self.guides = guides
         self.experienceConfiguration = experienceConfiguration
         self.notes = notes.map { note in
@@ -1511,10 +1524,12 @@ final class PlanningWorkspace {
 
     func deleteMainEvent() {
         guard canDeleteMainEvent else { return }
+        let deletedEventIDs = Set([mainEventID] + timeline.filter { $0.parentEventID == mainEventID }.map(\.id))
         isMainEventDeleted = true
         mainEventResponse = nil
         eventMoments.removeAll()
         eventExpenses.removeAll()
+        todos.removeAll { deletedEventIDs.contains($0.eventID) }
         timeline.removeAll { $0.parentEventID == mainEventID }
         mainEventBudgetCap = workspaceBudgetCap
         selectedEventReference = .main
@@ -1523,6 +1538,194 @@ final class PlanningWorkspace {
     func canSendNote(to reference: EventReference) -> Bool {
         canManageEvent(reference)
             && currentViewerMember(for: .main)?.planningPermission != .viewOnly
+    }
+
+    func todos(for reference: EventReference) -> [EventTodo] {
+        guard canReadTodos(for: reference), let eventID = todoEventID(for: reference) else { return [] }
+        return todos
+            .filter { $0.eventID == eventID }
+            .sorted {
+                if $0.createdAt == $1.createdAt { return $0.id.uuidString < $1.id.uuidString }
+                return $0.createdAt < $1.createdAt
+            }
+    }
+
+    /// Show the viewer's work first, then something they can take. Within each
+    /// group, date-only deadlines sort before undated work, newest first on ties.
+    func nextTodo(for reference: EventReference) -> EventTodo? {
+        guard let viewerID = currentViewerMember(for: reference)?.id else { return nil }
+        let unfinished = todos(for: reference).filter { !$0.isCompleted }
+        let assignedToViewer = unfinished.filter { $0.assigneePersonID == viewerID }
+        let candidates: [EventTodo]
+        if !assignedToViewer.isEmpty {
+            candidates = assignedToViewer
+        } else if canEditTodos(for: reference),
+                  eligibleTodoAssignees(for: reference).contains(where: { $0.id == viewerID }) {
+            candidates = unfinished.filter { $0.assigneePersonID == nil }
+        } else {
+            return nil
+        }
+        return candidates.sorted { left, right in
+            switch (left.dueDate, right.dueDate) {
+            case let (leftDate?, rightDate?) where leftDate != rightDate:
+                return leftDate < rightDate
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default:
+                if left.createdAt != right.createdAt { return left.createdAt > right.createdAt }
+                return left.id.uuidString < right.id.uuidString
+            }
+        }.first
+    }
+
+    func eligibleTodoAssignees(for reference: EventReference) -> [WorkspaceMember] {
+        guard canReadTodos(for: reference) else { return [] }
+        return participants(for: reference).filter { member in
+            guard member.invitationStatus == .active,
+                  let userID = member.userID, !userID.isEmpty else { return false }
+            return member.participantRole == .host ||
+                (member.participantRole == .collaborator &&
+                 (member.planningPermission == .manage || member.planningPermission == .contribute))
+        }.sorted {
+            let comparison = $0.name.localizedStandardCompare($1.name)
+            if comparison == .orderedSame { return $0.id.uuidString < $1.id.uuidString }
+            return comparison == .orderedAscending
+        }
+    }
+
+    func todoAssignee(for todo: EventTodo) -> WorkspaceMember? {
+        guard let personID = todo.assigneePersonID,
+              let reference = eventReference(forTodoEventID: todo.eventID),
+              canReadTodos(for: reference) else { return nil }
+        return participants(for: reference).first {
+            $0.id == personID && $0.invitationStatus == .active && $0.participantRole != .guest
+        }
+    }
+
+    func todoAssigneeName(for todo: EventTodo) -> String? {
+        todoAssignee(for: todo)?.name
+    }
+
+    func canTakeTodo(id: UUID) -> Bool {
+        guard let todo = todos.first(where: { $0.id == id }),
+              todo.assigneePersonID == nil, !todo.isCompleted,
+              let reference = eventReference(forTodoEventID: todo.eventID),
+              canEditTodos(for: reference),
+              let viewerID = currentViewerMember(for: reference)?.id else { return false }
+        return eligibleTodoAssignees(for: reference).contains { $0.id == viewerID }
+    }
+
+    @discardableResult
+    func takeTodo(id: UUID) -> Bool {
+        guard canTakeTodo(id: id), let todo = todos.first(where: { $0.id == id }),
+              let reference = eventReference(forTodoEventID: todo.eventID),
+              let viewerID = currentViewerMember(for: reference)?.id else { return false }
+        return assignTodo(id: id, assigneePersonID: viewerID)
+    }
+
+    @discardableResult
+    func assignTodo(id: UUID, assigneePersonID: UUID?) -> Bool {
+        guard let index = todos.firstIndex(where: { $0.id == id }),
+              let reference = eventReference(forTodoEventID: todos[index].eventID),
+              canEditTodos(for: reference),
+              assigneePersonID == nil || assigneePersonID == todos[index].assigneePersonID ||
+                eligibleTodoAssignees(for: reference).contains(where: { $0.id == assigneePersonID }) else { return false }
+        todos[index].assigneePersonID = assigneePersonID
+        return true
+    }
+
+    func canReadTodos(for reference: EventReference) -> Bool {
+        guard !isInvitationProjection, !isMainEventDeleted,
+              let eventID = todoEventID(for: reference),
+              let viewer = currentViewerMember(for: reference),
+              viewer.invitationStatus == .active else { return false }
+        if eventID != mainEventID,
+           !timeline.contains(where: { $0.id == eventID && $0.parentEventID == mainEventID }) { return false }
+        return viewer.participantRole == .host || viewer.participantRole == .collaborator
+    }
+
+    func canEditTodos(for reference: EventReference) -> Bool {
+        guard canReadTodos(for: reference), canManageEvent(reference),
+              let viewer = currentViewerMember(for: reference) else { return false }
+        switch viewer.participantRole {
+        case .host:
+            return true
+        case .collaborator:
+            return viewer.planningPermission == .manage || viewer.planningPermission == .contribute
+        case .guest:
+            return false
+        }
+    }
+
+    @discardableResult
+    func addTodo(title: String, dueDate: String? = nil, websiteURL: String? = nil,
+                 assigneePersonID: UUID? = nil, to reference: EventReference) -> EventTodo? {
+        guard canEditTodos(for: reference), let eventID = todoEventID(for: reference),
+              let normalizedTitle = EventTodo.normalizedTitle(title),
+              EventTodo.isValidDueDate(dueDate), EventTodo.isValidWebsiteURL(websiteURL),
+              assigneePersonID == nil || eligibleTodoAssignees(for: reference).contains(where: { $0.id == assigneePersonID })
+        else { return nil }
+        let todo = EventTodo(eventID: eventID, title: normalizedTitle, dueDate: dueDate,
+                             websiteURL: EventTodo.normalizedWebsiteURL(websiteURL), assigneePersonID: assigneePersonID)
+        todos.append(todo)
+        return todo
+    }
+
+    @discardableResult
+    func updateTodo(id: UUID, title: String, dueDate: String?, websiteURL: String? = nil,
+                    assigneePersonID: UUID? = nil) -> Bool {
+        guard let index = todos.firstIndex(where: { $0.id == id }),
+              let reference = eventReference(forTodoEventID: todos[index].eventID),
+              canEditTodos(for: reference),
+              let normalizedTitle = EventTodo.normalizedTitle(title),
+              EventTodo.isValidDueDate(dueDate), EventTodo.isValidWebsiteURL(websiteURL),
+              assigneePersonID == nil || assigneePersonID == todos[index].assigneePersonID ||
+                eligibleTodoAssignees(for: reference).contains(where: { $0.id == assigneePersonID }) else { return false }
+        todos[index].title = normalizedTitle
+        todos[index].dueDate = dueDate
+        todos[index].websiteURL = EventTodo.normalizedWebsiteURL(websiteURL)
+        todos[index].assigneePersonID = assigneePersonID
+        return true
+    }
+
+    @discardableResult
+    func setTodoCompleted(id: UUID, isCompleted: Bool) -> Bool {
+        guard let index = todos.firstIndex(where: { $0.id == id }),
+              let reference = eventReference(forTodoEventID: todos[index].eventID),
+              canEditTodos(for: reference) else { return false }
+        todos[index].isCompleted = isCompleted
+        return true
+    }
+
+    @discardableResult
+    func deleteTodo(id: UUID) -> Bool {
+        guard let index = todos.firstIndex(where: { $0.id == id }),
+              let reference = eventReference(forTodoEventID: todos[index].eventID),
+              canEditTodos(for: reference) else { return false }
+        todos.remove(at: index)
+        return true
+    }
+
+    private func todoEventID(for reference: EventReference) -> UUID? {
+        switch reference {
+        case .main:
+            return mainEventID
+        case .subevent(let id):
+            guard !isScopedEvent, timeline.contains(where: { $0.id == id && $0.parentEventID == mainEventID }) else {
+                return nil
+            }
+            return id
+        case .idea:
+            return nil
+        }
+    }
+
+    private func eventReference(forTodoEventID eventID: UUID) -> EventReference? {
+        if eventID == mainEventID { return .main }
+        guard !isScopedEvent, timeline.contains(where: { $0.id == eventID && $0.parentEventID == mainEventID }) else {
+            return nil
+        }
+        return .subevent(eventID)
     }
 
     @discardableResult
@@ -1541,6 +1744,7 @@ final class PlanningWorkspace {
 
     func deleteTimelineItem(_ item: TimelineItem) {
         timeline.removeAll { $0.id == item.id }
+        todos.removeAll { $0.eventID == item.id }
         eventParticipations.removeAll { $0.eventID == item.id }
         ideas.removeAll { $0.eventID == item.id }
         eventExpenses.removeAll { $0.eventID == item.id }

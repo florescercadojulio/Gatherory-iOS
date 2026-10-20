@@ -120,6 +120,16 @@ struct BlueprintWorkspaceEventDetail: View {
                 }
             }
 
+            if !event.todos.isEmpty {
+                EventInvitationSection(title: TodoCopy.title, symbol: "checklist") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(event.todos) { todo in
+                            BlueprintTodoDefinitionRow(title: todo.title, websiteURL: todo.websiteURL)
+                        }
+                    }
+                }
+            }
+
             if !event.ideas.isEmpty {
                 EventInvitationSection(title: BlueprintCopy.captureIdeas, symbol: "lightbulb") {
                     VStack(spacing: 0) {

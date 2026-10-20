@@ -9,6 +9,8 @@ extension WorkspaceArchiveV1 {
     func syncPayload(using codec: WorkspaceArchiveCodec) throws -> Data {
         var remote = self
         remote.scopedEvent = nil
+        // To-dos have independent versions and are projected only to planners.
+        remote.todos = nil
         // Responses have independent versions; a workspace snapshot must not
         // overwrite a teammate's input or resend it under another account.
         remote.ideaResponses = nil
@@ -70,6 +72,9 @@ extension WorkspaceArchiveV1 {
         for response in ideaResponses ?? [] {
             entities[.init(type: .ideaResponse, id: response.id)] = try codec.encode(response)
         }
+        for todo in todos ?? [] where isScopedEvent != true || todo.eventID == mainEventID {
+            entities[.init(type: .todo, id: todo.id)] = try codec.encode(todo)
+        }
         for moment in eventMoments {
             var remote = moment
             remote.imageData = Data()
@@ -95,6 +100,12 @@ extension WorkspaceArchiveV1 {
         timeline = local.timeline
         eventExpenses = local.eventExpenses
         notes = local.notes
+        // New server projections carry the authorized canonical todo list.
+        // Keep the local list only for older snapshots that omit it; pending
+        // mutations are overlaid separately by the remote merger.
+        if todos == nil {
+            todos = local.todos
+        }
         ideaResponses = local.ideaResponses
         eventMoments = local.eventMoments
         registry = local.registry
@@ -170,6 +181,28 @@ extension WorkspaceArchiveV1 {
             try applyRecord(EventExpense.self, id: id, operation: operation, payload: payload, codec: codec, to: &eventExpenses)
         case .note:
             try applyRecord(EventNote.self, id: id, operation: operation, payload: payload, codec: codec, to: &notes)
+        case .todo:
+            var records = todos ?? []
+            if operation == .delete {
+                records.removeAll { $0.id == id }
+            } else {
+                let todo = try codec.decode(EventTodo.self, from: payload)
+                let validEventIDs = Set([mainEventID] + (isScopedEvent == true ? [] : timeline.map(\.id)))
+                guard todo.id == id, validEventIDs.contains(todo.eventID),
+                      EventTodo.normalizedTitle(todo.title) == todo.title,
+                      EventTodo.isValidDueDate(todo.dueDate),
+                      EventTodo.isValidWebsiteURL(todo.websiteURL) else {
+                    throw DecodingError.dataCorrupted(
+                        .init(codingPath: [], debugDescription: "Invalid event to-do entity.")
+                    )
+                }
+                if let index = records.firstIndex(where: { $0.id == id }) {
+                    records[index] = todo
+                } else {
+                    records.append(todo)
+                }
+            }
+            todos = records
         case .ideaResponse:
             var responses = ideaResponses ?? []
             try applyRecord(IdeaResponse.self, id: id, operation: operation, payload: payload, codec: codec, to: &responses)
@@ -285,10 +318,42 @@ extension WorkspaceArchiveV1 {
         if let eventParticipations {
             self.eventParticipations = eventParticipations.filter { $0.eventID == mainEventID }
         }
+        todos = (todos ?? []).filter { $0.eventID == mainEventID }
         if var scopedEvent {
             scopedEvent.parentEventID = nil
             scopedEvent.linkedIdeaID = nil
             self.scopedEvent = scopedEvent
+        }
+    }
+
+    func canEditTodo(eventID: UUID, ownerUserID: String?) -> Bool {
+        // A missing account identity is used by local previews and persistence
+        // fixtures. Authenticated sync always supplies an owner identity.
+        guard let ownerUserID else { return true }
+        guard let member = members.first(where: { $0.userID == ownerUserID }) else { return false }
+
+        let participation = eventParticipations?.first { $0.eventID == eventID && $0.memberID == member.id }
+        let eventParticipantIDs: [UUID]
+        if eventID == mainEventID {
+            eventParticipantIDs = mainEventParticipantIDs
+        } else if isScopedEvent != true,
+                  let event = timeline.first(where: { $0.id == eventID && $0.parentEventID == mainEventID }) {
+            eventParticipantIDs = event.participantIDs
+        } else {
+            return false
+        }
+        let invitationStatus = participation?.invitationStatus ?? member.invitationStatus
+        guard (participation != nil || eventParticipantIDs.contains(member.id)),
+              invitationStatus == .active else { return false }
+        let role = participation?.role ?? member.participantRole
+        let permission = participation?.planningPermission ?? member.planningPermission
+        switch role {
+        case .host:
+            return true
+        case .collaborator:
+            return permission == .manage || permission == .contribute
+        case .guest:
+            return false
         }
     }
 }

@@ -351,6 +351,176 @@ struct WorkspaceOutboxWriterTests {
         #expect(try mutations(in: ModelContext(context.container)).isEmpty)
     }
 
+    @Test("To-do mutations coalesce durably with account-scoped server versions")
+    func todoMutationsUseRemoteEntityVersion() throws {
+        let context = try makeContext()
+        var archive = makeArchive()
+        let owner = WorkspaceMember(
+            userID: "owner",
+            name: "Owner",
+            participantRole: .host,
+            initials: "O"
+        )
+        archive.members = [owner]
+        archive.mainEventParticipantIDs = [owner.id]
+        let todo = EventTodo(
+            eventID: archive.mainEventID,
+            title: "Confirm the cake",
+            websiteURL: "https://example.test/vendor",
+            assigneePersonID: owner.id,
+            createdAt: timestamp
+        )
+        archive.todos = [todo]
+        let writer = makeWriter(context, ownerUserID: "owner")
+
+        try writer.coalesceEntityMutations(
+            scopeID: archive.mainEventID,
+            previousArchive: nil,
+            archive: archive,
+            pendingMutations: []
+        )
+        var todoMutation = try #require(mutations(in: context).first { $0.entityID == todo.id })
+        #expect(todoMutation.entityType == .todo)
+        #expect(todoMutation.operation == .create)
+        #expect(todoMutation.baseVersion == 0)
+        #expect(try codec.decode(EventTodo.self, from: todoMutation.payload) == todo)
+        #expect(try codec.decode(EventTodo.self, from: todoMutation.payload).websiteURL == "https://example.test/vendor")
+        #expect(try codec.decode(EventTodo.self, from: todoMutation.payload).assigneePersonID == owner.id)
+        try context.save()
+
+        // Simulate the create acknowledgement and retain a different account's
+        // version to prove todo CAS state is isolated per local account.
+        context.delete(todoMutation)
+        try RemoteEntityVersionRecord.upsert(
+            in: context,
+            scopeID: archive.mainEventID,
+            entityType: .todo,
+            entityID: todo.id,
+            serverVersion: 1,
+            ownerUserID: "owner"
+        )
+        try RemoteEntityVersionRecord.upsert(
+            in: context,
+            scopeID: archive.mainEventID,
+            entityType: .todo,
+            entityID: todo.id,
+            serverVersion: 20,
+            ownerUserID: "another-account"
+        )
+        try context.save()
+
+        var editedArchive = archive
+        editedArchive.todos?[0].isCompleted = true
+        try writer.coalesceEntityMutations(
+            scopeID: archive.mainEventID,
+            previousArchive: archive,
+            archive: editedArchive,
+            pendingMutations: try mutations(in: context)
+        )
+        todoMutation = try #require(mutations(in: context).first { $0.entityID == todo.id })
+        #expect(todoMutation.operation == .update)
+        #expect(todoMutation.baseVersion == 1)
+        #expect(try codec.decode(EventTodo.self, from: todoMutation.payload).isCompleted)
+        let updateID = todoMutation.id
+        try context.save()
+
+        var deletedArchive = editedArchive
+        deletedArchive.todos = []
+        try writer.coalesceEntityMutations(
+            scopeID: archive.mainEventID,
+            previousArchive: editedArchive,
+            archive: deletedArchive,
+            pendingMutations: try mutations(in: context)
+        )
+        todoMutation = try #require(mutations(in: context).first { $0.entityID == todo.id })
+        #expect(todoMutation.id == updateID)
+        #expect(todoMutation.operation == .delete)
+        #expect(todoMutation.baseVersion == 1)
+        try context.save()
+
+        let reopened = ModelContext(context.container)
+        let durable = try #require(mutations(in: reopened).first { $0.entityID == todo.id })
+        #expect(PendingMutationSnapshot(durable) == PendingMutationSnapshot(todoMutation))
+        #expect(try RemoteEntityVersionRecord.version(
+            in: reopened,
+            scopeID: archive.mainEventID,
+            entityType: .todo,
+            entityID: todo.id,
+            ownerUserID: "owner"
+        ) == 1)
+    }
+
+    @Test("A create acknowledgement advances a queued to-do follow-up CAS version")
+    func todoCreateAcknowledgementAdvancesFollowUp() async throws {
+        let context = try makeContext()
+        var archive = makeArchive()
+        let owner = WorkspaceMember(
+            userID: "owner", name: "Owner", participantRole: .host, initials: "O"
+        )
+        archive.members = [owner]
+        archive.mainEventParticipantIDs = [owner.id]
+        let todo = EventTodo(eventID: archive.mainEventID, title: "Confirm the cake", createdAt: timestamp)
+        archive.todos = [todo]
+        let writer = makeWriter(context, ownerUserID: "owner")
+        try writer.coalesceEntityMutations(
+            scopeID: archive.mainEventID, previousArchive: nil, archive: archive, pendingMutations: []
+        )
+        let create = try #require(mutations(in: context).first { $0.entityID == todo.id })
+        create.state = .sending
+        try context.save()
+
+        var edited = archive
+        edited.todos?[0].isCompleted = true
+        try writer.coalesceEntityMutations(
+            scopeID: archive.mainEventID, previousArchive: archive, archive: edited,
+            pendingMutations: try mutations(in: context)
+        )
+        let followUp = try #require(mutations(in: context).first {
+            $0.entityID == todo.id && $0.id != create.id
+        })
+        #expect(followUp.operation == .update)
+        #expect(followUp.baseVersion == 0)
+        try context.save()
+
+        let store = SwiftDataSyncStore(modelContainer: context.container)
+        try await store.acknowledge([
+            SyncPushResult(mutationID: create.id, disposition: .applied, serverVersion: 1, failureCode: nil)
+        ])
+        let remaining = try mutations(in: ModelContext(context.container))
+        let acknowledgedFollowUp = try #require(remaining.first { $0.id == followUp.id })
+        #expect(acknowledgedFollowUp.baseVersion == 1)
+        #expect(acknowledgedFollowUp.operation == .update)
+        #expect(try RemoteEntityVersionRecord.version(
+            in: ModelContext(context.container), scopeID: archive.mainEventID,
+            entityType: .todo, entityID: todo.id, ownerUserID: "owner"
+        ) == 1)
+    }
+
+    @Test("Deleting an unsent to-do create cancels it without a tombstone")
+    func deletingUnsentTodoCancelsCreate() throws {
+        let context = try makeContext()
+        var archive = makeArchive()
+        let owner = WorkspaceMember(
+            userID: "owner", name: "Owner", participantRole: .host, initials: "O"
+        )
+        archive.members = [owner]
+        archive.mainEventParticipantIDs = [owner.id]
+        let todo = EventTodo(eventID: archive.mainEventID, title: "Confirm the cake", createdAt: timestamp)
+        archive.todos = [todo]
+        let writer = makeWriter(context, ownerUserID: "owner")
+        try writer.coalesceEntityMutations(
+            scopeID: archive.mainEventID, previousArchive: nil, archive: archive, pendingMutations: []
+        )
+        let create = try #require(mutations(in: context).first { $0.entityID == todo.id })
+        var deleted = archive
+        deleted.todos = []
+        try writer.coalesceEntityMutations(
+            scopeID: archive.mainEventID, previousArchive: archive, archive: deleted,
+            pendingMutations: [create]
+        )
+        #expect(try mutations(in: context).filter { $0.entityID == todo.id }.isEmpty)
+    }
+
     private func makeContext() throws -> ModelContext {
         let configuration = ModelConfiguration(schema: OfflineSyncSchema.schema,
             isStoredInMemoryOnly: true, cloudKitDatabase: .none)

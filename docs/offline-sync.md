@@ -48,6 +48,40 @@ app becomes active or another local edit is made.
     its pending work. Generic authorization failures and network errors never
     purge it.
 
+## Shared event To-dos
+
+Manage → To-dos uses the existing transactional archive/outbox path. Each
+`EventTodo` belongs to one exact event; active hosts and collaborators can read,
+while hosts and Manage/Contribute collaborators can write only while the event
+is writable. Guests receive no task payloads. The optional archive `todos`
+array keeps older version-1 archives readable; the dedicated `todo` entity owns
+server writes. Embedded workspace arrays are replaced from canonical authorized
+storage and cannot bulk-edit or erase tasks.
+
+`RemoteEntityVersionRecord` stores task versions by account, replication scope
+and entity. Bootstrap, pull and push acknowledgement stage these records with
+the existing transaction. Root workspaces and isolated child workspaces use
+their own replication scope; child projections include supplemental task entity
+versions from the same canonical server log. A pending edit keeps its original
+comparison version across pulls. An acknowledgement can advance a later edit
+queued while the first was in flight. Conflicts preserve the local draft for
+the existing recovery controls; deleting an unsent create cancels the pair.
+
+Website and assignee fields are optional; clearing them emits explicit JSON
+null. New/changed assignees must be linked active writers for the exact event.
+Taking an unassigned task is an ordinary versioned assignment update: concurrent
+claims do not silently overwrite each other. Assignment itself grants no access.
+The native client advertises `event-todos-v2`. Servers return recoverable HTTP
+426 `todos_client_upgrade_required` to older clients for readable scopes with
+task state or tombstone history, including older v1 clients that would strip
+website/assignment data. Upgrade-required errors retain saved changes.
+Account deletion and scope removal purge the matching version records;
+sign-out retains them under their account namespace with the offline data.
+
+Due dates are date-only values; there is no notification scheduler or reminder
+consent in this slice. See the server repository's
+[implementation and release checks](../../../gatherory-web-app/docs/roadmaps/to-dos-reminders-roadmap/01-shared-event-to-dos.md).
+
 ## Decide and idea response bars
 
 Decide records an individual preference without changing the idea's shared

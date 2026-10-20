@@ -118,6 +118,20 @@ nonisolated struct BlueprintCatalogInstruction: Decodable, Identifiable, Sendabl
     var id: String { key }
 }
 
+/// Portable checklist content authored inside a blueprint. Installation always
+/// creates fresh event-scoped to-dos from these stable source keys.
+nonisolated struct BlueprintTodoDefinition: Codable, Equatable, Identifiable, Sendable {
+    let key: String
+    let title: String
+    let websiteURL: String?
+    let target: BlueprintTarget
+    var id: String { key }
+}
+
+nonisolated struct BlueprintTodosConfig: Decodable, Equatable, Sendable {
+    let todos: [BlueprintTodoDefinition]
+}
+
 nonisolated struct BlueprintCatalogCapability: Decodable, Identifiable, Sendable {
     let key: String
     let required: Bool
@@ -228,7 +242,25 @@ nonisolated struct BlueprintExpandedPlan: Decodable, Sendable {
     let children: [BlueprintPlannedEvent]
     let ideas: [BlueprintPlannedIdea]
     let instructions: [BlueprintPlannedInstruction]
+    var todos: [BlueprintPlannedTodo] = []
     let omissions: [BlueprintPlanOmission]
+
+    private enum CodingKeys: String, CodingKey {
+        case plannerVersion, experienceType, categoryOrder, main, children, ideas, instructions, todos, omissions
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        plannerVersion = try container.decode(Int.self, forKey: .plannerVersion)
+        experienceType = try container.decode(String.self, forKey: .experienceType)
+        categoryOrder = try container.decode([String].self, forKey: .categoryOrder)
+        main = try container.decode(BlueprintPlannedEvent.self, forKey: .main)
+        children = try container.decode([BlueprintPlannedEvent].self, forKey: .children)
+        ideas = try container.decode([BlueprintPlannedIdea].self, forKey: .ideas)
+        instructions = try container.decode([BlueprintPlannedInstruction].self, forKey: .instructions)
+        todos = try container.decodeIfPresent([BlueprintPlannedTodo].self, forKey: .todos) ?? []
+        omissions = try container.decode([BlueprintPlanOmission].self, forKey: .omissions)
+    }
 }
 
 nonisolated struct BlueprintPlannedEvent: Decodable, Identifiable, Sendable {
@@ -260,6 +292,14 @@ nonisolated struct BlueprintPlannedInstruction: Decodable, Identifiable, Sendabl
     let title: String
     let body: String
     let audience: ExperienceGuideVisibility
+    let targetSourceKey: String
+    var id: String { sourceKey }
+}
+
+nonisolated struct BlueprintPlannedTodo: Decodable, Equatable, Identifiable, Sendable {
+    let sourceKey: String
+    let title: String
+    let websiteURL: String?
     let targetSourceKey: String
     var id: String { sourceKey }
 }

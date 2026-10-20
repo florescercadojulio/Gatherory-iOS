@@ -9,6 +9,7 @@ struct BlueprintCaptureSourceResponse: Decodable, Equatable, Sendable {
     var children: [BlueprintCaptureSource.Child] { source.children }
     var ideas: [BlueprintCaptureSource.Idea] { source.ideas }
     var instructions: [BlueprintCaptureSource.Instruction] { source.instructions }
+    var todos: [BlueprintCaptureSource.Todo] { source.todos }
 }
 
 struct BlueprintCaptureSource: Decodable, Equatable, Sendable {
@@ -40,24 +41,62 @@ struct BlueprintCaptureSource: Decodable, Equatable, Sendable {
         let body: String
         let audience: String
     }
+    struct Todo: Decodable, Equatable, Identifiable, Sendable {
+        let id: UUID
+        let eventId: UUID
+        let title: String
+        let websiteURL: String?
+    }
     let event: Event
     let children: [Child]
     let ideas: [Idea]
     let instructions: [Instruction]
+    var todos: [Todo] = []
+
+    private enum CodingKeys: String, CodingKey { case event, children, ideas, instructions, todos }
+
+    init(event: Event, children: [Child], ideas: [Idea], instructions: [Instruction], todos: [Todo] = []) {
+        self.event = event
+        self.children = children
+        self.ideas = ideas
+        self.instructions = instructions
+        self.todos = todos
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        event = try container.decode(Event.self, forKey: .event)
+        children = try container.decode([Child].self, forKey: .children)
+        ideas = try container.decode([Idea].self, forKey: .ideas)
+        instructions = try container.decode([Instruction].self, forKey: .instructions)
+        todos = try container.decodeIfPresent([Todo].self, forKey: .todos) ?? []
+    }
 }
 
 struct BlueprintCaptureSelection: Encodable, Equatable, Sendable {
     let childIds: [UUID]
     let ideaIds: [UUID]
     let instructionIds: [UUID]
+    let todoIds: [UUID]
     let includeIdeaNotes: Bool
 
-    private enum CodingKeys: String, CodingKey { case childIds, ideaIds, instructionIds, includeIdeaNotes }
+    init(childIds: [UUID], ideaIds: [UUID], instructionIds: [UUID], todoIds: [UUID] = [], includeIdeaNotes: Bool) {
+        self.childIds = childIds
+        self.ideaIds = ideaIds
+        self.instructionIds = instructionIds
+        self.todoIds = todoIds
+        self.includeIdeaNotes = includeIdeaNotes
+    }
+
+    private enum CodingKeys: String, CodingKey { case childIds, ideaIds, instructionIds, todoIds, includeIdeaNotes }
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(childIds.map { $0.uuidString.lowercased() }, forKey: .childIds)
         try container.encode(ideaIds.map { $0.uuidString.lowercased() }, forKey: .ideaIds)
         try container.encode(instructionIds.map { $0.uuidString.lowercased() }, forKey: .instructionIds)
+        if !todoIds.isEmpty {
+            try container.encode(todoIds.map { $0.uuidString.lowercased() }, forKey: .todoIds)
+        }
         try container.encode(includeIdeaNotes, forKey: .includeIdeaNotes)
     }
 }
@@ -96,12 +135,46 @@ struct BlueprintCapturedContent: Decodable, Equatable, Sendable {
         let audience: String
         let target: Target
     }
+    struct Todo: Decodable, Equatable, Identifiable, Sendable {
+        var id: String { key }
+        let key: String
+        let title: String
+        let websiteURL: String?
+        let target: Target
+    }
     let name: String
     let description: String
     let experienceType: String
     let children: [Child]
     let ideas: [Idea]
     let instructions: [Instruction]
+    var todos: [Todo] = []
+
+    private enum CodingKeys: String, CodingKey {
+        case name, description, experienceType, children, ideas, instructions, todos
+    }
+
+    init(name: String, description: String, experienceType: String, children: [Child], ideas: [Idea],
+         instructions: [Instruction], todos: [Todo] = []) {
+        self.name = name
+        self.description = description
+        self.experienceType = experienceType
+        self.children = children
+        self.ideas = ideas
+        self.instructions = instructions
+        self.todos = todos
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decode(String.self, forKey: .description)
+        experienceType = try container.decode(String.self, forKey: .experienceType)
+        children = try container.decode([Child].self, forKey: .children)
+        ideas = try container.decode([Idea].self, forKey: .ideas)
+        instructions = try container.decode([Instruction].self, forKey: .instructions)
+        todos = try container.decodeIfPresent([Todo].self, forKey: .todos) ?? []
+    }
 }
 
 struct BlueprintCaptureReview: Decodable, Equatable, Sendable {
@@ -180,6 +253,7 @@ final class BlueprintCreateShareStore {
     private(set) var selectedChildIDs: Set<UUID> = []
     private(set) var selectedIdeaIDs: Set<UUID> = []
     private(set) var selectedInstructionIDs: Set<UUID> = []
+    private(set) var selectedTodoIDs: Set<UUID> = []
     private(set) var includeIdeaNotes = false
     private(set) var reviewed: BlueprintCaptureReview?
     private(set) var created: BlueprintNativeCreationResult?
@@ -239,6 +313,9 @@ final class BlueprintCreateShareStore {
     var eligibleInstructions: [BlueprintCaptureSource.Instruction] {
         source?.source.instructions.filter { isEligible($0.eventId) } ?? []
     }
+    var eligibleTodos: [BlueprintCaptureSource.Todo] {
+        source?.source.todos.filter { isEligible($0.eventId) } ?? []
+    }
 
     func setName(_ value: String) {
         guard canEdit else { return }
@@ -256,6 +333,7 @@ final class BlueprintCreateShareStore {
             selectedChildIDs.remove(id)
             selectedIdeaIDs = selectedIdeaIDs.intersection(eligibleIdeas.map(\.id))
             selectedInstructionIDs = selectedInstructionIDs.intersection(eligibleInstructions.map(\.id))
+            selectedTodoIDs = selectedTodoIDs.intersection(eligibleTodos.map(\.id))
         }
         edit()
     }
@@ -267,6 +345,16 @@ final class BlueprintCreateShareStore {
     func setInstruction(_ id: UUID, included: Bool) {
         guard canEdit, eligibleInstructions.contains(where: { $0.id == id }) else { return }
         if included { selectedInstructionIDs.insert(id) } else { selectedInstructionIDs.remove(id) }
+        edit()
+    }
+    func setTodo(_ id: UUID, included: Bool) {
+        guard canEdit, eligibleTodos.contains(where: { $0.id == id }) else { return }
+        if included { selectedTodoIDs.insert(id) } else { selectedTodoIDs.remove(id) }
+        edit()
+    }
+    func setIncludeTodos(_ included: Bool) {
+        guard canEdit else { return }
+        selectedTodoIDs = included ? Set(eligibleTodos.map(\.id)) : []
         edit()
     }
     func edit() {
@@ -291,6 +379,7 @@ final class BlueprintCreateShareStore {
             selectedChildIDs = Set(response.source.children.map(\.id))
             selectedIdeaIDs = Set(response.source.ideas.map(\.id))
             selectedInstructionIDs = Set(response.source.instructions.map(\.id))
+            selectedTodoIDs = []
             includeIdeaNotes = true
             reviewed = nil
             sourceReloadRequired = false
@@ -546,6 +635,7 @@ final class BlueprintCreateShareStore {
         selectedChildIDs = []
         selectedIdeaIDs = []
         selectedInstructionIDs = []
+        selectedTodoIDs = []
         includeIdeaNotes = false
         reviewed = nil
         pendingCreate = nil
@@ -580,7 +670,8 @@ final class BlueprintCreateShareStore {
     private var selection: BlueprintCaptureSelection {
         func sorted(_ ids: Set<UUID>) -> [UUID] { ids.sorted { $0.uuidString < $1.uuidString } }
         return BlueprintCaptureSelection(childIds: sorted(selectedChildIDs), ideaIds: sorted(selectedIdeaIDs),
-            instructionIds: sorted(selectedInstructionIDs), includeIdeaNotes: includeIdeaNotes)
+            instructionIds: sorted(selectedInstructionIDs), todoIds: sorted(selectedTodoIDs),
+            includeIdeaNotes: includeIdeaNotes)
     }
     private static func isHash(_ value: String) -> Bool {
         value.utf8.count == 64 && value.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }

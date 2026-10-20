@@ -36,6 +36,8 @@ struct WorkspaceArchiveV1: Codable {
     let currencyCode: String?
     var mainEventBudgetCap: Decimal?
     var notes: [EventNote]
+    /// Optional so existing version-1 archives decode with an empty to-do list.
+    var todos: [EventTodo]?
     var ideaResponses: [IdeaResponse]?
     var mainEventStatus: MainEventStatus
     let mainEventResponse: EventResponse?
@@ -81,6 +83,7 @@ struct WorkspaceArchiveV1: Codable {
         currencyCode = workspace.currencyCode
         mainEventBudgetCap = workspace.mainEventBudgetCap
         notes = workspace.notes
+        todos = workspace.todos
         ideaResponses = workspace.ideaResponses
         mainEventStatus = workspace.mainEventStatus
         mainEventResponse = workspace.mainEventResponse
@@ -124,6 +127,7 @@ struct WorkspaceArchiveV1: Codable {
             currencyCode: currencyCode ?? Locale.current.currency?.identifier ?? "USD",
             mainEventBudgetCap: mainEventBudgetCap,
             notes: notes,
+            todos: todos ?? [],
             ideaResponses: ideaResponses ?? [],
             mainEventStatus: mainEventStatus,
             mainEventResponse: mainEventResponse,

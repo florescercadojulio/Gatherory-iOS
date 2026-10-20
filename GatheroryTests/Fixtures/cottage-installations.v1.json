@@ -31,12 +31,7 @@
             "startsAt": "2027-07-11T14:00:00.000Z"
           }
         ],
-        "selectedIdeaKeys": [
-          "meals",
-          "local_outings",
-          "shared_activities",
-          "useful_links"
-        ],
+        "selectedIdeaKeys": ["meals", "local_outings", "shared_activities", "useful_links"],
         "capabilities": [
           "event.children_v1",
           "planning.ideas_v2",
@@ -72,6 +67,7 @@
         }
       },
       "archive": {
+        "todos": [],
         "mainEventID": "10000000-1000-4000-8000-000000000001",
         "title": "Lake Cottage Weekend",
         "mainEventStartsAt": 836755200,
@@ -153,9 +149,7 @@
             "updatedAt": 813758400
           }
         ],
-        "mainEventParticipantIDs": [
-          "10000000-7000-4000-8000-000000000001"
-        ],
+        "mainEventParticipantIDs": ["10000000-7000-4000-8000-000000000001"],
         "ideas": [
           {
             "id": "10000000-2000-4000-8000-000000000001",
@@ -254,9 +248,7 @@
             "isAllDay": false,
             "timeZoneIdentifier": "America/Detroit",
             "eventLocation": null,
-            "participantIDs": [
-              "10000000-7000-4000-8000-000000000001"
-            ],
+            "participantIDs": ["10000000-7000-4000-8000-000000000001"],
             "parentEventID": "10000000-1000-4000-8000-000000000001",
             "status": "approved",
             "statusBeforeArchiving": null,
@@ -280,9 +272,7 @@
             "isAllDay": false,
             "timeZoneIdentifier": "America/Detroit",
             "eventLocation": null,
-            "participantIDs": [
-              "10000000-7000-4000-8000-000000000001"
-            ],
+            "participantIDs": ["10000000-7000-4000-8000-000000000001"],
             "parentEventID": "10000000-1000-4000-8000-000000000001",
             "status": "approved",
             "statusBeforeArchiving": null,
@@ -306,9 +296,7 @@
             "isAllDay": false,
             "timeZoneIdentifier": "America/Detroit",
             "eventLocation": null,
-            "participantIDs": [
-              "10000000-7000-4000-8000-000000000001"
-            ],
+            "participantIDs": ["10000000-7000-4000-8000-000000000001"],
             "parentEventID": "10000000-1000-4000-8000-000000000001",
             "status": "approved",
             "statusBeforeArchiving": null,
@@ -371,12 +359,7 @@
         ],
         "experienceConfiguration": {
           "experienceType": "custom",
-          "categoryOrder": [
-            "food",
-            "venue",
-            "other",
-            "link"
-          ]
+          "categoryOrder": ["food", "venue", "other", "link"]
         },
         "isMainEventDeleted": false,
         "registry": [],
@@ -416,12 +399,7 @@
             "startsAt": "2027-10-16T14:00:00.000Z"
           }
         ],
-        "selectedIdeaKeys": [
-          "meals",
-          "local_outings",
-          "shared_activities",
-          "useful_links"
-        ],
+        "selectedIdeaKeys": ["meals", "local_outings", "shared_activities", "useful_links"],
         "capabilities": [
           "event.children_v1",
           "planning.ideas_v2",
@@ -457,6 +435,7 @@
         }
       },
       "archive": {
+        "todos": [],
         "mainEventID": "20000000-1000-4000-8000-000000000001",
         "title": "Autumn Cottage Weekend",
         "mainEventStartsAt": 845136000,
@@ -538,9 +517,7 @@
             "updatedAt": 813758400
           }
         ],
-        "mainEventParticipantIDs": [
-          "20000000-7000-4000-8000-000000000001"
-        ],
+        "mainEventParticipantIDs": ["20000000-7000-4000-8000-000000000001"],
         "ideas": [
           {
             "id": "20000000-2000-4000-8000-000000000001",
@@ -639,9 +616,7 @@
             "isAllDay": false,
             "timeZoneIdentifier": "America/Detroit",
             "eventLocation": null,
-            "participantIDs": [
-              "20000000-7000-4000-8000-000000000001"
-            ],
+            "participantIDs": ["20000000-7000-4000-8000-000000000001"],
             "parentEventID": "20000000-1000-4000-8000-000000000001",
             "status": "approved",
             "statusBeforeArchiving": null,
@@ -665,9 +640,7 @@
             "isAllDay": false,
             "timeZoneIdentifier": "America/Detroit",
             "eventLocation": null,
-            "participantIDs": [
-              "20000000-7000-4000-8000-000000000001"
-            ],
+            "participantIDs": ["20000000-7000-4000-8000-000000000001"],
             "parentEventID": "20000000-1000-4000-8000-000000000001",
             "status": "approved",
             "statusBeforeArchiving": null,
@@ -691,9 +664,7 @@
             "isAllDay": false,
             "timeZoneIdentifier": "America/Detroit",
             "eventLocation": null,
-            "participantIDs": [
-              "20000000-7000-4000-8000-000000000001"
-            ],
+            "participantIDs": ["20000000-7000-4000-8000-000000000001"],
             "parentEventID": "20000000-1000-4000-8000-000000000001",
             "status": "approved",
             "statusBeforeArchiving": null,
@@ -756,12 +727,7 @@
         ],
         "experienceConfiguration": {
           "experienceType": "custom",
-          "categoryOrder": [
-            "food",
-            "venue",
-            "other",
-            "link"
-          ]
+          "categoryOrder": ["food", "venue", "other", "link"]
         },
         "isMainEventDeleted": false,
         "registry": [],

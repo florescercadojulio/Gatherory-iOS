@@ -54,16 +54,33 @@ struct BlueprintSavedCopyResolver {
 extension BlueprintDraftContent {
     static func snapshot(of entry: BlueprintCatalogEntry) throws -> Self {
         guard entry.definition.supportsCurrentSchema else { throw BlueprintSavedCopyResolver.Failure.invalidCopy }
-        let supported: [String: Int] = ["experience_tree": 2, "ideas": 2, "instructions": 1]
+        let supported: [String: Int] = ["experience_tree": 2, "ideas": 2, "instructions": 1, "todos": 1]
         guard entry.definition.modules.allSatisfy({ !$0.isRequired || supported[$0.type] == $0.version }) else {
             throw BlueprintSavedCopyResolver.Failure.invalidCopy
         }
         let effective = try BlueprintCustomization().applying(to: entry)
+        let todosModule = entry.definition.modules.first { $0.type == "todos" }
+        let todos: [BlueprintTodoDefinition]
+        if let todosModule {
+            guard todosModule.version == 1,
+                  let config = todosModule.decodeConfiguration(BlueprintTodosConfig.self) else {
+                throw BlueprintSavedCopyResolver.Failure.invalidCopy
+            }
+            let childKeys = Set(effective.tree.children.map(\.key))
+            guard config.todos.allSatisfy({ todo in
+                if case .main = todo.target { return true }
+                if case let .child(key) = todo.target { return childKeys.contains(key) }
+                return false
+            }) else { throw BlueprintSavedCopyResolver.Failure.invalidCopy }
+            todos = config.todos
+        } else {
+            todos = []
+        }
         let instructions = entry.definition.modules.filter { $0.type == "instructions" }.flatMap {
             $0.decodeConfiguration(BlueprintInstructionsConfig.self)?.sections ?? []
         }.map { BlueprintDraftInstruction(key: $0.key, title: $0.title, body: $0.body, audience: $0.audience, target: $0.target) }
         return Self(name: entry.definition.blueprint.name, description: entry.description ?? entry.discovery?.summary ?? "",
                     experienceType: entry.definition.experienceDefaults.type, children: effective.tree.children,
-                    ideas: effective.ideas.ideas, instructions: instructions)
+                    ideas: effective.ideas.ideas, instructions: instructions, todos: todos)
     }
 }

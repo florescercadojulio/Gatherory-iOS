@@ -19,6 +19,7 @@ struct BlueprintPreviewContent {
     let children: [BlueprintCatalogChild]
     let ideas: [BlueprintCatalogIdea]
     let guidance: [BlueprintCatalogInstruction]
+    let todos: [BlueprintTodoDefinition]
 
     init?(entry: BlueprintCatalogEntry, customizations: BlueprintCustomization? = nil, eventName: String? = nil,
           creatorNameOverride: String? = nil) {
@@ -30,6 +31,15 @@ struct BlueprintPreviewContent {
         let effective = customizations.flatMap { try? $0.applying(to: entry) }
         if customizations != nil && effective == nil { return nil }
         children = effective?.tree.children ?? tree.children
+        let childKeys = Set(children.map(\.key))
+        let sourceTodos = entry.definition.modules.first { $0.type == "todos" }?
+            .decodeConfiguration(BlueprintTodosConfig.self)?.todos ?? []
+        todos = sourceTodos.filter { todo in
+            switch todo.target {
+            case .main: true
+            case .child(let key): childKeys.contains(key)
+            }
+        }
         title = eventName.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } ?? entry.definition.blueprint.name
         summary = entry.discovery?.summary
         creatorName = creatorNameOverride ?? entry.creator?.displayName
@@ -49,23 +59,36 @@ struct BlueprintPreviewContent {
     /// using the unfiltered content so undiscovered activities remain reachable.
     func homeContent(responses: [String: DecisionChoice]) -> Self {
         let lovedIdeas = ideas.filter { responses[$0.key] == .love }
-        let childKeys = Set(lovedIdeas.compactMap { idea -> String? in
+        let lovedChildKeys = Set(lovedIdeas.compactMap { idea -> String? in
             guard case .child(let key) = idea.target else { return nil }
             return key
         })
+        let taskChildKeys = Set(todos.compactMap { todo -> String? in
+            guard case .child(let key) = todo.target else { return nil }
+            return key
+        })
+        let childKeys = lovedChildKeys.union(taskChildKeys)
         return Self(title: title, summary: summary, creatorName: creatorName,
                     children: children.filter { childKeys.contains($0.key) },
-                    ideas: lovedIdeas, guidance: guidance)
+                    ideas: lovedIdeas, guidance: guidance,
+                    todos: todos.filter { todo in
+                        switch todo.target {
+                        case .main: true
+                        case .child(let key): childKeys.contains(key)
+                        }
+                    })
     }
 
     private init(title: String, summary: String?, creatorName: String?, children: [BlueprintCatalogChild],
-                 ideas: [BlueprintCatalogIdea], guidance: [BlueprintCatalogInstruction]) {
+                 ideas: [BlueprintCatalogIdea], guidance: [BlueprintCatalogInstruction],
+                 todos: [BlueprintTodoDefinition]) {
         self.title = title
         self.summary = summary
         self.creatorName = creatorName
         self.children = children
         self.ideas = ideas
         self.guidance = guidance
+        self.todos = todos
     }
 
     func ideas(in scope: BlueprintPreviewScope) -> [BlueprintCatalogIdea] {
@@ -94,12 +117,14 @@ struct BlueprintPreviewContent {
             return BlueprintPreviewEventContent(
                 title: child.title, summary: nil, category: child.category,
                 children: [], ideas: ideas(for: childKey), guidance: guidance(for: childKey),
-                scheduleProposal: child.scheduleProposal
+                scheduleProposal: child.scheduleProposal,
+                todos: todos.filter { $0.target == .child(key: childKey) }
             )
         }
         return BlueprintPreviewEventContent(
             title: title, summary: summary, category: "event", children: children,
-            ideas: ideas(), guidance: guidance(), scheduleProposal: nil
+            ideas: ideas(), guidance: guidance(), scheduleProposal: nil,
+            todos: todos.filter { $0.target == .main }
         )
     }
 
@@ -133,4 +158,5 @@ struct BlueprintPreviewEventContent {
     let ideas: [BlueprintCatalogIdea]
     let guidance: [BlueprintCatalogInstruction]
     let scheduleProposal: BlueprintScheduleProposal?
+    var todos: [BlueprintTodoDefinition] = []
 }

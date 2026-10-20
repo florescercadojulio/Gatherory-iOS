@@ -258,7 +258,8 @@ struct PostgresSyncTransport: WorkspaceSnapshotTransport {
             if response.statusCode == 413 { throw CloudSyncFailure.payloadTooLarge }
             if response.statusCode == 403 { throw CloudSyncFailure.forbidden(failure.code) }
             if response.statusCode == 426 || failure.code == SyncClientCapabilities.upgradeRequiredCode ||
-                failure.code == SyncClientCapabilities.legacyUpgradeRequiredCode {
+                failure.code == SyncClientCapabilities.legacyUpgradeRequiredCode ||
+                failure.code == SyncClientCapabilities.todosUpgradeRequiredCode {
                 throw CloudSyncFailure.clientUpgradeRequired(failure.code)
             }
             throw CloudSyncFailure.server(failure.code ?? "HTTP_\(response.statusCode)")

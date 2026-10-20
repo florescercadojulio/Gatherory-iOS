@@ -36,6 +36,87 @@ final class WorkspaceRecord {
     }
 }
 
+/// The account-local optimistic-concurrency version for an independently
+/// synchronized entity. Todo updates and deletes use it as their CAS base.
+@Model
+final class RemoteEntityVersionRecord {
+    @Attribute(.unique) var id: UUID
+    var scopeID: UUID
+    var entityTypeValue: String
+    var entityID: UUID
+    var serverVersion: Int
+    var ownerUserID: String?
+
+    init(
+        id: UUID = UUID(),
+        scopeID: UUID,
+        entityType: SyncEntityType,
+        entityID: UUID,
+        serverVersion: Int,
+        ownerUserID: String?
+    ) {
+        self.id = id
+        self.scopeID = scopeID
+        self.entityTypeValue = entityType.rawValue
+        self.entityID = entityID
+        self.serverVersion = serverVersion
+        self.ownerUserID = ownerUserID
+    }
+
+    static func version(
+        in context: ModelContext,
+        scopeID: UUID,
+        entityType: SyncEntityType,
+        entityID: UUID,
+        ownerUserID: String?
+    ) throws -> Int? {
+        try context.fetch(FetchDescriptor<RemoteEntityVersionRecord>()).first {
+            $0.scopeID == scopeID && $0.entityTypeValue == entityType.rawValue
+                && $0.entityID == entityID && $0.ownerUserID == ownerUserID
+        }?.serverVersion
+    }
+
+    static func upsert(
+        in context: ModelContext,
+        scopeID: UUID,
+        entityType: SyncEntityType,
+        entityID: UUID,
+        serverVersion: Int,
+        ownerUserID: String?
+    ) throws {
+        let matches = try context.fetch(FetchDescriptor<RemoteEntityVersionRecord>()).filter {
+            $0.scopeID == scopeID && $0.entityTypeValue == entityType.rawValue
+                && $0.entityID == entityID && $0.ownerUserID == ownerUserID
+        }
+        if let record = matches.first {
+            record.serverVersion = serverVersion
+            for duplicate in matches.dropFirst() { context.delete(duplicate) }
+        } else {
+            context.insert(RemoteEntityVersionRecord(
+                scopeID: scopeID,
+                entityType: entityType,
+                entityID: entityID,
+                serverVersion: serverVersion,
+                ownerUserID: ownerUserID
+            ))
+        }
+    }
+
+    static func remove(scopeID: UUID, ownerUserID: String?, in context: ModelContext) throws {
+        for record in try context.fetch(FetchDescriptor<RemoteEntityVersionRecord>())
+        where record.scopeID == scopeID && record.ownerUserID == ownerUserID {
+            context.delete(record)
+        }
+    }
+
+    static func removeAll(ownerUserID: String?, in context: ModelContext) throws {
+        for record in try context.fetch(FetchDescriptor<RemoteEntityVersionRecord>())
+        where record.ownerUserID == ownerUserID {
+            context.delete(record)
+        }
+    }
+}
+
 /// Owns the one local write path for the workspace graph and its sync outbox.
 /// Feature views continue to edit observable domain objects; observation below
 /// turns those edits into a debounced, atomic SwiftData transaction.
@@ -234,6 +315,7 @@ final class WorkspacePersistenceController {
         where record.ownerUserID == userID {
             context.delete(record)
         }
+        try RemoteEntityVersionRecord.removeAll(ownerUserID: userID, in: context)
         for mutation in try context.fetch(FetchDescriptor<PendingMutation>())
         where mutation.ownerUserID == userID {
             context.delete(mutation)
@@ -302,6 +384,7 @@ final class WorkspacePersistenceController {
         for record in existingRecords where !persistedIDs.contains(record.id) {
             let wasScopedEvent = (try? codec.decode(WorkspaceArchiveV1.self, from: record.payload).isScopedEvent) == true
             context.delete(record)
+            try RemoteEntityVersionRecord.remove(scopeID: record.id, ownerUserID: activeUserID, in: context)
             guard enqueuesMutations else { continue }
             if wasScopedEvent {
                 try discardPendingMutations(scopeID: record.id)
@@ -706,6 +789,7 @@ final class WorkspacePersistenceController {
             else { continue }
 
             context.delete(record)
+            try RemoteEntityVersionRecord.remove(scopeID: record.id, ownerUserID: activeUserID, in: context)
             try mediaBookkeeper.stageRemoval(scopeID: record.id)
             for receipt in try context.fetch(FetchDescriptor<AppliedSyncEnvelope>())
             where receipt.ownerUserID == activeUserID && receipt.scopeID == record.id {
@@ -736,6 +820,7 @@ final class WorkspacePersistenceController {
 
         context.delete(record)
         try discardPendingMutations(scopeID: scopeID)
+        try RemoteEntityVersionRecord.remove(scopeID: scopeID, ownerUserID: activeUserID, in: context)
         try mediaBookkeeper.stageRemoval(scopeID: scopeID)
         for receipt in try context.fetch(FetchDescriptor<AppliedSyncEnvelope>())
         where receipt.ownerUserID == activeUserID && receipt.scopeID == scopeID {

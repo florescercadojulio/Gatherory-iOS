@@ -82,6 +82,25 @@ struct BlueprintPersonalLibraryTests {
         let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(content)) as? [String: Any])
         #expect(Set(object.keys) == Set(["name", "description", "experienceType", "children", "ideas", "instructions"]))
     }
+
+    @Test("Portable to-dos roundtrip in draft content while empty arrays stay wire-compatible")
+    func portableTodosRoundTrip() throws {
+        let task = BlueprintTodoDefinition(key: "book-venue", title: "Book venue", websiteURL: "https://example.com",
+                                           target: .child(key: "visit"))
+        let content = BlueprintDraftContent(name: "Dinner", description: "A plan", experienceType: "dinner",
+            children: [], ideas: [], instructions: [], todos: [task])
+        let encoded = try JSONEncoder().encode(content)
+        let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        let todos = try #require(object["todos"] as? [[String: Any]])
+        #expect(todos.first?["key"] as? String == "book-venue")
+        #expect(try JSONDecoder().decode(BlueprintDraftContent.self, from: encoded).todos == [task])
+
+        let legacy = BlueprintDraftContent(name: "Dinner", description: "A plan", experienceType: "dinner",
+            children: [], ideas: [], instructions: [])
+        let legacyObject = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(legacy)) as? [String: Any])
+        #expect(legacyObject["todos"] == nil)
+        #expect(try JSONDecoder().decode(BlueprintDraftContent.self, from: JSONSerialization.data(withJSONObject: legacyObject)).todos.isEmpty)
+    }
 }
 
 private final class PersonalBlueprintFixtureBundle: NSObject {}

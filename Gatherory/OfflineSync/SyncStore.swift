@@ -88,15 +88,36 @@ actor SwiftDataSyncStore: SyncOutboxStore {
         let resultsByID = Dictionary(uniqueKeysWithValues: results.map { ($0.mutationID, $0) })
         for mutation in try modelContext.fetch(FetchDescriptor<PendingMutation>())
         where resultsByID[mutation.id] != nil {
+            let result = resultsByID[mutation.id]
             let scopeID = mutation.scopeID
             if mutation.entityType == .workspace,
-               let serverVersion = resultsByID[mutation.id]?.serverVersion,
+               let serverVersion = result?.serverVersion,
                let record = try modelContext.fetch(
                    FetchDescriptor<WorkspaceRecord>(
                        predicate: #Predicate { $0.id == scopeID }
                    )
                ).first(where: { $0.ownerUserID == mutation.ownerUserID }) {
                 record.serverVersion = serverVersion
+            }
+            if mutation.entityType == .todo, let serverVersion = result?.serverVersion {
+                try RemoteEntityVersionRecord.upsert(
+                    in: modelContext,
+                    scopeID: mutation.scopeID,
+                    entityType: .todo,
+                    entityID: mutation.entityID,
+                    serverVersion: serverVersion,
+                    ownerUserID: mutation.ownerUserID
+                )
+                for followUp in try modelContext.fetch(FetchDescriptor<PendingMutation>())
+                where followUp.id != mutation.id
+                    && followUp.scopeID == mutation.scopeID
+                    && followUp.entityType == .todo
+                    && followUp.entityID == mutation.entityID
+                    && followUp.ownerUserID == mutation.ownerUserID
+                    && followUp.state == .pending
+                    && followUp.operation != .create {
+                    followUp.baseVersion = serverVersion
+                }
             }
             modelContext.delete(mutation)
         }
@@ -154,7 +175,7 @@ private nonisolated func syncDependencyPriority(for rawValue: String) -> Int {
         2
     case "event_participation":
         3
-    case "idea", "registry_item", "expense", "note", "moment", "attendance":
+    case "idea", "registry_item", "expense", "note", "moment", "attendance", "todo":
         4
     default:
         5

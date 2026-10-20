@@ -67,7 +67,7 @@ struct BlueprintCreateShareView: View {
                     ProgressView(BlueprintCopy.preparingTemplateReview)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if startsWithReview {
-                    if store.sourceReloadRequired || (store.reviewed == nil && store.created == nil) {
+                    if store.sourceReloadRequired || store.source == nil {
                         preparationRetryView(store)
                     } else {
                         reviewView(store)
@@ -296,6 +296,22 @@ struct BlueprintCreateShareView: View {
                     }
                 }
 
+                if !store.eligibleTodos.isEmpty {
+                    Section {
+                        ForEach(store.eligibleTodos) { todo in
+                            Toggle(isOn: todoBinding(todo.id, store: store)) {
+                                sourceRecordLabel(title: todo.title, category: nil,
+                                    context: contextTitle(for: todo.eventId, source: source))
+                            }
+                            .disabled(!store.canEdit || store.sourceReloadRequired)
+                        }
+                    } header: {
+                        Text(TodoCopy.title)
+                    } footer: {
+                        Text(BlueprintCopy.todoCopyExplanation)
+                    }
+                }
+
                 if createsShareLink || publishesToSearch {
                     Section {
                         if publishesToSearch {
@@ -368,11 +384,11 @@ struct BlueprintCreateShareView: View {
                 shareSuccessView(createdURL, store: store)
             } else if createsShareLink, store.created != nil {
                 linkRecoveryView(store)
-            } else if let reviewed = store.reviewed {
+            } else if store.source != nil {
                 List {
                     Section {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text(reviewed.content.name)
+                            Text(store.reviewed?.content.name ?? store.name)
                                 .font(.title2.bold())
                                 .fixedSize(horizontal: false, vertical: true)
                             if store.created == nil {
@@ -386,8 +402,22 @@ struct BlueprintCreateShareView: View {
                             }
                         }
                     }
+                    if store.created == nil, !store.eligibleTodos.isEmpty {
+                        Section {
+                            Toggle(BlueprintCopy.includeTodos, isOn: includeTodosBinding(store))
+                                .disabled(!store.canEdit || store.sourceReloadRequired)
+                        } footer: {
+                            Text(BlueprintCopy.todoCopyExplanation)
+                        }
+                    }
                     if let message = store.errorMessage {
-                        Section { Text(message).font(.subheadline).foregroundStyle(.secondary) }
+                        Section {
+                            Text(message).font(.subheadline).foregroundStyle(.secondary)
+                            if store.reviewed == nil {
+                                Button(BlueprintCopy.retry) { Task { await store.review() } }
+                                    .disabled(!store.canReview)
+                            }
+                        }
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -667,6 +697,17 @@ struct BlueprintCreateShareView: View {
 
     private func notesBinding(_ store: BlueprintCreateShareStore) -> Binding<Bool> {
         Binding(get: { store.includeIdeaNotes }, set: { store.setIncludeIdeaNotes($0) })
+    }
+
+    private func todoBinding(_ id: UUID, store: BlueprintCreateShareStore) -> Binding<Bool> {
+        Binding(get: { store.selectedTodoIDs.contains(id) }, set: { store.setTodo(id, included: $0) })
+    }
+
+    private func includeTodosBinding(_ store: BlueprintCreateShareStore) -> Binding<Bool> {
+        Binding(get: { !store.selectedTodoIDs.isEmpty }, set: { included in
+            store.setIncludeTodos(included)
+            Task { await store.review() }
+        })
     }
 
     private func loadInitialState() async {

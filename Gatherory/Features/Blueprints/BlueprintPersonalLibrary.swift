@@ -9,6 +9,43 @@ nonisolated struct BlueprintDraftContent: Codable, Equatable, Sendable {
     var children: [BlueprintCatalogChild]
     var ideas: [BlueprintCatalogIdea]
     var instructions: [BlueprintDraftInstruction]
+    var todos: [BlueprintTodoDefinition]
+
+    init(name: String, description: String, experienceType: String,
+         children: [BlueprintCatalogChild], ideas: [BlueprintCatalogIdea],
+         instructions: [BlueprintDraftInstruction], todos: [BlueprintTodoDefinition] = []) {
+        self.name = name
+        self.description = description
+        self.experienceType = experienceType
+        self.children = children
+        self.ideas = ideas
+        self.instructions = instructions
+        self.todos = todos
+    }
+
+    private enum CodingKeys: String, CodingKey { case name, description, experienceType, children, ideas, instructions, todos }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decode(String.self, forKey: .description)
+        experienceType = try container.decode(String.self, forKey: .experienceType)
+        children = try container.decode([BlueprintCatalogChild].self, forKey: .children)
+        ideas = try container.decode([BlueprintCatalogIdea].self, forKey: .ideas)
+        instructions = try container.decode([BlueprintDraftInstruction].self, forKey: .instructions)
+        todos = try container.decodeIfPresent([BlueprintTodoDefinition].self, forKey: .todos) ?? []
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(description, forKey: .description)
+        try container.encode(experienceType, forKey: .experienceType)
+        try container.encode(children, forKey: .children)
+        try container.encode(ideas, forKey: .ideas)
+        try container.encode(instructions, forKey: .instructions)
+        if !todos.isEmpty { try container.encode(todos, forKey: .todos) }
+    }
 }
 
 nonisolated struct BlueprintDraftInstruction: Codable, Equatable, Identifiable, Sendable {
@@ -157,8 +194,10 @@ extension BlueprintPersonalRecord {
         let instructions = modules.first { $0.type == "instructions" }?.decodeConfiguration(BlueprintInstructionsConfig.self)?.sections.map {
             BlueprintDraftInstruction(key: $0.key, title: $0.title, body: $0.body, audience: $0.audience, target: $0.target)
         } ?? []
+        let todos = modules.first { $0.type == "todos" }?
+            .decodeConfiguration(BlueprintTodosConfig.self)?.todos ?? []
         return BlueprintDraftContent(name: catalogEntry.definition.blueprint.name, description: catalogEntry.description ?? catalogEntry.discovery?.summary ?? "",
             experienceType: catalogEntry.definition.experienceDefaults.type, children: children,
-            ideas: ideas, instructions: instructions)
+            ideas: ideas, instructions: instructions, todos: todos)
     }
 }

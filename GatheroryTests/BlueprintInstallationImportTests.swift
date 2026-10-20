@@ -6,6 +6,28 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct BlueprintInstallationImportTests {
+    @Test("Expanded plans decode legacy responses without to-dos and preserve planned targets")
+    func expandedPlanTodoCompatibility() throws {
+        let main: [String: Any] = [
+            "sourceKey": "main", "name": "Wedding", "eventType": "wedding", "startsAt": 0,
+            "timeZone": "UTC", "parentSourceKey": NSNull(), "purpose": NSNull(), "category": NSNull(), "planningStatus": NSNull()
+        ]
+        let legacy: [String: Any] = [
+            "plannerVersion": 1, "experienceType": "wedding", "categoryOrder": [], "main": main,
+            "children": [], "ideas": [], "instructions": [], "omissions": []
+        ]
+        let oldPlan = try JSONDecoder().decode(BlueprintExpandedPlan.self, from: JSONSerialization.data(withJSONObject: legacy))
+        #expect(oldPlan.todos.isEmpty)
+
+        var current = legacy
+        current["todos"] = [["sourceKey": "book-venue", "title": "Book venue", "websiteURL": "https://example.com",
+                              "targetSourceKey": "ceremony"]]
+        let newPlan = try JSONDecoder().decode(BlueprintExpandedPlan.self, from: JSONSerialization.data(withJSONObject: current))
+        #expect(newPlan.todos.map(\.sourceKey) == ["book-venue"])
+        #expect(newPlan.todos.first?.websiteURL == "https://example.com")
+        #expect(newPlan.todos.first?.targetSourceKey == "ceremony")
+    }
+
     @Test("Copied draft import cleans the original local identity and records the independent private pin")
     func copiedDraftUsesCanonicalImportAndExactCleanup() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
@@ -519,6 +541,11 @@ struct BlueprintInstallationImportTests {
             let contentHash = try #require(sampleInput["contentHash"] as? String)
             return (input.requestID.uuidString.lowercased(), contentHash)
         })
+        let frozenCapabilities = try Dictionary(uniqueKeysWithValues: zip(inputs, samples).map { pair in
+            let (input, sample) = pair
+            let sampleInput = try #require(sample["input"] as? [String: Any])
+            return (input.requestID.uuidString.lowercased(), try #require(sampleInput["capabilities"] as? [String]))
+        })
         BlueprintInstallURLProtocol.configure(
             archiveBytes: archives[0].0,
             scopeID: archives[0].1.mainEventID,
@@ -528,7 +555,8 @@ struct BlueprintInstallationImportTests {
             bootstrapOnlyCommittedInstallations: true,
             loseInstallResponse: false,
             installResultOverrides: resultOverrides,
-            expectedContentHashes: contentHashes
+            expectedContentHashes: contentHashes,
+            expectedCapabilities: frozenCapabilities
         )
 
         let configuration = URLSessionConfiguration.ephemeral
@@ -717,6 +745,7 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
     private static var organizationID = "wedding-org"
     private static var installResultOverrides: [String: [String: Any]] = [:]
     private static var expectedContentHashes: [String: String] = [:]
+    private static var expectedCapabilities: [String: [String]] = [:]
 
     static var installRequestCount: Int {
         lock.lock()
@@ -760,7 +789,8 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
         loseInstallResponse: Bool = true,
         revokeSharedTokenAfterLostResponse: Bool = false,
         installResultOverrides: [String: [String: Any]] = [:],
-        expectedContentHashes: [String: String] = [:]
+        expectedContentHashes: [String: String] = [:],
+        expectedCapabilities: [String: [String]] = [:]
     ) {
         lock.lock()
         self.archiveBytes = archiveBytes
@@ -785,6 +815,7 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
         organizationID = "wedding-org"
         self.installResultOverrides = installResultOverrides
         self.expectedContentHashes = expectedContentHashes
+        self.expectedCapabilities = expectedCapabilities
         lock.unlock()
     }
 
@@ -824,8 +855,9 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
                 let body = try #require(try JSONSerialization.jsonObject(with: bodyBytes) as? [String: Any])
                 let bodyRequestID = try #require(body["requestId"] as? String).lowercased()
                 #expect(bodyRequestID == idempotencyKey)
-                #expect(body["capabilities"] as? [String] == SyncClientCapabilities.blueprintFeatures)
                 Self.lock.lock()
+                let expectedCapabilities = Self.expectedCapabilities[bodyRequestID] ?? SyncClientCapabilities.blueprintFeatures
+                #expect(body["capabilities"] as? [String] == expectedCapabilities)
                 let revoked = Self.sharedTokenRevoked && body["shareToken"] != nil
                 if revoked {
                     status = 404

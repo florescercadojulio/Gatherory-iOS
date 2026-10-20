@@ -87,7 +87,9 @@ struct WorkspaceOutboxWriter {
             pending.attemptCount = 0
             pending.nextAttemptAt = nil
             pending.lastFailureCode = nil
-            pending.baseVersion = baseVersion
+            if entityType != .todo || pending.operation == .create {
+                pending.baseVersion = baseVersion
+            }
             return
         }
 
@@ -117,6 +119,10 @@ struct WorkspaceOutboxWriter {
         for (key, payload) in entities {
             let previousPayload = previousEntities[key]
             guard previousPayload != payload else { continue }
+            if key.type == .todo {
+                guard let todo = try? codec.decode(EventTodo.self, from: payload),
+                      archive.canEditTodo(eventID: todo.eventID, ownerUserID: ownerUserID) else { continue }
+            }
             if archive.isScopedEvent == true,
                !isAllowedScopedMutation(
                 key: key,
@@ -126,18 +132,32 @@ struct WorkspaceOutboxWriter {
                ) {
                 continue
             }
+            let baseVersion: Int? = if key.type == .todo {
+                previousPayload == nil ? 0 : (try RemoteEntityVersionRecord.version(
+                    in: context, scopeID: scopeID, entityType: .todo,
+                    entityID: key.id, ownerUserID: ownerUserID
+                ) ?? 0)
+            } else {
+                nil
+            }
             coalesceMutation(
                 scopeID: scopeID,
                 entityType: key.type,
                 entityID: key.id,
                 payload: payload,
                 operation: previousPayload == nil ? .create : .update,
-                baseVersion: nil,
+                baseVersion: baseVersion,
                 pendingMutations: pendingMutations
             )
         }
 
         for key in previousEntities.keys where entities[key] == nil {
+            if key.type == .todo {
+                guard let previousPayload = previousEntities[key],
+                      let todo = try? codec.decode(EventTodo.self, from: previousPayload),
+                      archive.canEditTodo(eventID: todo.eventID, ownerUserID: ownerUserID),
+                      previousArchive?.canEditTodo(eventID: todo.eventID, ownerUserID: ownerUserID) == true else { continue }
+            }
             if archive.isScopedEvent == true,
                key.type == .participant || key.type == .eventParticipation
                 || (key.type == .event && key.id != archive.mainEventID) {
@@ -146,6 +166,12 @@ struct WorkspaceOutboxWriter {
             coalesceEntityDeletion(
                 scopeID: scopeID,
                 key: key,
+                baseVersion: key.type == .todo
+                    ? (try RemoteEntityVersionRecord.version(
+                        in: context, scopeID: scopeID, entityType: .todo,
+                        entityID: key.id, ownerUserID: ownerUserID
+                    ) ?? 0)
+                    : nil,
                 pendingMutations: pendingMutations
             )
         }
@@ -176,6 +202,13 @@ struct WorkspaceOutboxWriter {
                 && previous.planningPermission == current.planningPermission
                 && previous.invitationStatus == current.invitationStatus
                 && previous.attendance != current.attendance
+        case .todo:
+            guard let todo = try? codec.decode(EventTodo.self, from: payload) else { return false }
+            return todo.id == key.id
+                && todo.eventID == archive.mainEventID
+                && EventTodo.normalizedTitle(todo.title) == todo.title
+                && EventTodo.isValidDueDate(todo.dueDate)
+                && EventTodo.isValidWebsiteURL(todo.websiteURL)
         default:
             return true
         }
@@ -184,6 +217,7 @@ struct WorkspaceOutboxWriter {
     private func coalesceEntityDeletion(
         scopeID: UUID,
         key: WorkspaceSyncEntityKey,
+        baseVersion: Int?,
         pendingMutations: [PendingMutation]
     ) {
         if let pending = pendingMutations
@@ -202,7 +236,9 @@ struct WorkspaceOutboxWriter {
                 pending.attemptCount = 0
                 pending.nextAttemptAt = nil
                 pending.lastFailureCode = nil
-                pending.baseVersion = nil
+                // Preserve the CAS version at which an unsent edit began.
+                // Remote pulls must not silently rebase a conflicting todo.
+                if key.type != .todo { pending.baseVersion = baseVersion }
             }
             return
         }
@@ -214,7 +250,7 @@ struct WorkspaceOutboxWriter {
                 entityID: key.id,
                 operation: .delete,
                 payload: Data(),
-                baseVersion: nil
+                baseVersion: baseVersion
             ),
             ownerUserID: ownerUserID,
             in: context

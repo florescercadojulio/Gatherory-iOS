@@ -55,6 +55,41 @@ load live credentials as part of the ordinary local check.
 
 ## What the tests protect
 
+Optional blueprint To-dos were verified on October 20 with **711 tests in 97
+suites passed**, excluding UI tests. Result:
+`/tmp/gatherory-blueprint-todos-native-20261020-r2.xcresult`.
+Capture starts excluded; tests cover explicit exact-event selection, child
+deselection pruning, legacy missing fields/empty wire omission, saved definition
+round trips, stable child placement and task-only child previews. Installation
+recovery tests retain each frozen request's original capability list and bytes.
+English/Spanish localization checks pass for **1,339 strings**. Physical-device
+and rollout checks are in the
+[blueprint To-do handoff](../../../gatherory-web-app/docs/roadmaps/to-dos-reminders-roadmap/02-blueprint-to-dos.md).
+
+Shared event To-dos were verified on October 20, 2026 with the complete
+`GatheroryTests` non-UI target: **706 tests in 97 suites passed** on the iOS
+simulator. Coverage includes exact-event planner permissions, required title
+and optional date/website validation, assignment/self-claim eligibility,
+current-assignee preview priority, claimable fallback, exact-event assignee/profile
+lookup and event/account isolation,
+completion/undo, legacy archive decoding,
+durable outbox retries, account-scoped server versions, bootstrap/pull overlays,
+in-flight acknowledgements and unsent create/delete cancellation. The English
+and Spanish localization check passed for **1,337 strings**. Result bundle:
+`/tmp/gatherory-todo-status-tabs-native-20261020-r2.xcresult`. The editor/date
+picker follows the existing Idea editor's grouped fields; the task list uses
+Upcoming / Completed segments, one gray grouped surface, separators and one
+compact action line. Upcoming includes all unfinished items. Successful Add
+returns to Upcoming; edits retain the selected segment. Assignee names and Take
+reuse participant avatars with initials fallback. Manage has one outer
+preview surface without a nested filled Take control.
+Completed rows have quiet status styling and checkbox undo; icon-and-label Take
+buttons and haptics after successful local saves still need physical-device
+acceptance. UI tests were
+excluded as requested. Physical-device accessibility, multi-device/offline and
+deployment acceptance remain in the
+[shared To-dos handoff](../../../gatherory-web-app/docs/roadmaps/to-dos-reminders-roadmap/01-shared-event-to-dos.md).
+
 | Area | Coverage |
 | --- | --- |
 | Authentication | Canonical Better Auth identity, stored-session restore, verification-required registration, provider token forwarding, sign-out waiting for pending sync, failed sign-in/restore recovery, deletion failure retaining the account until acknowledgement. |

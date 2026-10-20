@@ -43,6 +43,7 @@ struct WorkspaceArchiveCodecTests {
         #expect(archive.mainEventStartsAt == Date(timeIntervalSinceReferenceDate: 123_456.25))
         #expect(archive.currencyCode == nil)
         #expect(archive.eventParticipations == nil)
+        #expect(archive.todos == nil)
         #expect(archive.ideaResponses == nil)
         #expect(archive.isScopedEvent == nil)
         #expect(archive.guides == nil)
@@ -55,6 +56,73 @@ struct WorkspaceArchiveCodecTests {
         #expect(workspace.ideaResponses.isEmpty)
         #expect(workspace.guides.isEmpty)
         #expect(!workspace.isScopedEvent)
+    }
+
+    @Test("Legacy to-dos are optional while current to-dos round trip as exact-event sync entities")
+    func todoArchiveAndSyncProjection() throws {
+        var archive = makeArchive()
+        let createdAt = Date(timeIntervalSinceReferenceDate: 900_000_000)
+        let mainTodo = EventTodo(
+            id: UUID(uuidString: "20000000-0000-4000-8000-000000000001")!,
+            eventID: archive.mainEventID,
+            title: "Confirm the cake",
+            dueDate: "2032-02-29",
+            websiteURL: "https://example.test/vendor",
+            assigneePersonID: UUID(uuidString: "30000000-0000-4000-8000-000000000001")!,
+            isCompleted: true,
+            createdAt: createdAt
+        )
+        archive.todos = [mainTodo]
+
+        let codec = WorkspaceArchiveCodec()
+        let restored = try codec.decode(WorkspaceArchiveV1.self, from: codec.encode(archive))
+        #expect(restored.todos == [mainTodo])
+        #expect(restored.todos?.first?.websiteURL == "https://example.test/vendor")
+        #expect(restored.todos?.first?.assigneePersonID == mainTodo.assigneePersonID)
+        #expect(restored.makeWorkspace().todos == [mainTodo])
+
+        let workspacePayload = try codec.decode(
+            WorkspaceArchiveV1.self,
+            from: archive.syncPayload(using: codec)
+        )
+        #expect(workspacePayload.todos == nil)
+        let entities = try archive.syncEntities(using: codec)
+        let todoPayload = try #require(entities[.init(type: .todo, id: mainTodo.id)])
+        #expect(try codec.decode(EventTodo.self, from: todoPayload) == mainTodo)
+
+        let childID = try #require(archive.timeline.first?.id)
+        let childTodo = EventTodo(eventID: childID, title: "Arrange the chairs", createdAt: createdAt)
+        archive.isScopedEvent = true
+        archive.todos = [mainTodo, childTodo]
+        let scopedEntities = try archive.syncEntities(using: codec)
+        #expect(scopedEntities[.init(type: .todo, id: mainTodo.id)] != nil)
+        #expect(scopedEntities[.init(type: .todo, id: childTodo.id)] == nil)
+    }
+
+    @Test("To-do payloads encode explicit null metadata and decode older missing fields")
+    func todoOptionalMetadataWireCompatibility() throws {
+        struct LegacyTodo: Encodable {
+            let id: UUID
+            let eventID: UUID
+            let title: String
+            let dueDate: String?
+            let isCompleted: Bool
+            let createdAt: Date
+        }
+        let todo = EventTodo(eventID: UUID(), title: "Confirm the cake")
+        let encoded = try JSONEncoder().encode(todo)
+        let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        #expect(object["websiteURL"] is NSNull)
+        #expect(object["assigneePersonID"] is NSNull)
+
+        let legacy = LegacyTodo(
+            id: UUID(), eventID: UUID(), title: "Older payload", dueDate: nil,
+            isCompleted: false, createdAt: Date(timeIntervalSinceReferenceDate: 123)
+        )
+        let decoded = try JSONDecoder().decode(EventTodo.self, from: JSONEncoder().encode(legacy))
+        #expect(decoded.websiteURL == nil)
+        #expect(decoded.assigneePersonID == nil)
+        #expect(decoded.title == "Older payload")
     }
 
     @Test("Installed guides and configuration survive archive round trips")
