@@ -19,6 +19,7 @@ struct BlueprintPreviewView: View {
     @State private var selectedTab = WorkspaceTab.home
     @State private var navigation = BlueprintPreviewNavigation()
     @State private var ideasScope = BlueprintPreviewScope.all
+    @State private var ideasFilter = BlueprintIdeasFilter.all
     @State private var session: BlueprintPreviewSession?
     @State private var saveError: String?
     @State private var loadFailed = false
@@ -45,7 +46,12 @@ struct BlueprintPreviewView: View {
     var body: some View {
         Group {
             if let content, session?.ownerID == account?.id {
-                WorkspaceTabShell(selection: $selectedTab, showsManage: false) {
+                WorkspaceTabShell(
+                    selection: $selectedTab,
+                    showsManage: false,
+                    showsIdeasEventFilter: true,
+                    customIdeasAccessory: AnyView(BlueprintIdeasEventScopeAccessory(scope: $ideasScope, content: content))
+                ) {
                     navigationRoot(content: content, tab: .home) {
                         BlueprintWorkspaceHomeView(
                             content: content.homeContent(responses: session?.responses ?? [:]),
@@ -58,9 +64,12 @@ struct BlueprintPreviewView: View {
                     }
                 } ideas: { _ in
                     navigationRoot(content: content, tab: .ideas) {
-                        BlueprintWorkspaceIdeasView(ideas: content.ideas(in: ideasScope), responses: session?.responses ?? [:]) { idea in
-                            openEditor(.idea(idea))
-                        }
+                        BlueprintWorkspaceIdeasView(
+                            ideas: content.ideas(in: ideasScope).filter { ideasFilter.includes(session?.responses[$0.key]) },
+                            responses: session?.responses ?? [:],
+                            emptyStateTitle: ideasFilter.emptyTitle,
+                            emptyStateSymbol: ideasFilter.symbol
+                        ) { idea in openEditor(.idea(idea)) }
                     }
                 } decide: {
                     navigationRoot(content: content, tab: .decide) {
@@ -93,7 +102,10 @@ struct BlueprintPreviewView: View {
         .interactiveDismissDisabled(session?.isDirty == true)
         .task(id: account?.id) { loadSession() }
         .onChange(of: selectedTab) { _, tab in
-            if tab == .ideas { ideasScope = .all }
+            if tab == .ideas {
+                ideasScope = .all
+                ideasFilter = .all
+            }
         }
         .safeAreaInset(edge: .bottom) {
             if let saveError {
@@ -151,11 +163,16 @@ struct BlueprintPreviewView: View {
                             editingMenu(content)
                         }
                     } else if tab == .ideas {
-                        ToolbarItemGroup(placement: .topBarLeading) {
-                            closeButton
-                            scopeMenu(content)
+                        ToolbarItem(placement: .topBarLeading) {
+                            ideasFilterMenu
                         }
                         ToolbarItemGroup(placement: .topBarTrailing) {
+                            Button("Close preview", systemImage: "xmark") {
+                                if session?.isDirty == true { confirmsClose = true }
+                                else { closePreview() }
+                            }
+                                .labelStyle(.iconOnly)
+                                .frame(width: 44, height: 44)
                             Button("Add Idea", systemImage: "plus") { openEditor(.idea(nil)) }
                                 .labelStyle(.iconOnly)
                                 .disabled(content.ideas.count >= 100 || hasPendingInstallation || loadFailed)
@@ -170,13 +187,13 @@ struct BlueprintPreviewView: View {
             .labelStyle(.iconOnly)
     }
 
-    private func scopeMenu(_ content: BlueprintPreviewContent) -> some View {
+    private var ideasFilterMenu: some View {
         Menu {
-            Picker(AppCopy.Tab.ideas, selection: $ideasScope) {
-                Text("All").tag(BlueprintPreviewScope.all)
-                Text(content.title).tag(BlueprintPreviewScope.main)
-                ForEach(content.children) { child in
-                    Text(child.title).tag(BlueprintPreviewScope.child(child.key))
+            ForEach(BlueprintIdeasFilter.allCases) { filter in
+                Button {
+                    withAnimation(.snappy) { ideasFilter = filter }
+                } label: {
+                    Label(filter.title, systemImage: ideasFilter == filter ? "checkmark" : filter.symbol)
                 }
             }
             if session?.isDirty == true {
@@ -184,8 +201,13 @@ struct BlueprintPreviewView: View {
                 Button(BlueprintCopy.saveDraft, systemImage: "checkmark") { saveDraft() }
             }
         } label: {
-            Label(scopeTitle(content), systemImage: "line.3.horizontal.decrease").lineLimit(1)
+            Label(ideasFilter.title, systemImage: "line.3.horizontal.decrease")
+                .labelStyle(.iconOnly)
+                .frame(width: AppTheme.Layout.minimumTouchTarget, height: AppTheme.Layout.minimumTouchTarget)
+                .contentShape(Rectangle())
         }
+        .accessibilityLabel("Filter ideas")
+        .accessibilityValue(ideasFilter.title)
     }
 
     private var workspaceActionTitle: String {
@@ -301,14 +323,6 @@ struct BlueprintPreviewView: View {
         let scope = selectedTab == .ideas ? ideasScope
             : selectedTab == .home ? navigation.homeScope : navigation.decisionScope
         return if case .child(let key) = scope { .child(key: key) } else { .main }
-    }
-
-    private func scopeTitle(_ content: BlueprintPreviewContent) -> String {
-        switch ideasScope {
-        case .all: String(localized: "All")
-        case .main: content.title
-        case .child(let key): content.children.first { $0.key == key }?.title ?? BlueprintCopy.allIdeas
-        }
     }
 
     private var closeButton: some View {
@@ -439,12 +453,12 @@ struct BlueprintIdeaPreview: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
-        IdeaDetailScreen(content: IdeaDetailContent(preview: idea)) {
+        IdeaDetailScreen(content: IdeaDetailContent(preview: idea), collapsesLongText: true) {
             EmptyView()
         } footer: {
             EmptyView()
         } details: {
-            IdeaCategoryDetailContent(idea: IdeaDetailContent(preview: idea))
+            IdeaNotesCard(note: idea.notes ?? "", category: category, collapsesLongText: true)
         } artwork: {
             MediaArtwork(
                 imageData: nil, symbol: category.symbol,

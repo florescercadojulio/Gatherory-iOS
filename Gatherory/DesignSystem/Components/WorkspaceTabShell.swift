@@ -10,6 +10,7 @@ struct WorkspaceTabShell<Home: View, Ideas: View, Decide: View, Manage: View>: V
     var showsManage: Bool
     var showsIdeasEventFilter = false
     var showsManageEventFilter = false
+    var customIdeasAccessory: AnyView? = nil
     @State private var ideasScope: IdeasScope = .all
     @State private var manageEvent: EventReference = .main
     @ViewBuilder var home: () -> Home
@@ -28,7 +29,11 @@ struct WorkspaceTabShell<Home: View, Ideas: View, Decide: View, Manage: View>: V
             tabContents
                 .tabViewBottomAccessory(isEnabled: showsEventAccessory) {
                     if selection == .ideas {
-                        IdeasEventScopeAccessory(scope: $ideasScope)
+                        if let customIdeasAccessory {
+                            customIdeasAccessory
+                        } else {
+                            IdeasEventScopeAccessory(scope: $ideasScope)
+                        }
                     } else {
                         ManageEventScopeAccessory(selection: $manageEvent)
                     }

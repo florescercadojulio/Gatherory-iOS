@@ -11,6 +11,9 @@
         }
       }
     },
+    "·" : {
+
+    },
     "%@ · %@" : {
       "localizations" : {
         "en" : {
@@ -44,7 +47,6 @@
       }
     },
     "%@ %@" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2017,6 +2019,7 @@
       }
     },
     "All" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3100,6 +3103,9 @@
         }
       }
     },
+    "Awaiting" : {
+
+    },
     "Awaiting approval" : {
       "localizations" : {
         "es" : {
@@ -3121,6 +3127,7 @@
       }
     },
     "Awaiting RSVP" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6996,6 +7003,9 @@
         }
       }
     },
+    "Budget usage" : {
+
+    },
     "Budget used" : {
       "localizations" : {
         "es" : {
@@ -7321,6 +7331,15 @@
         }
       }
     },
+    "Choose which blueprint event’s ideas to show" : {
+
+    },
+    "Choose which event to manage" : {
+
+    },
+    "Choose which event’s ideas to show" : {
+
+    },
     "City, neighborhood, or area (optional)" : {
       "localizations" : {
         "es" : {
@@ -7360,6 +7379,9 @@
           }
         }
       }
+    },
+    "Close preview" : {
+
     },
     "Cloud Data" : {
       "localizations" : {
@@ -7426,6 +7448,12 @@
           }
         }
       }
+    },
+    "Collapse idea notes" : {
+
+    },
+    "Collapse idea text" : {
+
     },
     "Collect ideas without interruptions." : {
       "localizations" : {
@@ -9607,6 +9635,12 @@
         }
       }
     },
+    "Expand idea notes" : {
+
+    },
+    "Expand idea text" : {
+
+    },
     "Expenses" : {
       "localizations" : {
         "es" : {
@@ -10192,7 +10226,6 @@
       }
     },
     "Filter workspaces" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12512,6 +12545,9 @@
         }
       }
     },
+    "Manage event filter" : {
+
+    },
     "Manage the people, roles, and invitation access for this workspace." : {
       "localizations" : {
         "en" : {
@@ -12841,6 +12877,9 @@
         }
       }
     },
+    "No budget" : {
+
+    },
     "No budget set" : {
       "localizations" : {
         "es" : {
@@ -12850,6 +12889,9 @@
           }
         }
       }
+    },
+    "No budget set. Spent %@." : {
+
     },
     "No change" : {
       "localizations" : {
@@ -12946,6 +12988,12 @@
         }
       }
     },
+    "No ideas marked Love It" : {
+
+    },
+    "No ideas marked Maybe" : {
+
+    },
     "No Join Requests" : {
       "localizations" : {
         "es" : {
@@ -13034,6 +13082,9 @@
         }
       }
     },
+    "No passed ideas" : {
+
+    },
     "No Passes" : {
       "localizations" : {
         "en" : {
@@ -13065,6 +13116,9 @@
           }
         }
       }
+    },
+    "No pending requests" : {
+
     },
     "No planning event is available." : {
       "localizations" : {
@@ -13112,6 +13166,9 @@
           }
         }
       }
+    },
+    "No unanswered ideas" : {
+
     },
     "No Upcoming Workspaces" : {
       "localizations" : {
@@ -13252,6 +13309,9 @@
           }
         }
       }
+    },
+    "of %@" : {
+
     },
     "OK" : {
       "localizations" : {
@@ -14890,6 +14950,9 @@
         }
       }
     },
+    "Quick approval" : {
+
+    },
     "Quiet Planning" : {
       "localizations" : {
         "es" : {
@@ -16525,6 +16588,12 @@
         }
       }
     },
+    "Show less" : {
+
+    },
+    "Show more" : {
+
+    },
     "Show to Guests" : {
       "localizations" : {
         "es" : {
@@ -16685,6 +16754,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gastado"
+          }
+        }
+      }
+    },
+    "Spent %@. %@ %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Spent %1$@. %2$@ %3$@."
           }
         }
       }

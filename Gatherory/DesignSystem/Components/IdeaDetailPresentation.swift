@@ -39,6 +39,7 @@ extension IdeaDetailContent {
 /// Only workspace callers supply live controls, provenance and category tools.
 struct IdeaDetailScreen<Accessory: View, Footer: View, Details: View, Artwork: View>: View {
     let content: IdeaDetailContent
+    var collapsesLongText = false
     @ViewBuilder var accessory: () -> Accessory
     @ViewBuilder var footer: () -> Footer
     @ViewBuilder var details: () -> Details
@@ -48,6 +49,7 @@ struct IdeaDetailScreen<Accessory: View, Footer: View, Details: View, Artwork: V
     var body: some View {
         IdeaDetailPresentation {
             IdeaSummaryContent(title: content.title, note: content.note, category: content.category,
+                               collapsesLongText: collapsesLongText,
                                accessory: accessory, footer: footer)
         } details: {
             details()
@@ -94,6 +96,7 @@ struct GlurredArtwork<Artwork: View>: View {
 struct IdeaNotesCard: View {
     let note: String
     let category: IdeaCategory
+    var collapsesLongText = false
 
     var body: some View {
         if !note.isEmpty {
@@ -101,9 +104,14 @@ struct IdeaNotesCard: View {
                 Label("About This Idea", systemImage: category.symbol)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Text(note)
-                    .font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
+                if collapsesLongText {
+                    CollapsibleIdeaText(note, lineLimit: 5)
+                        .font(.body)
+                } else {
+                    Text(note)
+                        .font(.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(AppTheme.Spacing.standard)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -158,6 +166,8 @@ struct IdeaSummaryContent<Accessory: View, Footer: View>: View {
     let title: String
     let note: String
     let category: IdeaCategory
+    var collapsesLongText = false
+    @State private var isExpanded = false
     @ViewBuilder var accessory: () -> Accessory
     @ViewBuilder var footer: () -> Footer
 
@@ -169,20 +179,72 @@ struct IdeaSummaryContent<Accessory: View, Footer: View>: View {
                 Spacer(minLength: AppTheme.Spacing.compact)
                 accessory()
             }
-            Text(title)
-                .font(.largeTitle.bold())
-                .tracking(-0.7)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
+            Group {
+                if collapsesLongText {
+                    Text(title)
+                        .lineLimit(isExpanded ? nil : 3)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(title)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .font(.largeTitle.bold())
+            .tracking(-0.7)
+            .accessibilityAddTraits(.isHeader)
             if !note.isEmpty {
-                Text(note)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                Group {
+                    if collapsesLongText {
+                        Text(note)
+                            .lineLimit(isExpanded ? nil : 4)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text(note)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .font(.body)
+                .foregroundStyle(.secondary)
+            }
+            if collapsesLongText && (title.count > 100 || note.count > 220) {
+                Button(isExpanded ? "Show less" : "Show more") {
+                    withAnimation(.snappy(duration: 0.22)) { isExpanded.toggle() }
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.tint)
+                .accessibilityHint(isExpanded ? "Collapse idea text" : "Expand idea text")
             }
             footer()
         }
         .padding(AppTheme.Spacing.standard)
         .ideaContentSurface()
+    }
+}
+
+/// A compact note treatment for blueprint idea details. The caller opts in so
+/// live workspace idea reading remains unchanged.
+private struct CollapsibleIdeaText: View {
+    let text: String
+    let lineLimit: Int
+    @State private var isExpanded = false
+
+    init(_ text: String, lineLimit: Int) {
+        self.text = text
+        self.lineLimit = lineLimit
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(text)
+                .lineLimit(isExpanded ? nil : lineLimit)
+                .fixedSize(horizontal: false, vertical: true)
+            if text.count > 220 {
+                Button(isExpanded ? "Show less" : "Show more") {
+                    withAnimation(.snappy(duration: 0.22)) { isExpanded.toggle() }
+                }
+                .font(.subheadline.weight(.semibold))
+                .accessibilityHint(isExpanded ? "Collapse idea notes" : "Expand idea notes")
+            }
+        }
     }
 }
