@@ -113,18 +113,57 @@ struct GuestAuthenticationTests {
         #expect(auth.localGuestProfile == profile)
         #expect(auth.notificationPrincipal == nil)
 
+        try auth.markGuestHandoverReadyForCleanup(profileID: profile.id, accountID: GuestAuthenticationTestClient.user.id)
+        #expect(auth.guestHandoverIsReadyForCleanup(profileID: profile.id, accountID: GuestAuthenticationTestClient.user.id))
+        #expect(!auth.guestHandoverIsReadyForCleanup(profileID: profile.id, accountID: "another-account"))
+
+        stores.credentials.failRemove = true
+        await #expect(throws: CocoaError.self) { try auth.completeGuestImport() }
+        #expect(auth.hasPendingGuestImport)
+        #expect(stores.profile.profile?.handoverCleanupAccountID == GuestAuthenticationTestClient.user.id)
+        #expect(try stores.credentials.loadOrCreateToken(profileID: profile.id) == proof)
+
+        stores.credentials.failRemove = false
         stores.profile.failRemove = true
         await #expect(throws: CocoaError.self) { try auth.completeGuestImport() }
         #expect(auth.hasPendingGuestImport)
-        #expect(stores.profile.profile == profile)
-        #expect(try stores.credentials.loadOrCreateToken(profileID: profile.id) == proof)
-        stores.profile.failRemove = false
-        try auth.completeGuestImport()
-        #expect(!auth.hasPendingGuestImport)
-        #expect(auth.localGuestProfile == nil)
-        #expect(stores.profile.profile == nil)
+        #expect(stores.profile.profile?.handoverCleanupAccountID == GuestAuthenticationTestClient.user.id)
         #expect(stores.credentials.tokens[profile.id] == nil)
-        #expect(auth.notificationPrincipal == .account(id: GuestAuthenticationTestClient.user.id))
+
+        stores.profile.failRemove = false
+        client.restoredUser = GuestAuthenticationTestClient.user
+        let relaunched = AuthenticationSession(
+            environment: .production,
+            skipsAuthentication: false,
+            client: client,
+            guestProfileStore: stores.profile,
+            guestCredentialStore: stores.credentials
+        )
+        let otherAccount = UserAccount(
+            id: "other-account", email: "other@example.com", displayName: "Other",
+            role: .member, authenticationProvider: .password, createdAt: .distantPast
+        )
+        client.restoredUser = otherAccount
+        await relaunched.restoreSession()
+        #expect(!relaunched.guestHandoverIsReadyForCleanup(profileID: profile.id, accountID: otherAccount.id))
+        await #expect(throws: AuthenticationFailure.guestDataUnavailable) {
+            try relaunched.completeGuestImport()
+        }
+        #expect(stores.profile.profile?.handoverCleanupAccountID == GuestAuthenticationTestClient.user.id)
+
+        #expect(await relaunched.signOut(keepingPendingChanges: true))
+        await #expect(throws: AuthenticationFailure.guestDataUnavailable) {
+            try relaunched.continueAsGuest(displayName: "Replacement guest")
+        }
+        client.restoredUser = GuestAuthenticationTestClient.user
+        await relaunched.restoreSession()
+        #expect(relaunched.guestHandoverIsReadyForCleanup(profileID: profile.id, accountID: GuestAuthenticationTestClient.user.id))
+        try relaunched.completeGuestImport()
+        #expect(stores.credentials.tokens[profile.id] == nil)
+        #expect(!relaunched.hasPendingGuestImport)
+        #expect(relaunched.localGuestProfile == nil)
+        #expect(stores.profile.profile == nil)
+        #expect(relaunched.notificationPrincipal == .account(id: GuestAuthenticationTestClient.user.id))
     }
 
     @Test("A failed guest import hook blocks authentication while preserving local data")
@@ -156,9 +195,11 @@ struct GuestAuthenticationTests {
         let stores = try makeStores()
         let profile = LocalGuestProfile(displayName: "Morgan")
         try stores.profile.save(profile)
+        let client = GuestAuthenticationTestClient()
         let auth = AuthenticationSession(
             environment: .production,
             skipsAuthentication: false,
+            client: client,
             guestProfileStore: stores.profile,
             guestCredentialStore: stores.credentials
         )
@@ -170,19 +211,50 @@ struct GuestAuthenticationTests {
         }
         await #expect(throws: AuthenticationFailure.guestDataUnavailable) { try await auth.discardGuestSession() }
         #expect(discardCalls == 1)
-        #expect(auth.localGuestProfile == profile)
-        #expect(stores.profile.profile == profile)
+        #expect(auth.localGuestProfile?.id == profile.id)
+        #expect(auth.localGuestProfile?.discardPending == true)
+        #expect(stores.profile.profile?.discardPending == true)
         #expect(try stores.credentials.loadOrCreateToken(profileID: profile.id) == proof)
+        await #expect(throws: AuthenticationFailure.serviceUnavailable) {
+            try await auth.signIn(email: "morgan@example.com", password: "password")
+        }
+        #expect(client.signInCalls == 0)
 
-        stores.profile.failRemove = true
+        stores.credentials.failRemove = true
         auth.prepareForGuestDiscard = { _ in }
         await #expect(throws: CocoaError.self) { try await auth.discardGuestSession() }
-        #expect(auth.localGuestProfile == profile)
-        #expect(try stores.credentials.loadOrCreateToken(profileID: profile.id) == proof)
+        #expect(auth.localGuestProfile?.id == profile.id)
+        #expect(auth.localGuestProfile?.discardPending == true)
+        #expect(stores.credentials.tokens[profile.id] == proof)
+
+        stores.credentials.failRemove = false
+        stores.profile.failRemove = true
+        await #expect(throws: CocoaError.self) { try await auth.discardGuestSession() }
+        #expect(auth.guestDiscardNeedsAttention)
+        #expect(auth.localGuestProfile?.id == profile.id)
+        #expect(auth.localGuestProfile?.discardPending == true)
+        #expect(stores.profile.profile?.discardPending == true)
+        #expect(stores.credentials.tokens[profile.id] == nil)
 
         stores.profile.failRemove = false
-        try await auth.discardGuestSession()
-        #expect(auth.localGuestProfile == nil)
+        let relaunched = AuthenticationSession(
+            environment: .production,
+            skipsAuthentication: false,
+            guestProfileStore: stores.profile,
+            guestCredentialStore: stores.credentials
+        )
+        #expect(relaunched.guestDiscardNeedsAttention)
+        #expect(relaunched.localGuestProfile?.discardPending == true)
+        #expect(AuthenticationFlowChain.default.destination(for: AuthenticationFlowContext(
+            isGuestMode: relaunched.isGuestMode,
+            guestDiscardNeedsAttention: relaunched.guestDiscardNeedsAttention
+        )) == .guestDiscardRecovery)
+        await #expect(throws: AuthenticationFailure.guestDataUnavailable) {
+            try relaunched.continueAsGuest(displayName: "Replacement guest")
+        }
+        relaunched.prepareForGuestDiscard = { _ in }
+        try await relaunched.discardGuestSession()
+        #expect(relaunched.localGuestProfile == nil)
         #expect(stores.profile.profile == nil)
         #expect(stores.credentials.tokens[profile.id] == nil)
     }
@@ -251,7 +323,8 @@ struct GuestAuthenticationTests {
         #expect(router.pendingToken == inviteToken)
         #expect(!router.didJoinThisSession)
         #expect(!preview.shouldOpenExistingEvent(isAuthenticated: auth.isAuthenticated))
-        #expect(InvitationJoinProgress().acceptedResponse(for: auth.currentUser?.id) == nil)
+        #expect(InvitationJoinProgress().acceptedResponse(for: auth.currentUser?.id,
+            principalGeneration: auth.principalGeneration) == nil)
     }
 
     @MainActor
@@ -287,8 +360,9 @@ private final class GuestAuthenticationTestClient: AuthenticationClient {
         role: .member, authenticationProvider: .password, createdAt: .distantPast
     )
     var signInFailure: AuthenticationFailure?
+    var restoredUser: UserAccount?
     private(set) var signInCalls = 0
-    func restoreSession() async throws -> UserAccount? { nil }
+    func restoreSession() async throws -> UserAccount? { restoredUser }
     func signIn(email: String, password: String) async throws -> UserAccount {
         signInCalls += 1
         if let signInFailure { throw signInFailure }

@@ -103,7 +103,16 @@ struct NativeInvitationView: View {
             NavigationStack { LocalGuestNameView() }
                 .presentationDetents([.medium])
         }
-        .task(id: "\(token)|\(viewerIdentity ?? "anonymous")") {
+        .onChange(of: authentication.principalGeneration) { _, _ in
+            // A→B→A can restore the same identity string. Discard any preview
+            // and accepted response from the earlier session before it can
+            // influence the next render or action.
+            preview = nil
+            joinProgress = InvitationJoinProgress()
+            awaitingApproval = false
+            retryJoin = false
+        }
+        .task(id: "\(token)|\(viewerIdentity ?? "anonymous")|\(authentication.principalGeneration)") {
             preview = nil
             joinProgress = InvitationJoinProgress()
             awaitingApproval = false
@@ -184,7 +193,7 @@ struct NativeInvitationView: View {
 
     private var primaryActionTitle: String {
         if canJoinAsDeviceGuest {
-            if joinProgress.acceptedResponse(for: viewerIdentity) != nil { return String(localized: "Open Event") }
+            if joinProgress.acceptedResponse(for: viewerIdentity, principalGeneration: authentication.principalGeneration) != nil { return String(localized: "Open Event") }
             return GuestCopy.attendAsGuest
         }
         guard authentication.isAuthenticated else {
@@ -194,7 +203,7 @@ struct NativeInvitationView: View {
             default: return String(localized: "Sign In to Join")
             }
         }
-        if joinProgress.acceptedResponse(for: authentication.currentUser?.id) != nil || preview?.status == "accepted" { return String(localized: "Open Event") }
+        if joinProgress.acceptedResponse(for: authentication.currentUser?.id, principalGeneration: authentication.principalGeneration) != nil || preview?.status == "accepted" { return String(localized: "Open Event") }
         if awaitingApproval || preview?.status == "awaiting_approval" || preview?.status == "declined" { return String(localized: "Check Status") }
         return preview?.requiresApproval == true ? String(localized: "Request to Join") : String(localized: "Join Event")
     }
@@ -215,11 +224,14 @@ struct NativeInvitationView: View {
     }
 
     private func loadPreview() async {
+        guard !authentication.isSigningOut else { return }
         guard let baseURL = AppRuntimeConfiguration.authenticationBaseURL else {
             errorMessage = EventInvitationFailure.unavailable.localizedDescription
             return
         }
         let accountID = viewerIdentity
+        let principalGeneration = authentication.principalGeneration
+        let authenticated = authentication.isAuthenticated
         let requestID = UUID()
         previewRequestID = requestID
         isLoading = true
@@ -228,8 +240,9 @@ struct NativeInvitationView: View {
         defer { if previewRequestID == requestID { isLoading = false } }
         do {
             let value: InvitationPreview = try await InvitationAPIClient(baseURL: baseURL).request("api/invitations/preview",
-                query: [URLQueryItem(name: "token", value: token.uuidString)], authenticated: authentication.isAuthenticated)
+                query: [URLQueryItem(name: "token", value: token.uuidString)], authenticated: authenticated)
             guard invitations.pendingToken == token, viewerIdentity == accountID,
+                  authentication.principalGeneration == principalGeneration,
                   previewRequestID == requestID, !Task.isCancelled else { return }
             preview = value
             awaitingApproval = value.status == "awaiting_approval"
@@ -240,17 +253,18 @@ struct NativeInvitationView: View {
                 await accept()
             }
         } catch {
-            guard viewerIdentity == accountID, previewRequestID == requestID,
+            guard viewerIdentity == accountID, authentication.principalGeneration == principalGeneration,
+                  previewRequestID == requestID,
                   !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
     }
 
     private func retry() async {
-        guard !isLoading, !isAccepting else { return }
+        guard !authentication.isSigningOut, !isLoading, !isAccepting else { return }
         if authentication.isGuestMode && canJoinAsDeviceGuest && retryJoin {
             await acceptAsDeviceGuest()
-        } else if authentication.isAuthenticated && (retryJoin || joinProgress.acceptedResponse(for: authentication.currentUser?.id) != nil) {
+        } else if authentication.isAuthenticated && (retryJoin || joinProgress.acceptedResponse(for: authentication.currentUser?.id, principalGeneration: authentication.principalGeneration) != nil) {
             await accept()
         } else {
             await loadPreview()
@@ -266,26 +280,29 @@ struct NativeInvitationView: View {
     }
 
     private func acceptAsDeviceGuest() async {
-        guard !isAccepting, canJoinAsDeviceGuest, authentication.isGuestMode,
+        guard !authentication.isSigningOut, !isAccepting, canJoinAsDeviceGuest, authentication.isGuestMode,
               let profile = authentication.localGuestProfile,
               let baseURL = AppRuntimeConfiguration.authenticationBaseURL else { return }
+        let principalGeneration = authentication.principalGeneration
         isAccepting = true
         retryJoin = true
         errorMessage = nil
         defer { isAccepting = false }
         do {
             let acceptance: InvitationAcceptance
-            if let accepted = joinProgress.acceptedResponse(for: profile.storageID) {
+            if let accepted = joinProgress.acceptedResponse(for: profile.storageID, principalGeneration: principalGeneration) {
                 acceptance = accepted
             } else {
                 acceptance = try await DeviceGuestInvitationClient(baseURL: baseURL, profile: profile).join(token: token)
             }
-            guard viewerIdentity == profile.storageID, invitations.pendingToken == token,
+            guard viewerIdentity == profile.storageID, authentication.principalGeneration == principalGeneration,
+                  invitations.pendingToken == token,
                   !Task.isCancelled else { return }
-            joinProgress.record(acceptance, accountID: profile.storageID)
+            joinProgress.record(acceptance, accountID: profile.storageID, principalGeneration: principalGeneration)
             await guests.activate(localGuest: profile)
             await guests.refresh(force: true)
-            guard viewerIdentity == profile.storageID, invitations.pendingToken == token,
+            guard viewerIdentity == profile.storageID, authentication.principalGeneration == principalGeneration,
+                  invitations.pendingToken == token,
                   !Task.isCancelled else { return }
             guard guests.presentations[acceptance.eventId] != nil else {
                 throw EventInvitationFailure.server(guests.errorMessage ?? String(localized: "You joined the event. Try again to load your invitation."))
@@ -294,15 +311,17 @@ struct NativeInvitationView: View {
             guests.selectedEventID = acceptance.eventId
             invitations.dismiss(joined: true)
         } catch {
-            guard viewerIdentity == profile.storageID, invitations.pendingToken == token,
+            guard viewerIdentity == profile.storageID, authentication.principalGeneration == principalGeneration,
+                  invitations.pendingToken == token,
                   !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
     }
 
     private func accept() async {
-        guard !isAccepting, let account = authentication.currentUser,
+        guard !authentication.isSigningOut, !isAccepting, let account = authentication.currentUser,
               let baseURL = AppRuntimeConfiguration.authenticationBaseURL else { return }
+        let principalGeneration = authentication.principalGeneration
         isAccepting = true
         retryJoin = true
         errorMessage = nil
@@ -310,15 +329,17 @@ struct NativeInvitationView: View {
         var stage = "accept"
         do {
             let acceptance: InvitationAcceptance
-            if let accepted = joinProgress.acceptedResponse(for: account.id) {
+            if let accepted = joinProgress.acceptedResponse(for: account.id, principalGeneration: principalGeneration) {
                 acceptance = accepted
             } else {
                 acceptance = try await InvitationAPIClient(baseURL: baseURL).request("api/invitations/accept",
                     method: "POST", body: ["token": token.uuidString])
             }
-            guard authentication.currentUser?.id == account.id, invitations.pendingToken == token,
+            guard authentication.currentUser?.id == account.id,
+                  authentication.principalGeneration == principalGeneration,
+                  invitations.pendingToken == token,
                   !Task.isCancelled else { return }
-            joinProgress.record(acceptance, accountID: account.id)
+            joinProgress.record(acceptance, accountID: account.id, principalGeneration: principalGeneration)
             SyncDiagnostics.record("invitation_join_result", fields: [
                 "account_key": SyncDiagnostics.accountKey(account.id),
                 "event_id": acceptance.eventId.uuidString,
@@ -333,7 +354,9 @@ struct NativeInvitationView: View {
             if case .planning(let scope) = acceptance.destination {
                 stage = "planning_bootstrap"
                 await cloudSync.retryInitialBootstrap()
-                guard authentication.currentUser?.id == account.id, invitations.pendingToken == token,
+                guard authentication.currentUser?.id == account.id,
+                      authentication.principalGeneration == principalGeneration,
+                      invitations.pendingToken == token,
                       !Task.isCancelled else { return }
                 if let workspace = library.workspaces.first(where: { $0.mainEventID == scope }) {
                     guests.selectedEventID = nil
@@ -347,7 +370,9 @@ struct NativeInvitationView: View {
             stage = "guest_feed"
             await guests.activate(account: account)
             await guests.refresh(force: true)
-            guard authentication.currentUser?.id == account.id, invitations.pendingToken == token,
+            guard authentication.currentUser?.id == account.id,
+                  authentication.principalGeneration == principalGeneration,
+                  invitations.pendingToken == token,
                   !Task.isCancelled else { return }
             guard guests.presentations[acceptance.eventId] != nil else {
                 if let message = guests.errorMessage { throw EventInvitationFailure.server(message) }
@@ -357,11 +382,13 @@ struct NativeInvitationView: View {
             guests.selectedEventID = acceptance.eventId
             invitations.dismiss(joined: true)
         } catch {
-            guard authentication.currentUser?.id == account.id, invitations.pendingToken == token,
+            guard authentication.currentUser?.id == account.id,
+                  authentication.principalGeneration == principalGeneration,
+                  invitations.pendingToken == token,
                   !Task.isCancelled else { return }
             SyncDiagnostics.record("invitation_open_failed", fields: [
                 "account_key": SyncDiagnostics.accountKey(account.id), "stage": stage,
-                "join_completed": String(joinProgress.acceptedResponse(for: account.id) != nil)
+                "join_completed": String(joinProgress.acceptedResponse(for: account.id, principalGeneration: principalGeneration) != nil)
             ], error: error)
             errorMessage = error.localizedDescription
         }

@@ -14,6 +14,21 @@ struct EventInvitationQRCodeTests {
             url: URL(string: "https://app.gatherory.com/join/\(token)")!, role: "guest")
     }
 
+    @Test("Invitation decoding and URL validation can run outside the main actor")
+    func validatesAcrossActorBoundary() async throws {
+        let payload = Data(#"{"eventId":"11111111-1111-4111-8111-111111111111","email":null,"role":"guest","expiresAt":null,"url":"https://app.gatherory.com/join/22222222-2222-4222-8222-222222222222"}"#.utf8)
+        let decoded = try await Task.detached {
+            let value = try JSONDecoder().decode(GeneratedEventInvitation.self, from: payload)
+            let eventID = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
+            let baseURL = URL(string: "https://app.gatherory.com")!
+            #expect(value.isValid(for: eventID, baseURL: baseURL))
+            #expect(!value.isValid(for: eventID, baseURL: URL(string: "https://other.example")!))
+            return value
+        }.value
+        #expect(decoded.eventId == eventID)
+        #expect(decoded.role == "guest")
+    }
+
     @Test("Invitation QR round trips only the server-issued join URL")
     func roundTripURL() throws {
         let code = try EventInvitationQRCode(invitation: invitation, role: .guest, baseURL: baseURL)

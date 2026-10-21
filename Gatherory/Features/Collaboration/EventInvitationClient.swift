@@ -1,6 +1,6 @@
 import Foundation
 
-struct GeneratedEventInvitation: Decodable {
+nonisolated struct GeneratedEventInvitation: Decodable, Sendable {
     let eventId: UUID
     let email: String?
     let role: String?

@@ -19,16 +19,17 @@ struct SessionLifecycleActionsTests {
         await #expect(throws: CocoaError.self) { try await fixture.authentication.discardGuestSession() }
 
         #expect(fixture.authentication.guestDiscardNeedsAttention)
-        #expect(fixture.authentication.localGuestProfile == fixture.profile)
-        #expect(fixture.profiles.profile == fixture.profile)
-        #expect(fixture.credentials.tokens[fixture.profile.id] == fixture.proof)
+        #expect(fixture.authentication.localGuestProfile?.id == fixture.profile.id)
+        #expect(fixture.authentication.localGuestProfile?.discardPending == true)
+        #expect(fixture.profiles.profile?.discardPending == true)
+        #expect(fixture.credentials.tokens[fixture.profile.id] == nil)
         #expect(fixture.authentication.notificationPrincipal == nil)
         #expect(fixture.notifications.activePrincipal == nil)
         #expect(fixture.persistence.activeUserID == nil)
         #expect(fixture.library.workspaces.isEmpty)
         #expect(try fixture.savedRecords().isEmpty)
 
-        await #expect(throws: AuthenticationFailure.guestDataUnavailable) {
+        await #expect(throws: AuthenticationFailure.serviceUnavailable) {
             try await fixture.authentication.signIn(email: "morgan@example.com", password: "test-password")
         }
         #expect(fixture.client.signInCalls == 0)
@@ -79,6 +80,80 @@ struct SessionLifecycleActionsTests {
         #expect(fixture.authentication.notificationPrincipal == nil)
         #expect(fixture.profiles.profile == fixture.profile)
         #expect(try fixture.savedRecords().count == 1)
+    }
+
+    @Test("A claimed guest handover retries cleanup without reimporting or regenerating its proof")
+    func claimedGuestCleanupSkipsImportAndClaimAfterRelaunchBoundary() async throws {
+        let fixture = try LifecycleActionsFixture()
+        defer { fixture.cleanup() }
+        let guestWorkspace = fixture.addGuestPlan(title: "Claimed guest plan")
+        try fixture.persistence.saveChanges(in: fixture.library)
+        try await fixture.authentication.signIn(email: "morgan@example.com", password: "test-password")
+        let account = try #require(fixture.authentication.currentUser)
+        await fixture.cloudSync.activate(userID: account.id, seedData: false)
+
+        _ = try fixture.persistence.importLocalGuest(fixture.profile, into: account, in: fixture.library)
+        try fixture.authentication.markGuestHandoverReadyForCleanup(
+            profileID: fixture.profile.id,
+            accountID: account.id
+        )
+        let importedCopy = try #require(fixture.library.workspaces.first { $0.mainEventID == guestWorkspace.mainEventID })
+        fixture.library.remove(importedCopy)
+        try fixture.persistence.saveChanges(in: fixture.library)
+        #expect(try fixture.persistence.guestImportAccountID(fixture.profile) == account.id)
+
+        var claimCalls = 0
+        var services = LiveSessionPreparationServices(
+            authentication: fixture.authentication,
+            library: fixture.library,
+            cloudSync: fixture.cloudSync,
+            persistence: fixture.persistence,
+            guestInvitations: fixture.guestInvitations,
+            notifications: fixture.notifications,
+            usesRemoteAccountState: true,
+            seedsDevelopmentData: false,
+            baseURL: nil,
+            claimGuestAttendance: { _ in claimCalls += 1 }
+        )
+        let cleanupProfile = try #require(fixture.authentication.localGuestProfile)
+        fixture.profiles.failRemove = true
+        await #expect(throws: CocoaError.self) {
+            try await services.transferGuest(cleanupProfile, into: account, validate: {})
+        }
+
+        #expect(claimCalls == 0)
+        #expect(fixture.profiles.profile?.handoverCleanupAccountID == account.id)
+        #expect(fixture.credentials.tokens[fixture.profile.id] == nil)
+        #expect(try fixture.savedRecords().allSatisfy { $0.ownerUserID != fixture.profile.storageID })
+
+        fixture.profiles.failRemove = false
+        fixture.client.restoredUser = account
+        let relaunched = AuthenticationSession(
+            environment: .production,
+            skipsAuthentication: false,
+            client: fixture.client,
+            guestProfileStore: fixture.profiles,
+            guestCredentialStore: fixture.credentials
+        )
+        await relaunched.restoreSession()
+        let relaunchedServices = LiveSessionPreparationServices(
+            authentication: relaunched,
+            library: fixture.library,
+            cloudSync: fixture.cloudSync,
+            persistence: fixture.persistence,
+            guestInvitations: fixture.guestInvitations,
+            notifications: fixture.notifications,
+            usesRemoteAccountState: true,
+            seedsDevelopmentData: false,
+            baseURL: nil,
+            claimGuestAttendance: { _ in claimCalls += 1 }
+        )
+        let relaunchedProfile = try #require(relaunched.localGuestProfile)
+        try await relaunchedServices.transferGuest(relaunchedProfile, into: account, validate: {})
+        #expect(claimCalls == 0)
+        #expect(relaunched.localGuestProfile == nil)
+        #expect(fixture.profiles.profile == nil)
+        #expect(fixture.credentials.tokens[fixture.profile.id] == nil)
     }
 }
 
@@ -155,8 +230,9 @@ private final class LifecycleActionsAuthenticationClient: AuthenticationClient {
         role: .member, authenticationProvider: .password, createdAt: .distantPast
     )
     var beforeSignInResponse: (() throws -> Void)?
+    var restoredUser: UserAccount?
     private(set) var signInCalls = 0
-    func restoreSession() async throws -> UserAccount? { nil }
+    func restoreSession() async throws -> UserAccount? { restoredUser }
     func signIn(email: String, password: String) async throws -> UserAccount {
         signInCalls += 1
         try beforeSignInResponse?()

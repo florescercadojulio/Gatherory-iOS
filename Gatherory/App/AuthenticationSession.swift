@@ -104,7 +104,8 @@ final class AuthenticationSession {
     }
 
     func continueAsGuest(displayName: String) throws {
-        guard !deletionCleanup.blocksEntry, !isProcessing, !isAuthenticated, !guestStorageFailed else {
+        guard !deletionCleanup.blocksEntry, !isProcessing, !isAuthenticated, !guestStorageFailed,
+              !guestDiscardNeedsAttention, localGuestProfile?.handoverCleanupAccountID == nil else {
             throw AuthenticationFailure.guestDataUnavailable
         }
         let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -122,6 +123,7 @@ final class AuthenticationSession {
         guard guestStorageFailed, !isProcessing, !isAuthenticated else { return }
         do {
             localGuestProfile = try guestProfileStore.load()
+            guestDiscardNeedsAttention = localGuestProfile?.discardPending == true
             guestStorageFailed = false
         } catch { guestStorageFailed = true }
     }
@@ -129,15 +131,49 @@ final class AuthenticationSession {
     func requestGuestSignIn() { isGuestSignInRequested = true }
     func cancelGuestSignIn() { isGuestSignInRequested = false }
 
+    /// Persist the cross-store boundary after account import and attendance
+    /// claiming succeed. The marker binds cleanup recovery to that account.
+    func markGuestHandoverReadyForCleanup(profileID: UUID, accountID: String) throws {
+        guard isAuthenticated, currentUser?.id == accountID,
+              let profile = localGuestProfile, profile.id == profileID else {
+            throw AuthenticationFailure.guestDataUnavailable
+        }
+        if let boundAccountID = profile.handoverCleanupAccountID {
+            guard boundAccountID == accountID else {
+                throw LocalGuestWorkspacePersistenceError.guestAlreadyImportedIntoDifferentAccount
+            }
+            return
+        }
+        let readyProfile = LocalGuestProfile(
+            id: profile.id,
+            displayName: profile.displayName,
+            discardPending: profile.discardPending == true,
+            handoverCleanupAccountID: accountID
+        )
+        try guestProfileStore.save(readyProfile)
+        localGuestProfile = readyProfile
+    }
+
+    func guestHandoverIsReadyForCleanup(profileID: UUID, accountID: String) -> Bool {
+        guard isAuthenticated, currentUser?.id == accountID,
+              let profile = localGuestProfile, profile.id == profileID else { return false }
+        return profile.handoverCleanupAccountID == accountID
+    }
+
     /// Called only after workspace import and event-grant claiming are durable.
     func completeGuestImport() throws {
         guard !deletionCleanup.blocksEntry else { throw AuthenticationFailure.guestDataUnavailable }
         guard isAuthenticated, let profile = localGuestProfile else { return }
+        guard profile.handoverCleanupAccountID == currentUser?.id else {
+            throw AuthenticationFailure.guestDataUnavailable
+        }
+        // The persisted marker lets a relaunch skip claim if proof removal
+        // succeeds but deleting the profile file fails or the process exits.
+        try guestCredentialStore.removeSecret(profileID: profile.id)
         try guestProfileStore.remove()
         localGuestProfile = nil
         isGuestSignInRequested = false
         guestDiscardNeedsAttention = false
-        try? guestCredentialStore.removeSecret(profileID: profile.id)
     }
 
     /// The caller must first show the explicit device-data-loss confirmation.
@@ -146,14 +182,24 @@ final class AuthenticationSession {
               let prepareForGuestDiscard else { throw AuthenticationFailure.guestDataUnavailable }
         // Teardown may already have removed guest archives before profile removal
         // fails. Keep entry in recovery until an explicit retry finishes cleanup.
+        let pendingProfile = LocalGuestProfile(
+            id: profile.id,
+            displayName: profile.displayName,
+            discardPending: true,
+            handoverCleanupAccountID: profile.handoverCleanupAccountID
+        )
+        try guestProfileStore.save(pendingProfile)
+        localGuestProfile = pendingProfile
         guestDiscardNeedsAttention = true
         isProcessing = true
         defer { isProcessing = false }
-        try await prepareForGuestDiscard(profile)
+        try await prepareForGuestDiscard(pendingProfile)
+        // Keep the profile available for explicit cleanup recovery if Keychain
+        // refuses deletion. A retry is safe after archive/cache cleanup.
+        try guestCredentialStore.removeSecret(profileID: profile.id)
         try guestProfileStore.remove()
         localGuestProfile = nil
         isGuestSignInRequested = false
-        try? guestCredentialStore.removeSecret(profileID: profile.id)
         guestDiscardNeedsAttention = false
     }
 
@@ -179,7 +225,11 @@ final class AuthenticationSession {
         let profileStore = guestProfileStore ?? DeviceLocalGuestProfileStore()
         self.guestProfileStore = profileStore
         self.guestCredentialStore = guestCredentialStore ?? KeychainLocalGuestCredentialStore()
-        do { localGuestProfile = try profileStore.load() }
+        do {
+            let restoredProfile = try profileStore.load()
+            localGuestProfile = restoredProfile
+            guestDiscardNeedsAttention = restoredProfile?.discardPending == true
+        }
         catch { guestStorageFailed = true }
 
         if environment == .development {
@@ -241,7 +291,7 @@ final class AuthenticationSession {
     }
 
     func signIn(email: String, password: String) async throws {
-        guard !deletionCleanup.blocksEntry, !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        guard !deletionCleanup.blocksEntry, !isProcessing, !guestDiscardNeedsAttention else { throw AuthenticationFailure.serviceUnavailable }
         try prepareForGuestAuthentication?()
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         registrationNotice = nil
@@ -273,7 +323,7 @@ final class AuthenticationSession {
     }
 
     func register(displayName: String, email: String, password: String) async throws {
-        guard !deletionCleanup.blocksEntry, !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        guard !deletionCleanup.blocksEntry, !isProcessing, !guestDiscardNeedsAttention else { throw AuthenticationFailure.serviceUnavailable }
         try prepareForGuestAuthentication?()
         let normalizedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -333,7 +383,7 @@ final class AuthenticationSession {
     }
 
     func signIn(using provider: AuthenticationProvider) async throws {
-        guard !deletionCleanup.blocksEntry, !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        guard !deletionCleanup.blocksEntry, !isProcessing, !guestDiscardNeedsAttention else { throw AuthenticationFailure.serviceUnavailable }
         try prepareForGuestAuthentication?()
         registrationNotice = nil
         guard environment == .development, client == nil else {
@@ -351,7 +401,7 @@ final class AuthenticationSession {
         _ identity: AppleIdentity,
         requestingSignUp: Bool
     ) async throws {
-        guard !deletionCleanup.blocksEntry, !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        guard !deletionCleanup.blocksEntry, !isProcessing, !guestDiscardNeedsAttention else { throw AuthenticationFailure.serviceUnavailable }
         registrationNotice = nil
 
         guard let client else {
@@ -376,7 +426,7 @@ final class AuthenticationSession {
         nonce: String,
         requestingSignUp: Bool
     ) async throws {
-        guard !deletionCleanup.blocksEntry, !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        guard !deletionCleanup.blocksEntry, !isProcessing, !guestDiscardNeedsAttention else { throw AuthenticationFailure.serviceUnavailable }
         registrationNotice = nil
 
         guard let client else {

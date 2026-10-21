@@ -1279,3 +1279,57 @@ Camera scanning, saving/printing, accessibility, account-switch, and production
 app-link checks. The compatible schema/server must roll out before the new mobile
 build. No UI-automation tests, physical-device shares, deployment, build upload,
 commit, or push were performed. Existing staged and uncommitted work is preserved.
+
+## Mobile V1 guest and invitation recovery audit — October 21, 2026
+
+**891 tests in 126 suites passed**, selecting only `GatheroryTests` with parallel
+workers disabled. The command uses the QR verification's simulator and cached
+DerivedData path, with `POSTHOG_ENABLED=NO` and diagnostics collection disabled.
+`bash scripts/verify-localizations.sh` passes for **1,500 English/Spanish strings**,
+with the existing dynamic AppCopy extraction warning.
+
+Coverage includes identity-generation-bound invitation acknowledgements,
+preview/accept suspension during sign-out, partial guest removal and relaunch,
+Keychain/profile cleanup failures, backward-compatible profile decoding,
+account-bound completed-handover cleanup, and retry without reimporting,
+reclaiming attendance or generating a new proof. The lifecycle integration
+fixture removes an already imported account copy to prove cleanup does not
+depend on reimporting it. Existing account and guest namespace boundaries remain
+in place. Recovery/removal copy now avoids promising that nothing was removed
+after partial cleanup and explains that device removal does not change RSVPs.
+
+Log: `/tmp/gatherory-guest-audit-native-20261021.log`.
+Result: `/tmp/gatherory-event-qr-derived/Logs/Test/Test-Gatherory-2026.10.21_12-02-21--0400.xcresult`.
+Localization log: `/tmp/gatherory-guest-audit-localizations-20261021.log`.
+
+The [current mobile V1 checkpoint](../../../gatherory-web-app/docs/release/mobile-v1-guest-invitation-audit.md)
+records the server feed-isolation regression and remaining release blockers.
+Source/non-UI checks do not establish physical-device or deployed readiness.
+No UI-automation tests, production changes, deployment, build upload, commits or
+pushes were performed. The pre-existing staged `.build` tree is preserved.
+
+## Invitation QR actor isolation and Home scroll observation — October 21, 2026
+
+The immutable `GeneratedEventInvitation` value is explicitly `nonisolated` and
+`Sendable`, allowing the nonisolated QR renderer to validate it under the app's
+default MainActor isolation. A detached-task regression decodes and validates
+the actual model outside the main actor, including rejection of a foreign origin.
+
+Home's scroll geometry and phase observers now attach directly to its ScrollView,
+before overlays, navigation destinations and sheets, instead of observing the
+larger presentation container. This addresses ambiguous scroll-view selection
+without changing the existing scroll callbacks or analytics configuration.
+Reproduce the originally reported screen with live telemetry enabled to confirm
+the runtime diagnostic is gone; no UI tests were run.
+
+**892 tests in 126 suites passed**, selecting only `GatheroryTests`, with the
+existing cached simulator command and `POSTHOG_ENABLED=NO`.
+An unsigned Debug build for `generic/platform=iOS` also passed, using
+`CODE_SIGNING_ALLOWED=NO`, `/tmp/gatherory-qr-actor-device-derived`, and the existing
+package checkout cache. It was not installed, archived, uploaded or deployed.
+
+Test log: `/tmp/gatherory-qr-actor-scroll-native-20261021.log`.
+Result: `/tmp/gatherory-event-qr-derived/Logs/Test/Test-Gatherory-2026.10.21_12-05-31--0400.xcresult`.
+Device build log: `/tmp/gatherory-qr-actor-device-build-20261021.log`.
+Earlier guest-audit changes and staged build artifacts remain preserved. Nothing
+was committed or pushed.

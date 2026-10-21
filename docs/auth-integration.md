@@ -123,10 +123,13 @@ permissions.
 
 Onboarding uses the active account's onboarding state and positive account cache;
 the device-global completion flag no longer selects the next screen. The
-session-only QA override is tied to the active identity. A failed guest removal
-keeps a separate recovery gate, because archive cleanup may already have
-succeeded before profile-file removal failed. Repeating cleanup is safe; opening
-an unowned namespace or signing in from that partial state is blocked.
+session-only QA override is tied to the active identity. Guest handover persists
+its exact target account after import and attendance claim succeed. Relaunch can
+finish local cleanup for that account without recreating or reusing a removed
+guest proof. Explicit guest removal persists its discard marker before cleanup,
+so relaunch resumes its recovery gate if archive/cache cleanup already
+succeeded. Wrong-account preparation and guest editing stay blocked until the
+matching cleanup completes.
 
 The regression suites cover restoration retry/expiry, provider save gates,
 guest source/proof retention, preparation ordering, cancellation, account round

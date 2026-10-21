@@ -61,8 +61,8 @@ struct EventInvitationTransportTests {
         let response = InvitationAcceptance(eventId: id, role: "collaborator", planningScopeId: id, status: "awaiting_approval")
         #expect(response.destination == .awaitingApproval)
         var progress = InvitationJoinProgress()
-        progress.record(response, accountID: "invitee")
-        #expect(progress.acceptedResponse(for: "invitee") == nil)
+        progress.record(response, accountID: "invitee", principalGeneration: 4)
+        #expect(progress.acceptedResponse(for: "invitee", principalGeneration: 4) == nil)
     }
 
     @Test("A failed destination load retries the accepted join only for its account")
@@ -70,14 +70,24 @@ struct EventInvitationTransportTests {
         let id = UUID()
         let response = InvitationAcceptance(eventId: id, role: "collaborator", planningScopeId: id, status: "accepted")
         var progress = InvitationJoinProgress()
-        progress.record(response, accountID: "invitee")
-        #expect(progress.acceptedResponse(for: "invitee")?.destination == .planning(id))
-        #expect(progress.acceptedResponse(for: "host") == nil)
-        #expect(progress.acceptedResponse(for: nil) == nil)
+        progress.record(response, accountID: "invitee", principalGeneration: 4)
+        #expect(progress.acceptedResponse(for: "invitee", principalGeneration: 4)?.destination == .planning(id))
+        #expect(progress.acceptedResponse(for: "host", principalGeneration: 4) == nil)
+        #expect(progress.acceptedResponse(for: nil, principalGeneration: 4) == nil)
+        #expect(progress.acceptedResponse(for: "invitee", principalGeneration: 6) == nil)
         let guest = InvitationAcceptance(eventId: id, role: "guest", planningScopeId: nil, status: "accepted")
-        progress.record(guest, accountID: "guest")
-        #expect(progress.acceptedResponse(for: "guest")?.destination == .guest(id))
-        #expect(progress.acceptedResponse(for: "invitee") == nil)
+        progress.record(guest, accountID: "guest", principalGeneration: 8)
+        #expect(progress.acceptedResponse(for: "guest", principalGeneration: 8)?.destination == .guest(id))
+        #expect(progress.acceptedResponse(for: "invitee", principalGeneration: 8) == nil)
+    }
+
+    @Test("Accepted invitation progress expires across an A to B to A session switch")
+    func acceptedJoinRequiresSamePrincipalGeneration() {
+        let response = InvitationAcceptance(eventId: UUID(), role: "guest", planningScopeId: nil, status: "accepted")
+        var progress = InvitationJoinProgress()
+        progress.record(response, accountID: "same-account", principalGeneration: 2)
+        #expect(progress.acceptedResponse(for: "same-account", principalGeneration: 2) != nil)
+        #expect(progress.acceptedResponse(for: "same-account", principalGeneration: 4) == nil)
     }
 
     @Test("Accepted collaborators without a returned scope bootstrap their event; guests stay guests")

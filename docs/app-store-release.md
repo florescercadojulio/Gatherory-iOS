@@ -1,5 +1,18 @@
 # Gatherory App Store release and review handoff
 
+## Current mobile V1 checkpoint — October 21, 2026
+
+Use the [guest and invitation audit](../../../gatherory-web-app/docs/release/mobile-v1-guest-invitation-audit.md)
+for the current source/recovery changes, non-UI evidence, and outstanding
+release gates. Guest mode, announcements, native media transfer, reusable QR
+invitations, and CSV exports have advanced beyond the older build notes below.
+No deployment, App Store Connect inspection, Release archive, or device
+acceptance is implied by those local implementations.
+
+Historical sync-route failures, media-transfer deferrals, reviewer-account
+status, and dated TestFlight review states below must be revalidated against
+the intended backend and candidate build. They are not a current defect list.
+
 This document is the release owner’s checklist and the source for Gatherory’s
 App Review notes. Do not commit real review credentials here. Enter them only
 in App Store Connect and keep the canonical copy in the team password manager.
@@ -45,9 +58,11 @@ This is a TestFlight upload, not a public App Store submission. The checklist
 below includes earlier verification gaps; recheck its dated entries against
 current production/device evidence before a public release.
 
-## Submission blockers
+## Historical submission checklist — revalidation required
 
-Do not submit the current Release build until every blocking item is resolved.
+Revalidate these dated items alongside the current checkpoint before submission.
+Do not treat an old verified item as current evidence, or an old missing-source
+item as proof that the current code lacks that feature.
 
 | Status | Item | Current state | Release requirement |
 | --- | --- | --- | --- |

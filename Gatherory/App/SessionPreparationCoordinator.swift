@@ -113,6 +113,7 @@ final class SessionPreparationCoordinator {
     var usesRemoteAccountState = AppRuntimeConfiguration.usesRemoteAccountState
     var seedsDevelopmentData = AppRuntimeConfiguration.seedsDevelopmentData
     var baseURL = AppRuntimeConfiguration.authenticationBaseURL
+    var claimGuestAttendance: ((LocalGuestProfile) async throws -> Void)? = nil
 
     func detachNotifications() async { await notifications.activate(identity: nil) }
 
@@ -131,7 +132,8 @@ final class SessionPreparationCoordinator {
     }
 
     func activateGuest(_ profile: LocalGuestProfile) async throws {
-        if try persistence.guestImportAccountID(profile) != nil {
+        let hasImportReceipt = try persistence.guestImportAccountID(profile) != nil
+        if profile.handoverCleanupAccountID != nil || hasImportReceipt {
             // The retained source must not diverge from its account-owned copy.
             throw LocalGuestWorkspacePersistenceError.guestAlreadyImportedIntoDifferentAccount
         }
@@ -142,17 +144,36 @@ final class SessionPreparationCoordinator {
     func transferGuest(_ profile: LocalGuestProfile, into account: UserAccount,
                        validate: @MainActor () throws -> Void) async throws {
         try validate()
-        if usesRemoteAccountState {
-            switch cloudSync.accountOnboardingState {
-            case .complete, .needsOnboarding: break
-            default: throw AuthenticationFailure.guestDataUnavailable
+        let cleanupAlreadyAuthorized: Bool
+        if profile.handoverCleanupAccountID != nil {
+            guard profile.handoverCleanupAccountID == account.id,
+                  authentication.guestHandoverIsReadyForCleanup(profileID: profile.id, accountID: account.id) else {
+                throw LocalGuestWorkspacePersistenceError.guestAlreadyImportedIntoDifferentAccount
             }
+            cleanupAlreadyAuthorized = true
+        } else {
+            cleanupAlreadyAuthorized = false
         }
-        _ = try persistence.importLocalGuest(profile, into: account, in: library)
-        if usesRemoteAccountState {
-            guard let baseURL else { throw AuthenticationFailure.guestDataUnavailable }
+        if !cleanupAlreadyAuthorized {
             try validate()
-            _ = try await DeviceGuestInvitationClient(baseURL: baseURL, profile: profile).claim()
+            if usesRemoteAccountState {
+                switch cloudSync.accountOnboardingState {
+                case .complete, .needsOnboarding: break
+                default: throw AuthenticationFailure.guestDataUnavailable
+                }
+            }
+            _ = try persistence.importLocalGuest(profile, into: account, in: library)
+            if usesRemoteAccountState {
+                try validate()
+                if let claimGuestAttendance {
+                    try await claimGuestAttendance(profile)
+                } else {
+                    guard let baseURL else { throw AuthenticationFailure.guestDataUnavailable }
+                    _ = try await DeviceGuestInvitationClient(baseURL: baseURL, profile: profile).claim()
+                }
+            }
+            try validate()
+            try authentication.markGuestHandoverReadyForCleanup(profileID: profile.id, accountID: account.id)
         }
         try validate()
         try guestInvitations.purgeCache(profileID: profile.id)

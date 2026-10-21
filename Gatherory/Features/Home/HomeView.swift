@@ -118,6 +118,58 @@ struct HomeView: View {
         }
         .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
         .scrollPosition(id: $visibleScrollTarget, anchor: .center)
+        .onScrollGeometryChange(for: HomeScrollGeometry.self) { geometry in
+            let itemTop = geometry.contentSize.height
+                - AppTheme.Layout.screenBottom
+                - pullToCreateItemHeight
+            return HomeScrollGeometry(
+                offset: geometry.contentOffset.y,
+                pullToCreateDistance: max(
+                    geometry.visibleRect.maxY - itemTop - pullToCreateRevealInset,
+                    0
+                )
+            )
+        } action: { _, geometry in
+            currentScrollOffset = geometry.offset
+            isPullToCreateRegionVisible = geometry.pullToCreateDistance > 0
+            updateEventSwitcherReveal(offset: geometry.offset)
+            updateEventContextAtSwipeStart(offset: geometry.offset)
+            updatePullToCreate(distance: geometry.pullToCreateDistance)
+        }
+        .onScrollPhaseChange { oldPhase, newPhase in
+            if newPhase == .interacting {
+                homeReselectionTask?.cancel()
+                isHandlingHomeReselection = false
+                isScrollInteractionActive = true
+                scrollInteractionStartOffset = currentScrollOffset
+                swipeOriginEventReference = visibleEventReference ?? workspace.selectedEventReference
+                didUpdateContextForSwipe = false
+                eventSwitcherFadeTask?.cancel()
+                eventSwitcherFadeTask = nil
+                eventSwitcherOpacity = 0
+            }
+
+            if oldPhase == .interacting, newPhase != .interacting {
+                isScrollInteractionActive = false
+                completePullToCreateIfNeeded()
+                restoreLastEventAfterPullIfNeeded()
+            }
+
+            guard newPhase == .idle,
+                  !isScrubbingEvents,
+                  !isHandlingHomeReselection else { return }
+
+            if isPullToCreateRegionVisible {
+                restoreLastEventAfterPullIfNeeded()
+                return
+            }
+
+            commitVisibleScrollTarget()
+            scrollInteractionStartOffset = nil
+            swipeOriginEventReference = nil
+            didUpdateContextForSwipe = false
+            scheduleEventSwitcherFade()
+        }
         .appSoftScrollEdges()
         .background(AppTheme.ColorToken.background)
         .navigationTitle("")
@@ -268,58 +320,6 @@ struct HomeView: View {
             // resolve a non-leading event during the initial presentation.
             await Task.yield()
             visibleScrollTarget = .event(workspace.selectedEventReference)
-        }
-        .onScrollGeometryChange(for: HomeScrollGeometry.self) { geometry in
-            let itemTop = geometry.contentSize.height
-                - AppTheme.Layout.screenBottom
-                - pullToCreateItemHeight
-            return HomeScrollGeometry(
-                offset: geometry.contentOffset.y,
-                pullToCreateDistance: max(
-                    geometry.visibleRect.maxY - itemTop - pullToCreateRevealInset,
-                    0
-                )
-            )
-        } action: { _, geometry in
-            currentScrollOffset = geometry.offset
-            isPullToCreateRegionVisible = geometry.pullToCreateDistance > 0
-            updateEventSwitcherReveal(offset: geometry.offset)
-            updateEventContextAtSwipeStart(offset: geometry.offset)
-            updatePullToCreate(distance: geometry.pullToCreateDistance)
-        }
-        .onScrollPhaseChange { oldPhase, newPhase in
-            if newPhase == .interacting {
-                homeReselectionTask?.cancel()
-                isHandlingHomeReselection = false
-                isScrollInteractionActive = true
-                scrollInteractionStartOffset = currentScrollOffset
-                swipeOriginEventReference = visibleEventReference ?? workspace.selectedEventReference
-                didUpdateContextForSwipe = false
-                eventSwitcherFadeTask?.cancel()
-                eventSwitcherFadeTask = nil
-                eventSwitcherOpacity = 0
-            }
-
-            if oldPhase == .interacting, newPhase != .interacting {
-                isScrollInteractionActive = false
-                completePullToCreateIfNeeded()
-                restoreLastEventAfterPullIfNeeded()
-            }
-
-            guard newPhase == .idle,
-                  !isScrubbingEvents,
-                  !isHandlingHomeReselection else { return }
-
-            if isPullToCreateRegionVisible {
-                restoreLastEventAfterPullIfNeeded()
-                return
-            }
-
-            commitVisibleScrollTarget()
-            scrollInteractionStartOffset = nil
-            swipeOriginEventReference = nil
-            didUpdateContextForSwipe = false
-            scheduleEventSwitcherFade()
         }
         .onChange(of: workspace.selectedEventReference) { _, reference in
             let target = HomeScrollTarget.event(reference)

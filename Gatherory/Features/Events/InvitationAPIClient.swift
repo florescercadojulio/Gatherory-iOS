@@ -60,18 +60,23 @@ struct InvitationAcceptance: Decodable {
 }
 
 /// Keeps a successful join separate from loading its destination. A retry can
-/// resume that load without issuing another join, but never for another account.
+/// resume that load without issuing another join, but only within the same
+/// authenticated principal generation.
 struct InvitationJoinProgress {
     private var accountID: String?
+    private var principalGeneration: UInt64?
     private var response: InvitationAcceptance?
 
-    mutating func record(_ response: InvitationAcceptance, accountID: String) {
+    mutating func record(_ response: InvitationAcceptance, accountID: String, principalGeneration: UInt64) {
         self.accountID = accountID
+        self.principalGeneration = principalGeneration
         self.response = response
     }
 
-    func acceptedResponse(for accountID: String?) -> InvitationAcceptance? {
-        guard self.accountID == accountID, let response, !response.awaitsApproval else { return nil }
+    func acceptedResponse(for accountID: String?, principalGeneration: UInt64) -> InvitationAcceptance? {
+        guard self.accountID == accountID,
+              self.principalGeneration == principalGeneration,
+              let response, !response.awaitsApproval else { return nil }
         return response
     }
 }

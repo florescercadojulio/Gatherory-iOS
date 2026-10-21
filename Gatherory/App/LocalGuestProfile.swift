@@ -6,6 +6,12 @@ import Security
 nonisolated struct LocalGuestProfile: Codable, Equatable, Sendable, Identifiable {
     let id: UUID
     let displayName: String
+    /// Optional so profiles written before durable discard recovery decode as
+    /// ordinary active guest profiles.
+    let discardPending: Bool?
+    /// The account whose durable import and attendance claim completed before
+    /// local guest cleanup. Retries for this account must not claim again.
+    let handoverCleanupAccountID: String?
 
     var storageID: String { "device-guest:\(id.uuidString.lowercased())" }
     var hasValidDisplayName: Bool {
@@ -14,10 +20,17 @@ nonisolated struct LocalGuestProfile: Codable, Equatable, Sendable, Identifiable
             && displayName == displayName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    init(id: UUID = UUID(), displayName: String) {
+    init(
+        id: UUID = UUID(),
+        displayName: String,
+        discardPending: Bool = false,
+        handoverCleanupAccountID: String? = nil
+    ) {
         self.id = id
         let normalized = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         self.displayName = normalized
+        self.discardPending = discardPending
+        self.handoverCleanupAccountID = handoverCleanupAccountID
     }
 }
 
@@ -188,6 +201,7 @@ enum LocalGuestCredentialToken {
 
 @MainActor final class MemoryLocalGuestCredentialStore: LocalGuestCredentialStore {
     private(set) var tokens: [UUID: String] = [:]
+    var failRemove = false
 
     func loadOrCreateToken(profileID: UUID) throws -> String {
         if let token = tokens[profileID] { return token }
@@ -196,5 +210,8 @@ enum LocalGuestCredentialToken {
         return token
     }
 
-    func removeSecret(profileID: UUID) throws { tokens.removeValue(forKey: profileID) }
+    func removeSecret(profileID: UUID) throws {
+        if failRemove { throw CocoaError(.fileWriteUnknown) }
+        tokens.removeValue(forKey: profileID)
+    }
 }

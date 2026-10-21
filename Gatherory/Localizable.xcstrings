@@ -11483,13 +11483,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your guest plans and saved invitations will be removed from this device. Sign in to keep them with your account."
+            "value" : "Your guest plans and saved invitations will be removed from this device. Sign in to keep them. Your RSVPs won't change."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tus planes de invitado y las invitaciones guardadas se eliminarán de este dispositivo. Inicia sesión para conservarlos en tu cuenta."
+            "value" : "Tus planes de invitado y las invitaciones guardadas se eliminarán de este dispositivo. Inicia sesión para conservarlos. Tus respuestas de asistencia no cambiarán."
           }
         }
       }
@@ -11515,13 +11515,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sign in to the account you started saving to. Your guest information is still on this device."
+            "value" : "Sign in to the account you started saving to so we can finish."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inicia sesión en la cuenta en la que empezaste a guardar. Tu información de invitado sigue en este dispositivo."
+            "value" : "Inicia sesión en la cuenta en la que empezaste a guardar para poder terminar."
           }
         }
       }
@@ -11627,13 +11627,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your guest information is still on this device. Try again to add it to your account."
+            "value" : "Try again to finish saving your guest information to your account."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tu información de invitado sigue en este dispositivo. Inténtalo de nuevo para añadirla a tu cuenta."
+            "value" : "Inténtalo de nuevo para terminar de guardar tu información de invitado en tu cuenta."
           }
         }
       }
@@ -11835,13 +11835,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your guest information couldn't be saved. It hasn't been removed. Try again."
+            "value" : "We couldn't finish updating your guest information. Try again."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pudo guardar tu información de invitado. No se ha eliminado. Inténtalo de nuevo."
+            "value" : "No pudimos terminar de actualizar tu información de invitado. Inténtalo de nuevo."
           }
         }
       }

@@ -1,2 +1,5 @@
 .env
 /Gatherory/GoogleService-Info.plist
+
+# Generated Xcode build products and Swift package caches
+/.build/

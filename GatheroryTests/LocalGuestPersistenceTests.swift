@@ -17,6 +17,20 @@ struct LocalGuestPersistenceTests {
         #expect(try store.load() == profile)
         #expect(profile.storageID == "device-guest:\(profile.id.uuidString.lowercased())")
 
+        let pendingDiscard = LocalGuestProfile(
+            id: profile.id,
+            displayName: profile.displayName,
+            discardPending: true
+        )
+        try store.save(pendingDiscard)
+        #expect(try store.load()?.discardPending == true)
+        let legacyProfile = try JSONSerialization.data(withJSONObject: [
+            "id": profile.id.uuidString,
+            "displayName": profile.displayName
+        ])
+        try legacyProfile.write(to: file, options: .atomic)
+        #expect(try store.load()?.discardPending == nil)
+
         let invalid = LocalGuestProfile(displayName: "   ")
         #expect(throws: LocalGuestProfileStoreError.self) { try store.save(invalid) }
         #expect(!LocalGuestProfile(displayName: String(repeating: "e\u{301}", count: 41)).hasValidDisplayName)

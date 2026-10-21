@@ -11,14 +11,14 @@ enum GuestCopy {
     static var signInPreservesInfo: String { String(localized: "guest.signInPreservesInfo", defaultValue: "Your guest plans and invitations will be kept with your account.") }
     static var leave: String { String(localized: "guest.leave", defaultValue: "Leave Guest Mode") }
     static var exitTitle: String { String(localized: "guest.exitTitle", defaultValue: "Remove Guest Information?") }
-    static var exitHelp: String { String(localized: "guest.exitHelp", defaultValue: "Your guest plans and saved invitations will be removed from this device. Sign in to keep them with your account.") }
+    static var exitHelp: String { String(localized: "guest.exitHelp", defaultValue: "Your guest plans and saved invitations will be removed from this device. Sign in to keep them. Your RSVPs won't change.") }
     static var remove: String { String(localized: "guest.remove", defaultValue: "Remove from This Device") }
     static var stay: String { String(localized: "guest.stay", defaultValue: "Keep Using as Guest") }
-    static var storageFailed: String { String(localized: "guest.storageFailed", defaultValue: "Your guest information couldn't be saved. It hasn't been removed. Try again.") }
+    static var storageFailed: String { String(localized: "guest.storageFailed", defaultValue: "We couldn't finish updating your guest information. Try again.") }
     static var linking: String { String(localized: "guest.linking", defaultValue: "Saving Your Guest Information…") }
     static var linkingFailed: String { String(localized: "guest.linkingFailed", defaultValue: "Couldn't Save Guest Information") }
-    static var finishSavingHelp: String { String(localized: "guest.finishSavingHelp", defaultValue: "Sign in to the account you started saving to. Your guest information is still on this device.") }
-    static var linkingHelp: String { String(localized: "guest.linkingHelp", defaultValue: "Your guest information is still on this device. Try again to add it to your account.") }
+    static var finishSavingHelp: String { String(localized: "guest.finishSavingHelp", defaultValue: "Sign in to the account you started saving to so we can finish.") }
+    static var linkingHelp: String { String(localized: "guest.linkingHelp", defaultValue: "Try again to finish saving your guest information to your account.") }
     static var signInRequired: String { String(localized: "guest.signInRequired", defaultValue: "Sign In to Share") }
     static var shareHelp: String { String(localized: "guest.shareHelp", defaultValue: "Sign in to invite people or share your plans. Your guest plans will come with you.") }
     static var blueprintHelp: String { String(localized: "guest.blueprintHelp", defaultValue: "Sign in to save or share blueprints with your account.") }

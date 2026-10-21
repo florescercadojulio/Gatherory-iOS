@@ -84,6 +84,9 @@ struct AuthenticationLifecycleTests {
     @MainActor
     func incompleteGuestRemovalRequiresRecovery() async throws {
         let profile = LocalGuestProfile(displayName: "Morgan")
+        let pendingProfile = LocalGuestProfile(
+            id: profile.id, displayName: profile.displayName, discardPending: true
+        )
         let profiles = MemoryLocalGuestProfileStore()
         try profiles.save(profile)
         let credentials = MemoryLocalGuestCredentialStore()
@@ -93,7 +96,7 @@ struct AuthenticationLifecycleTests {
         var activeScope: String? = profile.storageID
         var hasGuestArchives = true
         auth.prepareForGuestDiscard = { requestedProfile in
-            #expect(requestedProfile == profile)
+            #expect(requestedProfile == pendingProfile)
             #expect(auth.guestDiscardNeedsAttention)
             cleanupAttempts += 1
             if cleanupAttempts == 1 { throw AuthenticationFailure.guestDataUnavailable }
@@ -110,7 +113,9 @@ struct AuthenticationLifecycleTests {
         #expect(!auth.isProcessing)
         #expect(activeScope == profile.storageID)
         #expect(hasGuestArchives)
-        #expect(auth.localGuestProfile == profile)
+        #expect(auth.localGuestProfile == pendingProfile)
+        #expect(profiles.profile == pendingProfile)
+        #expect(credentials.tokens[profile.id] == proof)
 
         profiles.failRemove = true
         await #expect(throws: CocoaError.self) { try await auth.discardGuestSession() }
@@ -118,9 +123,9 @@ struct AuthenticationLifecycleTests {
         #expect(!auth.isProcessing)
         #expect(activeScope == nil)
         #expect(!hasGuestArchives)
-        #expect(auth.localGuestProfile == profile)
-        #expect(profiles.profile == profile)
-        #expect(credentials.tokens[profile.id] == proof)
+        #expect(auth.localGuestProfile == pendingProfile)
+        #expect(profiles.profile == pendingProfile)
+        #expect(credentials.tokens[profile.id] == nil)
 
         profiles.failRemove = false
         try await auth.discardGuestSession()
