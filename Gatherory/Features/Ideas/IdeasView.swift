@@ -9,6 +9,7 @@ struct IdeasView: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.tabViewBottomAccessoryPlacement) private var accessoryPlacement
     @State private var filter: IdeaFilter = .all
     @State private var scope: IdeasScope = .all
     @State private var isAddingIdea = false
@@ -54,8 +55,7 @@ struct IdeasView: View {
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
-            ToolbarItemGroup(placement: .topBarLeading) {
-                scopeMenu
+            ToolbarItem(placement: .topBarLeading) {
                 statusFilterMenu
             }
 
@@ -68,6 +68,9 @@ struct IdeasView: View {
 
                 AccountToolbarButton()
             }
+        }
+        .tabViewBottomAccessory {
+            eventScopeAccessory
         }
         .sheet(isPresented: $isAddingIdea) {
             NavigationStack {
@@ -122,7 +125,7 @@ struct IdeasView: View {
         return "Add an idea to start shaping this event."
     }
 
-    private var scopeMenu: some View {
+    private var eventScopeAccessory: some View {
         Menu {
             Button {
                 withAnimation(.snappy) {
@@ -148,22 +151,44 @@ struct IdeasView: View {
                 }
             }
         } label: {
-            HStack(spacing: 5) {
-                Text(scopeTitle)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 12) {
+                Image(systemName: "calendar")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 30, height: 30)
+                    .accessibilityHidden(true)
+
+                if accessoryPlacement == .expanded {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Ideas for")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(scopeTitle)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    }
+                } else {
+                    Text(scopeTitle)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
-            .font(.headline.weight(.semibold))
-            .foregroundStyle(.primary)
-            .frame(width: 150, height: AppTheme.Layout.minimumTouchTarget, alignment: .leading)
-            .contentShape(Rectangle())
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: accessoryPlacement == .expanded ? 58 : 44, alignment: .leading)
+            .contentShape(Capsule())
         }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
         .accessibilityLabel("Ideas event filter")
         .accessibilityValue(isFilteringToEvent ? "\(scopeTitle), filtered" : "All Ideas")
+        .accessibilityHint("Choose which event’s ideas to show")
     }
 
     private var statusFilterMenu: some View {
