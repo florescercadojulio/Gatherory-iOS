@@ -350,6 +350,12 @@ final class PlanningWorkspace {
     /// planner API/share-link operations.
     var isLocalGuestViewer: Bool { localGuestProfileID != nil }
 
+    /// Sharing requires a configured signed-in identity, without preview or
+    /// email-based participant resolution granting account authorization.
+    func hasAuthenticatedViewer(accountID: String) -> Bool {
+        isViewerConfigured && !isLocalGuestViewer && !accountID.isEmpty && viewerUserID == accountID
+    }
+
     func configureViewer(_ account: UserAccount?) {
         if viewerUserID != account?.id { decisionHistory.removeAll() }
         isViewerConfigured = true

@@ -11,8 +11,423 @@
         }
       }
     },
+    "Share Event Schedule" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Event Schedule"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir programa del evento"
+          }
+        }
+      }
+    },
+    "Share a copy of this event’s dates, times, and locations" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share a copy of this event’s dates, times, and locations"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comparte una copia de las fechas, horas y ubicaciones de este evento"
+          }
+        }
+      }
+    },
+    "event.scheduleShare.allDay" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todo el día"
+          }
+        }
+      }
+    },
+    "event.scheduleShare.dateToBeDecided" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Date to be decided"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fecha por decidir"
+          }
+        }
+      }
+    },
+    "event.scheduleShare.heading" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Event Schedule"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Programa del evento"
+          }
+        }
+      }
+    },
+    "event.scheduleShare.csv.event" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Event"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Evento"
+          }
+        }
+      }
+    },
+    "event.scheduleShare.csv.start" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicio"
+          }
+        }
+      }
+    },
+    "event.scheduleShare.csv.end" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fin"
+          }
+        }
+      }
+    },
+    "event.scheduleShare.csv.allDay" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todo el día"
+          }
+        }
+      }
+    },
+    "event.scheduleShare.csv.timeZone" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time Zone"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zona horaria"
+          }
+        }
+      }
+    },
+    "event.scheduleShare.csv.location" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Location"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lugar"
+          }
+        }
+      }
+    },
+    "Couldn’t Share Schedule" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t Share Schedule"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo compartir el programa"
+          }
+        }
+      }
+    },
+    "The schedule file couldn’t be created. Please try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The schedule file couldn’t be created. Please try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo crear el archivo del programa. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "event.guestListExport.csv.name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre"
+          }
+        }
+      }
+    },
+    "event.guestListExport.csv.rsvpStatus" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RSVP Status"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estado de confirmación"
+          }
+        }
+      }
+    },
+    "event.guestListExport.unnamedGuest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unnamed Guest"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitado sin nombre"
+          }
+        }
+      }
+    },
+    "event.guestListExport.rsvp.invited" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invited"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitado"
+          }
+        }
+      }
+    },
+    "event.guestListExport.rsvp.going" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Going"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asistirá"
+          }
+        }
+      }
+    },
+    "event.guestListExport.rsvp.maybe" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maybe"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quizá"
+          }
+        }
+      }
+    },
+    "event.guestListExport.rsvp.declined" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't go"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No puede asistir"
+          }
+        }
+      }
+    },
+    "Export Guest List" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export Guest List"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar lista de invitados"
+          }
+        }
+      }
+    },
+    "Export a CSV copy of names and RSVP statuses" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export a CSV copy of names and RSVP statuses"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporta una copia CSV de los nombres y estados de confirmación de asistencia"
+          }
+        }
+      }
+    },
+    "Couldn’t Export Guest List" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t Export Guest List"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo exportar la lista de invitados"
+          }
+        }
+      }
+    },
+    "The guest list file couldn’t be created. Please try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The guest list file couldn’t be created. Please try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo crear el archivo de la lista de invitados. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
     "·" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "·"
+          }
+        }
+      }
     },
     "%@ · %@" : {
       "localizations" : {
@@ -3104,7 +3519,14 @@
       }
     },
     "Awaiting" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pendientes"
+          }
+        }
+      }
     },
     "Awaiting approval" : {
       "localizations" : {
@@ -7004,7 +7426,14 @@
       }
     },
     "Budget usage" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uso del presupuesto"
+          }
+        }
+      }
     },
     "Budget used" : {
       "localizations" : {
@@ -7332,13 +7761,34 @@
       }
     },
     "Choose which blueprint event’s ideas to show" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige de qué evento del plano quieres ver las ideas"
+          }
+        }
+      }
     },
     "Choose which event to manage" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige qué evento gestionar"
+          }
+        }
+      }
     },
     "Choose which event’s ideas to show" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige de qué evento quieres ver las ideas"
+          }
+        }
+      }
     },
     "City, neighborhood, or area (optional)" : {
       "localizations" : {
@@ -7379,9 +7829,6 @@
           }
         }
       }
-    },
-    "Close preview" : {
-
     },
     "Cloud Data" : {
       "localizations" : {
@@ -7450,10 +7897,24 @@
       }
     },
     "Collapse idea notes" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contraer notas de la idea"
+          }
+        }
+      }
     },
     "Collapse idea text" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contraer texto de la idea"
+          }
+        }
+      }
     },
     "Collect ideas without interruptions." : {
       "localizations" : {
@@ -9636,10 +10097,24 @@
       }
     },
     "Expand idea notes" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expandir notas de la idea"
+          }
+        }
+      }
     },
     "Expand idea text" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expandir texto de la idea"
+          }
+        }
+      }
     },
     "Expenses" : {
       "localizations" : {
@@ -10707,6 +11182,86 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Invitado"
+          }
+        }
+      }
+    },
+    "Collaborator Invitation" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitación para colaborar"
+          }
+        }
+      }
+    },
+    "Guest Invitation" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitación para asistir"
+          }
+        }
+      }
+    },
+    "Invitation QR" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Código QR de invitación"
+          }
+        }
+      }
+    },
+    "Invitation QR code" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Código QR de invitación"
+          }
+        }
+      }
+    },
+    "QR Code Unavailable" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Código QR no disponible"
+          }
+        }
+      }
+    },
+    "Show QR Code" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar código QR"
+          }
+        }
+      }
+    },
+    "Share QR Code" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir código QR"
+          }
+        }
+      }
+    },
+    "This link stays active until you revoke it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este enlace seguirá activo hasta que lo revoques."
           }
         }
       }
@@ -12546,7 +13101,14 @@
       }
     },
     "Manage event filter" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtro de eventos en Gestionar"
+          }
+        }
+      }
     },
     "Manage the people, roles, and invitation access for this workspace." : {
       "localizations" : {
@@ -12878,7 +13440,14 @@
       }
     },
     "No budget" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin presupuesto"
+          }
+        }
+      }
     },
     "No budget set" : {
       "localizations" : {
@@ -12891,7 +13460,14 @@
       }
     },
     "No budget set. Spent %@." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin presupuesto definido. Gastado: %@."
+          }
+        }
+      }
     },
     "No change" : {
       "localizations" : {
@@ -12989,10 +13565,24 @@
       }
     },
     "No ideas marked Love It" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ideas marcadas como «Me encanta»"
+          }
+        }
+      }
     },
     "No ideas marked Maybe" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ideas marcadas como «Tal vez»"
+          }
+        }
+      }
     },
     "No Join Requests" : {
       "localizations" : {
@@ -13083,7 +13673,14 @@
       }
     },
     "No passed ideas" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ideas descartadas"
+          }
+        }
+      }
     },
     "No Passes" : {
       "localizations" : {
@@ -13118,7 +13715,14 @@
       }
     },
     "No pending requests" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay solicitudes pendientes"
+          }
+        }
+      }
     },
     "No planning event is available." : {
       "localizations" : {
@@ -13168,7 +13772,14 @@
       }
     },
     "No unanswered ideas" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ideas sin responder"
+          }
+        }
+      }
     },
     "No Upcoming Workspaces" : {
       "localizations" : {
@@ -13311,7 +13922,14 @@
       }
     },
     "of %@" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "de %@"
+          }
+        }
+      }
     },
     "OK" : {
       "localizations" : {
@@ -14951,7 +15569,14 @@
       }
     },
     "Quick approval" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aprobación rápida"
+          }
+        }
+      }
     },
     "Quiet Planning" : {
       "localizations" : {
@@ -16589,10 +17214,24 @@
       }
     },
     "Show less" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar menos"
+          }
+        }
+      }
     },
     "Show more" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar más"
+          }
+        }
+      }
     },
     "Show to Guests" : {
       "localizations" : {
@@ -16764,6 +17403,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Spent %1$@. %2$@ %3$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gastado: %@. %@ %@."
           }
         }
       }

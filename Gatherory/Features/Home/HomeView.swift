@@ -12,6 +12,7 @@ struct HomeView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isSavingBlueprint = false
     @State private var isPresentingInvitationSharing = false
+    @State private var csvExportRequest: EventCSVExportRequest?
     @State private var editorTarget: HomeEventEditorTarget?
     @State private var isAddingEventIdea = false
     @State private var addEventIdeaDetent: PresentationDetent = .large
@@ -214,7 +215,7 @@ struct HomeView: View {
                             }
                         }
 
-                        if canEdit(reference) || workspace.eventRemovalAction(for: reference) != nil || workspace.canCancelEvent(reference) {
+                        if canEdit(reference) || workspace.eventRemovalAction(for: reference) != nil || workspace.canCancelEvent(reference) || canExport(.schedule, for: reference) || canExport(.guestList, for: reference) {
                             Menu(AppCopy.EventRemoval.actions, systemImage: "ellipsis") {
                                 eventActions(for: reference)
                             }
@@ -241,6 +242,7 @@ struct HomeView: View {
             CollaborationInviteView()
                 .environment(workspace)
         }
+        .modifier(EventCSVExportPresentation(request: $csvExportRequest))
         .sheet(item: $editorTarget) { target in
             NavigationStack {
                 EventEditorView(mode: editorMode(for: target))
@@ -341,7 +343,8 @@ struct HomeView: View {
     }
 
     private func eventHero(for reference: EventReference) -> some View {
-        GeometryReader { proxy in
+        let cardShape = RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous)
+        return GeometryReader { proxy in
             Button {
                 openedEventReference = reference
             } label: {
@@ -382,10 +385,14 @@ struct HomeView: View {
                     )
                 }
                 .frame(width: proxy.size.width, height: eventHeroHeight)
-                .clipped()
-                .matchedTransitionSource(id: reference, in: invitationTransition)
+                .clipShape(cardShape)
+                .matchedTransitionSource(id: reference, in: invitationTransition) { source in
+                    source.clipShape(cardShape)
+                }
             }
             .buttonStyle(.plain)
+            .contentShape(.interaction, cardShape)
+            .contentShape(.contextMenuPreview, cardShape)
             .contextMenu {
                 eventActions(for: reference)
             }
@@ -397,11 +404,11 @@ struct HomeView: View {
                 secondaryLabel(for: reference)
             )
             .frame(width: proxy.size.width, height: eventHeroHeight)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous)
+                cardShape
                     .stroke(.white.opacity(0.20), lineWidth: 0.5)
             }
+            .shadow(color: AppTheme.ColorToken.mediaScrim.opacity(0.12), radius: 12, y: 6)
             .accessibilityElement(children: .contain)
         }
         .frame(height: eventHeroHeight)
@@ -409,6 +416,20 @@ struct HomeView: View {
 
     @ViewBuilder
     private func eventActions(for reference: EventReference) -> some View {
+        if canExport(.schedule, for: reference) {
+            EventScheduleShareButton {
+                csvExportRequest = EventCSVExportRequest.make(
+                    kind: .schedule, workspace: workspace, reference: reference, authentication: authentication
+                )
+            }
+        }
+        if canExport(.guestList, for: reference) {
+            EventGuestListExportButton {
+                csvExportRequest = EventCSVExportRequest.make(
+                    kind: .guestList, workspace: workspace, reference: reference, authentication: authentication
+                )
+            }
+        }
         if reference == .main, BlueprintCaptureLink.sharingURL(
             baseURL: AppRuntimeConfiguration.authenticationBaseURL, workspace: workspace) != nil {
             Button(BlueprintCopy.saveBlueprint, systemImage: "square.and.arrow.down") {
@@ -433,6 +454,12 @@ struct HomeView: View {
                 )
             }
         }
+    }
+
+    private func canExport(_ kind: EventCSVExportKind, for reference: EventReference) -> Bool {
+        EventCSVExportRequest.canExport(
+            kind: kind, workspace: workspace, reference: reference, authentication: authentication
+        )
     }
 
     private func confirmRemoval(_ request: HomeEventRemovalRequest) {

@@ -63,9 +63,14 @@ private struct CollaborationInviteScreen: View {
     @State private var isConfirmingDisable = false
     @State private var generatedInvitation: GeneratedEventInvitation?
     @State private var generatedInvitationAccountID: String?
+    @State private var generatedInvitationPrincipalGeneration: UInt64?
+    @State private var generatedInvitationWorkspaceID: UUID?
+    @State private var shareLinkRequestID = UUID()
     @State private var isGenerating = false
     @State private var invitationError: String?
     @State private var isShowingSharingSettings = false
+    @State private var isShowingInvitationQRCode = false
+    @State private var csvExportRequest: EventCSVExportRequest?
 
     private let pinnedReference: EventReference?
     private let peopleSection: EventPeopleSection?
@@ -92,6 +97,12 @@ private struct CollaborationInviteScreen: View {
     private var inviteURL: URL? {
         generatedInvitation?.eventId == eventID
             && generatedInvitationAccountID == authentication.currentUser?.id
+            && generatedInvitationPrincipalGeneration == authentication.principalGeneration
+            && generatedInvitationWorkspaceID == workspace.mainEventID
+            && generatedInvitation?.role == invitedRole.rawValue
+            && authentication.currentUser.map { workspace.hasAuthenticatedViewer(accountID: $0.id) } == true
+            && !authentication.isSigningOut
+            && canManageInvitations
             ? generatedInvitation?.url : nil
     }
 
@@ -184,6 +195,21 @@ private struct CollaborationInviteScreen: View {
         .appClearNavigationBar()
         .toolbarColorScheme(reduceTransparency ? nil : .dark, for: .navigationBar)
         .toolbar {
+            if peopleSection == .guests, EventCSVExportRequest.canExport(
+                kind: .guestList, workspace: workspace, reference: eventReference, authentication: authentication
+            ) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    EventGuestListExportButton {
+                        csvExportRequest = EventCSVExportRequest.make(
+                            kind: .guestList, workspace: workspace,
+                            reference: eventReference, authentication: authentication
+                        )
+                    }
+                    .labelStyle(.iconOnly)
+                    .tint(backdropForeground)
+                    .frame(minWidth: 44, minHeight: 44)
+                }
+            }
             if !isPeopleDestination {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") {
@@ -195,13 +221,18 @@ private struct CollaborationInviteScreen: View {
             }
         }
         .navigationTitle(peopleSection == .guests ? "Guest List" : peopleSection == .collaborators ? "Collaborators" : "Invite")
-        .task(id: "\(eventID)|\(authentication.currentUser?.id ?? "")") {
+        .modifier(EventCSVExportPresentation(request: $csvExportRequest))
+        .task(id: "\(eventID)|\(authentication.currentUser?.id ?? "")|\(invitedRole.rawValue)") {
             clearInvitation()
+            await loadShareLink()
             if peopleSection == .collaborators { await loadJoinRequests() }
         }
         .sheet(isPresented: $isShowingSharingSettings, onDismiss: {
             clearInvitation()
-            Task { await loadJoinRequests() }
+            Task {
+                await loadShareLink()
+                await loadJoinRequests()
+            }
         }) {
             NavigationStack { CollaboratorSharingSettingsView() }
                 .environment(workspace)
@@ -210,8 +241,38 @@ private struct CollaborationInviteScreen: View {
                 .presentationDragIndicator(.visible)
         }
         .onChange(of: authentication.currentUser?.id) { _, _ in clearInvitation() }
+        .onChange(of: authentication.principalGeneration) { _, _ in clearInvitation() }
         .onChange(of: eventID) { _, _ in clearInvitation() }
+        .onChange(of: workspace.mainEventID) { _, _ in clearInvitation() }
         .onChange(of: invitedRole) { _, _ in clearInvitation() }
+        .onChange(of: canManageInvitations) { _, canManage in
+            if !canManage { clearInvitation() }
+        }
+        .onChange(of: workspace.isCollaboratorLinkEnabled) { _, enabled in
+            if invitedRole == .collaborator && !enabled { clearInvitation() }
+        }
+        .onChange(of: workspace.defaultCollaboratorPermission) { _, _ in
+            if invitedRole == .collaborator { clearInvitation() }
+        }
+        .sheet(isPresented: $isShowingInvitationQRCode) {
+            if let invitation = generatedInvitation,
+               let accountID = generatedInvitationAccountID,
+               let generation = generatedInvitationPrincipalGeneration,
+               let generatedWorkspaceID = generatedInvitationWorkspaceID,
+               let baseURL = AppRuntimeConfiguration.authenticationBaseURL,
+               isCurrentInvitationPrincipal(accountID: accountID, generation: generation,
+                    workspaceID: generatedWorkspaceID, reference: eventReference),
+               invitation.eventId == eventID, invitation.role == invitedRole.rawValue {
+                NavigationStack {
+                    EventInvitationQRCodeSheet(invitation: invitation, role: invitedRole,
+                        eventTitle: eventTitle, baseURL: baseURL)
+                        .navigationTitle("Invitation QR")
+                        .navigationBarTitleDisplayMode(.inline)
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
+        }
         .confirmationDialog("Disable this invitation link?", isPresented: $isConfirmingDisable, titleVisibility: .visible) {
             Button("Disable Link", role: .destructive) {
                 Task { await revokeInvitation() }
@@ -355,6 +416,14 @@ private struct CollaborationInviteScreen: View {
                     } label: {
                         Label(didCopyLink ? "Copied" : "Copy Link",
                               systemImage: didCopyLink ? "checkmark" : "link")
+                    }
+                    .frame(minHeight: 44)
+                    .disabled(isGenerating)
+
+                    Button {
+                        isShowingInvitationQRCode = true
+                    } label: {
+                        Label("Show QR Code", systemImage: "qrcode")
                     }
                     .frame(minHeight: 44)
                     .disabled(isGenerating)
@@ -559,74 +628,157 @@ private struct CollaborationInviteScreen: View {
     }
 
     private func clearInvitation() {
+        shareLinkRequestID = UUID()
+        isShowingInvitationQRCode = false
         generatedInvitation = nil
         generatedInvitationAccountID = nil
+        generatedInvitationPrincipalGeneration = nil
+        generatedInvitationWorkspaceID = nil
         didCopyLink = false
         invitationError = nil
     }
 
     @MainActor
+    private func loadShareLink() async {
+        guard let accountID = authentication.currentUser?.id,
+              let baseURL = AppRuntimeConfiguration.authenticationBaseURL else { return }
+        let generation = authentication.principalGeneration
+        let workspaceID = workspace.mainEventID
+        let eventID = self.eventID
+        let reference = eventReference
+        let role = invitedRole
+        let permission = role == .guest ? PlanningPermission.viewOnly : workspace.defaultCollaboratorPermission
+        let requestID = UUID()
+        shareLinkRequestID = requestID
+        guard role == .guest || workspace.isCollaboratorLinkEnabled else { return }
+        guard isCurrentInvitationPrincipal(accountID: accountID, generation: generation,
+              workspaceID: workspaceID, reference: reference) else { return }
+        do {
+            let links = try await EventInvitationClient(baseURL: baseURL).shareLinks(eventID: eventID)
+            guard !Task.isCancelled, shareLinkRequestID == requestID,
+                  eventReference == reference, self.eventID == eventID,
+                  invitedRole == role,
+                  (role == .guest ? PlanningPermission.viewOnly : workspace.defaultCollaboratorPermission) == permission,
+                  role == .guest || workspace.isCollaboratorLinkEnabled,
+                  isCurrentInvitationPrincipal(accountID: accountID, generation: generation,
+                      workspaceID: workspaceID, reference: reference) else { return }
+            guard let link = links.first(where: { $0.role == role.rawValue }) else { return }
+            generatedInvitation = link
+            generatedInvitationAccountID = accountID
+            generatedInvitationPrincipalGeneration = generation
+            generatedInvitationWorkspaceID = workspaceID
+        } catch {
+            // Explicit creation presents the actionable error if the service is unavailable.
+        }
+    }
+
+    @MainActor
     private func generateInvitation() async {
         clearInvitation()
-        guard !isGenerating, !cloudSync.isSynchronizing, canManageInvitations,
+        guard !isGenerating, !cloudSync.isSynchronizing,
               let accountID = authentication.currentUser?.id,
               let baseURL = AppRuntimeConfiguration.authenticationBaseURL else {
             invitationError = EventInvitationFailure.unavailable.localizedDescription
             return
         }
+        let generation = authentication.principalGeneration
+        let workspaceID = workspace.mainEventID
         let eventID = self.eventID
         let reference = eventReference
         let requestedRole = invitedRole
+        let requestedPermission = requestedRole == .guest ? PlanningPermission.viewOnly : workspace.defaultCollaboratorPermission
+        guard isCurrentInvitationPrincipal(accountID: accountID, generation: generation,
+              workspaceID: workspaceID, reference: reference) else {
+            invitationError = EventInvitationFailure.unavailable.localizedDescription
+            return
+        }
+        guard requestedRole == .guest || workspace.isCollaboratorLinkEnabled else { return }
+        let requestID = UUID()
+        shareLinkRequestID = requestID
         isGenerating = true
         defer { isGenerating = false }
         do {
             // A new/local event must exist canonically before an invite can reference it.
             await cloudSync.refreshCollaboration()
             if cloudSync.lastError != nil { throw EventInvitationFailure.unavailable }
-            guard eventReference == reference, self.eventID == eventID,
-                  authentication.currentUser?.id == accountID,
-                  invitedRole == requestedRole, canManageInvitations else { return }
-            let invitation = try await EventInvitationClient(baseURL: baseURL).create(
-                eventID: eventID, name: nil,
-                email: nil, role: requestedRole,
-                permission: requestedRole == .guest ? .viewOnly : workspace.defaultCollaboratorPermission
+            guard !Task.isCancelled, shareLinkRequestID == requestID,
+                  eventReference == reference, self.eventID == eventID,
+                  invitedRole == requestedRole,
+                  (requestedRole == .guest ? PlanningPermission.viewOnly : workspace.defaultCollaboratorPermission) == requestedPermission,
+                  requestedRole == .guest || workspace.isCollaboratorLinkEnabled,
+                  isCurrentInvitationPrincipal(accountID: accountID, generation: generation,
+                      workspaceID: workspaceID, reference: reference) else { return }
+            let invitation = try await EventInvitationClient(baseURL: baseURL).createShareLink(
+                eventID: eventID, role: requestedRole,
+                permission: requestedPermission
             )
-            guard eventReference == reference, self.eventID == eventID,
-                  authentication.currentUser?.id == accountID,
-                  invitedRole == requestedRole, canManageInvitations else { return }
+            guard !Task.isCancelled, shareLinkRequestID == requestID,
+                  eventReference == reference, self.eventID == eventID,
+                  invitedRole == requestedRole,
+                  (requestedRole == .guest ? PlanningPermission.viewOnly : workspace.defaultCollaboratorPermission) == requestedPermission,
+                  requestedRole == .guest || workspace.isCollaboratorLinkEnabled,
+                  isCurrentInvitationPrincipal(accountID: accountID, generation: generation,
+                      workspaceID: workspaceID, reference: reference) else { return }
             generatedInvitation = invitation
             generatedInvitationAccountID = accountID
+            generatedInvitationPrincipalGeneration = generation
+            generatedInvitationWorkspaceID = workspaceID
             PostHogSDK.shared.capture(
                 "invitation_link_created",
                 properties: ["role": String(describing: invitedRole)]
             )
         } catch {
-            guard eventReference == reference, self.eventID == eventID,
-                  authentication.currentUser?.id == accountID, invitedRole == requestedRole,
-                  canManageInvitations else { return }
+            guard eventReference == reference, self.eventID == eventID, invitedRole == requestedRole,
+                  isCurrentInvitationPrincipal(accountID: accountID, generation: generation,
+                      workspaceID: workspaceID, reference: reference) else { return }
             invitationError = error.localizedDescription
         }
     }
 
     private func revokeInvitation() async {
-        guard canManageInvitations, !isGenerating, let invitation = generatedInvitation,
+        guard !isGenerating, let invitation = generatedInvitation,
               invitation.eventId == eventID,
+              invitation.role == invitedRole.rawValue,
+              let generatedInvitationAccountID,
+              let generation = generatedInvitationPrincipalGeneration,
+              let workspaceID = generatedInvitationWorkspaceID,
               generatedInvitationAccountID == authentication.currentUser?.id,
               invitation.email == nil, let baseURL = AppRuntimeConfiguration.authenticationBaseURL else { return }
-        guard let accountID = authentication.currentUser?.id else { return }
+        let accountID = generatedInvitationAccountID
         let reference = eventReference
+        shareLinkRequestID = UUID()
+        let requestID = shareLinkRequestID
+        guard isCurrentInvitationPrincipal(accountID: accountID, generation: generation,
+              workspaceID: workspaceID, reference: reference) else { return }
         isGenerating = true
         defer { isGenerating = false }
         do {
-            try await EventInvitationClient(baseURL: baseURL).revoke(eventID: invitation.eventId)
-            guard authentication.currentUser?.id == accountID, eventReference == reference,
-                  canManageInvitations else { return }
+            try await EventInvitationClient(baseURL: baseURL).revoke(eventID: invitation.eventId, role: invitedRole)
+            guard !Task.isCancelled, shareLinkRequestID == requestID,
+                  eventReference == reference,
+                  isCurrentInvitationPrincipal(accountID: accountID, generation: generation,
+                      workspaceID: workspaceID, reference: reference) else { return }
             clearInvitation()
             PostHogSDK.shared.capture("invitation_link_revoked")
         } catch {
-            guard authentication.currentUser?.id == accountID, eventReference == reference else { return }
+            guard !Task.isCancelled, shareLinkRequestID == requestID,
+                  eventReference == reference,
+                  isCurrentInvitationPrincipal(accountID: accountID, generation: generation,
+                      workspaceID: workspaceID, reference: reference) else { return }
             invitationError = error.localizedDescription
         }
+    }
+
+    @MainActor
+    private func isCurrentInvitationPrincipal(
+        accountID: String, generation: UInt64, workspaceID: UUID, reference: EventReference
+    ) -> Bool {
+        !authentication.isSigningOut
+            && authentication.currentUser?.id == accountID
+            && authentication.principalGeneration == generation
+            && workspace.mainEventID == workspaceID
+            && workspace.hasAuthenticatedViewer(accountID: accountID)
+            && workspace.canManageInvitations(for: reference)
     }
 }
 

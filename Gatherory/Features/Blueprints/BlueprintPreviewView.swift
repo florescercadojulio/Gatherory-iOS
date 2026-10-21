@@ -167,12 +167,6 @@ struct BlueprintPreviewView: View {
                             ideasFilterMenu
                         }
                         ToolbarItemGroup(placement: .topBarTrailing) {
-                            Button("Close preview", systemImage: "xmark") {
-                                if session?.isDirty == true { confirmsClose = true }
-                                else { closePreview() }
-                            }
-                                .labelStyle(.iconOnly)
-                                .frame(width: 44, height: 44)
                             Button("Add Idea", systemImage: "plus") { openEditor(.idea(nil)) }
                                 .labelStyle(.iconOnly)
                                 .disabled(content.ideas.count >= 100 || hasPendingInstallation || loadFailed)

@@ -1124,3 +1124,158 @@ Send, account/role changes in flight, the older note history, local guest Save,
 VoiceOver, larger text and Spanish. See the shared announcement handoff for the
 complete remaining physical-device checks. No UI tests, existing database
 changes, real push sends, deployment, build upload, commit or push were performed.
+
+## Share Event Schedule — October 21, 2026
+
+The full `GatheroryTests` target passes **866 tests in 121 suites**, including
+**11 new export tests** for manager/active-role authorization, exact runtime
+account identity, email/preview fallback rejection, device/account guest privacy,
+root/child/scoped-event boundaries, approved public schedule filtering, immutable
+allowlisted copies, unscheduled dates, Spanish, DST and inclusive all-day dates.
+Account/session generation and live text changes invalidate the open share sheet.
+
+```sh
+xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
+  -destination 'platform=iOS Simulator,id=3A4621C1-A19F-4EDD-A25F-6A1AB7663D6F' \
+  -derivedDataPath /tmp/gatherory-schedule-share-derived \
+  -clonedSourcePackagesDirPath ~/Library/Developer/Xcode/DerivedData/Gatherory-fkdlsthewnqyuwcnvrboywcmoqza/SourcePackages \
+  -only-testing:GatheroryTests -parallel-testing-enabled NO \
+  -disableAutomaticPackageResolution -collect-test-diagnostics never \
+  POSTHOG_ENABLED=NO
+bash scripts/verify-localizations.sh
+```
+
+Log: `/tmp/gatherory-schedule-share-native-20261021-r2.log`.
+Result: `/tmp/gatherory-schedule-share-derived/Logs/Test/Test-Gatherory-2026.10.21_10-08-33--0400.xcresult`.
+English/Spanish localization checks pass for **1,473 strings**, including five
+new sharing/export strings. The 23 existing entries without Spanish translations
+were completed to clear the required catalog test; existing English and Spanish
+values were preserved. The existing AppCopy dynamic-key extraction warning
+remains. Both repositories pass `git diff --check`.
+
+Open an event's **…** menu or long-press its Home card and choose **Share Event
+Schedule**. This sends a text snapshot through the native share sheet. It never
+includes guest/contact records or private planning details, creates no link or
+permission grant, and cannot update or recall copies sent elsewhere. Local
+cached permissions remain subject to existing sync; offline sharing cannot
+discover a server revocation that has not reached the device.
+
+The [implementation handoff](../../../gatherory-web-app/docs/roadmaps/event-schedule-sharing-roadmap/README.md)
+records the allowlist, permission policy and physical-device checks for actual
+Messages/Mail/Copy sharing, cancellation, account changes, child privacy, dates,
+VoiceOver, large text and iPad presentation. Only the non-UI test target ran;
+no UI-automation tests, real shares, database changes, deployment, build upload,
+commit or push were performed. Existing staged build artifacts and blueprint
+edits were preserved.
+
+## CSV schedule sharing and rounded Home cards — October 21, 2026
+
+The full `GatheroryTests` target passes **871 tests in 122 suites**. CSV export
+coverage has **13 tests**, including independent RFC-4180 parsing, commas,
+escaped quotes, multiline fields, Unicode, formula neutralization, explicit
+ISO-8601 offsets, inclusive all-day dates and the existing permission/privacy
+boundaries. Three attachment tests cover BOM/file bytes, isolated idempotent
+cleanup, release and creation failure without removing existing data. Complete
+file protection is requested by the write; metadata verification runs only on
+a physical device because the simulator omits it.
+
+Use the preceding Xcode command with the same unit-test target, DerivedData and
+package-cache paths. Parallel testing and PostHog remain disabled. No UI-automation
+target was selected.
+
+Log: `/tmp/gatherory-csv-native-20261021-r2.log`.
+Result: `/tmp/gatherory-schedule-share-derived/Logs/Test/Test-Gatherory-2026.10.21_10-20-30--0400.xcresult`.
+Localization log: `/tmp/gatherory-csv-localizations-20261021.log` — **1,481
+English/Spanish strings pass**, with the existing AppCopy extraction warning.
+Swift parsing and both whitespace checks pass.
+
+The Home card now shares one continuous rounded shape across its content,
+native context-menu preview, interaction region and zoom source, with a subtle
+shadow outside the border. Physical visual acceptance remains for long-press
+lift/dismiss, normal tap/zoom/back, event-switching gestures, light/dark appearance
+and accessibility settings. Also verify the actual CSV attachment in Messages,
+Mail, AirDrop, Files and a spreadsheet app, plus file cleanup on share/cancel
+and account/permission changes. Abrupt process termination can leave a protected
+temporary file until OS cleanup; no later share reuses that file.
+
+See the updated [schedule-sharing handoff](../../../gatherory-web-app/docs/roadmaps/event-schedule-sharing-roadmap/README.md)
+for schema, security and acceptance details. No real share, database change,
+deployment, build upload, commit or push was performed. Existing staged build
+artifacts and blueprint edits remain preserved.
+
+## Guest-list CSV export — October 21, 2026
+
+The full native `GatheroryTests` target passes **884 tests in 124 suites**,
+with only that target selected, parallel testing disabled and PostHog disabled.
+The existing Xcode command, DerivedData directory, package cache and simulator
+destination from the schedule-sharing sections above were reused.
+
+Nine guest-export tests cover active exact-account manager authorization,
+preview/email fallback rejection, guest/projection isolation, exact root/child
+rosters and contextual RSVPs, distinct same-name people, contact/name redaction,
+Spanish, CSV round trips/formula controls and lifecycle revalidation. Three
+shared request tests verify session generation after sign-out/re-entry, workspace
+scope, fresh RSVP payloads, permission loss, kind separation and pending guest
+handover. Attachment coverage now also verifies cleanup isolation between two
+guest files and an open schedule file. Existing schedule regressions pass.
+
+Log: `/tmp/gatherory-guest-export-native-20261021.log`.
+Result: `/tmp/gatherory-schedule-share-derived/Logs/Test/Test-Gatherory-2026.10.21_10-32-57--0400.xcresult`.
+Localization log: `/tmp/gatherory-guest-export-localizations-20261021.log` —
+**1,492 English/Spanish strings pass**, including 11 new labels/headers/statuses
+and errors, with the existing dynamic AppCopy warning. Swift parsing and both
+whitespace checks pass.
+
+**Export Guest List** appears in the event menu and the Manage Guest List
+toolbar. The attachment contains only Name and RSVP Status for that event;
+the existing Guest List includes all attendee roles. Contact records, IDs,
+planning roles, join requests and other events' rosters are excluded. Schedule
+sharing now uses the same encoder/presenter and retains its own field allowlist.
+
+See the [guest-list export handoff](../../../gatherory-web-app/docs/roadmaps/guest-list-export-roadmap/README.md)
+for the remaining device checks: actual attachment handling, contacts absent in
+outbound CSV, event-role differences, account/roster changes while sharing,
+protection/cleanup and accessibility. No UI-automation tests, real exports,
+remote data changes, deployment, build upload, commit or push were performed.
+Existing staged artifacts, blueprint edits and earlier notification/export work
+remain intact.
+
+## Reusable event invitation QR links — October 21, 2026
+
+The Invite screen now loads existing Guest and Collaborator public links without
+creating them. Link creation remains explicit; each audience has its own reusable
+link and QR, with selected-role revocation under Link Options. The native share
+sheet exports a PNG. Scanning uses the existing invitation preview and explicit
+join/RSVP; guest attendance does not grant planning access. Email-bound invitations
+remain separate.
+
+Pending requests are fenced by request ID, cancellation, account generation,
+exact configured viewer, event, audience, and workspace. A change of account,
+event, permission, or collaborator-link enablement clears stale links and QR
+presentation. Settings dismissal reloads existing links without creating any.
+
+Verification: **889 tests in 126 suites passed**, with only `GatheroryTests`
+selected. QR decoding verifies the exact encoded URL. Public-link transport
+tests cover nullable expiry, audience validation, read-only lookup, role-specific
+revocation, and rejection of private/email or mismatched response links.
+`bash scripts/verify-localizations.sh` verifies **1,500 English/Spanish strings**
+with the existing dynamic AppCopy extraction warning.
+
+```sh
+xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
+  -destination 'platform=iOS Simulator,id=3A4621C1-A19F-4EDD-A25F-6A1AB7663D6F' \
+  -derivedDataPath /tmp/gatherory-event-qr-derived \
+  -only-testing:GatheroryTests -parallel-testing-enabled NO \
+  -disableAutomaticPackageResolution -collect-test-diagnostics never POSTHOG_ENABLED=NO
+```
+
+Log: `/tmp/gatherory-event-qr-native-20261021.log`.
+Result: `/tmp/gatherory-event-qr-derived/Logs/Test/Test-Gatherory-2026.10.21_10-59-23--0400.xcresult`.
+Localization log: `/tmp/gatherory-event-qr-localizations-20261021.log`.
+
+See the [event QR handoff](../../../gatherory-web-app/docs/roadmaps/event-invitation-qr-roadmap/README.md)
+for server/database evidence, migration compatibility, and remaining physical
+Camera scanning, saving/printing, accessibility, account-switch, and production
+app-link checks. The compatible schema/server must roll out before the new mobile
+build. No UI-automation tests, physical-device shares, deployment, build upload,
+commit, or push were performed. Existing staged and uncommitted work is preserved.

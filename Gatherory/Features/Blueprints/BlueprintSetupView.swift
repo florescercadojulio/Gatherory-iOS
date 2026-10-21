@@ -299,8 +299,6 @@ struct BlueprintSetupView: View {
         .formStyle(.grouped)
         .disabled(busy)
         .interactiveDismissDisabled(busy)
-        .scrollContentBackground(.hidden)
-        .background(AppTheme.ColorToken.background)
         .navigationTitle(catalogEntry?.definition.blueprint.name ?? BlueprintCopy.starter)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -1130,8 +1128,6 @@ private struct BlueprintPlanReviewView: View {
             }
         }
         .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .background(AppTheme.ColorToken.background)
         .navigationTitle(BlueprintCopy.review)
         .navigationBarTitleDisplayMode(.inline)
     }
