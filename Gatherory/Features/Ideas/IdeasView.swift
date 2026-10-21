@@ -9,13 +9,17 @@ struct IdeasView: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.layoutDirection) private var layoutDirection
-    @Environment(\.tabViewBottomAccessoryPlacement) private var accessoryPlacement
     @State private var filter: IdeaFilter = .all
-    @State private var scope: IdeasScope = .all
+    @Binding private var scope: IdeasScope
     @State private var isAddingIdea = false
     @State private var addIdeaDetent: PresentationDetent = .medium
     @State private var selectedIdeaID: UUID?
     @Namespace private var ideaTransition
+
+    init(scope: Binding<IdeasScope> = .constant(.all), onExitWorkspace: (() -> Void)? = nil) {
+        self._scope = scope
+        self.onExitWorkspace = onExitWorkspace
+    }
 
     private var filteredIdeas: [PlanningIdea] {
         let ideas = switch scope {
@@ -68,9 +72,6 @@ struct IdeasView: View {
 
                 AccountToolbarButton()
             }
-        }
-        .tabViewBottomAccessory {
-            eventScopeAccessory
         }
         .sheet(isPresented: $isAddingIdea) {
             NavigationStack {
@@ -125,72 +126,6 @@ struct IdeasView: View {
         return "Add an idea to start shaping this event."
     }
 
-    private var eventScopeAccessory: some View {
-        Menu {
-            Button {
-                withAnimation(.snappy) {
-                    scope = .all
-                }
-            } label: {
-                Label("All Ideas", systemImage: scope == .all ? "checkmark" : "square.grid.2x2")
-            }
-
-            Divider()
-
-            ForEach(workspace.availableEventContexts, id: \.self) { reference in
-                Button {
-                    withAnimation(.snappy) {
-                        workspace.selectEventContext(reference)
-                        scope = .selectedEvent
-                    }
-                } label: {
-                    Label(
-                        workspace.eventTitle(for: eventID(for: reference)),
-                        systemImage: isSelectedEvent(reference) ? "checkmark" : "calendar"
-                    )
-                }
-            }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "calendar")
-                    .font(.body.weight(.semibold))
-                    .frame(width: 30, height: 30)
-                    .accessibilityHidden(true)
-
-                if accessoryPlacement == .expanded {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Ideas for")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(scopeTitle)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                    }
-                } else {
-                    Text(scopeTitle)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, minHeight: accessoryPlacement == .expanded ? 58 : 44, alignment: .leading)
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 20)
-        .accessibilityLabel("Ideas event filter")
-        .accessibilityValue(isFilteringToEvent ? "\(scopeTitle), filtered" : "All Ideas")
-        .accessibilityHint("Choose which event’s ideas to show")
-    }
-
     private var statusFilterMenu: some View {
         Menu {
             ForEach(IdeaFilter.allCases) { option in
@@ -208,10 +143,7 @@ struct IdeasView: View {
         } label: {
             Label(filter.title, systemImage: "line.3.horizontal.decrease")
                 .labelStyle(.iconOnly)
-                .frame(
-                    width: AppTheme.Layout.minimumTouchTarget,
-                    height: AppTheme.Layout.minimumTouchTarget
-                )
+                .frame(width: AppTheme.Layout.minimumTouchTarget, height: AppTheme.Layout.minimumTouchTarget)
                 .contentShape(Rectangle())
         }
         .accessibilityLabel("Filter ideas")
@@ -292,9 +224,100 @@ struct IdeasView: View {
     }
 }
 
-private enum IdeasScope: Hashable {
+enum IdeasScope: Hashable {
     case all
     case selectedEvent
+}
+
+struct IdeasEventScopeAccessory: View {
+    @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(\.tabViewBottomAccessoryPlacement) private var accessoryPlacement
+    @Binding var scope: IdeasScope
+
+    private var scopeTitle: String {
+        switch scope {
+        case .all: "All Ideas"
+        case .selectedEvent: workspace.selectedEventTitle
+        }
+    }
+
+    private var isFilteringToEvent: Bool { scope == .selectedEvent }
+
+    var body: some View {
+        Menu {
+            Button {
+                withAnimation(.snappy) { scope = .all }
+            } label: {
+                Label("All Ideas", systemImage: scope == .all ? "checkmark" : "square.grid.2x2")
+            }
+
+            Divider()
+
+            ForEach(workspace.availableEventContexts, id: \.self) { reference in
+                Button {
+                    withAnimation(.snappy) {
+                        workspace.selectEventContext(reference)
+                        scope = .selectedEvent
+                    }
+                } label: {
+                    Label(
+                        workspace.eventTitle(for: eventID(for: reference)),
+                        systemImage: isSelectedEvent(reference) ? "checkmark" : "calendar"
+                    )
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "calendar")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 30, height: 30)
+                    .accessibilityHidden(true)
+
+                if accessoryPlacement == .expanded {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Ideas for")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(scopeTitle)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    }
+                } else {
+                    Text(scopeTitle)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: accessoryPlacement == .expanded ? 58 : 44, alignment: .leading)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+        .accessibilityLabel("Ideas event filter")
+        .accessibilityValue(isFilteringToEvent ? "\(scopeTitle), filtered" : "All Ideas")
+        .accessibilityHint("Choose which event’s ideas to show")
+    }
+
+    private func isSelectedEvent(_ reference: EventReference) -> Bool {
+        scope == .selectedEvent && workspace.selectedEventReference == reference
+    }
+
+    private func eventID(for reference: EventReference) -> UUID {
+        switch reference {
+        case .main: workspace.mainEventID
+        case .subevent(let eventID): eventID
+        case .idea: workspace.mainEventID
+        }
+    }
 }
 
 enum IdeaFilter: String, CaseIterable, Identifiable {

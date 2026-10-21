@@ -56,7 +56,7 @@ struct BlueprintPreviewView: View {
                             navigation.homeEvent = id
                         }
                     }
-                } ideas: {
+                } ideas: { _ in
                     navigationRoot(content: content, tab: .ideas) {
                         BlueprintWorkspaceIdeasView(ideas: content.ideas(in: ideasScope), responses: session?.responses ?? [:]) { idea in
                             openEditor(.idea(idea))

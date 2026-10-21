@@ -144,16 +144,16 @@ struct ContentView: View {
     }
 
     private var planningTabs: some View {
-        WorkspaceTabShell(selection: tabSelection, showsManage: true) {
+        WorkspaceTabShell(selection: tabSelection, showsManage: true, showsIdeasEventFilter: true) {
             NavigationStack {
                 HomeView(
                     homeReselectionTrigger: homeReselectionTrigger,
                     onExitWorkspace: onExitWorkspace
                 )
             }
-        } ideas: {
+        } ideas: { scope in
             NavigationStack {
-                IdeasView(onExitWorkspace: onExitWorkspace)
+                IdeasView(scope: scope, onExitWorkspace: onExitWorkspace)
             }
         } decide: {
             NavigationStack {
