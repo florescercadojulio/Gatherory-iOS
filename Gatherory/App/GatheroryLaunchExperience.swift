@@ -15,68 +15,132 @@ struct GatheroryLaunchContainer: View {
     @Environment(InvitationRouter.self) private var invitations
     @Environment(BlueprintSharedTemplateRouter.self) private var sharedBlueprintLinks
     @Environment(GuestInvitationStore.self) private var guestInvitations
+    @Environment(NotificationController.self) private var notifications
+    @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasSeenDecideTimelinePrimer") private var hasSeenDecideTimelinePrimer = false
     @State private var isShowingSplash = true
-    @State private var completedOnboardingThisSession = false
-    @State private var preparedAccountID: String?
+    @State private var completedOnboardingIdentity: SessionPreparationIdentity?
+    @State private var preparation = SessionPreparationCoordinator()
     @State private var hasRestoredAuthentication = false
+    @State private var preparationAttempt = 0
+    @State private var restorationSignInRequested = false
+    @State private var confirmsDeviceRemoval = false
+    @State private var showsGuestAccount = false
+    @State private var notificationNavigation = NotificationNavigationState()
+    @State private var notificationSessionGeneration = UUID()
 
-    private var shouldShowLocalOnboarding: Bool {
-        guard !completedOnboardingThisSession else { return false }
-        return AppRuntimeConfiguration.alwaysShowsOnboarding || !hasCompletedOnboarding
+    private var sessionIdentity: String {
+        authentication.currentUser?.id ?? authentication.localGuestProfile?.storageID ?? "signed-out"
+    }
+
+    private var preparationRequest: SessionPreparationRequest {
+        SessionPreparationRequest(account: authentication.currentUser, guestProfile: authentication.localGuestProfile)
+    }
+
+    private var isSessionReady: Bool {
+        !authentication.deletionCleanup.blocksEntry && !authentication.isSessionRestorationUnavailable && !authentication.guestDiscardNeedsAttention &&
+            preparation.isReady(for: preparationRequest.identity)
+    }
+    private var preparationRecovery: SessionPreparationRecovery? { preparation.recovery(for: preparationRequest.identity) }
+
+    private var authenticationFlowDestination: AuthenticationFlowDestination {
+        AuthenticationFlowChain.default.destination(for: AuthenticationFlowContext(
+            guestSignInRequested: authentication.isGuestSignInRequested,
+            guestImportNeedsSignIn: preparationRecovery == .originalAccountRequired,
+            hasPendingGuestImport: authentication.hasPendingGuestImport,
+            pendingSharedBlueprintToken: sharedBlueprintLinks.pendingToken,
+            pendingInvitationToken: invitations.pendingToken,
+            invitationRequiresAuthentication: invitations.requiresAuthentication,
+            isGuestMode: authentication.isGuestMode,
+            isAuthenticated: authentication.isAuthenticated,
+            guestPreparationFailed: preparationRecovery != nil,
+            preparedIdentityMatches: isSessionReady,
+            hasGuestInvitations: !guestInvitations.events.isEmpty,
+            didJoinInvitationThisSession: invitations.didJoinThisSession,
+            alwaysShowsOnboarding: AppRuntimeConfiguration.alwaysShowsOnboarding,
+            completedOnboardingThisSession: completedOnboardingIdentity == preparationRequest.identity,
+            usesRemoteAccountState: AppRuntimeConfiguration.usesRemoteAccountState,
+            accountOnboardingState: cloudSync.accountOnboardingState,
+            sessionRestorationUnavailable: authentication.isSessionRestorationUnavailable,
+            restorationSignInRequested: restorationSignInRequested,
+            guestDiscardNeedsAttention: authentication.guestDiscardNeedsAttention,
+            accountPreparationFailed: authentication.isAuthenticated && preparationRecovery != nil,
+            accountDeletionCleanupPending: authentication.deletionCleanup.blocksEntry
+        ))
     }
 
     var body: some View {
         @Bindable var authentication = authentication
         ZStack {
             Group {
-                if let token = sharedBlueprintLinks.pendingToken {
-                    if !authentication.isAuthenticated {
-                        NavigationStack {
-                            AuthenticationView()
-                                .toolbar {
-                                    ToolbarItem(placement: .cancellationAction) {
-                                        Button("Back", systemImage: "chevron.left") { sharedBlueprintLinks.dismiss() }
-                                    }
+                switch authenticationFlowDestination {
+                case .guestSignIn:
+                    NavigationStack {
+                        AuthenticationView(allowsGuestContinuation: false)
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button(AppCopy.Common.cancel) { authentication.cancelGuestSignIn() }
                                 }
-                        }
-                    } else if preparedAccountID != authentication.currentUser?.id {
-                        AccountOnboardingLoadingView()
-                    } else {
-                        BlueprintSharedPreviewView(token: token)
-                            .id("shared-blueprint-\(token)-\(authentication.currentUser?.id ?? "signed-out")")
+                            }
                     }
-                } else if let token = invitations.pendingToken {
-                    if invitations.requiresAuthentication && !authentication.isAuthenticated {
+                case .guestRecovery(let needsSignIn), .invitationRecovery(let needsSignIn):
+                    guestRecovery(needsSignIn: needsSignIn)
+                case .guestImporting:
+                    ProgressView(GuestCopy.linking)
+                case .sharedBlueprintAuthentication:
+                    NavigationStack {
+                        AuthenticationView()
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("Back", systemImage: "chevron.left") { sharedBlueprintLinks.dismiss() }
+                                }
+                            }
+                    }
+                case .sharedBlueprintLoading, .invitationLoading, .guestLoading, .accountLoading:
+                    AccountOnboardingLoadingView()
+                case .sharedBlueprintPreview(let token):
+                    BlueprintSharedPreviewView(token: token)
+                        .id("shared-blueprint-\(token)-\(authentication.currentUser?.id ?? "signed-out")")
+                case .invitationAuthentication:
+                    NavigationStack {
+                        AuthenticationView()
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("Back", systemImage: "chevron.left") { invitations.requiresAuthentication = false }
+                                }
+                            }
+                    }
+                case .invitation(let token):
+                    NativeInvitationView(token: token).id(token)
+                case .authentication:
+                    if authentication.isSessionRestorationUnavailable {
                         NavigationStack {
-                            AuthenticationView()
+                            AuthenticationView(allowsGuestContinuation: false)
                                 .toolbar {
                                     ToolbarItem(placement: .cancellationAction) {
-                                        Button("Back", systemImage: "chevron.left") { invitations.requiresAuthentication = false }
+                                        Button(AppCopy.Common.back) { restorationSignInRequested = false }
                                     }
                                 }
                         }
-                    } else if authentication.isAuthenticated && preparedAccountID != authentication.currentUser?.id {
-                        // Invitation routing must not race the previous account's
-                        // teardown or the new account's workspace activation.
-                        AccountOnboardingLoadingView()
-                    } else { NativeInvitationView(token: token).id(token) }
-                } else if !authentication.isAuthenticated {
-                    AuthenticationView()
-                } else if preparedAccountID != authentication.currentUser?.id {
-                    AccountOnboardingLoadingView()
-                } else if !guestInvitations.events.isEmpty || invitations.didJoinThisSession {
+                    } else {
+                        AuthenticationView()
+                    }
+                case .sessionRestorationRecovery:
+                    sessionRestorationRecovery
+                case .guestDiscardRecovery:
+                    guestDiscardRecovery
+                case .accountRecovery:
+                    accountPreparationRecovery
+                case .accountDeletionCleanup:
+                    accountDeletionCleanupRecovery
+                case .app:
                     AppRootView()
-                } else if AppRuntimeConfiguration.alwaysShowsOnboarding && !completedOnboardingThisSession {
+                case .onboarding:
                     OnboardingView(onCreateWorkspace: finishOnboarding, onSkipCreation: completeOnboarding)
-                } else if AppRuntimeConfiguration.usesRemoteAccountState {
+                case .remoteAccount:
                     remoteAccountExperience
-                } else if shouldShowLocalOnboarding {
-                    OnboardingView(onCreateWorkspace: finishOnboarding, onSkipCreation: completeOnboarding)
-                } else {
-                    AppRootView()
                 }
             }
             .transition(.opacity)
@@ -86,6 +150,27 @@ struct GatheroryLaunchContainer: View {
                     .transition(.opacity)
                     .zIndex(1)
             }
+        }
+        .environment(notificationNavigation)
+        .onChange(of: sessionIdentity) { _, _ in
+            notificationSessionGeneration = UUID()
+            notificationNavigation.destination = nil
+            notificationNavigation.attendanceAnnouncement = nil
+            completedOnboardingIdentity = nil
+            restorationSignInRequested = false
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, hasRestoredAuthentication,
+                  !authentication.isProcessing, !authentication.isSigningOut,
+                  isSessionReady else { return }
+            Task {
+                guard !authentication.isProcessing, !authentication.isSigningOut,
+                      isSessionReady else { return }
+                await notifications.activate(identity: authentication.notificationPrincipal)
+            }
+        }
+        .sheet(isPresented: $showsGuestAccount) {
+            NavigationStack { LocalGuestAccountView() }
         }
         .disabled(authentication.isSigningOut)
         .overlay {
@@ -104,10 +189,32 @@ struct GatheroryLaunchContainer: View {
         } message: {
             Text("Some changes may still need syncing. If you sign out now, saved changes stay on this device for this account. Sign back in to finish syncing before removing the app.")
         }
+        .alert(DeletionCleanupCopy.requestFailedTitle, isPresented: $authentication.accountDeletionNeedsAttention) {
+            Button(AppCopy.Common.close, role: .cancel) {}
+        } message: { Text(DeletionCleanupCopy.requestFailedHelp) }
         .task {
-            authentication.prepareForSignOut = { keepingPendingChanges in
-                try await cloudSync.prepareForSignOut(keepingPendingChanges: keepingPendingChanges)
-                await guestInvitations.activate(account: nil)
+            SessionLifecycleActions(
+                authentication: authentication, library: workspaceLibrary,
+                persistence: persistence, cloudSync: cloudSync,
+                guestInvitations: guestInvitations, notifications: notifications, imageSafety: imageSafety
+            ).install()
+            notifications.onRouteIntent = { intent in
+                let principal = notifications.activePrincipal
+                let generation = notificationSessionGeneration
+                Task {
+                    guard principal != nil, authentication.notificationPrincipal == principal,
+                          generation == notificationSessionGeneration else { return }
+                    await openNotification(intent)
+                }
+            }
+            notifications.onRefreshRequested = {
+                Task {
+                    guard isSessionReady else { return }
+                    let principal = authentication.notificationPrincipal
+                    if authentication.isAuthenticated { await cloudSync.synchronize(trigger: .backgroundRefresh) }
+                    guard authentication.notificationPrincipal == principal else { return }
+                    await guestInvitations.refresh(force: true)
+                }
             }
             guard isShowingSplash else { return }
 
@@ -118,13 +225,9 @@ struct GatheroryLaunchContainer: View {
                 try? await Task.sleep(for: .milliseconds(milliseconds))
             }
 
+            await authentication.deletionCleanup.retry()
             await authentication.restoreSession()
             hasRestoredAuthentication = true
-            if !AppRuntimeConfiguration.usesRemoteAccountState,
-               !workspaceLibrary.workspaces.isEmpty,
-               !AppRuntimeConfiguration.alwaysShowsOnboarding {
-                hasCompletedOnboarding = true
-            }
             await minimumSplash.value
             guard !Task.isCancelled else { return }
 
@@ -132,27 +235,166 @@ struct GatheroryLaunchContainer: View {
                 isShowingSplash = false
             }
         }
-        .task(id: "\(hasRestoredAuthentication)|\(authentication.currentUser?.id ?? "signed-out")") {
+        .task(id: "\(hasRestoredAuthentication)|\(sessionIdentity)|\(authentication.isSessionRestorationUnavailable)|\(authentication.deletionCleanup.blocksEntry)|\(preparationAttempt)") {
             // Never synchronize using a cached profile before its bearer
             // session has resolved to the canonical account identity.
-            guard hasRestoredAuthentication else { return }
+            guard hasRestoredAuthentication, !authentication.deletionCleanup.blocksEntry, !authentication.isSessionRestorationUnavailable,
+                  !authentication.guestDiscardNeedsAttention else { return }
             invitations.resetJoinedSession()
-            completedOnboardingThisSession = false
-            preparedAccountID = nil
-            let account = authentication.currentUser
-            await cloudSync.activate(
-                userID: account?.id,
-                seedData: AppRuntimeConfiguration.seedsDevelopmentData
+            let request = preparationRequest
+            await preparation.prepare(request, using: LiveSessionPreparationServices(
+                authentication: authentication, library: workspaceLibrary,
+                cloudSync: cloudSync, persistence: persistence,
+                guestInvitations: guestInvitations, notifications: notifications
+            ), isCurrent: {
+                // Guest cleanup intentionally removes the profile while the
+                // validated account remains the owner of this preparation.
+                preparationRequest.identity == request.identity && !authentication.isSigningOut &&
+                    !authentication.guestDiscardNeedsAttention && !authentication.deletionCleanup.blocksEntry
+            })
+        }
+    }
+
+    private func openNotification(_ intent: NotificationRouteIntent) async {
+        guard !authentication.isProcessing, !authentication.isSigningOut,
+              isSessionReady,
+              let principal = authentication.notificationPrincipal else { return }
+        let generation = notificationSessionGeneration
+        let principalGeneration = authentication.principalGeneration
+        let previousSync = cloudSync.lastSuccessfulSyncAt
+        if authentication.isAuthenticated {
+            await cloudSync.synchronize(trigger: .manual)
+        }
+        await guestInvitations.refresh(force: true)
+        guard !Task.isCancelled, generation == notificationSessionGeneration,
+              principalGeneration == authentication.principalGeneration,
+              !authentication.isProcessing, !authentication.isSigningOut,
+              authentication.notificationPrincipal == principal,
+              isSessionReady else { return }
+        let refreshedPlans = cloudSync.lastSuccessfulSyncAt != previousSync && cloudSync.lastError == nil
+        let destination = AuthorizedNotificationDestination.resolve(
+            intent,
+            workspaces: refreshedPlans ? workspaceLibrary.workspaces : [],
+            attendanceEventIDs: guestInvitations.errorMessage == nil ? Set(guestInvitations.events.map(\.id)) : []
+        )
+        switch destination {
+        case .announcement(let workspaceID, let reference, let announcementID):
+            guard let workspace = workspaceLibrary.workspaces.first(where: { $0.mainEventID == workspaceID }) else { return }
+            guestInvitations.selectedEventID = nil
+            workspace.selectEventContext(reference)
+            notificationNavigation.destination = NotificationPlanningDestination(
+                workspaceID: workspaceID, reference: reference, todoID: nil, announcementID: announcementID
             )
-            guard authentication.currentUser?.id == account?.id else { return }
-            await guestInvitations.activate(account: AppRuntimeConfiguration.usesRemoteAccountState ? account : nil)
-            guard authentication.currentUser?.id == account?.id else { return }
-            preparedAccountID = account?.id
-            if !AppRuntimeConfiguration.usesRemoteAccountState,
-               !workspaceLibrary.workspaces.isEmpty,
-               !AppRuntimeConfiguration.alwaysShowsOnboarding {
-                hasCompletedOnboarding = true
+            workspaceLibrary.open(workspace)
+        case .attendanceAnnouncement(let eventID, let announcementID):
+            workspaceLibrary.closeWorkspace()
+            notificationNavigation.attendanceAnnouncement = NotificationAttendanceAnnouncementDestination(
+                eventID: eventID, announcementID: announcementID
+            )
+            guestInvitations.selectedEventID = eventID
+        case .planning(let workspaceID, let reference, let todoID):
+            guard let workspace = workspaceLibrary.workspaces.first(where: { $0.mainEventID == workspaceID }) else { return }
+            guestInvitations.selectedEventID = nil
+            workspace.selectEventContext(reference)
+            notificationNavigation.destination = NotificationPlanningDestination(
+                workspaceID: workspaceID, reference: reference, todoID: todoID
+            )
+            workspaceLibrary.open(workspace)
+        case .attendance(let eventID):
+            workspaceLibrary.closeWorkspace()
+            guestInvitations.selectedEventID = eventID
+        case nil: break
+        }
+    }
+
+    private func guestRecovery(needsSignIn: Bool) -> some View {
+        ContentUnavailableView {
+            Label(GuestCopy.linkingFailed, systemImage: "externaldrive.badge.exclamationmark")
+        } description: {
+            Text(needsSignIn
+                 ? (authentication.isAuthenticated ? SessionFlowCopy.originalAccountHelp : GuestCopy.finishSavingHelp)
+                 : GuestCopy.linkingHelp)
+        } actions: {
+            if needsSignIn {
+                if authentication.isGuestMode {
+                    Button(GuestCopy.signInToSave) { authentication.requestGuestSignIn() }
+                    Button(GuestCopy.leave, role: .destructive) { showsGuestAccount = true }
+                }
+            } else { Button(AppCopy.Common.retry) { preparationAttempt += 1 } }
+            if authentication.isAuthenticated {
+                Button("Sign Out") { Task { await authentication.signOut(keepingPendingChanges: true) } }
             }
+        }
+    }
+
+    private var sessionRestorationRecovery: some View {
+        ContentUnavailableView {
+            Label(SessionFlowCopy.restorationTitle, systemImage: "wifi.exclamationmark")
+        } description: {
+            Text(SessionFlowCopy.restorationHelp)
+        } actions: {
+            Button(AppCopy.Common.retry) { Task { await authentication.restoreSession() } }
+                .buttonStyle(.borderedProminent)
+            Button("Sign In") { restorationSignInRequested = true }
+        }
+        .disabled(authentication.isProcessing)
+    }
+
+    private var accountDeletionCleanupRecovery: some View {
+        let cleanup = authentication.deletionCleanup
+        return ContentUnavailableView {
+            Label(DeletionCleanupCopy.title, systemImage: "trash.circle")
+        } description: {
+            Text(cleanup.journalUnreadable ? DeletionCleanupCopy.unavailableHelp
+                 : (cleanup.needsConfirmation
+                    ? (authentication.isProcessing ? DeletionCleanupCopy.waitingHelp : DeletionCleanupCopy.interruptedHelp)
+                    : (cleanup.record?.phase == .deviceRemovalConfirmed ? DeletionCleanupCopy.deviceRemovalHelp : DeletionCleanupCopy.help)))
+        } actions: {
+            if authentication.isProcessing || cleanup.isCleaning {
+                ProgressView()
+            } else if cleanup.needsConfirmation {
+                Button(DeletionCleanupCopy.removeFromDevice, role: .destructive) { confirmsDeviceRemoval = true }
+            } else {
+                Button(AppCopy.Common.retry) {
+                    Task {
+                        if cleanup.journalUnreadable { cleanup.reload() }
+                        await cleanup.retry()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .confirmationDialog(DeletionCleanupCopy.removeTitle, isPresented: $confirmsDeviceRemoval, titleVisibility: .visible) {
+            Button(DeletionCleanupCopy.removeFromDevice, role: .destructive) {
+                Task { await cleanup.confirmDeviceRemoval() }
+            }
+            Button(AppCopy.Common.cancel, role: .cancel) {}
+        } message: { Text(DeletionCleanupCopy.interruptedHelp) }
+    }
+
+    private var guestDiscardRecovery: some View {
+        ContentUnavailableView {
+            Label(SessionFlowCopy.removalTitle, systemImage: "externaldrive.badge.exclamationmark")
+        } description: {
+            Text(SessionFlowCopy.removalHelp)
+        } actions: {
+            Button(AppCopy.Common.retry) {
+                Task { try? await authentication.discardGuestSession() }
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .disabled(authentication.isProcessing)
+    }
+
+    private var accountPreparationRecovery: some View {
+        ContentUnavailableView {
+            Label("Couldn’t Load Your Account", systemImage: "externaldrive.badge.exclamationmark")
+        } description: {
+            Text(SessionFlowCopy.preparationHelp)
+        } actions: {
+            Button(AppCopy.Common.retry) { preparationAttempt += 1 }
+                .buttonStyle(.borderedProminent)
+            Button("Sign Out") { Task { await authentication.signOut(keepingPendingChanges: true) } }
         }
     }
 
@@ -221,12 +463,10 @@ struct GatheroryLaunchContainer: View {
         cloudSync.markOnboardingCompletedLocally()
 
         if reduceMotion {
-            hasCompletedOnboarding = true
-            completedOnboardingThisSession = true
+            completedOnboardingIdentity = preparationRequest.identity
         } else {
             withAnimation(.easeInOut(duration: 0.25)) {
-                hasCompletedOnboarding = true
-                completedOnboardingThisSession = true
+                completedOnboardingIdentity = preparationRequest.identity
             }
         }
     }

@@ -325,6 +325,7 @@ enum SyncOutbox {
 enum OfflineSyncSchema {
     static let schema = Schema([
         WorkspaceRecord.self,
+        LocalGuestWorkspaceImportReceipt.self,
         RemoteEntityVersionRecord.self,
         PendingMutation.self,
         SyncCheckpoint.self,

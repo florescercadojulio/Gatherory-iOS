@@ -175,6 +175,27 @@ struct WorkspaceMediaBookkeeper {
         }
     }
 
+    /// Keep transfer rows until file removal succeeds so deletion recovery can
+    /// retry an I/O failure. A missing file is already clean, and a file still
+    /// referenced by another namespace belongs to that namespace as well.
+    func stageAccountDeletion() throws {
+        let transfers = try context.fetch(FetchDescriptor<PendingMediaTransfer>())
+        let retainedPaths = Set(transfers.filter { $0.ownerUserID != ownerUserID }
+            .map { URL(fileURLWithPath: $0.localFilePath).standardizedFileURL.path })
+        let owned = transfers.filter { $0.ownerUserID == ownerUserID }
+        let ownedPaths = Set(owned.map {
+            URL(fileURLWithPath: $0.localFilePath).standardizedFileURL.path
+        })
+        for path in ownedPaths.subtracting(retainedPaths) {
+            do {
+                try FileManager.default.removeItem(atPath: path)
+            } catch let error as CocoaError where error.code == .fileNoSuchFile {
+                // Earlier attempts may have removed the file before save failed.
+            }
+        }
+        for transfer in owned { context.delete(transfer) }
+    }
+
     private func mediaTransfer(_ id: UUID) throws -> PendingMediaTransfer? {
         try context.fetch(FetchDescriptor<PendingMediaTransfer>())
             .first { $0.id == id && $0.ownerUserID == ownerUserID }

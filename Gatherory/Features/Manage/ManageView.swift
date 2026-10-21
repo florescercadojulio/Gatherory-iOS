@@ -59,10 +59,17 @@ struct ManageView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.layoutDirection) private var layoutDirection
-    @State private var selection: EventReference = .main
+    @Binding private var selection: EventReference
     @State private var hasInitializedSelection = false
     @State private var successfulTakeHaptic = 0
     @State private var todoTakeFailed = false
+
+    init(selection: Binding<EventReference> = .constant(.main), isActive: Bool = true,
+         onExitWorkspace: (() -> Void)? = nil) {
+        self._selection = selection
+        self.isActive = isActive
+        self.onExitWorkspace = onExitWorkspace
+    }
 
     private var references: [EventReference] { ManageEventSummary.references(in: workspace) }
     private var reference: EventReference { references.contains(selection) ? selection : references.first ?? .main }
@@ -96,21 +103,27 @@ struct ManageView: View {
         ScrollView {
             VStack(spacing: AppTheme.Spacing.spacious) {
                 if let summary {
-                    ManageEventSelector(
-                        events: references.compactMap { ManageEventSummary(workspace: workspace, reference: $0) },
-                        selected: summary, selection: $selection
-                    )
+                    if #unavailable(iOS 26.1) {
+                        ManageEventSelector(
+                            events: references.compactMap { ManageEventSummary(workspace: workspace, reference: $0) },
+                            selected: summary, selection: $selection
+                        )
+                    }
 
                     ManageDashboardLayout(isAccessibilitySize: dynamicTypeSize.isAccessibilitySize,
                                           layoutDirection: layoutDirection) {
                         NavigationLink(value: ManageDestination.budget(reference)) {
                             ManageBudgetCard(
                                 spent: ManageMetric(value: summary.spent.formatted(.currency(code: workspace.currencyCode)), label: String(localized: "Spent")),
-                                remaining: .remaining(spent: summary.spent, budget: summary.budget, currencyCode: workspace.currencyCode)
+                                remaining: .remaining(spent: summary.spent, budget: summary.budget, currencyCode: workspace.currencyCode),
+                                spentAmount: summary.spent,
+                                budgetAmount: summary.budget,
+                                budgetTotal: summary.budget?.formatted(.currency(code: workspace.currencyCode))
                             )
                         }
                         ManageGuestsCard(summary: summary)
                         ManageCollaboratorsCard(summary: summary, approval: approvalMetric)
+                        ManageQuickApprovalCard(summary: summary)
                     }
                     if workspace.canReadTodos(for: reference) {
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
@@ -216,7 +229,13 @@ struct ManageView: View {
             if let onExitWorkspace {
                 ToolbarItem(placement: .topBarLeading) { WorkspaceLibraryToolbarButton(action: onExitWorkspace) }
             }
-            ToolbarItem(placement: .topBarTrailing) { AccountToolbarButton() }
+            ToolbarItem(placement: .topBarTrailing) {
+                ToolbarGlassActionGroup {
+                    AccountToolbarButton(avatarSize: 28)
+                        .frame(width: 44, height: 44)
+                }
+            }
+            .sharedBackgroundVisibility(.hidden)
         }
         .navigationDestination(for: ManageDestination.self) { destination in
             switch destination {

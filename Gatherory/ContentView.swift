@@ -10,6 +10,7 @@ import SwiftUI
 private enum LibraryTab: Hashable { case workspaces, blueprints, explore }
 
 struct AppRootView: View {
+    @Environment(AuthenticationSession.self) private var authentication
     @State private var selectedTab = LibraryTab.workspaces
     @State private var isPreviewingBlueprint = false
     @Environment(WorkspaceLibrary.self) private var workspaceLibrary
@@ -37,24 +38,33 @@ struct AppRootView: View {
             }
             Tab(BlueprintCopy.libraryTitle, systemImage: "square.stack.3d.up.fill", value: .blueprints) {
                 NavigationStack {
-                    BlueprintLibraryView(
-                        ownerID: currentUserAccount?.id ?? "",
-                        isActive: selectedTab == .blueprints
-                    )
+                    if authentication.isGuestMode {
+                        LocalGuestSignInGate(message: GuestCopy.blueprintHelp)
+                    } else {
+                        BlueprintLibraryView(
+                            ownerID: currentUserAccount?.id ?? "",
+                            isActive: selectedTab == .blueprints
+                        )
+                    }
                 }
                 .id(currentUserAccount?.id)
             }
             Tab(ExploreCopy.title, systemImage: "magnifyingglass", value: .explore) {
                 NavigationStack {
-                    BlueprintExploreView(
-                        ownerID: currentUserAccount?.id ?? "",
-                        isActive: selectedTab == .explore
-                    )
+                    if authentication.isGuestMode {
+                        LocalGuestSignInGate(message: GuestCopy.blueprintHelp)
+                    } else {
+                        BlueprintExploreView(
+                            ownerID: currentUserAccount?.id ?? "",
+                            isActive: selectedTab == .explore
+                        )
+                    }
                 }
                 .id(currentUserAccount?.id)
             }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .tabBarMinimizeBehavior(.onScrollDown)
         .tint(AppTheme.ColorToken.accent)
         .environment(\.blueprintPreviewPresented, $isPreviewingBlueprint)
         .fullScreenCover(isPresented: isPresentingWorkspace) {
@@ -63,12 +73,17 @@ struct AppRootView: View {
             } else if let workspace = workspaceLibrary.selectedWorkspace {
                 WorkspaceSessionView(
                     workspace: workspace,
-                    account: currentUserAccount
+                    account: currentUserAccount,
+                    localGuest: authentication.isGuestMode ? authentication.localGuestProfile : nil
                 )
             }
         }
-        .task(id: currentUserAccount) {
-            workspaceLibrary.configureViewer(currentUserAccount)
+        .task(id: currentUserAccount?.id ?? authentication.localGuestProfile?.storageID) {
+            if authentication.isGuestMode, let profile = authentication.localGuestProfile {
+                workspaceLibrary.configureLocalGuest(profile)
+            } else {
+                workspaceLibrary.configureViewer(currentUserAccount)
+            }
         }
         .onChange(of: currentUserAccount?.id) { _, _ in
             selectedTab = .workspaces
@@ -81,9 +96,10 @@ private struct WorkspaceSessionView: View {
     @Environment(\.dismiss) private var dismiss
     let workspace: PlanningWorkspace
 
-    init(workspace: PlanningWorkspace, account: UserAccount?) {
+    init(workspace: PlanningWorkspace, account: UserAccount?, localGuest: LocalGuestProfile?) {
         self.workspace = workspace
-        workspace.configureViewer(account)
+        if let localGuest { workspace.configureLocalGuestViewer(localGuest) }
+        else { workspace.configureViewer(account) }
     }
 
     var body: some View {
@@ -98,10 +114,13 @@ struct ContentView: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @Environment(\.currentUserAccount) private var currentUserAccount
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync: WorkspaceCloudSyncController?
+    @Environment(NotificationNavigationState.self) private var notificationNavigation: NotificationNavigationState?
     @Environment(\.scenePhase) private var scenePhase
     var onExitWorkspace: (() -> Void)?
     @State private var selectedTab = WorkspaceTab.home
     @State private var homeReselectionTrigger = 0
+    @State private var notificationTodoDestination: NotificationPlanningDestination?
+    @State private var notificationAnnouncementDestination: NotificationPlanningDestination?
 
     init(onExitWorkspace: (() -> Void)? = nil) {
         self.onExitWorkspace = onExitWorkspace
@@ -130,6 +149,28 @@ struct ContentView: View {
             }
         }
         .tint(AppTheme.ColorToken.accent)
+        .task(id: notificationNavigation?.destination?.id) {
+            guard let destination = notificationNavigation?.destination,
+                  destination.workspaceID == workspace.mainEventID else { return }
+            selectedTab = destination.todoID == nil ? .home : .manage
+            notificationTodoDestination = destination.todoID == nil ? nil : destination
+            notificationAnnouncementDestination = destination.announcementID == nil ? nil : destination
+            notificationNavigation?.destination = nil
+        }
+        .sheet(item: $notificationAnnouncementDestination) { destination in
+            NavigationStack {
+                EventAnnouncementsView(eventID: announcementEventID(for: destination.reference), announcementID: destination.announcementID)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(AppCopy.Common.close) { notificationAnnouncementDestination = nil }
+                        }
+                    }
+            }
+        }
+        .onChange(of: currentUserAccount?.id) { _, _ in
+            notificationTodoDestination = nil
+            notificationAnnouncementDestination = nil
+        }
         .task(id: "\(workspace.mainEventID)|\(scenePhase)") {
             guard scenePhase == .active, workspace.showsPlanningInterface,
                   let cloudSync else { return }
@@ -144,7 +185,7 @@ struct ContentView: View {
     }
 
     private var planningTabs: some View {
-        WorkspaceTabShell(selection: tabSelection, showsManage: true, showsIdeasEventFilter: true) {
+        WorkspaceTabShell(selection: tabSelection, showsManage: true, showsIdeasEventFilter: true, showsManageEventFilter: true) {
             NavigationStack {
                 HomeView(
                     homeReselectionTrigger: homeReselectionTrigger,
@@ -162,12 +203,20 @@ struct ContentView: View {
                     onExitWorkspace: onExitWorkspace
                 )
             }
-        } manage: {
+        } manage: { eventSelection in
             NavigationStack {
-                ManageView(isActive: selectedTab == .manage, onExitWorkspace: onExitWorkspace)
+                ManageView(selection: eventSelection, isActive: selectedTab == .manage, onExitWorkspace: onExitWorkspace)
+                    .navigationDestination(item: $notificationTodoDestination) { destination in
+                        ManageTodosView(reference: destination.reference)
+                    }
             }
             .id("\(workspace.mainEventID)|\(currentUserAccount?.id ?? "")")
         }
+    }
+
+    private func announcementEventID(for reference: EventReference) -> UUID {
+        if case .subevent(let id) = reference { return id }
+        return workspace.mainEventID
     }
 }
 

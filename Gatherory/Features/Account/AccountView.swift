@@ -1,16 +1,12 @@
 import SwiftUI
 
 struct AccountView: View {
-    @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(AuthenticationSession.self) private var authentication
-    @Environment(WorkspaceLibrary.self) private var workspaceLibrary
-    @Environment(WorkspacePersistenceController.self) private var persistence
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
-    @Environment(GuestInvitationStore.self) private var guestInvitations
+    @Environment(NotificationController.self) private var notifications
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @AppStorage(AppColorThemeChoice.storageKey) private var colorThemeRawValue = AppColorThemeChoice.gatheroryBlue.rawValue
-    @AppStorage("planningNotifications") private var notificationsEnabled = true
     @State private var isEditingProfile = false
     @State private var isDeletingAccount = false
     @State private var weatherAttribution: EventWeatherAttribution?
@@ -57,6 +53,20 @@ struct AccountView: View {
             return "Your Account"
         }
         return name
+    }
+
+    private var notificationPrincipal: NotificationPrincipal? {
+        authentication.notificationPrincipal
+    }
+
+    private var notificationToggle: Binding<Bool> {
+        Binding(
+            get: { notificationPrincipal.map(notifications.isEnabled(for:)) ?? false },
+            set: { enabled in
+                guard let notificationPrincipal else { return }
+                Task { await notifications.setEnabled(enabled, for: notificationPrincipal) }
+            }
+        )
     }
 
     private var syncStatusDetail: String {
@@ -111,6 +121,11 @@ struct AccountView: View {
     }
 
     var body: some View {
+        if authentication.isGuestMode { LocalGuestAccountView() }
+        else { accountForm }
+    }
+
+    private var accountForm: some View {
         Form {
             Section {
                 HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
@@ -151,9 +166,10 @@ struct AccountView: View {
             .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("App Settings") {
-                Toggle(isOn: $notificationsEnabled) {
-                    Label("Planning Notifications", systemImage: "bell.badge")
+                Toggle(isOn: notificationToggle) {
+                    Label("Event and Task Notifications", systemImage: "bell.badge")
                 }
+                .disabled(!notifications.isConfigured || notificationPrincipal == nil)
                 .tint(AppTheme.ColorToken.accent)
 
                 Picker(selection: appearanceSelection) {
@@ -308,13 +324,7 @@ struct AccountView: View {
             DeleteAccountView(
                 isProcessing: authentication.isProcessing
             ) {
-                let deletedUserID = authentication.currentUser?.id
                 try await authentication.deleteAccount()
-                if let deletedUserID {
-                    imageSafety.purge(accountID: deletedUserID)
-                    try guestInvitations.purgeCache(accountID: deletedUserID)
-                }
-                try persistence.purgeAllLocalData(from: workspaceLibrary)
                 dismiss()
             }
             .presentationDetents([.medium])

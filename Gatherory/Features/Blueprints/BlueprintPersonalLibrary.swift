@@ -169,6 +169,15 @@ nonisolated final class BlueprintPersonalLibraryStore {
         try save(load(ownerID: ownerID).filter { $0.id != id }, ownerID: ownerID)
     }
 
+    func removeAll(accountID: String) throws {
+        guard !accountID.isEmpty else { throw BlueprintPersonalLibraryError.emptyOwner }
+        do {
+            try FileManager.default.removeItem(at: fileURL(accountID))
+        } catch let error as CocoaError where error.code == .fileNoSuchFile {
+            // A completed purge can be retried after relaunch.
+        }
+    }
+
     private func fileURL(_ ownerID: String) -> URL {
         directory.appendingPathComponent(ownerID.utf8.map { String(format: "%02x", $0) }.joined() + ".json")
     }

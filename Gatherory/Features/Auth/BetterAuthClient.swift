@@ -91,6 +91,13 @@ struct KeychainSessionTokenStore: SessionTokenStore {
         SecItemDelete(baseQuery as CFDictionary)
     }
 
+    func deleteChecked() throws {
+        let status = SecItemDelete(baseQuery as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw SecureSessionTokenError.unwritable(status)
+        }
+    }
+
     private var baseQuery: [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,

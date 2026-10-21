@@ -91,7 +91,7 @@ struct BudgetView: View {
                         NavigationLink {
                             BudgetView(reference: nil)
                         } label: {
-                            Label("Workspace Budget", systemImage: "chart.pie")
+                            Label(String(localized: "Workspace Budget"), systemImage: "chart.pie")
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain)
@@ -106,7 +106,7 @@ struct BudgetView: View {
         .scrollIndicators(.hidden)
         .appSoftScrollEdges()
         .background(AppTheme.ColorToken.background)
-        .navigationTitle(projection.isWorkspaceOverview ? "Workspace Budget" : "Budget")
+        .navigationTitle(projection.isWorkspaceOverview ? String(localized: "Workspace Budget") : "Budget")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
@@ -568,7 +568,7 @@ struct BudgetDestinationProjection {
             return BudgetDestinationProjection(
                 isValid: true,
                 isWorkspaceOverview: true,
-                title: "Workspace Budget",
+                title: String(localized: "Workspace Budget"),
                 workspaceBudgetCap: workspaceBudgetCap,
                 displayedBudgetCap: workspaceBudgetCap,
                 displayedSpent: expenses.reduce(.zero) { $0 + $1.amount },

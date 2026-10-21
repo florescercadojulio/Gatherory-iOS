@@ -73,7 +73,7 @@ struct BlueprintPreviewView: View {
                             if !loadFailed { saveError = nil }
                         }
                     }
-                } manage: {
+                } manage: { _ in
                     EmptyView()
                 }
             } else {

@@ -24,21 +24,17 @@ struct ManageGuestsCard: View {
         NavigationLink {
             EventPeopleView(reference: summary.reference, section: .guests)
         } label: {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.compact) {
                     Text("Guests")
                         .font(.headline)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
-                    Text(summary.attendance.total.formatted())
-                        .font(.subheadline.weight(.semibold))
-                        .monospacedDigit()
-                        .accessibilityHidden(true)
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
                         .accessibilityHidden(true)
                 }
-                RSVPOverviewBar(summary: summary.attendance)
+                RSVPOverviewRing(summary: summary.attendance)
             }
             .foregroundStyle(AppTheme.ColorToken.textPrimary)
             .padding(18)
@@ -51,18 +47,70 @@ struct ManageGuestsCard: View {
     }
 }
 
-/// Collaborator navigation and the existing transient join-request review.
+/// Collaborator count stays separate from the inline join-request actions.
 struct ManageCollaboratorsCard: View {
-    @Environment(PlanningWorkspace.self) private var workspace
-    @Environment(AuthenticationSession.self) private var authentication
-    @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     let summary: ManageEventSummary
     let approval: ManageMetric
     @ScaledMetric(relativeTo: .largeTitle) private var countSize = 48
 
-    private var latestRequest: EventJoinRequest? {
-        ManageCollaboratorReview.latestRequest(in: workspace, store: workspace.joinRequestStore, reference: summary.reference,
-                                              accountID: authentication.currentUser?.id)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            NavigationLink {
+                EventPeopleView(reference: summary.reference, section: .collaborators)
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Collaborators")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+                .foregroundStyle(AppTheme.ColorToken.textPrimary)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .center, spacing: 1) {
+                Text(approval.value)
+                    .font(.system(size: countSize * 0.9, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.ColorToken.accent)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+
+                Text(approval.label)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(approval.label)
+            .accessibilityValue(approval.value)
+        }
+        .foregroundStyle(AppTheme.ColorToken.textPrimary)
+        .padding(18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AppTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
+}
+
+/// A separate tile for reviewing the latest collaborator join request.
+struct ManageQuickApprovalCard: View {
+    @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(AuthenticationSession.self) private var authentication
+    @Environment(WorkspaceCloudSyncController.self) private var cloudSync
+    let summary: ManageEventSummary
+
+    private var requests: [EventJoinRequest] {
+        guard summary.canManageInvitations else { return [] }
+        return workspace.joinRequestStore.requests(eventID: summary.eventID, accountID: authentication.currentUser?.id)
     }
 
     private var isCaughtUp: Bool {
@@ -71,94 +119,120 @@ struct ManageCollaboratorsCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-            NavigationLink {
-                EventPeopleView(reference: summary.reference, section: .collaborators)
-            } label: {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-                    heading
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(approval.value)
-                            .font(.system(size: countSize, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppTheme.ColorToken.accent)
-                            .monospacedDigit()
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.65)
-                        Text(approval.label)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(2, reservesSpace: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(approval.label)
-                    .accessibilityValue(approval.value)
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Quick approval")
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AppTheme.ColorToken.textPrimary)
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .accessibilityElement(children: .combine)
 
-            // Status changes must not resize the dashboard or move the review actions.
-            let error = summary.canManageInvitations
-                ? workspace.joinRequestStore.error(eventID: summary.eventID, accountID: authentication.currentUser?.id) : nil
-            Text(error ?? " ").font(.footnote).foregroundStyle(.secondary)
-                .lineLimit(2, reservesSpace: true)
-                .accessibilityHidden(error == nil)
-            Spacer(minLength: 16)
-            Divider()
-                .padding(.bottom, 4)
-            Text(latestRequest?.name ?? (isCaughtUp ? String(localized: "All caught up") : " "))
-                .font(.subheadline)
-                .foregroundStyle(latestRequest == nil ? .secondary : .primary)
-                .lineLimit(2, reservesSpace: true)
-                .accessibilityHidden(latestRequest == nil && !isCaughtUp)
-            HStack(alignment: .bottom, spacing: 0) {
-                reviewButtons(latestRequest)
-                Spacer(minLength: 0)
-                NavigationLink {
-                    EventPeopleView(reference: summary.reference, section: .collaborators)
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.body.weight(.semibold))
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
+            if let error = summary.canManageInvitations
+                ? workspace.joinRequestStore.error(eventID: summary.eventID, accountID: authentication.currentUser?.id)
+                : nil {
+                Text(error)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .padding(.top, 8)
+            } else {
+                Spacer(minLength: 8)
+                if requests.isEmpty {
+                    emptyRequestsState
+                } else {
+                    pendingRequestRow(requests[requests.count - 1])
                 }
-                .accessibilityLabel("Collaborators")
+                Spacer(minLength: 8)
             }
         }
-        .buttonStyle(.plain)
         .foregroundStyle(AppTheme.ColorToken.textPrimary)
         .padding(18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(AppTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
-    private func reviewButtons(_ request: EventJoinRequest?) -> some View {
-        ZStack {
-            HStack(spacing: AppTheme.Spacing.compact) {
-                Button(role: .destructive) { if let request { review(request, action: .decline) } } label: {
-                    Image(systemName: "xmark.circle").font(.title2)
-                        .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+    @ViewBuilder
+    private var emptyRequestsState: some View {
+        if isCaughtUp {
+            Label(String(localized: "All caught up"), systemImage: "checkmark.circle.fill")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 64, alignment: .center)
+        } else if workspace.joinRequestStore.isLoading(eventID: summary.eventID) {
+            ProgressView()
+                .frame(maxWidth: .infinity, minHeight: 64)
+        } else if !summary.canManageInvitations {
+            Text(String(localized: "Manager only"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 64, alignment: .center)
+        } else {
+            Text(String(localized: "No pending requests"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 64, alignment: .center)
+        }
+    }
+
+    private func knownMember(for request: EventJoinRequest) -> WorkspaceMember? {
+        workspace.members.first {
+            $0.email?.localizedCaseInsensitiveCompare(request.email) == .orderedSame
+        }
+    }
+
+    private func pendingRequestRow(_ request: EventJoinRequest) -> some View {
+        VStack(spacing: 7) {
+            Group {
+                if let member = knownMember(for: request) {
+                    ParticipantAvatarView(member: member, size: 56, style: .accent)
+                } else {
+                    Text(initials(for: request.name))
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.ColorToken.accent)
+                        .frame(width: 56, height: 56)
+                        .background(AppTheme.ColorToken.accent.opacity(0.14), in: Circle())
+                        .overlay(Circle().stroke(.primary.opacity(0.1), lineWidth: 1))
                 }
-                .accessibilityLabel(String(format: String(localized: "Decline %@"), request?.name ?? ""))
-                Button { if let request { review(request, action: .approve) } } label: {
-                    Image(systemName: "checkmark.circle.fill").font(.title2)
-                        .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                }
-                .accessibilityLabel(String(format: String(localized: "Approve %@"), request?.name ?? ""))
             }
-            .buttonStyle(.borderless)
-            .disabled(request == nil || workspace.joinRequestStore.reviewingRequestID != nil)
-            .opacity(request == nil || isReviewing(request) ? 0 : 1)
-            .accessibilityHidden(request == nil || isReviewing(request))
-            if isReviewing(request) {
-                ProgressView().controlSize(.small)
+            .accessibilityHidden(true)
+
+            Text(request.name)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel(request.name)
+
+            HStack(spacing: 12) {
+                if isReviewing(request) {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                } else {
+                    Button(role: .destructive) { review(request, action: .decline) } label: {
+                        Image(systemName: "xmark.circle")
+                            .font(.system(size: 27, weight: .medium))
+                            .foregroundStyle(AppTheme.ColorToken.destructive)
+                            .frame(width: 48, height: 48)
+                            .background(AppTheme.ColorToken.destructive.opacity(0.1), in: Circle())
+                    }
+                    .accessibilityLabel(String(format: String(localized: "Decline %@"), request.name))
+
+                    Button { review(request, action: .approve) } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 27, weight: .medium))
+                            .foregroundStyle(AppTheme.ColorToken.accent)
+                            .frame(width: 48, height: 48)
+                            .background(AppTheme.ColorToken.accent.opacity(0.14), in: Circle())
+                    }
+                    .accessibilityLabel(String(format: String(localized: "Approve %@"), request.name))
+                }
             }
         }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func initials(for name: String) -> String {
+        let parts = name.split(whereSeparator: \.isWhitespace)
+        return String(parts.prefix(2).compactMap(\.first)).uppercased()
     }
 
     private func isReviewing(_ request: EventJoinRequest?) -> Bool {
@@ -178,55 +252,81 @@ struct ManageCollaboratorsCard: View {
         }
     }
 
-    private var heading: some View {
-        HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.compact) {
-            Text("Collaborators")
-                .font(.headline)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
 }
 
-private struct RSVPOverviewBar: View {
+private struct RSVPOverviewRing: View {
     let summary: ManageAttendanceSummary
 
-    private var segments: [(count: Int, color: Color, symbol: String, label: String)] {
+    private var segments: [(count: Int, color: Color, label: String)] {
         [
-            (summary.going, .green, "checkmark", String(localized: "Going")),
-            (summary.maybe, .yellow, "questionmark", String(localized: "Maybe")),
-            (summary.declined, .red, "xmark", String(localized: "Can't go")),
-            (summary.awaiting, .gray, "ellipsis", String(localized: "Awaiting RSVP"))
+            (summary.going, .green, String(localized: "Going")),
+            (summary.maybe, .yellow, String(localized: "Maybe")),
+            (summary.declined, .red, String(localized: "Can't go")),
+            (summary.awaiting, .gray, String(localized: "Awaiting"))
         ]
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            GeometryReader { proxy in
-                let visible = segments.filter { $0.count > 0 }
-                let available = max(0, proxy.size.width - CGFloat(max(0, visible.count - 1)) * 2)
-                HStack(spacing: 2) {
-                    ForEach(visible.indices, id: \.self) { index in
-                        let segment = visible[index]
-                        let width = available * CGFloat(segment.count) / CGFloat(max(1, summary.total))
-                        Rectangle().fill(segment.color)
-                            .overlay {
-                                if width >= 20 {
-                                    Image(systemName: segment.symbol)
-                                        .font(.system(size: 10, weight: .bold)).foregroundStyle(.black)
-                                }
-                            }
-                            .frame(width: width)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                .background(Color.gray.opacity(0.3))
-                .clipShape(Capsule())
-                .overlay { Capsule().stroke(.primary.opacity(0.3), lineWidth: 0.5) }
-            }
-            .frame(height: 18)
+    private var visibleSegments: [(count: Int, color: Color, start: CGFloat, end: CGFloat)] {
+        guard summary.total > 0 else { return [] }
+        var current = 0.0
+        return segments.compactMap { segment in
+            guard segment.count > 0 else { return nil }
+            let start = current
+            current += Double(segment.count) / Double(summary.total)
+            return (segment.count, segment.color, CGFloat(start), CGFloat(current))
         }
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .stroke(AppTheme.ColorToken.textSecondary.opacity(0.18), style: StrokeStyle(lineWidth: 9, lineCap: .butt))
+                ForEach(visibleSegments.indices, id: \.self) { index in
+                    let segment = visibleSegments[index]
+                    Circle()
+                        .trim(from: segment.start, to: segment.end)
+                        .stroke(segment.color, style: StrokeStyle(lineWidth: 9, lineCap: .butt))
+                        .rotationEffect(.degrees(-90))
+                }
+                VStack(spacing: 0) {
+                    Text(summary.total.formatted())
+                        .font(.system(.title2, design: .rounded, weight: .bold))
+                        .monospacedDigit()
+                    Text("Guests")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 88, height: 88)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    legendItem(segments[0])
+                    legendItem(segments[1])
+                }
+                HStack(spacing: 8) {
+                    legendItem(segments[2])
+                    legendItem(segments[3])
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Guest List")
         .accessibilityValue(segments.map { "\($0.count.formatted()) \($0.label)" }.joined(separator: ", "))
+    }
+
+    private func legendItem(_ segment: (count: Int, color: Color, label: String)) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(segment.color).frame(width: 6, height: 6)
+            Text("\(segment.count.formatted()) \(segment.label)")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

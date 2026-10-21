@@ -15,3 +15,8 @@ POSTHOG_PROJECT_TOKEN = phc_xPbBBJcQnKQBmZMeS49hS6KKrcsugidmPV7GEJTaBX7A
 POSTHOG_HOST = https:/$()/us.i.posthog.com
 // Independent of Release; set to NO to disable telemetry in this configuration.
 POSTHOG_ENABLED = YES
+// Local Firebase/APNs device testing; Release remains disabled.
+FCM_NOTIFICATIONS_ENABLED = YES
+APS_ENVIRONMENT = development
+OTHER_LDFLAGS = $(inherited) -ObjC
+SWIFT_OBJC_BRIDGING_HEADER = $(SRCROOT)/Gatherory/Gatherory-Bridging-Header.h

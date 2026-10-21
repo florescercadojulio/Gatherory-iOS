@@ -33,9 +33,57 @@ membership should be represented by the backend organization/member records.
 Local SwiftData rows should be queried through the authenticated account scope
 so signing out or switching accounts cannot expose another account's data.
 
-Existing anonymous/local data must not be silently assigned to the first
-person who signs in. Present an explicit import/claim choice, or leave that data
-in a separate local-only scope.
+Legacy unowned local data must not be silently assigned to the first person
+who signs in. The explicitly chosen device guest path below uses its own
+namespace and a retry-safe handover when the guest signs in to save their plans.
+
+## Device guest mode — October 20, 2026
+
+Implemented locally for the V1 candidate; server migration/deployment and physical
+device acceptance remain pending. **Continue as Guest** asks for a recognizable
+name and creates a separate `LocalGuestProfile`, never a `UserAccount` or Better
+Auth anonymous session. Guests can plan locally and attend public guest-role
+invitations. Sharing owned events and blueprint account controls require sign-in.
+
+`DeviceLocalGuestProfileStore` holds the non-secret name/UUID in an app-private
+file. A separate device-only Keychain proof authenticates only `/api/guest/*`.
+It is never a Better Auth bearer. The native transport uses a cookieless ephemeral
+session and rejects cross-origin/credential-bearing redirects; HTTPS is required
+except for loopback development.
+
+Signing in to save flushes guest edits before replacing the account session.
+Account bootstrap precedes additive local import. A durable target-account
+receipt and retained source prevent replacement, duplicate imports and cross-account
+retry. Local Decide response IDs/authorship are rebuilt for the real account.
+The server then claims exact-event guest attendance using both independent
+credentials and a verified account. Existing account RSVP/roles and explicit
+leave decisions win. No planner/organization membership is granted by the claim.
+Only after successful local import and server claim does native cleanup remove
+the source/profile/proof. An interrupted handover stays bound to that account;
+the old guest source cannot continue being edited and diverge from its imported
+copy. An unreadable profile can be retried without replacing its identity.
+
+**Leave Guest Mode** warns about losing device-only plans and cached invitations,
+and offers Sign In to Save, explicit Remove from This Device, or cancellation.
+It does not silently revoke attendance or remove the host's history. Normal
+signed-in sign-out retains its existing draft/recovery behavior.
+
+V1 invitation wording is **Attend as Guest** for public guest invitations and
+**Sign In to Help Plan** for collaborator invitations that permit editing.
+View-only invitations use **Sign In to View Plans**. Host sharing explains
+those boundaries and email-bound invitations still require the invited account.
+Guest sign-in explains that guest information will be kept. The native preview
+uses the real bearer only after sign-in to resolve private invitations and
+existing membership; guest previews remain unauthenticated. An existing attendee
+is not promoted to a planner by signing in or opening a forwarded planning link.
+
+Private/email-bound and planner invitations continue to require real sign-in.
+Invited-event caches remain projections, separate from locally owned plans and
+planner synchronization. Offline RSVP is not shown as sent without acknowledgement.
+See the web repository's
+[guest handoff](../../../gatherory-web-app/docs/roadmaps/v1-guest-release-candidate-roadmap/01-device-guest-mode.md)
+for the API contract and remaining acceptance checks. Browser guest RSVP remains
+outside this native slice.
 
 ## Native session transport
 
@@ -48,10 +96,44 @@ cannot accidentally become the native authentication boundary.
 
 Do not infer authentication from a locally cached profile. The server session
 is authoritative. On launch, restore the credential, validate it with Better
-Auth, and only then open that user's data scope. When offline, the UI may show
-the last validated user and their local data, but must clearly preserve the
-same user boundary and must not accept a different account until online
-validation completes.
+Auth, and only then open that user's data scope. A network or secure-storage
+failure shows retryable restoration recovery while retaining the credential
+and isolated archives. Confirmed expiry/absence shows authentication. This
+implementation does not manufacture offline authentication from a cached
+profile. An already prepared account continues using its existing offline
+data and outbox behavior.
+
+## Entry routing and preparation — October 20, 2026
+
+`AuthenticationFlowChain` is a pure Chain of Responsibility: each ordered
+handler either selects a destination or passes to the next handler. Screen
+routing is separate from `SessionPreparationCoordinator`, which owns the
+observable `idle` / `preparing` / `ready` / `recovery` phases. Preparation
+captures a typed account/guest identity and checks its generation, current
+identity, and cancellation after suspension. Old A → B → A completions cannot
+publish readiness or clean up another session's retained guest source.
+
+`LiveSessionPreparationServices` connects the existing persistence, sync,
+guest claim, invitation, and notification boundaries. `SessionLifecycleActions`
+installs the common save-before-authentication and exit hooks. The launch view
+renders destinations and supplies user actions. New checks belong in a routing
+handler; new asynchronous preparation belongs in the coordinator/services.
+Routing handlers must not perform network requests, delete data, or grant
+permissions.
+
+Onboarding uses the active account's onboarding state and positive account cache;
+the device-global completion flag no longer selects the next screen. The
+session-only QA override is tied to the active identity. A failed guest removal
+keeps a separate recovery gate, because archive cleanup may already have
+succeeded before profile-file removal failed. Repeating cleanup is safe; opening
+an unowned namespace or signing in from that partial state is blocked.
+
+The regression suites cover restoration retry/expiry, provider save gates,
+guest source/proof retention, preparation ordering, cancellation, account round
+trips, and real in-memory persistence through the installed lifecycle hooks.
+No automated UI tests are included. See the shared
+[mobile lifecycle design](../../../gatherory-web-app/docs/architecture/mobile-session-lifecycle.md)
+for the state/retention table and remaining physical-device checks.
 
 ## Sign-in flows
 
@@ -98,10 +180,70 @@ the departing user's uploaded media from R2, and relies on foreign-key actions
 to remove participation, decisions, commitments, sessions, and provider
 accounts. Historical content retained for collaborators clears its author ID.
 The iOS client then clears the Keychain token and purges SwiftData workspaces,
-outbox entries, checkpoints, inbox receipts, and pending media files.
+outbox entries, checkpoints, inbox receipts, and pending media files for that
+exact account ID. Other account caches, device guest sources/proofs, and legacy
+unowned records remain isolated and intact.
+
+### Retryable device cleanup after deletion — October 20, 2026
+
+Account deletion writes an account-scoped local cleanup intent before the
+remote request, suspends/joins sync without uploading queued changes, then
+records the server's confirmation. `AccountDeletionCleanupCoordinator` keeps
+that record until every local cleanup and final journal removal succeed.
+`AccountDeletionLocalCleanup` attempts independent stores even when another
+store fails. `AccountView` no longer decides which mutable active namespace
+to purge or sequences cache removal itself.
+
+Confirmed cleanup retries on launch before credential restoration, planning
+scope activation, guest import, link routing, or notification binding. It
+never calls the account-deletion endpoint again, restores an account, or
+uploads removed data. Failures show **Finishing Device Cleanup** with Retry.
+Unreadable journals stay blocked rather than being replaced. An unavailable
+real SwiftData store cannot be reported clean by an ephemeral fallback.
+
+Explicit server rejection retains the account and device records. A lost
+response or an app interruption before confirmation leaves `awaitingConfirmation`;
+it does not authorize automatic data removal. That rare state offers a separate
+explicit **Remove from This Device** confirmation. Its durable
+`deviceRemovalConfirmed` phase authorizes local cleanup only and never claims
+the server account was deleted or repeats the remote request.
+
+Cleanup covers exact-owner SwiftData entities and media transfer files,
+invitation cache, image safety preferences, saved blueprint drafts, installation
+intents, used/personal library caches, hidden/collection/recent preferences,
+share-link Keychain credentials, onboarding and notification preferences, and
+the deleted session credential. Media removal failures retain transfer rows
+for retry, and a file referenced by another namespace stays in place. The
+device notification installation secret/revision is retained for future safe
+detach/rebind operations. A retry for an inactive deleted account does not clear
+the active account's graph or credential.
+
+The cleanup journal contains only the captured canonical account ID and phase;
+it uses a protected atomic app-private file. Account/provider secrets, bearer
+tokens, and event content are never written to it. The live bootstrap uses the
+disk journal; test/fixture sessions use an isolated memory journal unless one
+is injected explicitly.
 
 Sign out clears the credential and closes the active user data scope. It must
 not delete server data or make another account's locally cached data visible.
+
+### Non-UI lifecycle regression coverage
+
+`AuthenticationLifecycleTests` uses injected in-memory profile/credential stores
+and an authentication client to exercise retention across session restoration,
+authentication, and sign-out. An unsuccessful restoration leaves the guest
+profile and attendance proof available for retry. A restored account with guest
+data waits for import before acquiring its notification principal. Failed final
+sync retains both the account session and guest import source; a successful
+sign-out retains unfinished guest data for recovery.
+
+The same suite checks that email sign-in, registration, Apple, and Google all
+save guest edits before calling the authentication client. A failed save blocks
+each entry point without changing the guest identity or contacting sign-in.
+`GuestAuthenticationTests` separately covers explicit guest removal and durable
+import completion, while `OfflineSyncTests` covers account-scoped workspace and
+outbox retention. These tests do not replace physical-device checks for provider
+callbacks, process termination during import, or Keychain/file access failures.
 
 ## Backend-to-local data sequence
 

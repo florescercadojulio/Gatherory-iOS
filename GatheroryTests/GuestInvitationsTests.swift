@@ -119,6 +119,124 @@ struct GuestInvitationsTests {
         #expect(store.events.isEmpty)
     }
 
+    @Test("Device guest invitations stay in their own cache and configure a locked local viewer")
+    @MainActor
+    func localGuestCacheAndViewerIsolation() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "guest-device-cache-test-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let profile = LocalGuestProfile(displayName: "Device Planner")
+        let guestEvent = try fixture(role: "guest")
+        let accountEvent = try fixture(role: "collaborator")
+        let localTransport = LocalGuestTestTransport(events: [guestEvent])
+        let accountTransport = GuestTestTransport(events: [accountEvent])
+        let store = GuestInvitationStore(
+            baseURL: nil,
+            cacheDirectory: directory,
+            client: accountTransport,
+            localClientFactory: { _ in localTransport }
+        )
+
+        await store.activate(localGuest: profile)
+        #expect(store.events.map(\.id) == [guestEvent.id])
+        let projection = try #require(store.presentations[guestEvent.id])
+        #expect(projection.currentViewerMember?.userID == profile.storageID)
+        #expect(projection.isLocalGuestViewer)
+        #expect(!projection.showsPlanningInterface)
+        #expect(!projection.canManageMainEvent)
+
+        await store.activate(account: account("existing-account"))
+        #expect(store.events.map(\.id) == [accountEvent.id])
+        #expect(store.presentations[accountEvent.id]?.currentViewerMember?.userID == "existing-account")
+        await store.activate(localGuest: profile)
+        #expect(store.events.map(\.id) == [guestEvent.id])
+
+        try store.purgeCache(profileID: profile.id)
+        #expect(store.events.isEmpty)
+        await store.activate(account: account("existing-account"))
+        #expect(store.events.map(\.id) == [accountEvent.id])
+        localTransport.events = []
+        await store.activate(localGuest: profile)
+        #expect(store.events.isEmpty)
+    }
+
+    @Test("A delayed local guest response cannot overwrite a later signed-in feed")
+    @MainActor
+    func delayedGuestFeedCannotCrossIntoAccount() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "guest-device-race-test-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let guest = try fixture(role: "guest")
+        let accountEvent = try fixture(role: "collaborator")
+        let delayed = DelayedLocalGuestTestTransport(event: guest)
+        let accountTransport = GuestTestTransport(events: [accountEvent])
+        let profile = LocalGuestProfile(displayName: "Device Planner")
+        let store = GuestInvitationStore(
+            baseURL: nil,
+            cacheDirectory: directory,
+            client: accountTransport,
+            localClientFactory: { _ in delayed }
+        )
+
+        let guestActivation = Task { await store.activate(localGuest: profile) }
+        while !delayed.hasStarted { await Task.yield() }
+        await store.activate(account: account("existing-account"))
+        delayed.release()
+        await guestActivation.value
+        #expect(store.events.map(\.id) == [accountEvent.id])
+        #expect(store.presentations[guest.id] == nil)
+    }
+
+    @Test("A delayed RSVP cannot apply after guest A switches to B and back to A")
+    @MainActor
+    func delayedGuestResponseCannotCrossIdentityGeneration() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "guest-rsvp-roundtrip-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let event = try fixture(role: "guest")
+        let transport = DelayedGuestActionTransport(events: [event])
+        let store = GuestInvitationStore(
+            baseURL: nil,
+            cacheDirectory: directory,
+            localClientFactory: { _ in transport }
+        )
+        let guestA = LocalGuestProfile(displayName: "Guest A")
+        await store.activate(localGuest: guestA)
+
+        let responseTask = Task { await store.respond(eventID: event.id, response: .notGoing) }
+        while !transport.hasStartedResponse { await Task.yield() }
+        await store.activate(localGuest: LocalGuestProfile(displayName: "Guest B"))
+        await store.activate(localGuest: guestA)
+        transport.releaseResponse()
+        await responseTask.value
+
+        #expect(store.events.first?.attendance == "going")
+        #expect(!store.isResponding)
+    }
+
+    @Test("A delayed leave cannot remove an invitation after guest A switches to B and back to A")
+    @MainActor
+    func delayedGuestLeaveCannotCrossIdentityGeneration() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "guest-leave-roundtrip-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let event = try fixture(role: "guest")
+        let transport = DelayedGuestActionTransport(events: [event])
+        let store = GuestInvitationStore(
+            baseURL: nil,
+            cacheDirectory: directory,
+            localClientFactory: { _ in transport }
+        )
+        let guestA = LocalGuestProfile(displayName: "Guest A")
+        await store.activate(localGuest: guestA)
+
+        let leaveTask = Task { await store.leave(eventID: event.id) }
+        while !transport.hasStartedLeave { await Task.yield() }
+        await store.activate(localGuest: LocalGuestProfile(displayName: "Guest B"))
+        await store.activate(localGuest: guestA)
+        transport.releaseLeave()
+
+        #expect(await leaveTask.value == false)
+        #expect(store.events.map(\.id) == [event.id])
+        #expect(!store.isResponding)
+    }
+
     @MainActor
     private func account(_ id: String) -> UserAccount {
         UserAccount(id: id, email: "\(id)@example.com", displayName: "Guest", role: .member, authenticationProvider: .password, createdAt: .now)
@@ -155,5 +273,87 @@ struct GuestInvitationsTests {
         if failLeave { throw EventInvitationFailure.unavailable }
         events.removeAll { $0.id == eventID }
         return eventID
+    }
+}
+
+@MainActor private final class LocalGuestTestTransport: LocalGuestInvitationTransport {
+    var events: [GuestEventInvitation]
+    var failLeave = false
+    init(events: [GuestEventInvitation]) { self.events = events }
+    func invitations() async throws -> GuestInvitationFeed { GuestInvitationFeed(events: events) }
+    func join(token: UUID) async throws -> InvitationAcceptance {
+        InvitationAcceptance(eventId: events[0].id, role: "guest", planningScopeId: nil, status: "accepted")
+    }
+    func respond(eventID: UUID, response: EventResponse) async throws -> AttendanceAcknowledgement {
+        let value = switch response { case .going: "going"; case .notSure: "not_sure"; case .notGoing: "not_going" }
+        return AttendanceAcknowledgement(eventId: eventID, attendance: value)
+    }
+    func leaveInvitation(eventID: UUID) async throws -> UUID {
+        if failLeave { throw EventInvitationFailure.unavailable }
+        events.removeAll { $0.id == eventID }
+        return eventID
+    }
+    func claim() async throws -> GuestClaimAcknowledgement { GuestClaimAcknowledgement(claimedEventIds: events.map(\.id)) }
+}
+
+@MainActor private final class DelayedLocalGuestTestTransport: LocalGuestInvitationTransport {
+    private let event: GuestEventInvitation
+    private var continuation: CheckedContinuation<GuestInvitationFeed, Never>?
+    private(set) var hasStarted = false
+    init(event: GuestEventInvitation) { self.event = event }
+    func invitations() async throws -> GuestInvitationFeed {
+        hasStarted = true
+        return await withCheckedContinuation { continuation = $0 }
+    }
+    func join(token: UUID) async throws -> InvitationAcceptance {
+        InvitationAcceptance(eventId: event.id, role: "guest", planningScopeId: nil, status: "accepted")
+    }
+    func respond(eventID: UUID, response: EventResponse) async throws -> AttendanceAcknowledgement {
+        AttendanceAcknowledgement(eventId: eventID, attendance: "going")
+    }
+    func leaveInvitation(eventID: UUID) async throws -> UUID { eventID }
+    func claim() async throws -> GuestClaimAcknowledgement { GuestClaimAcknowledgement(claimedEventIds: [event.id]) }
+    func release() { continuation?.resume(returning: GuestInvitationFeed(events: [event])); continuation = nil }
+}
+
+@MainActor private final class DelayedGuestActionTransport: LocalGuestInvitationTransport {
+    var events: [GuestEventInvitation]
+    private var responseContinuation: CheckedContinuation<AttendanceAcknowledgement, Never>?
+    private var leaveContinuation: CheckedContinuation<UUID, Never>?
+    private(set) var hasStartedResponse = false
+    private(set) var hasStartedLeave = false
+
+    init(events: [GuestEventInvitation]) { self.events = events }
+
+    func invitations() async throws -> GuestInvitationFeed { GuestInvitationFeed(events: events) }
+
+    func join(token: UUID) async throws -> InvitationAcceptance {
+        InvitationAcceptance(eventId: events[0].id, role: "guest", planningScopeId: nil, status: "accepted")
+    }
+
+    func respond(eventID: UUID, response: EventResponse) async throws -> AttendanceAcknowledgement {
+        hasStartedResponse = true
+        return await withCheckedContinuation { responseContinuation = $0 }
+    }
+
+    func leaveInvitation(eventID: UUID) async throws -> UUID {
+        hasStartedLeave = true
+        return await withCheckedContinuation { leaveContinuation = $0 }
+    }
+
+    func claim() async throws -> GuestClaimAcknowledgement {
+        GuestClaimAcknowledgement(claimedEventIds: events.map(\.id))
+    }
+
+    func releaseResponse() {
+        responseContinuation?.resume(
+            returning: AttendanceAcknowledgement(eventId: events[0].id, attendance: "not_going")
+        )
+        responseContinuation = nil
+    }
+
+    func releaseLeave() {
+        leaveContinuation?.resume(returning: events[0].id)
+        leaveContinuation = nil
     }
 }

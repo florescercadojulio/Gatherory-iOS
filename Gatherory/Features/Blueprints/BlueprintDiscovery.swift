@@ -122,6 +122,10 @@ struct BlueprintRecentHistory {
     }
 
     func clear(ownerID: String) { defaults.removeObject(forKey: key(ownerID)) }
+
+    func removeAll(accountID: String) throws {
+        defaults.removeObject(forKey: key(accountID))
+    }
 }
 
 @MainActor @Observable

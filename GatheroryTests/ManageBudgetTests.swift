@@ -42,7 +42,7 @@ struct ManageBudgetTests {
 
         #expect(projection.isValid)
         #expect(projection.isWorkspaceOverview)
-        #expect(projection.title == "Workspace Budget")
+        #expect(projection.title == "Event Budget")
         #expect(projection.displayedSpent == 175)
         #expect(Set(projection.expenses.map(\.id)) == Set(fixture.expenses.map(\.id)))
         #expect(projection.costSummaries.map(\.id).count == 3)

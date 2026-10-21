@@ -15,13 +15,13 @@ enum CloudSyncFailure: LocalizedError {
         case .invalidResponse:
             "Gatherory received an unexpected synchronization response."
         case .payloadTooLarge:
-            "This workspace contains media that must upload separately before it can synchronize."
+            String(localized: "This event contains media that must upload separately before it can synchronize.")
         case .clientUpgradeRequired:
             BlueprintCopy.clientUpgradeRequired
         case .forbidden:
-            "Gatherory can no longer synchronize this workspace."
+            String(localized: "Gatherory can no longer synchronize this event.")
         case .server(let code):
-            "Gatherory couldn’t synchronize this workspace (\(code))."
+            String(localized: "Gatherory couldn’t synchronize this event (\(code)).")
         }
     }
 }

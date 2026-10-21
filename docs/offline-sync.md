@@ -18,8 +18,9 @@ app becomes active or another local edit is made.
 5. Applying a remote change page and advancing its cursor is one local
    transaction.
 6. Deletes are durable tombstones until the server acknowledges them.
-7. Every local row and remote snapshot is scoped to the canonical Better Auth
-   user ID.
+7. Authenticated local rows and remote snapshots are scoped to the canonical
+   Better Auth user ID. Device guest archives use the explicit local-only
+   `device-guest:<UUID>` namespace described below.
 8. A server-version conflict preserves the local edit for later resolution;
    it does not overwrite the visible workspace with the server snapshot.
 9. Large media will use file-backed S3 uploads, separate from JSON sync.
@@ -47,6 +48,33 @@ app becomes active or another local edit is made.
     authoritative scoped workspace delete clears the cached projection and
     its pending work. Generic authorization failures and network errors never
     purge it.
+
+## Device guest archives and account handover
+
+Device guest planning uses the existing archive without enqueuing mutations or
+staging media uploads. `WorkspaceCloudSyncController` has no active account for
+a guest and makes no planner transport calls. The nil/legacy archive namespace
+is not the guest identity. New guest workspaces have a local host with the guest
+storage identity, so local domain permissions still have an explicit viewer.
+
+Signing in flushes guest edits, activates/bootstraps the real account namespace,
+then imports guest-owned plans alongside existing account records. Archives,
+authorship/Decide identity mapping, create mutations and a
+`LocalGuestWorkspaceImportReceipt` are one SwiftData transaction. The receipt
+binds the profile to its first target account, including an empty import. Same
+account retries are idempotent; a different account or workspace-ID collision
+fails without overwriting. The source remains until the separate server guest
+attendance claim succeeds. An unfinished handover requires sign-in to that
+account before returning to editing, so the retained source cannot diverge.
+
+Discard removes only the selected guest namespace; a failure rolls the context
+back. Target archives, outbox entries and import receipts are not deleted by
+source cleanup. Invited-event read caches never become planner archives or
+outbox entries. Local guest cache/RSVP/leave callbacks also carry an activation
+generation so an old A→B→A request cannot affect a later activation.
+
+See [authentication integration](auth-integration.md#device-guest-mode--october-20-2026)
+and the web guest handoff for the API claim boundary and device acceptance.
 
 ## Shared event To-dos
 

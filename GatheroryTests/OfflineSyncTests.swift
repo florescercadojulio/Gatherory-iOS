@@ -42,9 +42,9 @@ struct OfflineSyncTests {
         try await sync.prepareForSignOut(keepingPendingChanges: true)
     }
 
-    @Test("Skipping event creation survives account switches without creating data or skipping another account")
+    @Test("Skipping event creation survives account switches without creating data or skipping another account", arguments: [true, false])
     @MainActor
-    func skipEventCreation() async throws {
+    func skipEventCreation(usesRemoteAccountState: Bool) async throws {
         let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
         let library = persistence.restoreLibrary(seedData: false)
         let first = UUID().uuidString
@@ -54,7 +54,7 @@ struct OfflineSyncTests {
             UserDefaults.standard.removeObject(forKey: "accountOnboardingComplete.\(second)")
         }
         let sync = WorkspaceCloudSyncController(persistence: persistence, library: library,
-            baseURL: URL(string: "https://example.invalid")!, transport: SignOutSyncTransport(), usesRemoteAccountState: true)
+            baseURL: URL(string: "https://example.invalid")!, transport: SignOutSyncTransport(), usesRemoteAccountState: usesRemoteAccountState)
         await sync.activate(userID: first, seedData: false)
         #expect(sync.accountOnboardingState == .needsOnboarding)
         sync.markOnboardingCompletedLocally()

@@ -15,6 +15,7 @@ struct NativeInvitationView: View {
     @State private var awaitingApproval = false
     @State private var previewRequestID = UUID()
     @State private var retryJoin = false
+    @State private var showsGuestName = false
     let token: UUID
 
     var body: some View {
@@ -37,7 +38,7 @@ struct NativeInvitationView: View {
                             VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
                                 Text("You're invited as a \(WorkspaceRole(rawValue: role)?.title ?? role).")
                                     .font(.headline)
-                                if let resolvedRole = WorkspaceRole(rawValue: role) {
+                                if let resolvedRole = WorkspaceRole(rawValue: role), resolvedRole != .collaborator {
                                     Text(LocalizedStringKey(resolvedRole.detail))
                                         .foregroundStyle(.secondary)
                                 }
@@ -53,7 +54,7 @@ struct NativeInvitationView: View {
                             Text("Your request was declined. Contact the host if you think this was a mistake.")
                                 .foregroundStyle(.secondary)
                         } else if preview?.requiresApproval == true {
-                            Text("The host will review your request before you can see or change plans.")
+                            Text("The host will review your request before access begins.")
                                 .foregroundStyle(.secondary)
                         }
                         if let permission = preview?.planningPermission, preview?.role == "collaborator" {
@@ -98,7 +99,11 @@ struct NativeInvitationView: View {
             }
         }
         .appImageDetailAppearance()
-        .task(id: "\(token)|\(authentication.currentUser?.id ?? "anonymous")") {
+        .sheet(isPresented: $showsGuestName) {
+            NavigationStack { LocalGuestNameView() }
+                .presentationDetents([.medium])
+        }
+        .task(id: "\(token)|\(viewerIdentity ?? "anonymous")") {
             preview = nil
             joinProgress = InvitationJoinProgress()
             awaitingApproval = false
@@ -115,8 +120,14 @@ struct NativeInvitationView: View {
                     Task { await authentication.signOut() }
                 }
                 .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+            } else if canJoinAsDeviceGuest {
+                Text(GuestCopy.joinHelp)
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             } else {
-                Text("Sign in or create an account to join. Your invitation will stay here.")
+                Text(collaboratorInvitationRequiresSignIn
+                     ? GuestCopy.collaboratorSignInHelp
+                     : authentication.isGuestMode ? GuestCopy.guestUnavailable : String(localized: "Sign in or create an account to join. Your invitation will stay here."))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -124,8 +135,12 @@ struct NativeInvitationView: View {
             }
 
             Button {
-                if !authentication.isAuthenticated {
-                    invitations.requiresAuthentication = true
+                if canJoinAsDeviceGuest {
+                    if authentication.isGuestMode { Task { await acceptAsDeviceGuest() } }
+                    else { showsGuestName = true }
+                } else if !authentication.isAuthenticated {
+                    if authentication.isGuestMode { authentication.requestGuestSignIn() }
+                    else { invitations.requiresAuthentication = true }
                 } else if awaitingApproval || preview?.status == "awaiting_approval" || preview?.status == "declined" {
                     Task { await loadPreview() }
                 } else { Task { await accept() } }
@@ -140,6 +155,14 @@ struct NativeInvitationView: View {
             .buttonBorderShape(.capsule)
             .controlSize(.large)
             .disabled(isLoading || isAccepting)
+            if canJoinAsDeviceGuest && !authentication.isAuthenticated {
+                Button(String(localized: "Sign In to Join")) {
+                    if authentication.isGuestMode { authentication.requestGuestSignIn() }
+                    else { invitations.requiresAuthentication = true }
+                }
+                .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                .disabled(isLoading || isAccepting)
+            }
         }
         .frame(maxWidth: 520)
         .padding(.horizontal, AppTheme.Spacing.spacious)
@@ -147,8 +170,30 @@ struct NativeInvitationView: View {
         .frame(maxWidth: .infinity)
     }
 
+    private var viewerIdentity: String? {
+        authentication.currentUser?.id ?? authentication.localGuestProfile?.storageID
+    }
+
+    private var canJoinAsDeviceGuest: Bool {
+        !authentication.isAuthenticated && preview?.permitsDeviceGuestAttendance == true
+    }
+
+    private var collaboratorInvitationRequiresSignIn: Bool {
+        !authentication.isAuthenticated && preview?.role == "collaborator"
+    }
+
     private var primaryActionTitle: String {
-        guard authentication.isAuthenticated else { return String(localized: "Sign In to Join") }
+        if canJoinAsDeviceGuest {
+            if joinProgress.acceptedResponse(for: viewerIdentity) != nil { return String(localized: "Open Event") }
+            return GuestCopy.attendAsGuest
+        }
+        guard authentication.isAuthenticated else {
+            switch preview?.signInPurpose {
+            case .helpPlan: return GuestCopy.signInToHelpPlan
+            case .viewPlans: return GuestCopy.signInToViewPlans
+            default: return String(localized: "Sign In to Join")
+            }
+        }
         if joinProgress.acceptedResponse(for: authentication.currentUser?.id) != nil || preview?.status == "accepted" { return String(localized: "Open Event") }
         if awaitingApproval || preview?.status == "awaiting_approval" || preview?.status == "declined" { return String(localized: "Check Status") }
         return preview?.requiresApproval == true ? String(localized: "Request to Join") : String(localized: "Join Event")
@@ -174,7 +219,7 @@ struct NativeInvitationView: View {
             errorMessage = EventInvitationFailure.unavailable.localizedDescription
             return
         }
-        let accountID = authentication.currentUser?.id
+        let accountID = viewerIdentity
         let requestID = UUID()
         previewRequestID = requestID
         isLoading = true
@@ -183,8 +228,8 @@ struct NativeInvitationView: View {
         defer { if previewRequestID == requestID { isLoading = false } }
         do {
             let value: InvitationPreview = try await InvitationAPIClient(baseURL: baseURL).request("api/invitations/preview",
-                query: [URLQueryItem(name: "token", value: token.uuidString)], authenticated: false)
-            guard invitations.pendingToken == token, authentication.currentUser?.id == accountID,
+                query: [URLQueryItem(name: "token", value: token.uuidString)], authenticated: authentication.isAuthenticated)
+            guard invitations.pendingToken == token, viewerIdentity == accountID,
                   previewRequestID == requestID, !Task.isCancelled else { return }
             preview = value
             awaitingApproval = value.status == "awaiting_approval"
@@ -195,7 +240,7 @@ struct NativeInvitationView: View {
                 await accept()
             }
         } catch {
-            guard authentication.currentUser?.id == accountID, previewRequestID == requestID,
+            guard viewerIdentity == accountID, previewRequestID == requestID,
                   !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
@@ -203,7 +248,9 @@ struct NativeInvitationView: View {
 
     private func retry() async {
         guard !isLoading, !isAccepting else { return }
-        if authentication.isAuthenticated && (retryJoin || joinProgress.acceptedResponse(for: authentication.currentUser?.id) != nil) {
+        if authentication.isGuestMode && canJoinAsDeviceGuest && retryJoin {
+            await acceptAsDeviceGuest()
+        } else if authentication.isAuthenticated && (retryJoin || joinProgress.acceptedResponse(for: authentication.currentUser?.id) != nil) {
             await accept()
         } else {
             await loadPreview()
@@ -216,6 +263,41 @@ struct NativeInvitationView: View {
         if let date = formatter.date(from: value) { return date }
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: value)
+    }
+
+    private func acceptAsDeviceGuest() async {
+        guard !isAccepting, canJoinAsDeviceGuest, authentication.isGuestMode,
+              let profile = authentication.localGuestProfile,
+              let baseURL = AppRuntimeConfiguration.authenticationBaseURL else { return }
+        isAccepting = true
+        retryJoin = true
+        errorMessage = nil
+        defer { isAccepting = false }
+        do {
+            let acceptance: InvitationAcceptance
+            if let accepted = joinProgress.acceptedResponse(for: profile.storageID) {
+                acceptance = accepted
+            } else {
+                acceptance = try await DeviceGuestInvitationClient(baseURL: baseURL, profile: profile).join(token: token)
+            }
+            guard viewerIdentity == profile.storageID, invitations.pendingToken == token,
+                  !Task.isCancelled else { return }
+            joinProgress.record(acceptance, accountID: profile.storageID)
+            await guests.activate(localGuest: profile)
+            await guests.refresh(force: true)
+            guard viewerIdentity == profile.storageID, invitations.pendingToken == token,
+                  !Task.isCancelled else { return }
+            guard guests.presentations[acceptance.eventId] != nil else {
+                throw EventInvitationFailure.server(guests.errorMessage ?? String(localized: "You joined the event. Try again to load your invitation."))
+            }
+            library.closeWorkspace()
+            guests.selectedEventID = acceptance.eventId
+            invitations.dismiss(joined: true)
+        } catch {
+            guard viewerIdentity == profile.storageID, invitations.pendingToken == token,
+                  !Task.isCancelled else { return }
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func accept() async {
@@ -316,6 +398,7 @@ private struct InvitationFailureBanner: View {
 
 struct GuestEventInvitationView: View {
     @Environment(GuestInvitationStore.self) private var guests
+    @Environment(NotificationNavigationState.self) private var notificationNavigation: NotificationNavigationState?
     @Environment(\.dismiss) private var dismiss
     let eventID: UUID
     @State private var isConfirmingLeave = false
@@ -362,6 +445,23 @@ struct GuestEventInvitationView: View {
             }
         }
         .appImageDetailAppearance()
+        .sheet(item: Binding(
+            get: { notificationNavigation?.attendanceAnnouncement.flatMap { $0.eventID == eventID ? $0 : nil } },
+            set: { value in
+                if value == nil, notificationNavigation?.attendanceAnnouncement?.eventID == eventID {
+                    notificationNavigation?.attendanceAnnouncement = nil
+                }
+            }
+        )) { destination in
+            NavigationStack {
+                EventAnnouncementsView(eventID: destination.eventID, announcementID: destination.announcementID)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(AppCopy.Common.done) { notificationNavigation?.attendanceAnnouncement = nil }
+                        }
+                    }
+            }
+        }
         .confirmationDialog(AppCopy.Lifecycle.leave, isPresented: $isConfirmingLeave, titleVisibility: .visible) {
             Button(AppCopy.Lifecycle.leave, role: .destructive) {
                 Task { if await guests.leave(eventID: eventID) { dismiss() } }

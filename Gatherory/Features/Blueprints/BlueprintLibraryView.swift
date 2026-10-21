@@ -191,7 +191,12 @@ struct BlueprintLibraryView: View {
         }
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) { AccountToolbarButton(avatarSize: 44) }
+            ToolbarItem(placement: .topBarTrailing) {
+                ToolbarGlassActionGroup {
+                    AccountToolbarButton(avatarSize: 28)
+                        .frame(width: 44, height: 44)
+                }
+            }
                 .sharedBackgroundVisibility(.hidden)
         }
         .task(id: "\(isActive)|\(String(describing: cloudSync.accountOnboardingState))") {

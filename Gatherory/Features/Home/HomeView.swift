@@ -5,11 +5,11 @@ struct HomeView: View {
     var onExitWorkspace: (() -> Void)?
 
     @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(AuthenticationSession.self) private var authentication: AuthenticationSession?
     @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var isComposingNote = false
     @State private var isSavingBlueprint = false
     @State private var isPresentingInvitationSharing = false
     @State private var editorTarget: HomeEventEditorTarget?
@@ -152,35 +152,44 @@ struct HomeView: View {
                 }
             }
 
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                if workspace.isMainEventDeleted, workspace.showsPlanningInterface {
-                    Button("Create event", systemImage: "plus") {
-                        editorTarget = .main
-                    }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.primary)
-                    .tint(.primary)
-                } else if workspace.showsPlanningInterface {
-                    Button("Send a note", systemImage: "megaphone") {
-                        isComposingNote = true
-                    }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.primary)
-                    .tint(.primary)
-
-                    if workspace.isMainEventContext {
-                        Button("Add event", systemImage: "calendar.badge.plus") {
-                            addEventIdeaDetent = .large
-                            isAddingEventIdea = true
+            ToolbarItem(placement: .topBarTrailing) {
+                ToolbarGlassActionGroup {
+                    if workspace.isMainEventDeleted, workspace.showsPlanningInterface {
+                        Button("Create event", systemImage: "plus") {
+                            editorTarget = .main
                         }
                         .labelStyle(.iconOnly)
                         .foregroundStyle(.primary)
                         .tint(.primary)
-                    }
-                }
+                        .frame(width: 44, height: 44)
+                    } else if workspace.showsPlanningInterface {
+                        NavigationLink {
+                            EventAnnouncementsView(eventID: workspace.selectedEventID)
+                        } label: {
+                            Label(AnnouncementCopy.title, systemImage: "megaphone")
+                        }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.primary)
+                        .tint(.primary)
+                        .frame(width: 44, height: 44)
 
-                AccountToolbarButton(monochrome: true)
+                        if workspace.isMainEventContext {
+                            Button("Add event", systemImage: "calendar.badge.plus") {
+                                addEventIdeaDetent = .large
+                                isAddingEventIdea = true
+                            }
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(.primary)
+                            .tint(.primary)
+                            .frame(width: 44, height: 44)
+                        }
+                    }
+
+                    AccountToolbarButton(monochrome: true, avatarSize: 28)
+                        .frame(width: 44, height: 44)
+                }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .navigationDestination(item: $openedEventReference) { reference in
             EventInvitationScreen(reference: reference)
@@ -227,12 +236,6 @@ struct HomeView: View {
                 )
             }
             .presentationDetents([.large])
-        }
-        .sheet(isPresented: $isComposingNote) {
-            NoteComposerView(event: workspace.selectedEventReference,
-                             eventID: workspace.selectedEventID,
-                             title: workspace.selectedEventTitle)
-                .environment(workspace)
         }
         .fullScreenCover(isPresented: $isPresentingInvitationSharing) {
             CollaborationInviteView()

@@ -142,6 +142,17 @@ private struct CollaborationInviteScreen: View {
     }
 
     var body: some View {
+        if authentication.isGuestMode && !isPeopleDestination {
+            LocalGuestSignInGate()
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(AppCopy.Common.close) { dismiss() }
+                    }
+                }
+        } else { invitationContent }
+    }
+
+    private var invitationContent: some View {
         ZStack {
             CollaborationBackdrop(
                 imageData: selectedEventImageData,
@@ -307,10 +318,8 @@ private struct CollaborationInviteScreen: View {
             }
 
             Text(invitedRole == .guest
-                 ? String(localized: "Guests can view the invitation and RSVP. Planning stays private.")
-                 : workspace.requiresCollaboratorApproval
-                    ? String(localized: "The host will review your request before you can see or change plans.")
-                    : String(localized: "People with this link join with the access selected in Sharing Settings."))
+                 ? GuestCopy.publicGuestLinkHelp
+                 : collaboratorLinkDescription)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -415,6 +424,16 @@ private struct CollaborationInviteScreen: View {
             Text("Collaborator").tag(WorkspaceRole.collaborator)
         }
         .disabled(isGenerating)
+    }
+
+    private var collaboratorLinkDescription: String {
+        let viewOnly = workspace.defaultCollaboratorPermission == .viewOnly
+        return switch (workspace.requiresCollaboratorApproval, viewOnly) {
+        case (true, true): GuestCopy.collaboratorViewOnlyApprovalLinkHelp
+        case (true, false): GuestCopy.collaboratorApprovalLinkHelp
+        case (false, true): GuestCopy.collaboratorViewOnlyLinkHelp
+        case (false, false): GuestCopy.collaboratorLinkHelp
+        }
     }
 
     private func loadJoinRequests() async {
@@ -711,7 +730,7 @@ private struct EmailInvitationView: View {
                     }
                 }
             } footer: {
-                Text("Only the invited email address can accept this link. Share it using the options below; Gatherory does not send an email automatically.")
+                Text(GuestCopy.emailInvitationSignInHelp)
             }
             .disabled(isPreparing)
 

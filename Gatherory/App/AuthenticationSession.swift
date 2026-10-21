@@ -13,6 +13,7 @@ enum AuthenticationFailure: LocalizedError, Equatable {
     case networkUnavailable
     case serviceUnavailable
     case invalidServerResponse
+    case guestDataUnavailable
     case server(message: String?)
 
     var errorDescription: String? {
@@ -37,6 +38,8 @@ enum AuthenticationFailure: LocalizedError, Equatable {
             "The sign-in service is temporarily unavailable. Try again in a moment."
         case .invalidServerResponse:
             "Gatherory received an unexpected response from the sign-in service."
+        case .guestDataUnavailable:
+            GuestCopy.storageFailed
         case .server(let message):
             message ?? "Gatherory couldn’t complete the sign-in request."
         }
@@ -46,13 +49,38 @@ enum AuthenticationFailure: LocalizedError, Equatable {
 @Observable
 @MainActor
 final class AuthenticationSession {
-    private(set) var currentUser: UserAccount?
+    private(set) var currentUser: UserAccount? {
+        didSet { if oldValue?.id != currentUser?.id { principalGeneration &+= 1 } }
+    }
+    private(set) var localGuestProfile: LocalGuestProfile? {
+        didSet { if oldValue?.id != localGuestProfile?.id { principalGeneration &+= 1 } }
+    }
+    /// Invalidates identity-bound requests even across a rapid A → B → A switch.
+    private(set) var principalGeneration: UInt64 = 0
+    private(set) var isGuestSignInRequested = false
+    private(set) var guestStorageFailed = false
+    private(set) var guestDiscardNeedsAttention = false
+    @ObservationIgnored var prepareForGuestAuthentication: (() throws -> Void)?
+    @ObservationIgnored var prepareForGuestDiscard: ((LocalGuestProfile) async throws -> Void)?
+    @ObservationIgnored private let guestProfileStore: any LocalGuestProfileStore
+    @ObservationIgnored private let guestCredentialStore: any LocalGuestCredentialStore
     private(set) var developmentAccounts: [UserAccount]
     private(set) var isProcessing = false
-    private(set) var isSigningOut = false
+    private(set) var isSigningOut = false {
+        didSet { if isSigningOut && !oldValue { principalGeneration &+= 1 } }
+    }
     var signOutNeedsAttention = false
+    var accountDeletionNeedsAttention = false
     @ObservationIgnored var prepareForSignOut: ((Bool) async throws -> Void)?
+    @ObservationIgnored var prepareForAccountDeletion: ((String) async throws -> Void)?
+    @ObservationIgnored var resumeAfterFailedAccountDeletion: ((UserAccount) async -> Void)?
+    let deletionCleanup: AccountDeletionCleanupCoordinator
     private(set) var registrationNotice: String?
+    /// A failed network or secure-storage check is not evidence of sign-out.
+    /// Keep entry behind recovery until a retry validates the saved session.
+    private(set) var sessionRestorationFailure: (any Error)?
+
+    var isSessionRestorationUnavailable: Bool { sessionRestorationFailure != nil }
 
     let environment: AppRuntimeConfiguration.Environment
 
@@ -64,15 +92,95 @@ final class AuthenticationSession {
         currentUser != nil
     }
 
+    var isGuestMode: Bool { currentUser == nil && localGuestProfile != nil }
+    var hasPendingGuestImport: Bool { currentUser != nil && localGuestProfile != nil }
+
+    /// A guest handover must finish before this installation can receive
+    /// notifications for the account. Display names never identify a recipient.
+    var notificationPrincipal: NotificationPrincipal? {
+        guard !deletionCleanup.blocksEntry, !hasPendingGuestImport, !guestDiscardNeedsAttention, !isSessionRestorationUnavailable else { return nil }
+        if let currentUser { return .account(id: currentUser.id) }
+        return localGuestProfile.map { .guest(id: $0.id) }
+    }
+
+    func continueAsGuest(displayName: String) throws {
+        guard !deletionCleanup.blocksEntry, !isProcessing, !isAuthenticated, !guestStorageFailed else {
+            throw AuthenticationFailure.guestDataUnavailable
+        }
+        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.unicodeScalars.count <= 80 else {
+            throw LocalGuestProfileStoreError.invalidProfile
+        }
+        let profile = LocalGuestProfile(id: localGuestProfile?.id ?? UUID(), displayName: name)
+        try guestProfileStore.save(profile)
+        localGuestProfile = profile
+        isGuestSignInRequested = false
+        registrationNotice = nil
+    }
+
+    func retryGuestProfileLoading() {
+        guard guestStorageFailed, !isProcessing, !isAuthenticated else { return }
+        do {
+            localGuestProfile = try guestProfileStore.load()
+            guestStorageFailed = false
+        } catch { guestStorageFailed = true }
+    }
+
+    func requestGuestSignIn() { isGuestSignInRequested = true }
+    func cancelGuestSignIn() { isGuestSignInRequested = false }
+
+    /// Called only after workspace import and event-grant claiming are durable.
+    func completeGuestImport() throws {
+        guard !deletionCleanup.blocksEntry else { throw AuthenticationFailure.guestDataUnavailable }
+        guard isAuthenticated, let profile = localGuestProfile else { return }
+        try guestProfileStore.remove()
+        localGuestProfile = nil
+        isGuestSignInRequested = false
+        guestDiscardNeedsAttention = false
+        try? guestCredentialStore.removeSecret(profileID: profile.id)
+    }
+
+    /// The caller must first show the explicit device-data-loss confirmation.
+    func discardGuestSession() async throws {
+        guard !deletionCleanup.blocksEntry, !isProcessing, currentUser == nil, let profile = localGuestProfile,
+              let prepareForGuestDiscard else { throw AuthenticationFailure.guestDataUnavailable }
+        // Teardown may already have removed guest archives before profile removal
+        // fails. Keep entry in recovery until an explicit retry finishes cleanup.
+        guestDiscardNeedsAttention = true
+        isProcessing = true
+        defer { isProcessing = false }
+        try await prepareForGuestDiscard(profile)
+        try guestProfileStore.remove()
+        localGuestProfile = nil
+        isGuestSignInRequested = false
+        try? guestCredentialStore.removeSecret(profileID: profile.id)
+        guestDiscardNeedsAttention = false
+    }
+
     init(
         environment: AppRuntimeConfiguration.Environment,
         skipsAuthentication: Bool,
         client: (any AuthenticationClient)? = nil,
-        removeSavedShareLinks: (@MainActor (String) -> Void)? = nil
+        removeSavedShareLinks: (@MainActor (String) -> Void)? = nil,
+        guestProfileStore: (any LocalGuestProfileStore)? = nil,
+        guestCredentialStore: (any LocalGuestCredentialStore)? = nil,
+        deletionCleanup: AccountDeletionCleanupCoordinator? = nil
     ) {
         self.environment = environment
         self.client = client
         self.removeSavedShareLinks = removeSavedShareLinks
+        if let deletionCleanup {
+            self.deletionCleanup = deletionCleanup
+        } else {
+            let fixtureCleanup = AccountDeletionCleanupCoordinator(journal: MemoryAccountDeletionCleanupJournal())
+            fixtureCleanup.removeLocalData = { _ in }
+            self.deletionCleanup = fixtureCleanup
+        }
+        let profileStore = guestProfileStore ?? DeviceLocalGuestProfileStore()
+        self.guestProfileStore = profileStore
+        self.guestCredentialStore = guestCredentialStore ?? KeychainLocalGuestCredentialStore()
+        do { localGuestProfile = try profileStore.load() }
+        catch { guestStorageFailed = true }
 
         if environment == .development {
             let planner = DevelopmentAccountFixtures.planner
@@ -100,35 +208,41 @@ final class AuthenticationSession {
             environment: AppRuntimeConfiguration.environment,
             skipsAuthentication: AppRuntimeConfiguration.skipsAuthentication,
             client: client,
-            removeSavedShareLinks: { accountID in
-                try? KeychainBlueprintShareLinkCredentialStore().removeAll(accountID: accountID)
-            }
+            deletionCleanup: AccountDeletionCleanupCoordinator(journal: DeviceAccountDeletionCleanupJournal())
         )
     }
 
     func restoreSession() async {
-        guard !isProcessing, currentUser == nil, let client else { return }
+        guard !deletionCleanup.blocksEntry, !isProcessing, currentUser == nil, let client else { return }
 
         isProcessing = true
         defer { isProcessing = false }
 
         do {
             currentUser = try await client.restoreSession()
+            sessionRestorationFailure = nil
             if let currentUser {
                 identify(currentUser)
             } else {
                 PostHogSDK.shared.reset()
             }
+        } catch AuthenticationFailure.invalidSession {
+            // Clients may report expiry directly; Better Auth normally returns nil.
+            sessionRestorationFailure = nil
+            currentUser = nil
+            PostHogSDK.shared.reset()
         } catch {
-            // A failed refresh must never manufacture an authenticated state.
-            // The login screen will surface errors when the user actively retries.
+            // Preserve the distinction between a confirmed sign-out and an
+            // unavailable check without manufacturing an authenticated state.
+            sessionRestorationFailure = error
             currentUser = nil
             PostHogSDK.shared.reset()
         }
     }
 
     func signIn(email: String, password: String) async throws {
-        guard !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        guard !deletionCleanup.blocksEntry, !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        try prepareForGuestAuthentication?()
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         registrationNotice = nil
 
@@ -137,6 +251,7 @@ final class AuthenticationSession {
             defer { isProcessing = false }
             let account = try await client.signIn(email: normalizedEmail, password: password)
             currentUser = account
+            sessionRestorationFailure = nil
             identify(account)
             return
         }
@@ -149,6 +264,7 @@ final class AuthenticationSession {
         }
 
         currentUser = account
+        sessionRestorationFailure = nil
         identify(account)
     }
 
@@ -157,7 +273,8 @@ final class AuthenticationSession {
     }
 
     func register(displayName: String, email: String, password: String) async throws {
-        guard !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        guard !deletionCleanup.blocksEntry, !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        try prepareForGuestAuthentication?()
         let normalizedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
@@ -182,9 +299,11 @@ final class AuthenticationSession {
             ) {
             case .authenticated(let account):
                 currentUser = account
+                sessionRestorationFailure = nil
                 identify(account)
             case .verificationRequired(let email):
                 currentUser = nil
+                sessionRestorationFailure = nil
                 registrationNotice = "Check \(email) for a verification link, then sign in."
             }
             return
@@ -209,11 +328,13 @@ final class AuthenticationSession {
         developmentAccounts.append(account)
         developmentPasswords[normalizedEmail] = password
         currentUser = account
+        sessionRestorationFailure = nil
         identify(account)
     }
 
     func signIn(using provider: AuthenticationProvider) async throws {
-        guard !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        guard !deletionCleanup.blocksEntry, !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        try prepareForGuestAuthentication?()
         registrationNotice = nil
         guard environment == .development, client == nil else {
             throw AuthenticationFailure.providerUnavailable
@@ -222,6 +343,7 @@ final class AuthenticationSession {
         var planner = DevelopmentAccountFixtures.planner
         planner.authenticationProvider = provider
         currentUser = planner
+        sessionRestorationFailure = nil
         identify(planner)
     }
 
@@ -229,7 +351,7 @@ final class AuthenticationSession {
         _ identity: AppleIdentity,
         requestingSignUp: Bool
     ) async throws {
-        guard !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        guard !deletionCleanup.blocksEntry, !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
         registrationNotice = nil
 
         guard let client else {
@@ -237,6 +359,7 @@ final class AuthenticationSession {
             return
         }
 
+        try prepareForGuestAuthentication?()
         isProcessing = true
         defer { isProcessing = false }
         let account = try await client.signInWithApple(
@@ -244,6 +367,7 @@ final class AuthenticationSession {
             requestingSignUp: requestingSignUp
         )
         currentUser = account
+        sessionRestorationFailure = nil
         identify(account)
     }
 
@@ -252,7 +376,7 @@ final class AuthenticationSession {
         nonce: String,
         requestingSignUp: Bool
     ) async throws {
-        guard !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        guard !deletionCleanup.blocksEntry, !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
         registrationNotice = nil
 
         guard let client else {
@@ -260,6 +384,7 @@ final class AuthenticationSession {
             return
         }
 
+        try prepareForGuestAuthentication?()
         isProcessing = true
         defer { isProcessing = false }
         let account = try await client.signInWithGoogle(
@@ -268,6 +393,7 @@ final class AuthenticationSession {
             requestingSignUp: requestingSignUp
         )
         currentUser = account
+        sessionRestorationFailure = nil
         identify(account)
     }
 
@@ -287,7 +413,7 @@ final class AuthenticationSession {
 
     @discardableResult
     func signOut(keepingPendingChanges: Bool = false) async -> Bool {
-        guard !isProcessing, !isSigningOut else { return false }
+        guard !deletionCleanup.blocksEntry, !isProcessing, !isSigningOut else { return false }
         isSigningOut = true
         isProcessing = true
         signOutNeedsAttention = false
@@ -308,27 +434,61 @@ final class AuthenticationSession {
     }
 
     func deleteAccount() async throws {
-        guard !isProcessing else { throw AuthenticationFailure.serviceUnavailable }
+        guard !isProcessing, !deletionCleanup.blocksEntry else { throw AuthenticationFailure.serviceUnavailable }
         guard let account = currentUser else {
             throw AuthenticationFailure.invalidSession
         }
 
         isProcessing = true
         defer { isProcessing = false }
-
-        if let client {
-            try await client.deleteAccount()
-        } else {
-            developmentAccounts.removeAll { $0.id == account.id }
-            developmentPasswords.removeValue(forKey: account.email.lowercased())
+        accountDeletionNeedsAttention = false
+        try deletionCleanup.begin(accountID: account.id)
+        var sentRemoteRequest = false
+        do {
+            try await prepareForAccountDeletion?(account.id)
+            try Task.checkCancellation()
+            if let client {
+                sentRemoteRequest = true
+                try await client.deleteAccount()
+            } else {
+                developmentAccounts.removeAll { $0.id == account.id }
+                developmentPasswords.removeValue(forKey: account.email.lowercased())
+            }
+        } catch {
+            // A transport failure after sending can mean the server deleted
+            // the account but its acknowledgement was lost. Keep that intent
+            // for explicit device-only resolution; never repeat remote delete.
+            let rejected: Bool
+            switch error as? AuthenticationFailure {
+            case .reauthenticationRequired, .invalidSession, .invalidCredentials, .emailNotVerified,
+                 .invalidRegistration, .accountAlreadyExists, .providerUnavailable:
+                rejected = true
+            default: rejected = false
+            }
+            if !sentRemoteRequest || rejected { deletionCleanup.cancelUnconfirmedRequest() }
+            accountDeletionNeedsAttention = !deletionCleanup.blocksEntry
+            await resumeAfterFailedAccountDeletion?(account)
+            throw error
         }
-
+        deletionCleanup.confirmRemoteDeletion()
         // The account must be deleted remotely before its local sharing
         // credentials are removed. Normal sign-out keeps them account scoped.
         removeSavedShareLinks?(account.id)
         PostHogSDK.shared.reset()
         currentUser = nil
         registrationNotice = nil
+        sessionRestorationFailure = nil
+        await deletionCleanup.retry()
+    }
+
+    /// Clears only the matching in-memory identity while an explicit device
+    /// cleanup is in progress. This never calls the remote deletion endpoint.
+    func clearAccountForDeviceCleanup(accountID: String) {
+        guard currentUser?.id == accountID else { return }
+        currentUser = nil
+        registrationNotice = nil
+        sessionRestorationFailure = nil
+        PostHogSDK.shared.reset()
     }
 
     private func identify(_ account: UserAccount) {

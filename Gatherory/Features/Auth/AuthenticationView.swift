@@ -7,6 +7,7 @@ import SwiftUI
 import UIKit
 
 struct AuthenticationView: View {
+    var allowsGuestContinuation = true
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
@@ -18,6 +19,7 @@ struct AuthenticationView: View {
     @State private var password = ""
     @State private var errorMessage: String?
     @State private var currentAppleNonce: String?
+    @State private var showsGuestName = false
     @FocusState private var focusedField: Field?
 
     var body: some View {
@@ -66,17 +68,39 @@ struct AuthenticationView: View {
                 authentication.clearRegistrationNotice()
             }
         }
+        .sheet(isPresented: $showsGuestName) {
+            NavigationStack { LocalGuestNameView() }
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var authenticationPanel: some View {
         VStack(spacing: focusedField == nil ? AppTheme.Spacing.standard : 10) {
             credentialsForm
 
+            if authentication.isGuestMode {
+                Text(GuestCopy.signInPreservesInfo)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if focusedField == nil {
                 providerDivider
                 providerActions
                 modeSwitcher
                     .transition(.opacity)
+                if authentication.guestStorageFailed {
+                    Text(GuestCopy.storageFailed).font(.footnote).foregroundStyle(.secondary)
+                    Button(AppCopy.Common.retry) { authentication.retryGuestProfileLoading() }
+                }
+                if allowsGuestContinuation, !authentication.isGuestMode {
+                    Button(GuestCopy.continueAsGuest) { showsGuestName = true }
+                        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                        .disabled(authentication.isProcessing || authentication.guestStorageFailed)
+                }
             }
         }
         .animation(reduceMotion ? nil : .snappy, value: focusedField)

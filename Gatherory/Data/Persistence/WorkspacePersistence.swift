@@ -36,6 +36,39 @@ final class WorkspaceRecord {
     }
 }
 
+/// Durable idempotency receipt for additive local-guest import. Its account
+/// namespace is explicit, and source guest data remains intact until the caller
+/// completes remote attendance claiming and requests source cleanup.
+@Model
+final class LocalGuestWorkspaceImportReceipt {
+    @Attribute(.unique) var id: String
+    var guestProfileID: UUID
+    var accountID: String
+    var workspaceIDsPayload: Data
+    var createdAt: Date
+
+    init(guestProfileID: UUID, accountID: String, workspaceIDsPayload: Data) {
+        self.id = "\(guestProfileID.uuidString.lowercased()):\(accountID)"
+        self.guestProfileID = guestProfileID
+        self.accountID = accountID
+        self.workspaceIDsPayload = workspaceIDsPayload
+        self.createdAt = .now
+    }
+}
+
+struct GuestWorkspaceImportResult: Equatable, Sendable {
+    let workspaceIDs: [UUID]
+    let wasAlreadyImported: Bool
+}
+
+enum LocalGuestWorkspacePersistenceError: Error, Equatable {
+    case invalidProfile
+    case invalidImportState
+    case guestAlreadyImportedIntoDifferentAccount
+    case workspaceIDCollision(UUID)
+    case invalidImportReceipt
+}
+
 /// The account-local optimistic-concurrency version for an independently
 /// synchronized entity. Todo updates and deletes use it as their CAS base.
 @Model
@@ -125,6 +158,7 @@ final class RemoteEntityVersionRecord {
 final class WorkspacePersistenceController {
     @ObservationIgnored let container: ModelContainer
     private(set) var lastError: Error?
+    private(set) var storageInitializationError: Error?
 
     @ObservationIgnored private let context: ModelContext
     @ObservationIgnored private let codec: WorkspaceArchiveCodec
@@ -189,6 +223,7 @@ final class WorkspacePersistenceController {
             do {
                 let fallback = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
                 fallback.lastError = error
+                fallback.storageInitializationError = error
                 return fallback
             } catch {
                 fatalError("Gatherory could not create a local data store: \(error)")
@@ -279,12 +314,225 @@ final class WorkspacePersistenceController {
         pendingSaveTask?.cancel()
         pendingSaveTask = nil
         do {
-            try persist(library, enqueuesMutations: true)
+            try persist(library, enqueuesMutations: !isActiveLocalGuest)
             lastError = nil
         } catch {
             context.rollback()
             lastError = error
             throw error
+        }
+    }
+
+    private var isActiveLocalGuest: Bool {
+        activeUserID?.hasPrefix("device-guest:") == true
+    }
+
+    /// Switches only the local archive namespace. Authenticated cloud sync is
+    /// intentionally not part of this API; the app shell keeps CurrentUser nil.
+    func activateLocalGuest(_ profile: LocalGuestProfile, in library: WorkspaceLibrary) throws {
+        guard profile.hasValidDisplayName else {
+            throw LocalGuestWorkspacePersistenceError.invalidProfile
+        }
+        try flushForAccountTransition(library)
+        pendingSaveTask?.cancel()
+        pendingSaveTask = nil
+        activeUserID = profile.storageID
+        activeUserGeneration = UUID()
+        lastError = nil
+        let restored = restoreLibrary(seedData: false, ownerUserID: profile.storageID)
+        if let lastError { throw lastError }
+        restored.configureLocalGuest(profile)
+        suppressNextObservedChange = true
+        library.replaceAll(with: restored.workspaces)
+        library.configureLocalGuest(profile)
+    }
+
+    /// Imports local planning as new authenticated creates. Existing account
+    /// records are never replaced, and a collision aborts before any mutation.
+    /// Guest source records are retained for retry until a higher layer has
+    /// successfully claimed event-only attendance.
+    func importLocalGuest(
+        _ profile: LocalGuestProfile,
+        into account: UserAccount,
+        in library: WorkspaceLibrary
+    ) throws -> GuestWorkspaceImportResult {
+        guard profile.hasValidDisplayName else {
+            throw LocalGuestWorkspacePersistenceError.invalidProfile
+        }
+        guard activeUserID == account.id else {
+            throw LocalGuestWorkspacePersistenceError.invalidImportState
+        }
+        let profileReceipts = try context.fetch(FetchDescriptor<LocalGuestWorkspaceImportReceipt>())
+            .filter { $0.guestProfileID == profile.id }
+        guard profileReceipts.allSatisfy({ $0.accountID == account.id }) else {
+            throw LocalGuestWorkspacePersistenceError.guestAlreadyImportedIntoDifferentAccount
+        }
+        let receiptID = "\(profile.id.uuidString.lowercased()):\(account.id)"
+        let receipt = profileReceipts.first(where: { $0.id == receiptID })
+        try flushForAccountTransition(library)
+        let previouslyImportedIDs = try receipt.map {
+            try JSONDecoder().decode([UUID].self, from: $0.workspaceIDsPayload)
+        } ?? []
+
+        let guestRecords = try context.fetch(FetchDescriptor<WorkspaceRecord>())
+            .filter { $0.ownerUserID == profile.storageID }
+        let guestArchives = try guestRecords.map { record -> WorkspaceArchiveV1 in
+            guard record.payloadSchemaVersion == WorkspaceArchiveV1.schemaVersion else {
+                throw WorkspacePersistenceError.unsupportedArchiveVersion(record.payloadSchemaVersion)
+            }
+            return try codec.decode(WorkspaceArchiveV1.self, from: record.payload)
+        }
+        let accountRecords = try context.fetch(FetchDescriptor<WorkspaceRecord>())
+            .filter { $0.ownerUserID == account.id }
+        let accountIDs = Set(accountRecords.map(\.id))
+        guard previouslyImportedIDs.allSatisfy(accountIDs.contains) else {
+            throw LocalGuestWorkspacePersistenceError.invalidImportReceipt
+        }
+        let previouslyImportedSet = Set(previouslyImportedIDs)
+        let newArchives = guestArchives.filter { !previouslyImportedSet.contains($0.mainEventID) }
+        if let collision = newArchives.first(where: { accountIDs.contains($0.mainEventID) }) {
+            throw LocalGuestWorkspacePersistenceError.workspaceIDCollision(collision.mainEventID)
+        }
+
+        var imported: [WorkspaceArchiveV1] = []
+        imported.reserveCapacity(newArchives.count)
+        for var archive in newArchives {
+            archive.members = archive.members.map { member in
+                guard member.userID == profile.storageID else { return member }
+                var host = member
+                host.userID = account.id
+                host.name = account.displayName
+                host.email = account.email
+                host.initials = String(
+                    account.displayName.split(separator: " ").prefix(2)
+                        .compactMap(\.first).map(String.init).joined().uppercased().prefix(3)
+                )
+                host.profileImageAssetName = account.profileImageAssetName
+                host.profileImageURL = account.profileImageURL
+                return host
+            }
+            archive.ideas = archive.ideas.map { idea in
+                var copy = idea
+                if copy.submittedByUserID == profile.storageID { copy.submittedByUserID = account.id }
+                return copy
+            }
+            archive.ideaResponses = (archive.ideaResponses ?? []).map { response in
+                guard response.userID == profile.storageID else { return response }
+                return IdeaResponse(
+                    ideaID: response.ideaID,
+                    userID: account.id,
+                    choice: response.choice
+                )
+            }
+            archive.notes = archive.notes.map { note in
+                guard note.authorUserID == profile.storageID else { return note }
+                return EventNote(id: note.id, eventID: note.eventID, authorUserID: account.id, body: note.body, sentAt: note.sentAt)
+            }
+            archive.eventMoments = archive.eventMoments.map { moment in
+                var copy = moment
+                if copy.addedByUserID == profile.storageID { copy.addedByUserID = account.id }
+                return copy
+            }
+            archive.eventExpenses = archive.eventExpenses.map { expense in
+                var copy = expense
+                if copy.createdByUserID == profile.storageID { copy.createdByUserID = account.id }
+                return copy
+            }
+            imported.append(archive)
+        }
+
+        let ids = imported.map(\.mainEventID)
+        guard !ids.isEmpty else {
+            guard receipt == nil else {
+                return GuestWorkspaceImportResult(workspaceIDs: previouslyImportedIDs, wasAlreadyImported: true)
+            }
+            do {
+                context.insert(LocalGuestWorkspaceImportReceipt(
+                    guestProfileID: profile.id,
+                    accountID: account.id,
+                    workspaceIDsPayload: try JSONEncoder().encode([] as [UUID])
+                ))
+                try context.save()
+                return GuestWorkspaceImportResult(workspaceIDs: [], wasAlreadyImported: false)
+            } catch {
+                context.rollback()
+                lastError = error
+                throw error
+            }
+        }
+        do {
+            for archive in imported {
+                let workspace = archive.makeWorkspace()
+                workspace.configureViewer(account)
+                library.add(workspace, openAfterAdding: false)
+            }
+            let allImportedIDs = previouslyImportedIDs + ids
+            let idData = try JSONEncoder().encode(allImportedIDs)
+            if let receipt {
+                receipt.workspaceIDsPayload = idData
+            } else {
+                context.insert(LocalGuestWorkspaceImportReceipt(
+                    guestProfileID: profile.id,
+                    accountID: account.id,
+                    workspaceIDsPayload: idData
+                ))
+            }
+            try persist(library, enqueuesMutations: true)
+            lastError = nil
+            return GuestWorkspaceImportResult(workspaceIDs: allImportedIDs, wasAlreadyImported: false)
+        } catch {
+            context.rollback()
+            for id in ids { library.remove(workspaceID: id) }
+            lastError = error
+            throw error
+        }
+    }
+
+    /// Returns the account durably bound to a guest import, including imports
+    /// with no local workspaces. The launch flow uses this to keep a partially
+    /// completed guest claim on the same-account recovery path.
+    func guestImportAccountID(_ profile: LocalGuestProfile) throws -> String? {
+        let receipts = try context.fetch(FetchDescriptor<LocalGuestWorkspaceImportReceipt>())
+            .filter { $0.guestProfileID == profile.id }
+        let accountIDs = Set(receipts.map(\.accountID))
+        guard accountIDs.count <= 1 else {
+            throw LocalGuestWorkspacePersistenceError.invalidImportReceipt
+        }
+        return accountIDs.first
+    }
+
+    /// Removes only the guest namespace. It is safe to call after the library
+    /// has switched to a signed-in account; signed-in records/outbox are left
+    /// untouched.
+    func discardLocalGuest(_ profile: LocalGuestProfile, in library: WorkspaceLibrary) throws {
+        try flushForAccountTransition(library)
+        let guestID = profile.storageID
+        do {
+            try WorkspaceMediaBookkeeper(context: context, codec: codec, ownerUserID: guestID).stageRemoval()
+            for record in try context.fetch(FetchDescriptor<WorkspaceRecord>()) where record.ownerUserID == guestID {
+                context.delete(record)
+            }
+            try RemoteEntityVersionRecord.removeAll(ownerUserID: guestID, in: context)
+            for mutation in try context.fetch(FetchDescriptor<PendingMutation>()) where mutation.ownerUserID == guestID {
+                context.delete(mutation)
+            }
+            for checkpoint in try context.fetch(FetchDescriptor<SyncCheckpoint>()) where checkpoint.ownerUserID == guestID {
+                context.delete(checkpoint)
+            }
+            for receipt in try context.fetch(FetchDescriptor<AppliedSyncEnvelope>()) where receipt.ownerUserID == guestID {
+                context.delete(receipt)
+            }
+            try context.save()
+            lastError = nil
+        } catch {
+            context.rollback()
+            lastError = error
+            throw error
+        }
+        if activeUserID == guestID {
+            activeUserID = nil
+            activeUserGeneration = UUID()
+            library.removeAll()
         }
     }
 
@@ -301,36 +549,67 @@ final class WorkspacePersistenceController {
         try context.save()
     }
 
-    /// Removes every account-scoped local artifact after the backend confirms
-    /// permanent account deletion. No outbox tombstones are produced because
-    /// the deleted identity can no longer authenticate to deliver them.
+    /// Legacy active-namespace cleanup. Account deletion must pass the confirmed
+    /// account ID explicitly so recovery cannot purge a newly active identity.
     func purgeAllLocalData(from library: WorkspaceLibrary) throws {
-        pendingSaveTask?.cancel()
-        pendingSaveTask = nil
+        try purgeLocalData(ownerUserID: activeUserID, from: library)
+    }
 
-        let userID = activeUserID
-        try mediaBookkeeper.stageRemoval()
+    /// Removes only this account's archives and delivery state after confirmed
+    /// server deletion. An inactive-account retry never changes the visible
+    /// library, its pending save, or its activation generation. Retained guest
+    /// source archives survive; only their binding to this account is removed.
+    func purgeLocalData(accountID: String, from library: WorkspaceLibrary) throws {
+        try purgeLocalData(ownerUserID: accountID, from: library)
+    }
 
-        for record in try context.fetch(FetchDescriptor<WorkspaceRecord>())
-        where record.ownerUserID == userID {
-            context.delete(record)
-        }
-        try RemoteEntityVersionRecord.removeAll(ownerUserID: userID, in: context)
-        for mutation in try context.fetch(FetchDescriptor<PendingMutation>())
-        where mutation.ownerUserID == userID {
-            context.delete(mutation)
-        }
-        for checkpoint in try context.fetch(FetchDescriptor<SyncCheckpoint>())
-        where checkpoint.ownerUserID == userID {
-            context.delete(checkpoint)
-        }
-        for receipt in try context.fetch(FetchDescriptor<AppliedSyncEnvelope>())
-        where receipt.ownerUserID == userID {
-            context.delete(receipt)
+    private func purgeLocalData(ownerUserID: String?, from library: WorkspaceLibrary) throws {
+        let isActiveAccount = activeUserID == ownerUserID
+        if isActiveAccount {
+            pendingSaveTask?.cancel()
+            pendingSaveTask = nil
         }
 
-        try context.save()
-        library.removeAll()
+        do {
+            try WorkspaceMediaBookkeeper(context: context, codec: codec, ownerUserID: ownerUserID)
+                .stageAccountDeletion()
+            for record in try context.fetch(FetchDescriptor<WorkspaceRecord>())
+            where record.ownerUserID == ownerUserID {
+                context.delete(record)
+            }
+            try RemoteEntityVersionRecord.removeAll(ownerUserID: ownerUserID, in: context)
+            for mutation in try context.fetch(FetchDescriptor<PendingMutation>())
+            where mutation.ownerUserID == ownerUserID {
+                context.delete(mutation)
+            }
+            for checkpoint in try context.fetch(FetchDescriptor<SyncCheckpoint>())
+            where checkpoint.ownerUserID == ownerUserID {
+                context.delete(checkpoint)
+            }
+            for receipt in try context.fetch(FetchDescriptor<AppliedSyncEnvelope>())
+            where receipt.ownerUserID == ownerUserID {
+                context.delete(receipt)
+            }
+            for receipt in try context.fetch(FetchDescriptor<LocalGuestWorkspaceImportReceipt>())
+            where receipt.accountID == ownerUserID {
+                context.delete(receipt)
+            }
+            try context.save()
+            if isActiveAccount { lastError = nil }
+        } catch {
+            context.rollback()
+            if isActiveAccount { lastError = error }
+            throw error
+        }
+
+        if isActiveAccount {
+            // Keep the emptied library in its original namespace until normal
+            // session activation restores the next one. Relabeling it as nil
+            // here could make a later save overwrite retained legacy archives.
+            activeUserGeneration = UUID()
+            suppressNextObservedChange = true
+            library.removeAll()
+        }
     }
 
     private func observeNextChange(in library: WorkspaceLibrary) {

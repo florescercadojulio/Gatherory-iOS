@@ -37,6 +37,18 @@ struct AccountToolbarButton: View {
     }
 }
 
+/// Groups trailing toolbar actions into the same compact Liquid Glass capsule
+/// used by the workspace browser.
+struct ToolbarGlassActionGroup<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        HStack(spacing: 6, content: content)
+            .frame(minHeight: 44)
+            .glassEffect(.regular.interactive(), in: Capsule())
+    }
+}
+
 struct UserAvatarView: View {
     let account: UserAccount?
     var size: CGFloat

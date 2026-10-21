@@ -1,0 +1,1 @@
+#import "Notifications/FirebaseTokenCompatibility.h"

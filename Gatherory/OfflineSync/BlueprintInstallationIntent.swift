@@ -11,6 +11,7 @@ struct BlueprintInstallationIntent: Codable, Equatable, Sendable {
 
 enum BlueprintInstallationIntentFailure: Error, Equatable {
     case requestIDAlreadyUsed
+    case emptyOwner
 }
 
 /// Durable local retry state, isolated by canonical Better Auth user ID.
@@ -75,6 +76,16 @@ final class BlueprintInstallationIntentStore {
         let url = intentURL(ownerUserID: ownerUserID, requestID: requestID)
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         try FileManager.default.removeItem(at: url)
+    }
+
+    /// Purges every retained request for this account, including unreadable intents.
+    func removeAll(accountID: String) throws {
+        guard !accountID.isEmpty else { throw BlueprintInstallationIntentFailure.emptyOwner }
+        do {
+            try FileManager.default.removeItem(at: accountDirectory(ownerUserID: accountID))
+        } catch let error as CocoaError where error.code == .fileNoSuchFile {
+            // A completed purge can be retried after relaunch.
+        }
     }
 
     private func accountDirectory(ownerUserID: String) -> URL {

@@ -201,6 +201,17 @@ nonisolated final class BlueprintSetupDraftStore {
         }
     }
 
+    /// Removes the account directory without decoding drafts or link credentials.
+    func removeAll(accountID: String) throws {
+        guard !accountID.isEmpty else { throw StoreError.emptyIdentity }
+        let accountDirectory = directoryURL.appendingPathComponent(Self.pathComponent(accountID), isDirectory: true)
+        do {
+            try FileManager.default.removeItem(at: accountDirectory)
+        } catch let error as CocoaError where error.code == .fileNoSuchFile {
+            // A completed purge can be retried after relaunch.
+        }
+    }
+
     private func readDraft(
         at fileURL: URL,
         ownerUserID: String,

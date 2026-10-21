@@ -55,6 +55,24 @@ load live credentials as part of the ordinary local check.
 
 ## What the tests protect
 
+The mobile session lifecycle refactor was verified on October 20, 2026 with
+**790 tests in 108 suites passed**, running only `GatheroryTests` on the iPhone
+18 Pro simulator. English/Spanish localization coverage passed for **1,384
+strings**. No automated UI tests ran. The first build found an actor-isolated
+test-helper default argument; after fixing that helper, the complete target
+passed. Final output: `/tmp/gatherory-auth-lifecycle-native-20261020-r2.log`;
+result bundle:
+`/Users/nexus/Library/Developer/Xcode/DerivedData/Gatherory-fkdlsthewnqyuwcnvrboywcmoqza/Logs/Test/Test-Gatherory-2026.10.20_15-35-52--0400.xcresult`.
+
+New coverage includes pure chain precedence and safe fallbacks, restoration
+unavailability versus expiry, all provider save-before-authentication gates,
+guest retention on sign-out, generation/cancellation barriers, A → B → A
+preparation, import-before-cleanup, and installed lifecycle hooks against real
+in-memory SwiftData. Both remote-account and local fixture onboarding retain
+skipped creation for the same account without skipping another account's flow.
+Physical-device acceptance and remaining deletion-cleanup hardening are in
+the [mobile session lifecycle design](../../../gatherory-web-app/docs/architecture/mobile-session-lifecycle.md).
+
 Optional blueprint To-dos were verified on October 20 with **711 tests in 97
 suites passed**, excluding UI tests. Result:
 `/tmp/gatherory-blueprint-todos-native-20261020-r2.xcresult`.
@@ -923,3 +941,186 @@ PostgreSQL 18 database, which was removed afterward.
 Result: `/tmp/gatherory-catalog-controls-native-20261020.xcresult`.
 Log: `/tmp/gatherory-catalog-controls-native-20261020.log`. Use the full non-UI
 command above with this result path. No UI tests or deployment were performed.
+
+
+## Device guest V1 candidate — October 20, 2026
+
+Continue as Guest now creates a named device profile for local planning and
+public guest invitation attendance. Account sharing/blueprint controls require
+sign-in. Guest archives do not enqueue remote writes or media uploads. Account
+handover adds to existing plans, remaps authorship/Decide identity and records an
+account-bound receipt; failures preserve the source and retry proof. Invited
+event projections remain separate from the planner library. Device-only exit
+warns before removal and offers sign-in/cancellation.
+
+**735 native non-UI tests in 100 suites pass**, including guest persistence,
+authentication and invitation transport/cache regressions. Result:
+`/tmp/gatherory-v1-guest-native-final2-20261020.xcresult`; log:
+`/tmp/gatherory-v1-guest-native-final2-20261020.log`. A final focused regression
+run also builds the recovery wording for using the wrong target account.
+**1,363 English/Spanish strings** pass `bash scripts/verify-localizations.sh`
+(the existing AppCopy dynamic-key extraction warning remains).
+
+Web/server `pnpm test` passes **480 tests**, with **28 environment-gated skips**;
+contract freshness and TypeScript pass. Guest contracts/repository integration
+pass separately (3 tests) on a fresh disposable migrated PostgreSQL database;
+the guest HTTP authorization suite passes separately (1 test) on a local Vite
+server using that database. Those test resources were removed. Changed source
+formatting and both whitespace checks pass.
+
+No UI tests were run. No production migration, deployment, existing-database
+reset, build upload, commit or push was performed. Physical guest relaunch/offline
+planning, provider sign-in/import, host roster/RSVP, failure recovery, Spanish and
+accessibility acceptance remain. Follow the full cross-repository
+[guest implementation handoff](../../../gatherory-web-app/docs/roadmaps/v1-guest-release-candidate-roadmap/01-device-guest-mode.md)
+for commands, architecture boundaries and remaining release checks. Browser-only
+guest RSVP and other research priorities remain outside this first native slice.
+
+
+## Attend as guest; sign in to help plan — October 20, 2026
+
+V1 sharing and invitation wording now separates public guest attendance from
+planning access. Public guest invitations offer Attend as Guest; collaborator
+invitations require sign-in and retain host approval/access levels. View-only
+invitations say Sign In to View Plans. Email invitations still require the
+invited account. No sign-in or forwarded link automatically upgrades a guest.
+A short sign-in message explains that guest plans and invitations are kept.
+
+Native invitation previews now explicitly follow the active session: anonymous
+previews ignore leftover account tokens, signed-in previews use the real bearer,
+and requests don't use browser cookies. Pending invitation and guest profile/
+proof retention have non-UI regressions. DTO policy tests distinguish public
+collaborator previews (which may disclose details without sign-in) from permission
+to attend as a device guest. Planning permissions are unchanged.
+
+The browser retains its account requirement, explains iPhone guest attendance,
+and accurately separates pending approval from accepted access. Its new pure
+presentation tests cover role/access wording, join response state and English/
+Spanish invitation-key parity. Full web tests pass 484 tests (28 gated skips),
+portable-contract checks and TypeScript pass. **739 native non-UI tests in 101
+suites pass**, including the new handover/preview regressions. Result:
+`/tmp/gatherory-v1-attend-copy-native-20261020.xcresult`; log:
+`/tmp/gatherory-v1-attend-copy-native-20261020.log`. **1,375 English/Spanish
+strings** pass localization coverage (existing AppCopy dynamic-key warning).
+Both repositories pass whitespace checks; changed TypeScript formatting passes.
+No UI tests, deployment, database reset, build upload, commit or push.
+
+## FCM mobile proof-of-concept verification — October 20, 2026
+
+The full non-UI `GatheroryTests` target passed **749 tests in 103 suites** with
+parallel testing and PostHog disabled. A focused notification/navigation/guest
+authentication run passed 18 tests in 3 suites (included in the full total).
+English/Spanish localization coverage passed for **1,377 strings**.
+
+Evidence: `/tmp/gatherory-fcm-native-full-20261020.log` and `.xcresult`,
+`/tmp/gatherory-fcm-native-focused-20261020.log` and `.xcresult`, and
+`/tmp/gatherory-fcm-localizations-final-20261020.log`.
+
+See [mobile notifications](mobile-notifications.md) for feature-off configuration,
+identity/isolation behavior, compatible Firebase pin, and remaining Firebase/APNs
+and physical-device acceptance. No UI test target was run, no live push was sent,
+and no deployment, build upload, commit or push was performed.
+
+## Account deletion device cleanup — October 20, 2026
+
+The full non-UI `GatheroryTests` target passed **825 tests in 116 suites**.
+Coverage includes durable journal failures, confirmed and interrupted deletion,
+local-only retries without repeating server deletion, sync cancellation without
+uploading pending work, and cleanup of account-owned media and blueprint stores.
+Isolation regressions preserve another account's visible graph, pending edits,
+preferences and credentials, plus retained guest and unowned legacy data.
+English/Spanish localization coverage passed for **1,394 strings**; the existing
+AppCopy dynamic-key extraction warning remains. Both repositories pass
+`git diff --check`.
+
+Command (from the native repository):
+
+```sh
+xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
+  -destination 'platform=iOS Simulator,id=3A4621C1-A19F-4EDD-A25F-6A1AB7663D6F' \
+  -only-testing:GatheroryTests -parallel-testing-enabled NO \
+  -disableAutomaticPackageResolution -collect-test-diagnostics never \
+  POSTHOG_ENABLED=NO
+bash scripts/verify-localizations.sh
+```
+
+Log: `/tmp/gatherory-account-deletion-20261020-r3.log`.
+Result: `~/Library/Developer/Xcode/DerivedData/Gatherory-fkdlsthewnqyuwcnvrboywcmoqza/Logs/Test/Test-Gatherory-2026.10.20_15-51-25--0400.xcresult`.
+
+Physical-device acceptance remains: use a disposable account to check deletion,
+interrupted cleanup and relaunch, retry after a store failure, server rejection,
+and an interrupted confirmation followed by explicit device-only removal.
+Verify another account and retained guest data remain intact, and that an
+account still present on the server can sign in after local-only removal.
+Check the recovery screen in Spanish, with VoiceOver and larger text.
+No UI tests, real account deletion, database reset, deployment, build upload,
+commit or push were performed. Web/server changes for this slice are
+documentation only; no server deployment is needed for the local cleanup logic.
+
+## Explicit announcements and event wording — October 20, 2026
+
+The full native non-UI target passes **846 tests in 119 suites**. Announcement
+tests exercise Unicode limits, explicit sends, retained retry IDs/drafts,
+credential and event isolation, denied access, invalid responses, conflicts,
+late responses across A → B → A, and authorized notification navigation.
+An existing budget assertion now expects the renamed **Event Budget** label.
+English/Spanish localization verification passes for **1,432 strings**, with
+the existing AppCopy extraction warning. Rendered copy is checked for obsolete
+workspace terminology while internal keys remain stable.
+
+```sh
+xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
+  -destination 'platform=iOS Simulator,id=3A4621C1-A19F-4EDD-A25F-6A1AB7663D6F' \
+  -only-testing:GatheroryTests -parallel-testing-enabled NO \
+  -disableAutomaticPackageResolution -collect-test-diagnostics never \
+  POSTHOG_ENABLED=NO
+bash scripts/verify-localizations.sh
+```
+
+Log: `/tmp/gatherory-announcements-20261020-r2.log`.
+Result: `~/Library/Developer/Xcode/DerivedData/Gatherory-fkdlsthewnqyuwcnvrboywcmoqza/Logs/Test/Test-Gatherory-2026.10.20_17-24-38--0400.xcresult`.
+
+Web/server `pnpm test` passes **505 tests / 33 environment-gated skips**;
+TypeScript, portable-contract freshness and targeted formatting pass. The
+announcement database integration also passes separately on a fresh disposable
+PostgreSQL 18 container, covering transactional rollback, concurrent retries,
+permission/guest/claim isolation, notification eligibility and deletion privacy.
+The container was removed and existing databases were not changed.
+
+See the [announcement handoff](../../../gatherory-web-app/docs/roadmaps/notifications-roadmap/02-event-announcements.md)
+for permissions, online-only send/draft limits, migration and physical-device
+acceptance. No UI tests, real push sends, deployment, existing database reset,
+build upload, commit or push were performed. The migration must be separately
+applied to an approved target before testing this flow on the iPhone.
+
+## One Updates composer with audiences — October 20, 2026
+
+**855 native non-UI tests in 120 suites pass** with the full `GatheroryTests`
+target, parallel testing disabled and PostHog disabled. New checks cover
+server-authorized audience choices, a Planning default, missing-capability
+fail-closed decoding, request IDs bound to message and audience, matching
+acknowledgements, exact-event legacy-note privacy, explicit server denial,
+offline cached history and device-guest ownership. Existing history fixtures
+now declare their child participation through public APIs. English/Spanish
+localization coverage passes for **1,447 strings**, with the existing AppCopy
+dynamic-key warning.
+
+Command: use the full non-UI Xcode command in the preceding section.
+Log: `/tmp/gatherory-audience-native-20261020-r2.log`.
+Web/server `pnpm test` passes **512 tests / 33 environment-gated skips**;
+TypeScript, contract freshness, formatting and both whitespace checks pass.
+Audience database integration passes separately against disposable PostgreSQL
+18, including Planning/Guests privacy and current dispatch permissions.
+
+Home and Manage now open one Updates screen; the old team-note composer has no
+active entry point. Existing notes remain private Planning history. Device-only
+planning retains its private Save path without HTTP or notifications. No old
+note is converted or resent. Guests have no send control.
+
+Both additive announcement migrations require application to an approved target
+before device testing. Verify each audience with a host, contributor, read-only
+planner, account attendee and device guest; test an audience change after failed
+Send, account/role changes in flight, the older note history, local guest Save,
+VoiceOver, larger text and Spanish. See the shared announcement handoff for the
+complete remaining physical-device checks. No UI tests, existing database
+changes, real push sends, deployment, build upload, commit or push were performed.

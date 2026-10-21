@@ -45,6 +45,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>FORCE_ONBOARDING</key>
 	<string>$(FORCE_ONBOARDING)</string>
+	<key>FCM_NOTIFICATIONS_ENABLED</key>
+	<string>$(FCM_NOTIFICATIONS_ENABLED)</string>
+	<key>FirebaseMessagingAutoInitEnabled</key>
+	<false/>
 	<key>GIDClientID</key>
 	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
 	<key>GIDServerClientID</key>

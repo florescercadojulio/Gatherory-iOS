@@ -22,6 +22,7 @@ struct WorkspaceBrowserView: View {
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var activeSheet: WorkspaceBrowserSheet?
+    @State private var selectedFilter: WorkspaceFilter = .all
     var onExplore: () -> Void = {}
 
     private var columns: [GridItem] {
@@ -33,7 +34,7 @@ struct WorkspaceBrowserView: View {
     }
 
     private var filteredWorkspaces: [PlanningWorkspace] {
-        browsableWorkspaces
+        selectedFilter.workspaces(from: browsableWorkspaces, for: authentication.currentUser)
     }
 
     private var browsableWorkspaces: [PlanningWorkspace] {
@@ -44,7 +45,7 @@ struct WorkspaceBrowserView: View {
 
     var body: some View {
         Group {
-            if browsableWorkspaces.isEmpty {
+            if filteredWorkspaces.isEmpty {
                 emptyState
             } else {
                 ScrollView {
@@ -104,18 +105,23 @@ struct WorkspaceBrowserView: View {
                 }.padding().frame(maxWidth: .infinity).background(.regularMaterial)
             }
         }
-        .navigationTitle("Workspaces")
-        .toolbarTitleDisplayMode(.inlineLarge)
+        .navigationTitle("")
+        .toolbarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Add workspace", systemImage: "plus") {
-                    activeSheet = .addWorkspace
-                }
-                .labelStyle(.iconOnly)
+            ToolbarItem(placement: .topBarLeading) {
+                workspaceFilterMenu
             }
-            .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .topBarTrailing) {
-                AccountToolbarButton(avatarSize: 44)
+                ToolbarGlassActionGroup {
+                    Button("Add workspace", systemImage: "plus") {
+                        activeSheet = .addWorkspace
+                    }
+                    .labelStyle(.iconOnly)
+                    .frame(width: 44, height: 44)
+
+                    AccountToolbarButton(avatarSize: 28)
+                        .frame(width: 44, height: 44)
+                }
             }
             .sharedBackgroundVisibility(.hidden)
         }
@@ -178,17 +184,51 @@ struct WorkspaceBrowserView: View {
 
     private var emptyState: some View {
         ContentUnavailableView {
-            Label("No Workspaces", systemImage: "rectangle.stack.badge.plus")
+            Label(selectedFilter.emptyTitle, systemImage: selectedFilter.symbol)
         } description: {
-            Text("Create a workspace to start shaping an event with your people.")
+            Text(selectedFilter.emptyDescription)
         } actions: {
-            Button("Add Workspace", systemImage: "plus") {
-                activeSheet = .addWorkspace
+            if selectedFilter == .all, browsableWorkspaces.isEmpty {
+                Button("Add Workspace", systemImage: "plus") {
+                    activeSheet = .addWorkspace
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(AppTheme.Spacing.spacious)
+    }
+
+    private var workspaceFilterMenu: some View {
+        Menu {
+            ForEach(WorkspaceFilter.primaryFilters) { filter in
+                filterButton(filter)
+            }
+            Divider()
+            ForEach(WorkspaceFilter.participationFilters) { filter in
+                filterButton(filter)
+            }
+        } label: {
+            Image(systemName: selectedFilter.symbol)
+                .font(.body.weight(.semibold))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Filter workspaces")
+        .accessibilityValue(selectedFilter.title)
+    }
+
+    private func filterButton(_ filter: WorkspaceFilter) -> some View {
+        Button {
+            withAnimation(.snappy) { selectedFilter = filter }
+        } label: {
+            Label("\(filter.title) (\(filterCount(for: filter)))",
+                  systemImage: selectedFilter == filter ? "checkmark" : filter.symbol)
+        }
+    }
+
+    private func filterCount(for filter: WorkspaceFilter) -> Int {
+        filter.workspaces(from: browsableWorkspaces, for: authentication.currentUser).count
     }
 }
 
@@ -210,12 +250,12 @@ enum WorkspaceFilter: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .upcoming: "Upcoming"
-        case .all: "All Workspaces"
-        case .past: "Past Events"
-        case .drafts: "Drafts"
-        case .hosting: "Hosting"
-        case .attending: "Attending"
+        case .upcoming: String(localized: "Upcoming")
+        case .all: String(localized: "All Workspaces")
+        case .past: String(localized: "Past Events")
+        case .drafts: String(localized: "Drafts")
+        case .hosting: String(localized: "Hosting")
+        case .attending: String(localized: "Attending")
         }
     }
 
@@ -232,29 +272,29 @@ enum WorkspaceFilter: String, CaseIterable, Identifiable {
 
     var emptyTitle: String {
         switch self {
-        case .all: "No Workspaces"
-        case .upcoming: "No Upcoming Workspaces"
-        case .past: "No Past Events"
-        case .drafts: "No Drafts"
-        case .hosting: "No Hosted Workspaces"
-        case .attending: "No Events You're Attending"
+        case .all: String(localized: "No Workspaces")
+        case .upcoming: String(localized: "No Upcoming Workspaces")
+        case .past: String(localized: "No Past Events")
+        case .drafts: String(localized: "No Drafts")
+        case .hosting: String(localized: "No Hosted Workspaces")
+        case .attending: String(localized: "No Events You're Attending")
         }
     }
 
     var emptyDescription: String {
         switch self {
         case .all:
-            "Create a workspace to start shaping an event with your people."
+            String(localized: "Create a workspace to start shaping an event with your people.")
         case .upcoming:
-            "Workspaces with a scheduled event will appear here."
+            String(localized: "Workspaces with a scheduled event will appear here.")
         case .past:
-            "Finished celebrations stay here as read-only memories."
+            String(localized: "Finished celebrations stay here as read-only memories.")
         case .drafts:
-            "Workspaces that are still being planned will appear here."
+            String(localized: "Workspaces that are still being planned will appear here.")
         case .hosting:
-            "Workspaces where you're a host will appear here."
+            String(localized: "Workspaces where you're a host will appear here.")
         case .attending:
-            "Events you've been invited to or may attend will appear here."
+            String(localized: "Events you've been invited to or may attend will appear here.")
         }
     }
 
@@ -563,7 +603,8 @@ struct NewWorkspaceView: View {
                         eventLocation: eventLocation,
                         imageData: imageData,
                         budgetCap: parsedBudget,
-                        owner: authentication.currentUser
+                        owner: authentication.currentUser,
+                        localGuest: authentication.isGuestMode ? authentication.localGuestProfile : nil
                     )
 
                     if let onWorkspaceCreated {

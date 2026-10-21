@@ -5,7 +5,8 @@ enum BlueprintCaptureLink {
     /// Hosts/managers must still be able to revoke links after an event ends.
     @MainActor
     static func sharingURL(baseURL: URL?, workspace: PlanningWorkspace) -> URL? {
-        guard !workspace.isMainEventDeleted, workspace.showsPlanningInterface,
+        guard !workspace.isLocalGuestViewer,
+              !workspace.isMainEventDeleted, workspace.showsPlanningInterface,
               let member = workspace.currentViewerMember(for: .main),
               member.participantRole == .host ||
                 (member.participantRole == .collaborator && member.planningPermission == .manage),
@@ -30,7 +31,7 @@ enum BlueprintCaptureLink {
     /// the last selected event inside it. This is navigation only, never a save.
     @MainActor
     static func workspaceURL(baseURL: URL?, workspace: PlanningWorkspace) -> URL? {
-        guard workspace.showsPlanningInterface,
+        guard !workspace.isLocalGuestViewer, workspace.showsPlanningInterface,
               workspace.canManageInvitations(for: .main),
               let baseURL else { return nil }
         return url(baseURL: baseURL, eventID: workspace.mainEventID)

@@ -312,9 +312,28 @@ struct EventInvitationScreen: View {
         }
     }
 
+    private var announcementEventID: UUID? {
+        switch reference {
+        case .main: workspace.mainEventID
+        case .subevent(let id): id
+        case .idea: nil
+        }
+    }
+
     private func information(_ event: EventPresentation) -> some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
             peopleCard(event)
+            if let announcementEventID {
+                NavigationLink {
+                    EventAnnouncementsView(eventID: announcementEventID)
+                } label: {
+                    Label(AnnouncementCopy.title, systemImage: "megaphone")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
             timingCard(event)
 
             if case .idea(let id) = reference,

@@ -63,15 +63,20 @@ struct IdeasView: View {
                 statusFilterMenu
             }
 
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Add idea", systemImage: "plus") {
-                    addIdeaDetent = .medium
-                    isAddingIdea = true
-                }
+            ToolbarItem(placement: .topBarTrailing) {
+                ToolbarGlassActionGroup {
+                    Button("Add idea", systemImage: "plus") {
+                        addIdeaDetent = .medium
+                        isAddingIdea = true
+                    }
                     .labelStyle(.iconOnly)
+                    .frame(width: 44, height: 44)
 
-                AccountToolbarButton()
+                    AccountToolbarButton(avatarSize: 28)
+                        .frame(width: 44, height: 44)
+                }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .sheet(isPresented: $isAddingIdea) {
             NavigationStack {

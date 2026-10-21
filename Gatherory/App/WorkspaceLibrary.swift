@@ -8,6 +8,7 @@ final class WorkspaceLibrary {
     private(set) var workspaces: [PlanningWorkspace]
     private(set) var selectedWorkspaceID: UUID?
     private var viewerAccount: UserAccount?
+    private var localGuestViewer: LocalGuestProfile?
     private var isViewerConfigured = false
 
     init(workspaces: [PlanningWorkspace] = []) {
@@ -31,7 +32,7 @@ final class WorkspaceLibrary {
     func add(_ workspace: PlanningWorkspace, openAfterAdding: Bool = true) {
         guard !workspaces.contains(where: { $0.mainEventID == workspace.mainEventID }) else { return }
         if isViewerConfigured {
-            workspace.configureViewer(viewerAccount)
+            configure(workspace)
         }
         workspaces.insert(workspace, at: 0)
         if openAfterAdding {
@@ -54,7 +55,7 @@ final class WorkspaceLibrary {
     func replaceAll(with replacements: [PlanningWorkspace]) {
         if isViewerConfigured {
             for workspace in replacements {
-                workspace.configureViewer(viewerAccount)
+                configure(workspace)
             }
         }
         workspaces = replacements
@@ -66,7 +67,7 @@ final class WorkspaceLibrary {
 
     func upsert(_ workspace: PlanningWorkspace) {
         if isViewerConfigured {
-            workspace.configureViewer(viewerAccount)
+            configure(workspace)
         }
         if let index = workspaces.firstIndex(where: {
             $0.mainEventID == workspace.mainEventID
@@ -86,9 +87,29 @@ final class WorkspaceLibrary {
 
     func configureViewer(_ account: UserAccount?) {
         viewerAccount = account
+        localGuestViewer = nil
         isViewerConfigured = true
         for workspace in workspaces {
             workspace.configureViewer(account)
+        }
+    }
+
+    /// Configures a device-local guest perspective without manufacturing an
+    /// authenticated account or enabling network synchronization.
+    func configureLocalGuest(_ profile: LocalGuestProfile) {
+        viewerAccount = nil
+        localGuestViewer = profile
+        isViewerConfigured = true
+        for workspace in workspaces {
+            workspace.configureLocalGuestViewer(profile)
+        }
+    }
+
+    private func configure(_ workspace: PlanningWorkspace) {
+        if let localGuestViewer {
+            workspace.configureLocalGuestViewer(localGuestViewer)
+        } else {
+            workspace.configureViewer(viewerAccount)
         }
     }
 }
@@ -130,9 +151,11 @@ extension PlanningWorkspace {
         eventLocation: EventLocation?,
         imageData: Data?,
         budgetCap: Decimal? = nil,
-        owner: UserAccount? = nil
+        owner: UserAccount? = nil,
+        localGuest: LocalGuestProfile? = nil
     ) -> PlanningWorkspace {
-        let ownerName = owner?.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ownerName = (localGuest?.displayName ?? owner?.displayName)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         let displayName = ownerName.flatMap { $0.isEmpty ? nil : $0 } ?? "You"
         let initials = displayName
             .split(separator: " ")
@@ -142,7 +165,7 @@ extension PlanningWorkspace {
             .joined()
             .uppercased()
         let host = WorkspaceMember(
-            userID: owner?.id,
+            userID: localGuest?.storageID ?? owner?.id,
             name: displayName,
             participantRole: .host,
             initials: initials.isEmpty ? "Y" : initials,
@@ -160,7 +183,7 @@ extension PlanningWorkspace {
             return max(candidate, normalizedStart)
         }
 
-        return PlanningWorkspace(
+        let workspace = PlanningWorkspace(
             title: title,
             mainEventStartsAt: normalizedStart,
             mainEventEndsAt: normalizedEnd,
@@ -178,6 +201,34 @@ extension PlanningWorkspace {
             timeline: [],
             workspaceBudgetCap: budgetCap,
             registry: []
+        )
+        if let localGuest {
+            workspace.configureLocalGuestViewer(localGuest)
+        }
+        return workspace
+    }
+
+    static func newLocalGuestWorkspace(
+        title: String,
+        startsAt: Date,
+        endsAt: Date? = nil,
+        isAllDay: Bool = false,
+        timeZoneIdentifier: String = TimeZone.autoupdatingCurrent.identifier,
+        eventLocation: EventLocation?,
+        imageData: Data?,
+        budgetCap: Decimal? = nil,
+        guest: LocalGuestProfile
+    ) -> PlanningWorkspace {
+        newWorkspace(
+            title: title,
+            startsAt: startsAt,
+            endsAt: endsAt,
+            isAllDay: isAllDay,
+            timeZoneIdentifier: timeZoneIdentifier,
+            eventLocation: eventLocation,
+            imageData: imageData,
+            budgetCap: budgetCap,
+            localGuest: guest
         )
     }
 

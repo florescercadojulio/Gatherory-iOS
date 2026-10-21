@@ -54,6 +54,10 @@ struct BlueprintLibraryCollectionPreferenceStore {
         defaults.set(collection.rawValue, forKey: key(ownerID: ownerID))
     }
 
+    func removeAll(accountID: String) throws {
+        defaults.removeObject(forKey: key(ownerID: accountID))
+    }
+
     private func key(ownerID: String) -> String {
         let encodedOwner = Data(ownerID.utf8).base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")

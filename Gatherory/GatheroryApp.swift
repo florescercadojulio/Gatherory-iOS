@@ -13,6 +13,7 @@ import SwiftData
 @main
 @MainActor
 struct GatheroryApp: App {
+    @UIApplicationDelegateAdaptor(GatheroryNotificationAppDelegate.self) private var notificationAppDelegate
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var authentication: AuthenticationSession
@@ -24,6 +25,7 @@ struct GatheroryApp: App {
     @State private var musicCatalog = MusicCatalog()
     @State private var musicPreviewPlayer = MusicPreviewPlayer()
     @State private var imageSafety = ImageSafetyStore()
+    @State private var notifications: NotificationController
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system.rawValue
     @AppStorage(AppColorThemeChoice.storageKey) private var colorTheme = AppColorThemeChoice.gatheroryBlue.rawValue
 
@@ -33,15 +35,18 @@ struct GatheroryApp: App {
         Self.configurePostHog()
 
         let authentication = AuthenticationSession.bootstrap()
+        let notifications = NotificationController(baseURL: AppRuntimeConfiguration.authenticationBaseURL)
         let persistence = WorkspacePersistenceController.bootstrap(
             isStoredInMemoryOnly: AppRuntimeConfiguration.usesEphemeralDataStore
         )
         let library = persistence.restoreLibrary(
-            seedData: AppRuntimeConfiguration.seedsDevelopmentData,
-            ownerUserID: authentication.currentUser?.id
+            seedData: AppRuntimeConfiguration.seedsDevelopmentData && !authentication.deletionCleanup.blocksEntry,
+            ownerUserID: authentication.deletionCleanup.blocksEntry ? nil : authentication.currentUser?.id
         )
 
         _authentication = State(initialValue: authentication)
+        _notifications = State(initialValue: notifications)
+        GatheroryNotificationAppDelegate.controller = notifications
         self.persistence = persistence
         _workspaceLibrary = State(initialValue: library)
         _cloudSync = State(
@@ -87,7 +92,7 @@ struct GatheroryApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if persistence.lastError == nil {
+                if persistence.lastError == nil || authentication.deletionCleanup.blocksEntry {
                     GatheroryLaunchContainer()
                 } else {
                     LocalDataStoreFailureView()
@@ -104,6 +109,7 @@ struct GatheroryApp: App {
             .environment(sharedBlueprintLinks)
             .environment(guestInvitations)
             .environment(imageSafety)
+            .environment(notifications)
             .appUserAppearance(selectedAppearance)
             .environment(
                 \.appContentColorScheme,

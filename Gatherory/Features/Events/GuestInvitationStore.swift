@@ -8,6 +8,21 @@ import UIKit
     func leaveInvitation(eventID: UUID) async throws -> UUID
 }
 
+@MainActor protocol LocalGuestInvitationTransport: GuestInvitationTransport {
+    func join(token: UUID) async throws -> InvitationAcceptance
+    func respond(eventID: UUID, response: EventResponse) async throws -> AttendanceAcknowledgement
+    func claim() async throws -> GuestClaimAcknowledgement
+}
+
+struct AttendanceAcknowledgement: Decodable, Equatable {
+    let eventId: UUID
+    let attendance: String
+}
+
+struct GuestClaimAcknowledgement: Decodable, Equatable {
+    let claimedEventIds: [UUID]
+}
+
 extension InvitationAPIClient: GuestInvitationTransport {
     func invitations() async throws -> GuestInvitationFeed { try await request("api/events/invitations") }
     func leaveInvitation(eventID: UUID) async throws -> UUID {
@@ -17,7 +32,8 @@ extension InvitationAPIClient: GuestInvitationTransport {
     }
 }
 
-/// An account-scoped, read-only cache. Never inserted into WorkspaceLibrary or its outbox.
+/// An account- or device-guest-scoped invitation cache. Event projections never
+/// enter the planner workspace library or its sync outbox.
 @MainActor @Observable
 final class GuestInvitationStore {
     private(set) var events: [GuestEventInvitation] = []
@@ -27,18 +43,30 @@ final class GuestInvitationStore {
     private(set) var isResponding = false
     var selectedEventID: UUID?
     @ObservationIgnored private var account: UserAccount?
+    @ObservationIgnored private var localGuest: LocalGuestProfile?
+    @ObservationIgnored private var localClient: (any LocalGuestInvitationTransport)?
     @ObservationIgnored private let baseURL: URL?
     @ObservationIgnored private let cacheDirectory: URL
     @ObservationIgnored private let injectedClient: (any GuestInvitationTransport)?
+    @ObservationIgnored private let localClientFactory: @MainActor (LocalGuestProfile) -> any LocalGuestInvitationTransport
     @ObservationIgnored private var artwork: [UUID: Data] = [:]
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var mediaTask: Task<Void, Never>?
     @ObservationIgnored private var feedRevision = UUID()
+    @ObservationIgnored private var identityGeneration = UUID()
 
-    init(baseURL: URL?, cacheDirectory: URL? = nil, client: (any GuestInvitationTransport)? = nil) {
+    init(
+        baseURL: URL?,
+        cacheDirectory: URL? = nil,
+        client: (any GuestInvitationTransport)? = nil,
+        localClientFactory: (@MainActor (LocalGuestProfile) -> any LocalGuestInvitationTransport)? = nil
+    ) {
         self.baseURL = baseURL
         injectedClient = client
         self.cacheDirectory = cacheDirectory ?? URL.applicationSupportDirectory.appending(path: "GuestInvitations")
+        self.localClientFactory = localClientFactory ?? { profile in
+            DeviceGuestInvitationClient(baseURL: baseURL, profile: profile)
+        }
     }
 
     var selectedPresentation: PlanningWorkspace? { selectedEventID.flatMap { presentations[$0] } }
@@ -48,38 +76,73 @@ final class GuestInvitationStore {
     }
 
     func purgeCache(accountID: String) throws {
-        let source = "\(baseURL?.absoluteString ?? "local")|\(accountID)"
-        let key = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
-        let file = cacheDirectory.appending(path: "\(key).json")
-        if FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
+        try purgeCache(identity: accountID)
         if account?.id == accountID {
-            refreshTask?.cancel()
-            mediaTask?.cancel()
-            account = nil
-            events = []
-            presentations = [:]
-            artwork = [:]
-            selectedEventID = nil
-            isRefreshing = false
-            isResponding = false
-            errorMessage = nil
+            clearActiveState()
         }
     }
 
+    func deactivateDeletedAccount(_ accountID: String) async {
+        guard account?.id == accountID else { return }
+        await activate(account: nil)
+    }
+
+    func purgeCache(profileID: UUID) throws {
+        try purgeCache(identity: "device-guest:\(profileID.uuidString.lowercased())")
+        if localGuest?.id == profileID { clearActiveState() }
+    }
+
+    private func purgeCache(identity: String) throws {
+        let source = "\(baseURL?.absoluteString ?? "local")|\(identity)"
+        let key = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
+        let file = cacheDirectory.appending(path: "\(key).json")
+        if FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
+    }
+
     func activate(account newAccount: UserAccount?) async {
-        guard account?.id != newAccount?.id else { return }
+        guard account?.id != newAccount?.id || localGuest != nil else { return }
         refreshTask?.cancel()
         mediaTask?.cancel()
+        identityGeneration = UUID()
         feedRevision = UUID()
         refreshTask = nil
         account = newAccount
+        localGuest = nil
+        localClient = nil
         events = []
         presentations = [:]
         artwork = [:]
         selectedEventID = nil
         errorMessage = nil
         isRefreshing = false
+        isResponding = false
         guard newAccount != nil else { return }
+        if let cacheURL, let data = try? Data(contentsOf: cacheURL), let cache = try? JSONDecoder().decode(Cache.self, from: data) {
+            events = cache.events
+            artwork = cache.artwork
+            rebuildPresentations()
+        }
+        await refresh()
+    }
+
+    func activate(localGuest newGuest: LocalGuestProfile?) async {
+        guard localGuest?.id != newGuest?.id || account != nil else { return }
+        refreshTask?.cancel()
+        mediaTask?.cancel()
+        identityGeneration = UUID()
+        feedRevision = UUID()
+        refreshTask = nil
+        account = nil
+        localGuest = newGuest
+        localClient = newGuest.map(localClientFactory)
+        events = []
+        presentations = [:]
+        artwork = [:]
+        selectedEventID = nil
+        errorMessage = nil
+        isRefreshing = false
+        isResponding = false
+        guard newGuest != nil else { return }
         if let cacheURL, let data = try? Data(contentsOf: cacheURL), let cache = try? JSONDecoder().decode(Cache.self, from: data) {
             events = cache.events
             artwork = cache.artwork
@@ -93,26 +156,28 @@ final class GuestInvitationStore {
             await refreshTask.value
             if !force { return }
         }
-        guard account != nil, client != nil else { return }
+        guard activeIdentity != nil, activeTransport != nil else { return }
         let task = Task { await loadFeed() }
         refreshTask = task
         await task.value
     }
 
     private func loadFeed() async {
-        guard let account, let client else { return }
-        let userID = account.id
+        guard let identity = activeIdentity, let transport = activeTransport else { return }
+        let requestGeneration = identityGeneration
         let requestRevision = feedRevision
         isRefreshing = true
         defer {
-            if self.account?.id == userID {
+            if isCurrent(identity: identity, generation: requestGeneration) {
                 isRefreshing = false
                 refreshTask = nil
             }
         }
         do {
-            let feed = try await client.invitations()
-            guard self.account?.id == userID, feedRevision == requestRevision, !Task.isCancelled else { return }
+            let feed = try await transport.invitations()
+            guard isCurrent(identity: identity, generation: requestGeneration),
+                  feedRevision == requestRevision,
+                  !Task.isCancelled else { return }
             events = feed.events
             let revision = UUID()
             feedRevision = revision
@@ -122,15 +187,17 @@ final class GuestInvitationStore {
             try saveCache()
             // Save text first; image failures must not hide the invitation.
             mediaTask?.cancel()
-            mediaTask = Task { await downloadArtwork(events: feed.events, userID: userID, revision: revision) }
+            mediaTask = Task { await downloadArtwork(events: feed.events, identity: identity, revision: revision) }
             errorMessage = nil
         } catch {
-            guard self.account?.id == userID, !Task.isCancelled else { return }
+            guard isCurrent(identity: identity, generation: requestGeneration),
+                  feedRevision == requestRevision,
+                  !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
     }
 
-    private func downloadArtwork(events: [GuestEventInvitation], userID: String, revision: UUID) async {
+    private func downloadArtwork(events: [GuestEventInvitation], identity: String, revision: UUID) async {
             for event in events {
                 let images = [(event.coverId, event.coverURL)] + event.ideas.map { ($0.imageId, $0.imageURL) } + event.moments.map { (Optional($0.id), $0.imageURL) }
                 for (id, url) in images {
@@ -143,25 +210,36 @@ final class GuestInvitationStore {
                         let prepared = await Task.detached(priority: .utility) {
                             InvitationImageDecoder.thumbnail(data: data)?.pngData()
                         }.value
-                        guard self.account?.id == userID, feedRevision == revision, !Task.isCancelled else { return }
+                        guard activeIdentity == identity, feedRevision == revision, !Task.isCancelled else { return }
                         if let prepared { artwork[id] = prepared }
                     }
                 }
             }
-            guard self.account?.id == userID, feedRevision == revision, !Task.isCancelled else { return }
+            guard activeIdentity == identity, feedRevision == revision, !Task.isCancelled else { return }
             rebuildPresentations()
             try? saveCache()
     }
 
     func respond(eventID: UUID, response: EventResponse) async {
-        guard !isResponding, let baseURL, let userID = account?.id else { return }
+        guard !isResponding, let identity = activeIdentity else { return }
+        let requestGeneration = identityGeneration
         isResponding = true
-        defer { isResponding = false }
-        let value = switch response { case .going: "going"; case .notSure: "not_sure"; case .notGoing: "not_going" }
+        defer {
+            if isCurrent(identity: identity, generation: requestGeneration) {
+                isResponding = false
+            }
+        }
         do {
-            let acknowledgement: AttendanceAcknowledgement = try await InvitationAPIClient(baseURL: baseURL).request("api/events/invitations",
-                method: "POST", body: ["eventId": eventID.uuidString, "attendance": value])
-            guard account?.id == userID else { return }
+            let acknowledgement: AttendanceAcknowledgement
+            if let localClient {
+                acknowledgement = try await localClient.respond(eventID: eventID, response: response)
+            } else if let baseURL, let account {
+                let value = Self.wireAttendance(response)
+                acknowledgement = try await InvitationAPIClient(baseURL: baseURL).request("api/events/invitations",
+                    method: "POST", body: ["eventId": eventID.uuidString, "attendance": value])
+                guard self.account?.id == account.id else { return }
+            } else { return }
+            guard isCurrent(identity: identity, generation: requestGeneration) else { return }
             if let index = events.firstIndex(where: { $0.id == acknowledgement.eventId }) {
                 events[index].attendance = acknowledgement.attendance
                 let viewer = events[index].viewerPersonId
@@ -175,7 +253,7 @@ final class GuestInvitationStore {
             }
             await refresh(force: true)
         } catch {
-            guard account?.id == userID else { return }
+            guard isCurrent(identity: identity, generation: requestGeneration) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -185,12 +263,19 @@ final class GuestInvitationStore {
     }
 
     func leave(eventID: UUID) async -> Bool {
-        guard !isResponding, canLeave(eventID: eventID), let client, let userID = account?.id else { return false }
+        guard !isResponding, canLeave(eventID: eventID), let transport = activeTransport,
+              let identity = activeIdentity else { return false }
+        let requestGeneration = identityGeneration
         isResponding = true
-        defer { if account?.id == userID { isResponding = false } }
+        defer {
+            if isCurrent(identity: identity, generation: requestGeneration) {
+                isResponding = false
+            }
+        }
         do {
-            let acknowledgedEventID = try await client.leaveInvitation(eventID: eventID)
-            guard account?.id == userID, acknowledgedEventID == eventID else { return false }
+            let acknowledgedEventID = try await transport.leaveInvitation(eventID: eventID)
+            guard isCurrent(identity: identity, generation: requestGeneration),
+                  acknowledgedEventID == eventID else { return false }
             feedRevision = UUID()
             mediaTask?.cancel()
             events.removeAll { $0.id == eventID }
@@ -206,21 +291,26 @@ final class GuestInvitationStore {
             errorMessage = nil
             return true
         } catch {
-            guard account?.id == userID else { return false }
+            guard isCurrent(identity: identity, generation: requestGeneration) else { return false }
             errorMessage = AppCopy.Lifecycle.leaveFailed
             return false
         }
     }
 
     private func rebuildPresentations() {
-        guard let account else { return }
-        presentations = Dictionary(uniqueKeysWithValues: events.map { ($0.id, $0.makePresentation(account: account, artwork: artwork)) })
+        if let account {
+            presentations = Dictionary(uniqueKeysWithValues: events.map { ($0.id, $0.makePresentation(account: account, artwork: artwork)) })
+        } else if let localGuest {
+            presentations = Dictionary(uniqueKeysWithValues: events.map { ($0.id, $0.makePresentation(localGuest: localGuest, artwork: artwork)) })
+        } else {
+            presentations = [:]
+        }
         if let selectedEventID, presentations[selectedEventID] == nil { self.selectedEventID = nil }
     }
 
     private var cacheURL: URL? {
-        guard let account else { return nil }
-        let source = "\(baseURL?.absoluteString ?? "local")|\(account.id)"
+        guard let identity = activeIdentity else { return nil }
+        let source = "\(baseURL?.absoluteString ?? "local")|\(identity)"
         let key = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
         return cacheDirectory.appending(path: "\(key).json")
     }
@@ -233,7 +323,39 @@ final class GuestInvitationStore {
     }
 
     private struct Cache: Codable { let events: [GuestEventInvitation]; let artwork: [UUID: Data] }
-    private struct AttendanceAcknowledgement: Decodable { let eventId: UUID; let attendance: String }
+
+    private var activeIdentity: String? { account?.id ?? localGuest?.storageID }
+
+    private func isCurrent(identity: String, generation: UUID) -> Bool {
+        activeIdentity == identity && identityGeneration == generation
+    }
+
+    private var activeTransport: (any GuestInvitationTransport)? {
+        if let localClient { return localClient }
+        return account == nil ? nil : client
+    }
+
+    private static func wireAttendance(_ response: EventResponse) -> String {
+        switch response { case .going: "going"; case .notSure: "not_sure"; case .notGoing: "not_going" }
+    }
+
+    private func clearActiveState() {
+        refreshTask?.cancel()
+        mediaTask?.cancel()
+        identityGeneration = UUID()
+        feedRevision = UUID()
+        refreshTask = nil
+        account = nil
+        localGuest = nil
+        localClient = nil
+        events = []
+        presentations = [:]
+        artwork = [:]
+        selectedEventID = nil
+        isRefreshing = false
+        isResponding = false
+        errorMessage = nil
+    }
 }
 
 @MainActor @Observable

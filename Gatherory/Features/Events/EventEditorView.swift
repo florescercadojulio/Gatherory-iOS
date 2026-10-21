@@ -477,7 +477,7 @@ struct EventEditorView: View {
                     planningRow(
                         symbol: "chart.pie.fill",
                         title: "Budget",
-                        value: "Set Workspace Budget First",
+                        value: String(localized: "Set Workspace Budget First"),
                         isAvailable: false
                     )
                 }
@@ -643,7 +643,7 @@ struct EventEditorView: View {
         if isMainEvent {
             return parsedMainBudget?.formatted(.currency(code: currencyCode)) ?? "Not Set"
         }
-        guard workspace.workspaceBudgetCap != nil else { return "Workspace Budget Not Set" }
+        guard workspace.workspaceBudgetCap != nil else { return String(localized: "Workspace Budget Not Set") }
         guard usesBudget, let parsedMainBudget else { return "Not Set" }
         if originalItem == nil { return parsedMainBudget.formatted(.currency(code: currencyCode)) }
         return currentChildBudget.formatted(.currency(code: currencyCode))

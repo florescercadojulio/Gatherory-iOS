@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 110;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -11,6 +11,7 @@
 		FA0F24163077118000762213 /* GlurBackdrop in Frameworks */ = {isa = PBXBuildFile; productRef = FA0F24153077118000762213 /* GlurBackdrop */; };
 		FA0F24263077118000762213 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = FA0F24253077118000762213 /* GoogleSignIn */; };
 		FA0F24273077118000762213 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = FA0F24283077118000762213 /* PostHog */; };
+		FA0F24A13077118000762213 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = FA0F24A03077118000762213 /* FirebaseMessaging */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,22 +73,29 @@
 /* Begin PBXFrameworksBuildPhase section */
 		FA0F23E53077114C00762213 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 				FA0F24273077118000762213 /* PostHog in Frameworks */,
+				FA0F24A13077118000762213 /* FirebaseMessaging in Frameworks */,
 				FA0F24263077118000762213 /* GoogleSignIn in Frameworks */,
 				FA0F24163077118000762213 /* GlurBackdrop in Frameworks */,
 				FA0F24143077118000762213 /* Glur in Frameworks */,
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 		FA0F23F43077114D00762213 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 		FA0F23FE3077114D00762213 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
@@ -135,6 +143,8 @@
 			);
 			buildRules = (
 			);
+			dependencies = (
+			);
 			fileSystemSynchronizedGroups = (
 				FA0F23EA3077114C00762213 /* Gatherory */,
 			);
@@ -144,6 +154,7 @@
 				FA0F24153077118000762213 /* GlurBackdrop */,
 				FA0F24253077118000762213 /* GoogleSignIn */,
 				FA0F24283077118000762213 /* PostHog */,
+				FA0F24A03077118000762213 /* FirebaseMessaging */,
 			);
 			productName = Gatherory;
 			productReference = FA0F23E83077114C00762213 /* Gatherory.app */;
@@ -166,6 +177,8 @@
 				FA0F23FA3077114D00762213 /* GatheroryTests */,
 			);
 			name = GatheroryTests;
+			packageProductDependencies = (
+			);
 			productName = GatheroryTests;
 			productReference = FA0F23F73077114D00762213 /* GatheroryTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -187,6 +200,8 @@
 				FA0F24043077114D00762213 /* GatheroryUITests */,
 			);
 			name = GatheroryUITests;
+			packageProductDependencies = (
+			);
 			productName = GatheroryUITests;
 			productReference = FA0F24013077114D00762213 /* GatheroryUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -236,6 +251,7 @@
 				FA0F24123077118000762213 /* XCRemoteSwiftPackageReference "Glur" */,
 				FA0F24243077118000762213 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 				FA0F24293077118000762213 /* XCRemoteSwiftPackageReference "posthog-ios" */,
+				FA0F249F3077118000762213 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FA0F23E93077114C00762213 /* Products */;
@@ -252,36 +268,48 @@
 /* Begin PBXResourcesBuildPhase section */
 		FA0F23E63077114C00762213 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 		FA0F23F53077114D00762213 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 		FA0F23FF3077114D00762213 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		FA0F23E43077114C00762213 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 		FA0F23F33077114D00762213 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 		FA0F23FD3077114D00762213 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
@@ -299,7 +327,7 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		FA0F24073077114D00762213 /* Debug configuration for PBXProject "Gatherory" */ = {
+		FA0F24073077114D00762213 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -363,7 +391,7 @@
 			};
 			name = Debug;
 		};
-		FA0F24083077114D00762213 /* Release configuration for PBXProject "Gatherory" */ = {
+		FA0F24083077114D00762213 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -420,7 +448,7 @@
 			};
 			name = Release;
 		};
-		FA0F240A3077114D00762213 /* Debug configuration for PBXNativeTarget "Gatherory" */ = {
+		FA0F240A3077114D00762213 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FA0F24203077118000762213 /* Debug.xcconfig */;
 			buildSettings = {
@@ -463,7 +491,7 @@
 			};
 			name = Debug;
 		};
-		FA0F240B3077114D00762213 /* Release configuration for PBXNativeTarget "Gatherory" */ = {
+		FA0F240B3077114D00762213 /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FA0F24213077118000762213 /* Release.xcconfig */;
 			buildSettings = {
@@ -506,7 +534,7 @@
 			};
 			name = Release;
 		};
-		FA0F240D3077114D00762213 /* Debug configuration for PBXNativeTarget "GatheroryTests" */ = {
+		FA0F240D3077114D00762213 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -528,7 +556,7 @@
 			};
 			name = Debug;
 		};
-		FA0F240E3077114D00762213 /* Release configuration for PBXNativeTarget "GatheroryTests" */ = {
+		FA0F240E3077114D00762213 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -550,7 +578,7 @@
 			};
 			name = Release;
 		};
-		FA0F24103077114D00762213 /* Debug configuration for PBXNativeTarget "GatheroryUITests" */ = {
+		FA0F24103077114D00762213 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -570,7 +598,7 @@
 			};
 			name = Debug;
 		};
-		FA0F24113077114D00762213 /* Release configuration for PBXNativeTarget "GatheroryUITests" */ = {
+		FA0F24113077114D00762213 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -596,33 +624,37 @@
 		FA0F23E33077114C00762213 /* Build configuration list for PBXProject "Gatherory" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				FA0F24073077114D00762213 /* Debug configuration for PBXProject "Gatherory" */,
-				FA0F24083077114D00762213 /* Release configuration for PBXProject "Gatherory" */,
+				FA0F24073077114D00762213 /* Debug */,
+				FA0F24083077114D00762213 /* Release */,
 			);
+			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		FA0F24093077114D00762213 /* Build configuration list for PBXNativeTarget "Gatherory" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				FA0F240A3077114D00762213 /* Debug configuration for PBXNativeTarget "Gatherory" */,
-				FA0F240B3077114D00762213 /* Release configuration for PBXNativeTarget "Gatherory" */,
+				FA0F240A3077114D00762213 /* Debug */,
+				FA0F240B3077114D00762213 /* Release */,
 			);
+			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		FA0F240C3077114D00762213 /* Build configuration list for PBXNativeTarget "GatheroryTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				FA0F240D3077114D00762213 /* Debug configuration for PBXNativeTarget "GatheroryTests" */,
-				FA0F240E3077114D00762213 /* Release configuration for PBXNativeTarget "GatheroryTests" */,
+				FA0F240D3077114D00762213 /* Debug */,
+				FA0F240E3077114D00762213 /* Release */,
 			);
+			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		FA0F240F3077114D00762213 /* Build configuration list for PBXNativeTarget "GatheroryUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				FA0F24103077114D00762213 /* Debug configuration for PBXNativeTarget "GatheroryUITests" */,
-				FA0F24113077114D00762213 /* Release configuration for PBXNativeTarget "GatheroryUITests" */,
+				FA0F24103077114D00762213 /* Debug */,
+				FA0F24113077114D00762213 /* Release */,
 			);
+			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
@@ -652,6 +684,14 @@
 				minimumVersion = 3.59.3;
 			};
 		};
+		FA0F249F3077118000762213 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = exactVersion;
+				version = 12.19.2;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -675,8 +715,12 @@
 			package = FA0F24293077118000762213 /* XCRemoteSwiftPackageReference "posthog-ios" */;
 			productName = PostHog;
 		};
+		FA0F24A03077118000762213 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FA0F249F3077118000762213 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = FA0F23E03077114C00762213 /* Project object */;
-	validationLevel = 1;
 }

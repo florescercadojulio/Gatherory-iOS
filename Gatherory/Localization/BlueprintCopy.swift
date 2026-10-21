@@ -20,7 +20,7 @@ enum BlueprintCopy {
     static var reviewEvents: String { String(localized: "blueprint.reviewEvents", defaultValue: "Events") }
     static var reviewGuidance: String { String(localized: "blueprint.reviewGuidance", defaultValue: "Tips & Instructions") }
     static var reviewSharingSummary: String { String(localized: "blueprint.reviewSharingSummary", defaultValue: "Share a reusable copy of this plan by link. It won’t appear in Search.") }
-    static var reviewPrivateSummary: String { String(localized: "blueprint.reviewPrivateSummary", defaultValue: "Save a reusable copy of this plan. Your workspace stays unchanged.") }
+    static var reviewPrivateSummary: String { String(localized: "blueprint.reviewPrivateSummary", defaultValue: "Save a reusable copy of this plan. Your event stays unchanged.") }
     static var reviewPersonalTextWarning: String { String(localized: "blueprint.reviewPersonalTextWarning", defaultValue: "Check the included text for personal details. Guest lists, chats, and photos aren’t included.") }
     static var viewIncludedContent: String { String(localized: "blueprint.viewIncludedContent", defaultValue: "View Included Content") }
     static var editIncludedContent: String { String(localized: "blueprint.editIncludedContent", defaultValue: "Edit Content") }
@@ -29,12 +29,12 @@ enum BlueprintCopy {
     static var reviewDayAfterFormat: String { String(localized: "blueprint.reviewDayAfterFormat", defaultValue: "The next day · %@") }
     static var reviewDaysBeforeFormat: String { String(localized: "blueprint.reviewDaysBeforeFormat", defaultValue: "%lld days before · %@") }
     static var reviewDaysAfterFormat: String { String(localized: "blueprint.reviewDaysAfterFormat", defaultValue: "%lld days after · %@") }
-    static var deletePersonalBlueprintMessage: String { String(localized: "blueprint.deletePersonalMessage", defaultValue: "This removes your blueprint from search and revokes its sharing links. Other people's completed copies and existing workspaces stay unchanged.") }
+    static var deletePersonalBlueprintMessage: String { String(localized: "blueprint.deletePersonalMessage", defaultValue: "This removes your blueprint from search and revokes its sharing links. Other people's completed copies and existing events stay unchanged.") }
     static var saveBlueprint: String { String(localized: "blueprint.saveToLibrary", defaultValue: "Save Blueprint") }
-    static var blueprintSavedExplanation: String { String(localized: "blueprint.savedToLibrary", defaultValue: "Saved in Blueprints. Your workspace remains independent.") }
+    static var blueprintSavedExplanation: String { String(localized: "blueprint.savedToLibrary", defaultValue: "Saved in Blueprints. Your event remains independent.") }
     static var previewInstall: String { String(localized: "blueprint.preview.install", defaultValue: "Use Blueprint") }
     static var confirmInstallTitle: String { String(localized: "blueprint.preview.confirmInstall", defaultValue: "Use This Blueprint?") }
-    static var confirmInstallMessage: String { String(localized: "blueprint.preview.confirmInstallMessage", defaultValue: "Continue with these choices? You’ll choose dates before creating your workspace.") }
+    static var confirmInstallMessage: String { String(localized: "blueprint.preview.confirmInstallMessage", defaultValue: "Continue with these choices? You’ll choose dates before creating your event.") }
     static var previewNoIdeas: String { String(localized: "blueprint.preview.noIdeas", defaultValue: "There are no ideas to decide on in this preview.") }
     static var previewChoicesExplanation: String { String(localized: "blueprint.preview.choicesExplanation", defaultValue: "Choose the ideas you like. Save Draft to continue later.") }
     static var saveDraft: String { String(localized: "blueprint.preview.saveDraft", defaultValue: "Save Draft") }
@@ -43,7 +43,7 @@ enum BlueprintCopy {
     static var previewSaveBeforeCustomize: String { String(localized: "blueprint.preview.saveBeforeCustomize", defaultValue: "Save your choices before customizing?") }
     static var saveAndCustomize: String { String(localized: "blueprint.preview.saveAndCustomize", defaultValue: "Save & Customize") }
     static var discardAndCustomize: String { String(localized: "blueprint.preview.discardAndCustomize", defaultValue: "Discard & Customize") }
-    static var previewSaveFailed: String { String(localized: "blueprint.preview.saveFailed", defaultValue: "Couldn’t save your changes. Finish any pending workspace, or reopen your saved blueprint and try again.") }
+    static var previewSaveFailed: String { String(localized: "blueprint.preview.saveFailed", defaultValue: "Couldn’t save your changes. Finish any pending event, or reopen your saved blueprint and try again.") }
     static var returnToTemplates: String { String(localized: "blueprint.preview.return", defaultValue: "Returns to blueprints") }
     static var libraryTitle: String { String(localized: "blueprint.library.title", defaultValue: "Blueprints") }
     static var libraryDrafts: String { String(localized: "blueprint.library.drafts", defaultValue: "Drafts") }
@@ -52,8 +52,8 @@ enum BlueprintCopy {
     static var libraryUsedEmpty: String { String(localized: "blueprint.library.usedEmpty", defaultValue: "Save a blueprint or choose one in Explore to get started.") }
     static var libraryLocalReadFailed: String { String(localized: "blueprint.library.localReadFailed", defaultValue: "Some saved blueprints couldn’t be opened. Try again.") }
     static var libraryRefreshFailed: String { String(localized: "blueprint.library.refreshFailed", defaultValue: "Couldn’t refresh your blueprints. Your saved copies are still on this device.") }
-    static var libraryWorkspaceUnavailable: String { String(localized: "blueprint.library.workspaceUnavailable", defaultValue: "Workspace isn’t available on this device.") }
-    static var libraryOpenWorkspace: String { String(localized: "blueprint.library.openWorkspace", defaultValue: "Open Workspace") }
+    static var libraryWorkspaceUnavailable: String { String(localized: "blueprint.library.workspaceUnavailable", defaultValue: "Event isn’t available on this device.") }
+    static var libraryOpenWorkspace: String { String(localized: "blueprint.library.openWorkspace", defaultValue: "Open Event") }
     static func libraryUsedFor(_ name: String) -> String {
         String.localizedStringWithFormat(String(localized: "blueprint.library.usedFor", defaultValue: "Used for %@"), name)
     }
@@ -69,10 +69,10 @@ enum BlueprintCopy {
     static func previewPositionLabel(_ position: Int, total: Int) -> String {
         String.localizedStringWithFormat(String(localized: "blueprint.previewPositionLabel", defaultValue: "Idea %lld of %lld"), Int64(position), Int64(total))
     }
-    static var savedPreviewExplanation: String { String(localized: "blueprint.savedPreviewExplanation", defaultValue: "Showing your saved copy. Connect to create a workspace.") }
+    static var savedPreviewExplanation: String { String(localized: "blueprint.savedPreviewExplanation", defaultValue: "Showing your saved copy. Connect to create an event.") }
     static var previewTitle: String { String(localized: "blueprint.previewTitle", defaultValue: "Blueprint Preview") }
-    static var previewExplanation: String { String(localized: "blueprint.previewExplanation", defaultValue: "Choose what you want to use. Your workspace will be a separate copy.") }
-    static var previewDatesExplanation: String { String(localized: "blueprint.previewDatesExplanation", defaultValue: "Choose dates when you create your workspace.") }
+    static var previewExplanation: String { String(localized: "blueprint.previewExplanation", defaultValue: "Choose what you want to use. Your event will be a separate copy.") }
+    static var previewDatesExplanation: String { String(localized: "blueprint.previewDatesExplanation", defaultValue: "Choose dates when you create your event.") }
     static var sharedLinkUnavailable: String { String(localized: "blueprint.sharedLinkUnavailable", defaultValue: "This link is no longer available. Ask the sender for a new one.") }
     static var saveAsTemplate: String { String(localized: "blueprint.saveAsTemplate", defaultValue: "Save as Blueprint") }
     static var shareTemplate: String { String(localized: "blueprint.shareTemplate", defaultValue: "Share Blueprint") }
@@ -199,7 +199,7 @@ enum BlueprintCopy {
     static var ideas: String { String(localized: "blueprint.ideas", defaultValue: "Starter ideas") }
     static var review: String { String(localized: "blueprint.review", defaultValue: "Your Plan") }
     static var reviewing: String { String(localized: "blueprint.reviewing", defaultValue: "Getting blueprint ready…") }
-    static var install: String { String(localized: "blueprint.install", defaultValue: "Create Workspace") }
+    static var install: String { String(localized: "blueprint.install", defaultValue: "Create Event") }
     static var installing: String { String(localized: "blueprint.installing", defaultValue: "Creating…") }
     static var omitted: String { String(localized: "blueprint.omitted", defaultValue: "Not included") }
     static var childDateRequired: String {
@@ -226,19 +226,19 @@ enum BlueprintCopy {
         String(localized: "blueprint.clientUpgradeRequired", defaultValue: "Update Gatherory to continue. Your saved changes will be kept.")
     }
     static var workspaceNotInBootstrap: String {
-        String(localized: "blueprint.workspaceNotInBootstrap", defaultValue: "Your workspace hasn’t finished loading. Try again.")
+        String(localized: "blueprint.workspaceNotInBootstrap", defaultValue: "Your event hasn’t finished loading. Try again.")
     }
     static var signInRequired: String { String(localized: "blueprint.signInRequired", defaultValue: "Sign in to use blueprints.") }
-    static var retryInstall: String { String(localized: "blueprint.retryInstall", defaultValue: "Continue Creating Workspace") }
+    static var retryInstall: String { String(localized: "blueprint.retryInstall", defaultValue: "Continue Creating Event") }
     static var retrySameRequest: String {
         String(localized: "blueprint.retrySameRequest", defaultValue: "Try Again")
     }
-    static var pendingInstall: String { String(localized: "blueprint.pendingInstall", defaultValue: "Finish Creating Your Workspace") }
+    static var pendingInstall: String { String(localized: "blueprint.pendingInstall", defaultValue: "Finish Creating Your Event") }
     static var finishPreviousInstall: String {
-        String(localized: "blueprint.finishPreviousInstall", defaultValue: "Finish this workspace before starting another.")
+        String(localized: "blueprint.finishPreviousInstall", defaultValue: "Finish this event before starting another.")
     }
     static var nothingCreatedYet: String {
-        String(localized: "blueprint.nothingCreatedYet", defaultValue: "Your workspace is created only when you choose Create Workspace.")
+        String(localized: "blueprint.nothingCreatedYet", defaultValue: "Your event is created only when you choose Create Event.")
     }
     static var omissionReason: String { String(localized: "blueprint.omissionReason", defaultValue: "Reason") }
 }

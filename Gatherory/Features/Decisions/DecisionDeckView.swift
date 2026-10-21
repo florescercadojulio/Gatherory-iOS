@@ -208,30 +208,36 @@ struct DecisionDeckView: View {
                 decisionResponseFilterMenu
             }
 
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                if workspace.canUndoDecision {
-                    Button("Undo last decision", systemImage: "arrow.uturn.backward") {
-                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.24)) {
-                            if let ideaID = workspace.undoLastDecision() {
-                                let choice = motionHistory.undo(for: ideaID) ?? .love
-                                let restored = workspace.ideas.first { $0.id == ideaID }
-                                if !reduceMotion, let restored {
-                                    flight.returnCard(restored, choice: choice) { $0.id == ideaID }
-                                } else {
-                                    flight.reset()
+            ToolbarItem(placement: .topBarTrailing) {
+                ToolbarGlassActionGroup {
+                    if workspace.canUndoDecision {
+                        Button("Undo last decision", systemImage: "arrow.uturn.backward") {
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.24)) {
+                                if let ideaID = workspace.undoLastDecision() {
+                                    let choice = motionHistory.undo(for: ideaID) ?? .love
+                                    let restored = workspace.ideas.first { $0.id == ideaID }
+                                    if !reduceMotion, let restored {
+                                        flight.returnCard(restored, choice: choice) { $0.id == ideaID }
+                                    } else {
+                                        flight.reset()
+                                    }
+                                    let filter = DecisionQueueFilter(restoring: restored.flatMap(workspace.response(on:)))
+                                    if session.filter != filter { session.selectFilter(filter) }
+                                    session.undoDecision(on: ideaID)
                                 }
-                                let filter = DecisionQueueFilter(restoring: restored.flatMap(workspace.response(on:)))
-                                if session.filter != filter { session.selectFilter(filter) }
-                                session.undoDecision(on: ideaID)
+                                drag = .init()
+                                decisionScope = .queue
                             }
-                            drag = .init()
-                            decisionScope = .queue
                         }
+                        .labelStyle(.iconOnly)
+                        .frame(width: 44, height: 44)
                     }
-                    .labelStyle(.iconOnly)
+
+                    AccountToolbarButton(avatarSize: 28)
+                        .frame(width: 44, height: 44)
                 }
-                AccountToolbarButton()
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .navigationDestination(item: $selectedIdeaID) { ideaID in
             IdeaDetailView(

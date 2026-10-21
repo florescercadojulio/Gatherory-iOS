@@ -223,7 +223,7 @@ enum AppCopy {
             static var artworkAccessibilityLabel: String {
                 localized(
                     "primer.onboarding.artwork.accessibilityLabel",
-                    default: "Examples of event workspaces in Gatherory"
+                    default: "Examples of events in Gatherory"
                 )
             }
         }

@@ -11,6 +11,23 @@ struct InvitationPreview: Decodable {
     let requiresApproval: Bool?
     let planningPermission: String?
 
+    enum SignInPurpose: Equatable {
+        case join, helpPlan, viewPlans
+    }
+
+    var signInPurpose: SignInPurpose {
+        guard role == "collaborator" else { return .join }
+        switch planningPermission {
+        case "view_only": return .viewPlans
+        case "contribute", "manage": return .helpPlan
+        default: return .join
+        }
+    }
+
+    /// Public previews disclose collaborator details without authentication too.
+    /// Only an explicit guest invitation permits attending without an account.
+    var permitsDeviceGuestAttendance: Bool { role == "guest" && !requiresSignIn }
+
     func shouldOpenExistingEvent(isAuthenticated: Bool) -> Bool {
         // Only a fresh, account-specific server preview can establish access.
         // A role alone also appears on invitations that still require consent.
@@ -112,8 +129,21 @@ struct GuestEventInvitation: Codable, Identifiable {
     let guides: [ExperienceGuide]?
 
     func makePresentation(account: UserAccount, artwork: [UUID: Data]) -> PlanningWorkspace {
+        makePresentation(viewerID: account.id, authenticatedAccount: account, localGuestProfile: nil, artwork: artwork)
+    }
+
+    func makePresentation(localGuest profile: LocalGuestProfile, artwork: [UUID: Data]) -> PlanningWorkspace {
+        makePresentation(viewerID: profile.storageID, authenticatedAccount: nil, localGuestProfile: profile, artwork: artwork)
+    }
+
+    private func makePresentation(
+        viewerID: String,
+        authenticatedAccount: UserAccount?,
+        localGuestProfile: LocalGuestProfile?,
+        artwork: [UUID: Data]
+    ) -> PlanningWorkspace {
         let members = people.map { person in
-            WorkspaceMember(id: person.id, userID: person.userId ?? (person.id == viewerPersonId ? account.id : nil),
+            WorkspaceMember(id: person.id, userID: person.userId ?? (person.id == viewerPersonId ? viewerID : nil),
                 name: person.name, participantRole: WorkspaceRole(rawValue: person.role) ?? .guest,
                 initials: person.name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased(),
                 attendance: Self.attendance(person.attendance), profileImageURL: person.imageURL,
@@ -145,7 +175,11 @@ struct GuestEventInvitation: Codable, Identifiable {
         workspace.mainEventMediaAssetID = coverId
         workspace.invitationDateIsUndecided = startsAt == nil
         if locationName == nil && locationAddress == nil && latitude == nil { workspace.mainEventLocation = nil }
-        workspace.configureViewer(account)
+        if let localGuestProfile {
+            workspace.configureLocalGuestViewer(localGuestProfile)
+        } else if let authenticatedAccount {
+            workspace.configureViewer(authenticatedAccount)
+        }
         return workspace
     }
 
@@ -218,6 +252,7 @@ struct InvitationAPIClient {
         request.httpMethod = method
         request.timeoutInterval = 30
         request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.httpShouldHandleCookies = false
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let requestID = UUID().uuidString.lowercased()
         request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
@@ -225,9 +260,10 @@ struct InvitationAPIClient {
         let endpoint = ["api/events/invitations", "api/invitations", "api/invitations/preview", "api/invitations/accept"].contains(path)
             ? path : "other"
         var fields = ["endpoint": endpoint, "method": method, "request_id": requestID]
-        if let token = try tokenStore.read(), !token.isEmpty {
+        if authenticated {
+            guard let token = try tokenStore.read(), !token.isEmpty else { throw CloudSyncFailure.invalidSession }
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        } else if authenticated { throw CloudSyncFailure.invalidSession }
+        }
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(body)

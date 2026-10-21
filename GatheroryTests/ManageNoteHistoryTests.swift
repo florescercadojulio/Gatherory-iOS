@@ -9,6 +9,7 @@ struct ManageNoteHistoryTests {
         let workspace = makeWorkspace()
         let child = makeChild(parentEventID: workspace.mainEventID)
         workspace.timeline = [child]
+        workspace.addParticipant(workspace.members[0].id, to: .subevent(child.id))
         let earlier = Date(timeIntervalSince1970: 1_700_000_000)
         let later = earlier.addingTimeInterval(60)
         let mainOld = EventNote(eventID: workspace.mainEventID, body: "Main old", sentAt: earlier)

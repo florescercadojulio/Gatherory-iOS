@@ -105,6 +105,29 @@ final class WorkspaceCloudSyncController {
     @ObservationIgnored private var needsAnotherSync = false
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     @ObservationIgnored private var isPreparingSignOut = false
+    @ObservationIgnored private var deletingAccountID: String?
+
+    /// Stop delivery before deletion. Unlike sign-out this does not flush or
+    /// upload queued work, which must never recreate a deleted account's data.
+    func suspendForAccountDeletion(accountID: String) async {
+        guard activeUserID == accountID else { return }
+        deletingAccountID = accountID
+        activationRevision = UUID()
+        scheduledTask?.cancel()
+        scheduledTask = nil
+        syncTask?.cancel()
+        await syncTask?.value
+    }
+
+    func resumeAfterFailedAccountDeletion(accountID: String) {
+        if deletingAccountID == accountID { deletingAccountID = nil }
+    }
+
+    func deactivateDeletedAccount(accountID: String) async {
+        await suspendForAccountDeletion(accountID: accountID)
+        if activeUserID == accountID { await activate(userID: nil, seedData: false) }
+        if activeUserID != accountID { resumeAfterFailedAccountDeletion(accountID: accountID) }
+    }
 
     init(
         persistence: WorkspacePersistenceController,
@@ -165,7 +188,8 @@ final class WorkspaceCloudSyncController {
 
         guard let userID else { return }
         guard usesRemoteAccountState else {
-            accountOnboardingState = library.workspaces.isEmpty ? .needsOnboarding : .complete
+            accountOnboardingState = hasConfirmedOnboarding(for: userID) || !library.workspaces.isEmpty
+                ? .complete : .needsOnboarding
             return
         }
         guard baseURL != nil else {
@@ -199,7 +223,7 @@ final class WorkspaceCloudSyncController {
 
     func schedule(trigger: SyncTrigger) {
         refreshSaveState()
-        guard activeUserID != nil, !isPreparingSignOut else { return }
+        guard activeUserID != nil, activeUserID != deletingAccountID, !isPreparingSignOut else { return }
         scheduledTask?.cancel()
         scheduledTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(650))
@@ -209,13 +233,13 @@ final class WorkspaceCloudSyncController {
     }
 
     func synchronize(trigger: SyncTrigger = .manual) async {
-        guard !isPreparingSignOut else { return }
+        guard activeUserID != deletingAccountID, !isPreparingSignOut else { return }
         await runJoinedSync(trigger: trigger)
     }
 
     /// Refresh the shared roster and responses without racing debounced local edits.
     func refreshCollaboration(passively: Bool = false) async {
-        guard activeUserID != nil, usesRemoteAccountState, !isPreparingSignOut,
+        guard activeUserID != nil, activeUserID != deletingAccountID, usesRemoteAccountState, !isPreparingSignOut,
               !isSynchronizing, !Task.isCancelled else { return }
         if passively {
             // Let the debounced local save and its mutation-triggered sync run.
@@ -289,6 +313,7 @@ final class WorkspaceCloudSyncController {
 
     private func performSync(trigger: SyncTrigger) async {
         guard let userID = activeUserID,
+              userID != deletingAccountID,
               let baseURL
         else { return }
         if isSynchronizing {

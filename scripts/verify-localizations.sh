@@ -56,5 +56,18 @@ if (missingExtractedKeys.length || missingTranslations.length) {
   process.exit(1)
 }
 
+// Catalog keys remain stable even when product terminology changes. Check the
+// strings people actually receive, including English source-language fallbacks.
+const legacyEventTerm = /\bworkspaces?\b|\bespacios? de (?:trabajo|planificaci[oó]n)\b/i
+const outdatedCopy = sourceKeys.flatMap((key) => ["en", "es"].flatMap((locale) => {
+  const value = catalog.strings[key].localizations?.[locale]?.stringUnit?.value ?? key
+  return legacyEventTerm.test(value) ? [`${locale}: ${JSON.stringify(key)} => ${value}`] : []
+}))
+if (outdatedCopy.length) {
+  console.error("Consumer copy must use event terminology:")
+  outdatedCopy.forEach((entry) => console.error(`  ${entry}`))
+  process.exit(1)
+}
+
 console.log(`Localization coverage verified for ${sourceKeys.length} strings in English and Spanish.`)
 NODE

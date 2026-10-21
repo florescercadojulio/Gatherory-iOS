@@ -36,12 +36,22 @@ struct ManageDashboardLayout: Layout {
     }
 
     private func frames(width: CGFloat, subviews: Subviews) -> [CGRect] {
-        let columns = subviews.count == 3 && ManageDashboardLayoutPolicy.usesColumns(
+        let columns = (subviews.count == 3 || subviews.count == 4) && ManageDashboardLayoutPolicy.usesColumns(
             availableWidth: width, isAccessibilitySize: isAccessibilitySize
         )
         let itemWidth = columns ? max(0, width - spacing) / 2 : width
         let heights = subviews.map {
             LayoutDimensions.nonnegative($0.sizeThatFits(ProposedViewSize(width: itemWidth, height: nil)).height)
+        }
+        if columns && subviews.count == 4 {
+            let leftHeight = heights[0] + spacing + heights[1]
+            let quickApprovalHeight = max(heights[3], leftHeight - spacing - heights[2])
+            return [
+                CGRect(x: 0, y: 0, width: itemWidth, height: heights[0]),
+                CGRect(x: 0, y: heights[0] + spacing, width: itemWidth, height: heights[1]),
+                CGRect(x: itemWidth + spacing, y: 0, width: itemWidth, height: heights[2]),
+                CGRect(x: itemWidth + spacing, y: heights[2] + spacing, width: itemWidth, height: quickApprovalHeight),
+            ]
         }
         if columns {
             let sizing = ManageDashboardLayoutPolicy.columnHeights(

@@ -76,6 +76,7 @@ final class PlanningWorkspace {
     /// authentication session.
     private var viewerUserID: String?
     private var viewerEmail: String?
+    private(set) var localGuestProfileID: UUID?
     private var isViewerConfigured = false
 
     private var decisionHistory: [DecisionRecord] = []
@@ -344,12 +345,33 @@ final class PlanningWorkspace {
         !showsPlanningInterface
     }
 
+    /// True for a device-local planning identity. It may plan its local
+    /// workspace, but it is not an authenticated account and must not trigger
+    /// planner API/share-link operations.
+    var isLocalGuestViewer: Bool { localGuestProfileID != nil }
+
     func configureViewer(_ account: UserAccount?) {
         if viewerUserID != account?.id { decisionHistory.removeAll() }
         isViewerConfigured = true
         viewerUserID = account?.id
         viewerEmail = account?.email
+        localGuestProfileID = nil
 
+        normalizeSelectedEventForViewer()
+    }
+
+    func configureLocalGuestViewer(_ profile: LocalGuestProfile) {
+        let guestID = profile.storageID
+        if viewerUserID != guestID { decisionHistory.removeAll() }
+        isViewerConfigured = true
+        viewerUserID = guestID
+        viewerEmail = nil
+        localGuestProfileID = profile.id
+
+        normalizeSelectedEventForViewer()
+    }
+
+    private func normalizeSelectedEventForViewer() {
         if !visibleEventContexts.contains(selectedEventReference),
            let firstVisibleEvent = visibleEventContexts.first {
             selectedEventReference = firstVisibleEvent

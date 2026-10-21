@@ -40,7 +40,8 @@ struct BlueprintExploreView: View {
                 case .browse: categories
                 case .recent: recent
                 case .results:
-                    blueprintGrid(model.entries.filter { $0.matches(query: query) }, source: .results, emptyTitle: ExploreCopy.noResults, emptyMessage: ExploreCopy.tryAnotherSearch)
+                    blueprintGrid(model.entries.filter { $0.matches(query: query) }, source: .results,
+                                  emptyTitle: ExploreCopy.noResults, emptyMessage: ExploreCopy.tryAnotherSearch)
                 }
             }
         }
@@ -68,7 +69,10 @@ struct BlueprintExploreView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                AccountToolbarButton(avatarSize: 44)
+                ToolbarGlassActionGroup {
+                    AccountToolbarButton(avatarSize: 28)
+                        .frame(width: 44, height: 44)
+                }
             }
             .sharedBackgroundVisibility(.hidden)
         }
@@ -111,6 +115,7 @@ struct BlueprintExploreView: View {
             .padding(AppTheme.Layout.screenHorizontal)
         }
         .refreshable { await load() }
+        .appSoftScrollEdges()
     }
 
     private var recent: some View {

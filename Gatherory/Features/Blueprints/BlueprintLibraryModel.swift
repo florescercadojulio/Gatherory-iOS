@@ -171,6 +171,15 @@ nonisolated final class BlueprintLibraryCache {
         }
     }
 
+    func removeAll(accountID: String) throws {
+        try validateOwner(accountID)
+        do {
+            try FileManager.default.removeItem(at: fileURL(ownerID: accountID))
+        } catch let error as CocoaError where error.code == .fileNoSuchFile {
+            // A completed purge can be retried after relaunch.
+        }
+    }
+
     static func validated(_ installations: [BlueprintUsedTemplate]) -> [BlueprintUsedTemplate]? {
         guard installations.count <= maximumRows else { return nil }
         var seen: [UUID: BlueprintUsedTemplate] = [:]
@@ -230,6 +239,10 @@ nonisolated final class BlueprintLibraryCache {
 /// Library visibility is local metadata, not deletion of receipts or workspaces.
 struct BlueprintLibraryVisibilityStore {
     var defaults: UserDefaults = .standard
+
+    func removeAll(accountID: String) throws {
+        defaults.removeObject(forKey: key(accountID))
+    }
 
     private func key(_ ownerID: String) -> String {
         "blueprint.library.hidden.v1." + Data(ownerID.utf8).base64EncodedString()
