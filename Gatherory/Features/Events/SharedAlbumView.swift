@@ -1,3 +1,4 @@
+import PostHog
 import SwiftUI
 import UIKit
 
@@ -131,7 +132,10 @@ struct SharedAlbumView: View {
                 saveResult = nil
                 let result = await saver.save(photos)
                 saveResult = result
-                if case .saved = result { selection.clear() }
+                if case .saved(let count) = result {
+                    PostHogSDK.shared.capture("album_photos_saved", properties: ["photo_count": count])
+                    selection.clear()
+                }
             }
         } label: {
             HStack {

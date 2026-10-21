@@ -1,3 +1,4 @@
+import PostHog
 import SwiftUI
 
 struct OnboardingView: View {
@@ -150,13 +151,17 @@ struct OnboardingView: View {
 
                     VStack(spacing: AppTheme.Spacing.compact) {
                         Button(AppCopy.Primer.Onboarding.createEvent) {
+                            PostHogSDK.shared.capture("onboarding_event_creation_opened")
                             isCreatingWorkspace = true
                         }
                         .font(.headline)
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
 
-                        Button(AppCopy.Common.notNow, action: onSkipCreation)
+                        Button(AppCopy.Common.notNow) {
+                            PostHogSDK.shared.capture("onboarding_event_creation_skipped")
+                            onSkipCreation()
+                        }
                             .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
                             .accessibilityIdentifier("onboarding.skipEventCreation")
                     }

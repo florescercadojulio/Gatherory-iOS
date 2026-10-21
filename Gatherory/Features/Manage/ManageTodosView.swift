@@ -1,3 +1,4 @@
+import PostHog
 import SwiftUI
 
 private struct TodoEditorSelection: Identifiable {
@@ -118,12 +119,23 @@ struct ManageTodosView: View {
                             assigneePersonID: assigneePersonID, to: reference
                         ) != nil
                     }
-                    if didSave, selection.todo == nil { listFilter = .upcoming }
+                    if didSave {
+                        PostHogSDK.shared.capture(
+                            selection.todo == nil ? "todo_created" : "todo_updated",
+                            properties: [
+                                "has_due_date": dueDate != nil,
+                                "is_assigned": assigneePersonID != nil
+                            ]
+                        )
+                        if selection.todo == nil { listFilter = .upcoming }
+                    }
                     return didSave
                 },
                 onDelete: {
                     guard let todo = selection.todo else { return false }
-                    return persist({ workspace.deleteTodo(id: todo.id) }, feedback: .selection)
+                    let didDelete = persist({ workspace.deleteTodo(id: todo.id) }, feedback: .selection)
+                    if didDelete { PostHogSDK.shared.capture("todo_deleted") }
+                    return didDelete
                 })
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -145,8 +157,13 @@ struct ManageTodosView: View {
             HStack(alignment: .top, spacing: 10) {
                 Button {
                     let isUndo = todo.isCompleted
-                    if !persist({ workspace.setTodoCompleted(id: todo.id, isCompleted: !isUndo) },
-                                feedback: isUndo ? .selection : .success) {
+                    let didPersist = persist(
+                        { workspace.setTodoCompleted(id: todo.id, isCompleted: !isUndo) },
+                        feedback: isUndo ? .selection : .success
+                    )
+                    if didPersist, !isUndo {
+                        PostHogSDK.shared.capture("todo_completed")
+                    } else if !didPersist {
                         saveFailed = true
                     }
                 } label: {
