@@ -15,18 +15,25 @@ struct WorkspaceTabShell<Home: View, Ideas: View, Decide: View, Manage: View>: V
     @ViewBuilder var decide: () -> Decide
     @ViewBuilder var manage: () -> Manage
 
+    @ViewBuilder
     var body: some View {
+        if #available(iOS 26.1, *) {
+            tabs
+                .tabViewBottomAccessory(isEnabled: showsIdeasEventFilter && selection == .ideas) {
+                    IdeasEventScopeAccessory(scope: $ideasScope)
+                }
+        } else {
+            tabs
+        }
+    }
+
+    private var tabs: some View {
         TabView(selection: $selection) {
             Tab(AppCopy.Tab.home, systemImage: "house.fill", value: .home) { home() }
             Tab(AppCopy.Tab.ideas, systemImage: "sparkles.rectangle.stack.fill", value: .ideas) { ideas($ideasScope) }
             Tab(AppCopy.Tab.decide, systemImage: "rectangle.on.rectangle.angled", value: .decide) { decide() }
             if showsManage {
                 Tab(AppCopy.Tab.manage, systemImage: "slider.horizontal.3", value: .manage) { manage() }
-            }
-        }
-        .tabViewBottomAccessory {
-            if showsIdeasEventFilter && selection == .ideas {
-                IdeasEventScopeAccessory(scope: $ideasScope)
             }
         }
         .tabViewStyle(.sidebarAdaptable)
