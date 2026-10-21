@@ -231,7 +231,6 @@ enum IdeasScope: Hashable {
 
 struct IdeasEventScopeAccessory: View {
     @Environment(PlanningWorkspace.self) private var workspace
-    @Environment(\.tabViewBottomAccessoryPlacement) private var accessoryPlacement
     @Binding var scope: IdeasScope
 
     private var scopeTitle: String {
@@ -273,22 +272,10 @@ struct IdeasEventScopeAccessory: View {
                     .frame(width: 30, height: 30)
                     .accessibilityHidden(true)
 
-                if accessoryPlacement == .expanded {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Ideas for")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(scopeTitle)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                    }
-                } else {
-                    Text(scopeTitle)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                }
+                Text(scopeTitle)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
 
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.up.chevron.down")
@@ -297,7 +284,7 @@ struct IdeasEventScopeAccessory: View {
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, minHeight: accessoryPlacement == .expanded ? 58 : 44, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
