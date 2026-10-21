@@ -3,6 +3,37 @@ import Foundation
 import Observation
 import UIKit
 
+@MainActor protocol GuestInvitationCacheIO {
+    /// Returns nil only when the file does not exist. Read failures must throw.
+    func readData(at url: URL) throws -> Data?
+    func writeAtomically(_ data: Data, to url: URL) throws
+    /// Removing a file that is already absent succeeds.
+    func removeItem(at url: URL) throws
+}
+
+@MainActor struct FileGuestInvitationCacheIO: GuestInvitationCacheIO {
+    func readData(at url: URL) throws -> Data? {
+        do {
+            return try Data(contentsOf: url)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            return nil
+        }
+    }
+
+    func writeAtomically(_ data: Data, to url: URL) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    }
+
+    func removeItem(at url: URL) throws {
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch let error as CocoaError where error.code == .fileNoSuchFile {
+            // Repeated purge and journal reconciliation are safe.
+        }
+    }
+}
+
 @MainActor protocol GuestInvitationTransport {
     func invitations() async throws -> GuestInvitationFeed
     func leaveInvitation(eventID: UUID) async throws -> UUID
@@ -17,6 +48,20 @@ import UIKit
 struct AttendanceAcknowledgement: Decodable, Equatable {
     let eventId: UUID
     let attendance: String
+}
+
+/// Transient feedback belongs to one event and is discarded on identity changes.
+/// A failed attempt retains the choice for an explicit retry, never an offline send.
+struct GuestAttendanceUpdate: Equatable {
+    enum Phase: Equatable {
+        case sending
+        case saved
+        case failed(String)
+    }
+
+    let eventID: UUID
+    let response: EventResponse
+    let phase: Phase
 }
 
 struct GuestClaimAcknowledgement: Decodable, Equatable {
@@ -41,12 +86,14 @@ final class GuestInvitationStore {
     private(set) var errorMessage: String?
     private(set) var isRefreshing = false
     private(set) var isResponding = false
+    private(set) var attendanceUpdate: GuestAttendanceUpdate?
     var selectedEventID: UUID?
     @ObservationIgnored private var account: UserAccount?
     @ObservationIgnored private var localGuest: LocalGuestProfile?
     @ObservationIgnored private var localClient: (any LocalGuestInvitationTransport)?
     @ObservationIgnored private let baseURL: URL?
     @ObservationIgnored private let cacheDirectory: URL
+    @ObservationIgnored private let cacheIO: any GuestInvitationCacheIO
     @ObservationIgnored private let injectedClient: (any GuestInvitationTransport)?
     @ObservationIgnored private let localClientFactory: @MainActor (LocalGuestProfile) -> any LocalGuestInvitationTransport
     @ObservationIgnored private var artwork: [UUID: Data] = [:]
@@ -54,16 +101,21 @@ final class GuestInvitationStore {
     @ObservationIgnored private var mediaTask: Task<Void, Never>?
     @ObservationIgnored private var feedRevision = UUID()
     @ObservationIgnored private var identityGeneration = UUID()
+    @ObservationIgnored private var leaveIntentEventIDs: Set<UUID> = []
+    @ObservationIgnored private var leaveJournalUnreadable = false
+    @ObservationIgnored private var leaveRequestsInFlight: Set<UUID> = []
 
     init(
         baseURL: URL?,
         cacheDirectory: URL? = nil,
         client: (any GuestInvitationTransport)? = nil,
-        localClientFactory: (@MainActor (LocalGuestProfile) -> any LocalGuestInvitationTransport)? = nil
+        localClientFactory: (@MainActor (LocalGuestProfile) -> any LocalGuestInvitationTransport)? = nil,
+        cacheIO: (any GuestInvitationCacheIO)? = nil
     ) {
         self.baseURL = baseURL
         injectedClient = client
         self.cacheDirectory = cacheDirectory ?? URL.applicationSupportDirectory.appending(path: "GuestInvitations")
+        self.cacheIO = cacheIO ?? FileGuestInvitationCacheIO()
         self.localClientFactory = localClientFactory ?? { profile in
             DeviceGuestInvitationClient(baseURL: baseURL, profile: profile)
         }
@@ -93,10 +145,10 @@ final class GuestInvitationStore {
     }
 
     private func purgeCache(identity: String) throws {
-        let source = "\(baseURL?.absoluteString ?? "local")|\(identity)"
-        let key = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
-        let file = cacheDirectory.appending(path: "\(key).json")
-        if FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
+        let file = cacheURL(identity: identity)
+        try cacheIO.removeItem(at: file)
+        try cacheIO.removeItem(at: leaveJournalURL(for: file))
+        if activeIdentity == identity { leaveIntentEventIDs = []; leaveJournalUnreadable = false }
     }
 
     func activate(account newAccount: UserAccount?) async {
@@ -116,12 +168,12 @@ final class GuestInvitationStore {
         errorMessage = nil
         isRefreshing = false
         isResponding = false
+        attendanceUpdate = nil
+        leaveIntentEventIDs = []
+        leaveJournalUnreadable = false
+        leaveRequestsInFlight = []
         guard newAccount != nil else { return }
-        if let cacheURL, let data = try? Data(contentsOf: cacheURL), let cache = try? JSONDecoder().decode(Cache.self, from: data) {
-            events = cache.events
-            artwork = cache.artwork
-            rebuildPresentations()
-        }
+        restoreCache()
         await refresh()
     }
 
@@ -142,12 +194,12 @@ final class GuestInvitationStore {
         errorMessage = nil
         isRefreshing = false
         isResponding = false
+        attendanceUpdate = nil
+        leaveIntentEventIDs = []
+        leaveJournalUnreadable = false
+        leaveRequestsInFlight = []
         guard newGuest != nil else { return }
-        if let cacheURL, let data = try? Data(contentsOf: cacheURL), let cache = try? JSONDecoder().decode(Cache.self, from: data) {
-            events = cache.events
-            artwork = cache.artwork
-            rebuildPresentations()
-        }
+        restoreCache()
         await refresh()
     }
 
@@ -166,6 +218,7 @@ final class GuestInvitationStore {
         guard let identity = activeIdentity, let transport = activeTransport else { return }
         let requestGeneration = identityGeneration
         let requestRevision = feedRevision
+        let leaveRequestsAtStart = leaveRequestsInFlight
         isRefreshing = true
         defer {
             if isCurrent(identity: identity, generation: requestGeneration) {
@@ -184,11 +237,21 @@ final class GuestInvitationStore {
             let retainedArtwork = Set(events.flatMap { event in [event.coverId].compactMap { $0 } + event.ideas.compactMap(\.imageId) + event.moments.map(\.id) })
             artwork = artwork.filter { retainedArtwork.contains($0.key) }
             rebuildPresentations()
-            try saveCache()
+            // A fresh server feed resolves every leave intent, including a
+            // previously ambiguous request or a later explicit rejoin. Keep
+            // the journal until this authoritative snapshot is safely cached.
+            var cacheAndJournalSaved = false
+            do {
+                try saveCache()
+                try clearLeaveIntentsAfterCacheWrite(preserving: leaveRequestsAtStart)
+                cacheAndJournalSaved = true
+            } catch {
+                errorMessage = cacheRecoveryMessage
+            }
             // Save text first; image failures must not hide the invitation.
             mediaTask?.cancel()
             mediaTask = Task { await downloadArtwork(events: feed.events, identity: identity, revision: revision) }
-            errorMessage = nil
+            if cacheAndJournalSaved { errorMessage = nil }
         } catch {
             guard isCurrent(identity: identity, generation: requestGeneration),
                   feedRevision == requestRevision,
@@ -221,9 +284,13 @@ final class GuestInvitationStore {
     }
 
     func respond(eventID: UUID, response: EventResponse) async {
-        guard !isResponding, let identity = activeIdentity else { return }
+        guard !isResponding, let identity = activeIdentity,
+              events.contains(where: { $0.id == eventID }),
+              localClient != nil || (baseURL != nil && account != nil) else { return }
         let requestGeneration = identityGeneration
         isResponding = true
+        errorMessage = nil
+        attendanceUpdate = GuestAttendanceUpdate(eventID: eventID, response: response, phase: .sending)
         defer {
             if isCurrent(identity: identity, generation: requestGeneration) {
                 isResponding = false
@@ -240,7 +307,14 @@ final class GuestInvitationStore {
                 guard self.account?.id == account.id else { return }
             } else { return }
             guard isCurrent(identity: identity, generation: requestGeneration) else { return }
-            if let index = events.firstIndex(where: { $0.id == acknowledgement.eventId }) {
+            guard acknowledgement.eventId == eventID,
+                  ["going", "not_sure", "not_going"].contains(acknowledgement.attendance) else {
+                throw EventInvitationFailure.unavailable
+            }
+            // An older feed request must not overwrite the acknowledged response.
+            feedRevision = UUID()
+            attendanceUpdate = GuestAttendanceUpdate(eventID: eventID, response: response, phase: .saved)
+            if let index = events.firstIndex(where: { $0.id == eventID }) {
                 events[index].attendance = acknowledgement.attendance
                 let viewer = events[index].viewerPersonId
                 events[index].people = events[index].people.map { person in
@@ -249,13 +323,23 @@ final class GuestInvitationStore {
                     return person
                 }
                 rebuildPresentations()
-                try saveCache()
+                // A local-cache failure cannot turn a confirmed remote RSVP into
+                // an unconfirmed write. A subsequent refresh can recover the cache.
+                do { try saveCache() }
+                catch { errorMessage = error.localizedDescription }
             }
             await refresh(force: true)
         } catch {
             guard isCurrent(identity: identity, generation: requestGeneration) else { return }
-            errorMessage = error.localizedDescription
+            attendanceUpdate = GuestAttendanceUpdate(eventID: eventID, response: response,
+                                                    phase: .failed(error.localizedDescription))
         }
+    }
+
+    func retryAttendanceResponse(eventID: UUID) async {
+        guard let update = attendanceUpdate, update.eventID == eventID,
+              case .failed = update.phase else { return }
+        await respond(eventID: eventID, response: update.response)
     }
 
     func canLeave(eventID: UUID) -> Bool {
@@ -264,31 +348,66 @@ final class GuestInvitationStore {
 
     func leave(eventID: UUID) async -> Bool {
         guard !isResponding, canLeave(eventID: eventID), let transport = activeTransport,
-              let identity = activeIdentity else { return false }
+              let identity = activeIdentity, !leaveJournalUnreadable else { return false }
         let requestGeneration = identityGeneration
+        var nextLeaveIntents = leaveIntentEventIDs
+        nextLeaveIntents.insert(eventID)
+        do {
+            try writeLeaveIntents(nextLeaveIntents)
+            leaveIntentEventIDs = nextLeaveIntents
+        } catch {
+            errorMessage = cacheRecoveryMessage
+            return false
+        }
+        mediaTask?.cancel()
+        mediaTask = nil
+        leaveRequestsInFlight.insert(eventID)
+        // Fence any older feed before yielding to the DELETE request. If it
+        // completes later, it cannot restore the invitation from stale data.
+        feedRevision = UUID()
         isResponding = true
         defer {
             if isCurrent(identity: identity, generation: requestGeneration) {
                 isResponding = false
+                leaveRequestsInFlight.remove(eventID)
             }
         }
         do {
             let acknowledgedEventID = try await transport.leaveInvitation(eventID: eventID)
-            guard isCurrent(identity: identity, generation: requestGeneration),
-                  acknowledgedEventID == eventID else { return false }
+            guard isCurrent(identity: identity, generation: requestGeneration) else { return false }
+            guard acknowledgedEventID == eventID else {
+                errorMessage = AppCopy.Lifecycle.leaveFailed
+                return false
+            }
             feedRevision = UUID()
             mediaTask?.cancel()
             events.removeAll { $0.id == eventID }
+            if attendanceUpdate?.eventID == eventID { attendanceUpdate = nil }
             let retained = Set(events.flatMap { event in [event.coverId].compactMap { $0 } + event.ideas.compactMap(\.imageId) + event.moments.map(\.id) })
             artwork = artwork.filter { retained.contains($0.key) }
             rebuildPresentations()
             do { try saveCache() }
             catch {
-                // Never keep a stale invitation on disk after the server has
-                // acknowledged departure. The remaining feed is recoverable.
-                if let cacheURL { try? FileManager.default.removeItem(at: cacheURL) }
+                // The durable intent remains until the current cache is safe.
+                // Removing a stale cache is best effort; a later authoritative
+                // feed will repair it and resolve the intent.
+                if let cacheURL { try? cacheIO.removeItem(at: cacheURL) }
+                errorMessage = cacheRecoveryMessage
+                return true
             }
-            errorMessage = nil
+            var resolvedLeaveIntents = leaveIntentEventIDs
+            resolvedLeaveIntents.remove(eventID)
+            do {
+                try writeLeaveIntents(resolvedLeaveIntents)
+                leaveIntentEventIDs = resolvedLeaveIntents
+                leaveJournalUnreadable = false
+            } catch {
+                // The current cache is safe. Keep the old journal so the next
+                // launch still filters any cache that could predate this write.
+                errorMessage = cacheRecoveryMessage
+                return true
+            }
+            if leaveIntentEventIDs.isEmpty { errorMessage = nil }
             return true
         } catch {
             guard isCurrent(identity: identity, generation: requestGeneration) else { return false }
@@ -310,19 +429,101 @@ final class GuestInvitationStore {
 
     private var cacheURL: URL? {
         guard let identity = activeIdentity else { return nil }
+        return cacheURL(identity: identity)
+    }
+
+    private func cacheURL(identity: String) -> URL {
         let source = "\(baseURL?.absoluteString ?? "local")|\(identity)"
         let key = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
         return cacheDirectory.appending(path: "\(key).json")
     }
 
+    private func leaveJournalURL(for cacheURL: URL) -> URL {
+        cacheURL.deletingPathExtension().appendingPathExtension("leave-intents.json")
+    }
+
+    private func restoreCache() {
+        guard let cacheURL else { return }
+        do {
+            let journalURL = leaveJournalURL(for: cacheURL)
+            if let journalData = try cacheIO.readData(at: journalURL) {
+                let journal = try JSONDecoder().decode(LeaveIntentJournal.self, from: journalData)
+                guard journal.schemaVersion == LeaveIntentJournal.currentSchemaVersion else {
+                    throw LeaveIntentJournalError.unsupportedVersion
+                }
+                leaveIntentEventIDs = Set(journal.eventIDs)
+            }
+        } catch {
+            // Unknown intents make the cache unsafe to display. A fresh feed
+            // can replace the journal after its cache has been written.
+            leaveIntentEventIDs = []
+            leaveJournalUnreadable = true
+            errorMessage = cacheRecoveryMessage
+            return
+        }
+
+        do {
+            guard let data = try cacheIO.readData(at: cacheURL) else { return }
+            let cache = try JSONDecoder().decode(Cache.self, from: data)
+            events = cache.events.filter { !leaveIntentEventIDs.contains($0.id) }
+            let retainedArtwork = artworkIDs(in: events)
+            artwork = cache.artwork.filter { retainedArtwork.contains($0.key) }
+            rebuildPresentations()
+        } catch {
+            errorMessage = cacheRecoveryMessage
+        }
+    }
+
+    private func artworkIDs(in events: [GuestEventInvitation]) -> Set<UUID> {
+        Set(events.flatMap { event in
+            [event.coverId].compactMap { $0 }
+                + event.ideas.compactMap(\.imageId)
+                + event.moments.map(\.id)
+        })
+    }
+
+    private func writeLeaveIntents(_ eventIDs: Set<UUID>) throws {
+        guard let cacheURL else { throw EventInvitationFailure.unavailable }
+        let journalURL = leaveJournalURL(for: cacheURL)
+        guard !eventIDs.isEmpty else {
+            try cacheIO.removeItem(at: journalURL)
+            return
+        }
+        let journal = LeaveIntentJournal(schemaVersion: LeaveIntentJournal.currentSchemaVersion,
+                                         eventIDs: eventIDs.sorted { $0.uuidString < $1.uuidString })
+        try cacheIO.writeAtomically(try JSONEncoder().encode(journal), to: journalURL)
+    }
+
+    private func clearLeaveIntentsAfterCacheWrite(preserving inFlight: Set<UUID>) throws {
+        guard leaveJournalUnreadable || !leaveIntentEventIDs.isEmpty else { return }
+        // A feed started while DELETE was still in flight can predate its
+        // server-side effect. Keep those markers until a later feed begins
+        // after the request has settled.
+        let remaining = leaveJournalUnreadable ? [] : leaveIntentEventIDs.intersection(inFlight)
+        try writeLeaveIntents(remaining)
+        leaveIntentEventIDs = remaining
+        leaveJournalUnreadable = false
+    }
+
     private func saveCache() throws {
         guard let cacheURL else { return }
-        try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(Cache(events: events, artwork: artwork))
-        try data.write(to: cacheURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        try cacheIO.writeAtomically(data, to: cacheURL)
     }
 
     private struct Cache: Codable { let events: [GuestEventInvitation]; let artwork: [UUID: Data] }
+
+    private struct LeaveIntentJournal: Codable {
+        static let currentSchemaVersion = 1
+        let schemaVersion: Int
+        let eventIDs: [UUID]
+    }
+
+    private enum LeaveIntentJournalError: Error { case unsupportedVersion }
+
+    private var cacheRecoveryMessage: String {
+        String(localized: "Saved invitations need to be refreshed. Try again when you’re online.")
+    }
 
     private var activeIdentity: String? { account?.id ?? localGuest?.storageID }
 
@@ -354,6 +555,10 @@ final class GuestInvitationStore {
         selectedEventID = nil
         isRefreshing = false
         isResponding = false
+        leaveIntentEventIDs = []
+        leaveJournalUnreadable = false
+        leaveRequestsInFlight = []
+        attendanceUpdate = nil
         errorMessage = nil
     }
 }

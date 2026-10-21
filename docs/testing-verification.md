@@ -1333,3 +1333,67 @@ Result: `/tmp/gatherory-event-qr-derived/Logs/Test/Test-Gatherory-2026.10.21_12-
 Device build log: `/tmp/gatherory-qr-actor-device-build-20261021.log`.
 Earlier guest-audit changes and staged build artifacts remain preserved. Nothing
 was committed or pushed.
+
+## Mobile invitation and RSVP usability — October 21, 2026
+
+**901 tests in 127 suites passed**, selecting only `GatheroryTests`, with parallel
+workers and diagnostics collection disabled. English/Spanish localization
+coverage passes for **1,522 strings**, with the pre-existing dynamic AppCopy
+extraction warning. No UI-automation tests were executed.
+
+```sh
+xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
+  -destination 'platform=iOS Simulator,id=3A4621C1-A19F-4EDD-A25F-6A1AB7663D6F' \
+  -derivedDataPath /tmp/gatherory-event-qr-derived \
+  -only-testing:GatheroryTests -parallel-testing-enabled NO \
+  -disableAutomaticPackageResolution -collect-test-diagnostics never POSTHOG_ENABLED=NO
+bash scripts/verify-localizations.sh
+```
+
+Nine new `GuestAttendanceRecoveryTests` cases cover retrying the actual RSVP,
+pending/confirmed feedback and duplicate taps, wrong-event and unknown-status
+acknowledgements, event/principal retry isolation, guest A-B-A stale completion,
+acknowledgement followed by feed or cache-write failure, and an older delayed
+feed being superseded by the acknowledged response. Existing guest planning,
+invitation continuation, handover, deletion cleanup and authorization tests
+remain in the full target. Swift parsing and `git diff --check` also pass.
+
+Final test log: `/tmp/gatherory-invitation-usability-native-final.log`.
+Result: `/tmp/gatherory-event-qr-derived/Logs/Test/Test-Gatherory-2026.10.21_15-31-56--0400.xcresult`.
+Localization log: `/tmp/gatherory-invitation-usability-localizations.log`.
+
+See [invitation/RSVP usability](invitation-rsvp-usability.md) for the changed
+experience, recovery boundaries, remaining physical-device checks and the
+leave-cache recovery (completed in the follow-up below). No server source, database,
+production service, build upload, commit or push was changed by this pass.
+Existing edits to `project.pbxproj` and `docs/app-store-release.md` were preserved.
+
+## Durable invitation leave-cache recovery — October 21, 2026
+
+**909 tests in 128 suites passed**, selecting only `GatheroryTests` with the
+simulator command in the preceding section. Eight new leave-cache cases cover
+intent persistence before DELETE, refusal to send without a durable intent, a
+feed arriving during departure, cache-write plus cache-delete failure followed
+by offline relaunch, exact account/server isolation, uncertain server outcomes,
+corrupt-journal repair, cleanup failure ordering and retry, explicit rejoin, and
+stale guest A→B→A completion. No UI tests were executed.
+
+The initial run exposed a test-helper directory URL comparison issue (trailing
+slash differences); comparing standardized directory paths fixed it. The complete
+suite passed after that correction. Existing guest authorization, deletion and
+handover tests remain in the full target. No server source or schema changed.
+
+English/Spanish localization coverage passed for **1,523 strings**, with the
+existing dynamic AppCopy extraction warning. Swift parsing and `git diff --check`
+passed. The new storage-recovery message is translated in both languages.
+
+Final test log: `/tmp/gatherory-leave-cache-native-final.log`.
+Result: `/tmp/gatherory-event-qr-derived/Logs/Test/Test-Gatherory-2026.10.21_15-41-54--0400.xcresult`.
+Localization log: `/tmp/gatherory-leave-cache-localizations.log`.
+
+See [invitation/RSVP usability](invitation-rsvp-usability.md#durable-leave-cache-recovery)
+for journal scope and physical-device acceptance. The device storage interruption,
+offline relaunch and explicit rejoin checks remain outstanding. No database,
+deployment, build upload or push was performed. The source changes are committed
+at the user's request; existing build-number and TestFlight release-note edits
+remain outside this commit.

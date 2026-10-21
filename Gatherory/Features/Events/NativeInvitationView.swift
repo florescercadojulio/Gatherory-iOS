@@ -35,31 +35,29 @@ struct NativeInvitationView: View {
                         }
                         if let location = preview?.locationName { Text(location).foregroundStyle(.secondary) }
                         if let role = preview?.role, preview?.status != "accepted" {
-                            VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-                                Text("You're invited as a \(WorkspaceRole(rawValue: role)?.title ?? role).")
-                                    .font(.headline)
-                                if let resolvedRole = WorkspaceRole(rawValue: role), resolvedRole != .collaborator {
-                                    Text(LocalizedStringKey(resolvedRole.detail))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .fixedSize(horizontal: false, vertical: true)
+                            Text(invitationAccessDescription(role: role, permission: preview?.planningPermission))
+                                .font(.headline)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityAddTraits(.isHeader)
                         }
                         if awaitingApproval || preview?.status == "awaiting_approval" {
-                            Label("Awaiting Approval", systemImage: "clock")
-                                .font(.headline)
-                            Text("Your request has been sent. Once approved, you can open this invitation to join the planning circle.")
-                                .foregroundStyle(.secondary)
+                            invitationStatus(
+                                title: InvitationUsabilityCopy.awaitingApproval,
+                                message: InvitationUsabilityCopy.awaitingApprovalMessage,
+                                symbol: "clock"
+                            )
                         } else if preview?.status == "declined" {
-                            Text("Your request was declined. Contact the host if you think this was a mistake.")
-                                .foregroundStyle(.secondary)
+                            invitationStatus(
+                                title: InvitationUsabilityCopy.requestDeclined,
+                                message: InvitationUsabilityCopy.requestDeclinedMessage,
+                                symbol: "xmark.circle"
+                            )
                         } else if preview?.requiresApproval == true {
-                            Text("The host will review your request before access begins.")
-                                .foregroundStyle(.secondary)
-                        }
-                        if let permission = preview?.planningPermission, preview?.role == "collaborator" {
-                            Text(LocalizedStringKey((permission == "view_only" ? PlanningPermission.viewOnly : PlanningPermission(rawValue: permission) ?? .contribute).detail))
-                                .font(.subheadline).foregroundStyle(.secondary)
+                            invitationStatus(
+                                title: InvitationUsabilityCopy.hostApprovalRequired,
+                                message: InvitationUsabilityCopy.hostApprovalMessage,
+                                symbol: "clock"
+                            )
                         }
                     }
                     .frame(maxWidth: 520, alignment: .leading)
@@ -78,14 +76,22 @@ struct NativeInvitationView: View {
             }
             .overlay(alignment: .top) {
                 if let errorMessage {
-                    InvitationFailureBanner(message: errorMessage, isRetrying: isLoading || isAccepting) {
+                    InvitationFailureBanner(message: errorMessage, isRetrying: isLoading || isAccepting,
+                                            dismissLabel: preview == nil ? InvitationUsabilityCopy.closeInvitation : InvitationUsabilityCopy.dismissError) {
                         Task { await retry() }
                     } dismiss: {
-                        self.errorMessage = nil
+                        // Preserve the accepted join and its retry path when
+                        // dismissing feedback over an existing preview.
+                        if preview == nil { invitations.dismiss() }
+                        else { self.errorMessage = nil }
                     }
                     .padding(AppTheme.Spacing.standard)
                 } else if isLoading && preview == nil {
-                    ProgressView().padding(AppTheme.Spacing.spacious)
+                    ProgressView {
+                        Text(InvitationUsabilityCopy.loading)
+                            .font(.callout)
+                    }
+                    .padding(AppTheme.Spacing.spacious)
                 }
             }
             .background { invitationArtwork.ignoresSafeArea() }
@@ -124,11 +130,11 @@ struct NativeInvitationView: View {
     private var invitationActions: some View {
         VStack(spacing: AppTheme.Spacing.compact) {
             if authentication.isAuthenticated {
-                Button("Use Another Account") {
-                    invitations.requiresAuthentication = true
-                    Task { await authentication.signOut() }
+                if let name = authentication.currentUser?.displayName, !name.isEmpty {
+                    Label(name, systemImage: "person.crop.circle")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-                .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
             } else if canJoinAsDeviceGuest {
                 Text(GuestCopy.joinHelp)
                     .font(.footnote).foregroundStyle(.secondary)
@@ -163,14 +169,22 @@ struct NativeInvitationView: View {
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)
             .controlSize(.large)
-            .disabled(isLoading || isAccepting)
+            .disabled(isLoading || isAccepting || authentication.isSigningOut)
+            if authentication.isAuthenticated {
+                Button("Use Another Account") {
+                    invitations.requiresAuthentication = true
+                    Task { await authentication.signOut() }
+                }
+                .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                .disabled(isLoading || isAccepting || authentication.isSigningOut)
+            }
             if canJoinAsDeviceGuest && !authentication.isAuthenticated {
                 Button(String(localized: "Sign In to Join")) {
                     if authentication.isGuestMode { authentication.requestGuestSignIn() }
                     else { invitations.requiresAuthentication = true }
                 }
                 .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-                .disabled(isLoading || isAccepting)
+                .disabled(isLoading || isAccepting || authentication.isSigningOut)
             }
         }
         .frame(maxWidth: 520)
@@ -181,6 +195,30 @@ struct NativeInvitationView: View {
 
     private var viewerIdentity: String? {
         authentication.currentUser?.id ?? authentication.localGuestProfile?.storageID
+    }
+
+    private func invitationAccessDescription(role: String, permission: String?) -> String {
+        if role == WorkspaceRole.guest.rawValue {
+            return InvitationUsabilityCopy.guestAccess
+        }
+        guard role == WorkspaceRole.collaborator.rawValue else { return InvitationUsabilityCopy.planningInvitation }
+        switch permission {
+        case "view_only", "viewOnly": return InvitationUsabilityCopy.viewPlans
+        case "contribute": return InvitationUsabilityCopy.contributePlans
+        case "manage": return InvitationUsabilityCopy.managePlans
+        default: return InvitationUsabilityCopy.planningInvitation
+        }
+    }
+
+    private func invitationStatus(title: String, message: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+            Label(title, systemImage: symbol)
+                .font(.headline)
+            Text(message)
+                .foregroundStyle(.secondary)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
     }
 
     private var canJoinAsDeviceGuest: Bool {
@@ -398,6 +436,7 @@ struct NativeInvitationView: View {
 private struct InvitationFailureBanner: View {
     let message: String
     let isRetrying: Bool
+    let dismissLabel: String
     let retry: () -> Void
     let dismiss: () -> Void
 
@@ -411,7 +450,7 @@ private struct InvitationFailureBanner: View {
                     .disabled(isRetrying)
                     .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
                 Spacer()
-                Button("Close", systemImage: "xmark", action: dismiss)
+                Button(dismissLabel, systemImage: "xmark", action: dismiss)
                     .labelStyle(.iconOnly)
                     .frame(minWidth: AppTheme.Layout.minimumTouchTarget, minHeight: AppTheme.Layout.minimumTouchTarget)
             }
@@ -436,7 +475,11 @@ struct GuestEventInvitationView: View {
                 if let workspace = guests.presentations[eventID] {
                     EventInvitationScreen(reference: .main, onAttendanceResponse: { response in
                         Task { await guests.respond(eventID: eventID, response: response) }
-                    }, isUpdatingAttendance: guests.isResponding)
+                    }, isUpdatingAttendance: guests.isResponding,
+                       attendanceUpdate: guests.attendanceUpdate.flatMap { $0.eventID == eventID ? $0 : nil },
+                       onAttendanceRetry: {
+                        Task { await guests.retryAttendanceResponse(eventID: eventID) }
+                    })
                     .environment(workspace)
                     .refreshable { await guests.refresh(force: true) }
                     .appClearNavigationBar()
@@ -464,7 +507,8 @@ struct GuestEventInvitationView: View {
                 if let message = guests.errorMessage {
                     VStack(spacing: 8) {
                         Text(message).font(.footnote).fixedSize(horizontal: false, vertical: true)
-                        Button("Try Again") { Task { await guests.refresh(force: true) } }
+                        Button(RSVPCopy.refresh) { Task { await guests.refresh(force: true) } }
+                            .disabled(guests.isRefreshing || guests.isResponding)
                     }
                     .padding().frame(maxWidth: .infinity)
                     .background(.regularMaterial)

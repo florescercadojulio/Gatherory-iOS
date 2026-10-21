@@ -1215,18 +1215,23 @@ struct EventStatusBadge: View {
 }
 
 struct EventResponseControl: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let selection: EventResponse?
     let select: (EventResponse) -> Void
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 6) {
-                controls
-            }
-            .frame(maxWidth: .infinity)
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: 6) { controls }
+        } else {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    controls
+                }
+                .frame(maxWidth: .infinity)
 
-            VStack(spacing: 6) {
-                controls
+                VStack(spacing: 6) {
+                    controls
+                }
             }
         }
     }
@@ -1237,21 +1242,26 @@ struct EventResponseControl: View {
             Button {
                 select(option)
             } label: {
-                Label(option.title, systemImage: option.symbol)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-                    .labelStyle(.titleAndIcon)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-                    .contentShape(Rectangle())
+                HStack(spacing: 6) {
+                    Label(RSVPCopy.responseTitle(option), systemImage: option.symbol)
+                        .labelStyle(.titleAndIcon)
+                    if selection == option {
+                        Image(systemName: "checkmark").accessibilityHidden(true)
+                    }
+                }
+                .font(.subheadline.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
             .frame(maxWidth: .infinity)
             .tint(selection == option ? AppTheme.ColorToken.accent : .secondary)
             .foregroundStyle(selection == option ? AppTheme.ColorToken.accent : .primary)
-            .accessibilityValue(selection == option ? "Selected" : "Not selected")
+            .accessibilityValue(selection == option ? RSVPCopy.selected : RSVPCopy.notSelected)
+            .accessibilityAddTraits(selection == option ? .isSelected : [])
         }
     }
 }

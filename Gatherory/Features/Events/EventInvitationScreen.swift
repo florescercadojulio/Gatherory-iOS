@@ -32,6 +32,8 @@ struct EventInvitationScreen: View {
     let reference: EventReference
     var onAttendanceResponse: ((EventResponse) -> Void)? = nil
     var isUpdatingAttendance = false
+    var attendanceUpdate: GuestAttendanceUpdate? = nil
+    var onAttendanceRetry: (() -> Void)? = nil
 
     @MainActor
     private var presentation: EventPresentation? {
@@ -299,15 +301,48 @@ struct EventInvitationScreen: View {
             }
         } response: {
             if event.permitsResponse || event.response != nil {
-                EventResponseControl(selection: event.response) { response in
-                    withAnimation(.snappy) {
-                        setResponse(response)
+                VStack(spacing: AppTheme.Spacing.compact) {
+                    Text(RSVPCopy.title)
+                        .font(.subheadline.weight(.semibold))
+                    EventResponseControl(selection: event.response) { response in
+                        withAnimation(.snappy) {
+                            setResponse(response)
+                        }
                     }
+                    .disabled(!event.permitsResponse || isUpdatingAttendance)
+                    attendanceFeedback
+                        .disabled(!event.permitsResponse || isUpdatingAttendance)
                 }
-                .disabled(!event.permitsResponse || isUpdatingAttendance)
                 .padding(.top, AppTheme.Spacing.compact)
                 .appImageOverlayAppearance()
-                .accessibilityLabel("Attendance response")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var attendanceFeedback: some View {
+        if let attendanceUpdate {
+            switch attendanceUpdate.phase {
+            case .sending:
+                ProgressView(RSVPCopy.sending)
+                    .font(.footnote)
+            case .saved:
+                Label(RSVPCopy.saved, systemImage: "checkmark.circle")
+                    .font(.footnote)
+            case .failed:
+                VStack(spacing: AppTheme.Spacing.compact) {
+                    Label(RSVPCopy.unconfirmed, systemImage: "exclamationmark.circle")
+                        .font(.footnote)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let onAttendanceRetry {
+                        Button(RSVPCopy.retry(attendanceUpdate.response), action: onAttendanceRetry)
+                            .buttonStyle(.bordered)
+                            .buttonBorderShape(.capsule)
+                            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                            .disabled(isUpdatingAttendance)
+                    }
+                }
             }
         }
     }
