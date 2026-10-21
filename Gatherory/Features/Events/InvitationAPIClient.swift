@@ -90,6 +90,16 @@ struct EventJoinRequest: Decodable, Identifiable {
     let name: String
     let email: String
     let planningPermission: String
+    let profileImageURL: URL?
+
+    init(id: UUID, name: String, email: String, planningPermission: String,
+         profileImageURL: URL? = nil) {
+        self.id = id
+        self.name = name
+        self.email = email
+        self.planningPermission = planningPermission
+        self.profileImageURL = profileImageURL
+    }
 
     var permission: PlanningPermission {
         planningPermission == "view_only" ? .viewOnly : PlanningPermission(rawValue: planningPermission) ?? .contribute

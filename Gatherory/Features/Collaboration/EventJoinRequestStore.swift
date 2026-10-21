@@ -38,7 +38,13 @@ final class EventJoinRequestStore {
     init(client: (any EventJoinRequestTransport)? = nil) { injectedClient = client }
 
     private var client: (any EventJoinRequestTransport)? {
-        injectedClient ?? AppRuntimeConfiguration.authenticationBaseURL.map { InvitationAPIClient(baseURL: $0) }
+        if let injectedClient { return injectedClient }
+#if DEBUG
+        if BirthdayMarketingFixtures.isEnabled {
+            return BirthdayMarketingFixtures.joinRequestTransport
+        }
+#endif
+        return AppRuntimeConfiguration.authenticationBaseURL.map { InvitationAPIClient(baseURL: $0) }
     }
 
     func requests(eventID: UUID, accountID: String?) -> [EventJoinRequest] {

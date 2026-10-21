@@ -117,13 +117,18 @@ struct ContentView: View {
     @Environment(NotificationNavigationState.self) private var notificationNavigation: NotificationNavigationState?
     @Environment(\.scenePhase) private var scenePhase
     var onExitWorkspace: (() -> Void)?
-    @State private var selectedTab = WorkspaceTab.home
+    @State private var selectedTab: WorkspaceTab
     @State private var homeReselectionTrigger = 0
     @State private var notificationTodoDestination: NotificationPlanningDestination?
     @State private var notificationAnnouncementDestination: NotificationPlanningDestination?
 
     init(onExitWorkspace: (() -> Void)? = nil) {
         self.onExitWorkspace = onExitWorkspace
+#if DEBUG
+        _selectedTab = State(initialValue: BirthdayMarketingFixtures.startsOnManagePreview ? .manage : .home)
+#else
+        _selectedTab = State(initialValue: .home)
+#endif
     }
 
     private var tabSelection: Binding<WorkspaceTab> {

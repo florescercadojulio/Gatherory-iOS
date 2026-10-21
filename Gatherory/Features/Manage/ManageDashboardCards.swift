@@ -113,7 +113,7 @@ struct ManageBudgetCard: View {
     let budgetTotal: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("Budget").font(.subheadline.weight(.semibold))
                 Spacer(minLength: 0)
@@ -121,14 +121,12 @@ struct ManageBudgetCard: View {
             }
             .foregroundStyle(.secondary)
 
-            Spacer(minLength: 5)
             budgetRing.frame(maxWidth: .infinity)
             remainingSummary
-            Spacer(minLength: 5)
         }
         .foregroundStyle(AppTheme.ColorToken.textPrimary)
         .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 180, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 220, maxHeight: .infinity, alignment: .topLeading)
         .background(AppTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 28))
         .contentShape(RoundedRectangle(cornerRadius: 28))
         .accessibilityElement(children: .combine)

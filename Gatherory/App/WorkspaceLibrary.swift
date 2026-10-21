@@ -120,6 +120,11 @@ extension WorkspaceLibrary {
     }
 
     static var sample: WorkspaceLibrary {
+#if DEBUG
+        if BirthdayMarketingFixtures.isEnabled {
+            return WorkspaceLibrary(workspaces: [BirthdayMarketingFixtures.makeWorkspace()])
+        }
+#endif
         let workspaces = [PlanningWorkspace.sample, .secondarySample]
         let developmentAccount = DevelopmentAccountFixtures.planner
 

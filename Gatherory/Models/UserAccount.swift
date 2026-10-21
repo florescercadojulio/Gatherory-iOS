@@ -62,7 +62,18 @@ struct UserAccount: Identifiable, Codable, Hashable, Sendable {
 }
 
 enum DevelopmentAccountFixtures {
-    static let planner = UserAccount(
+    static var planner: UserAccount {
+        var account = defaultPlanner
+#if DEBUG
+        if BirthdayMarketingFixtures.isEnabled {
+            account.displayName = "Alex Morgan"
+            account.profileImageAssetName = "MarketingAlex"
+        }
+#endif
+        return account
+    }
+
+    private static let defaultPlanner = UserAccount(
         id: "47415448-4552-4F52-9950-4C414E4E4552",
         email: "planner@gatherory.test",
         displayName: "Gatherory Planner",

@@ -178,18 +178,51 @@ struct ManageQuickApprovalCard: View {
         }
     }
 
+    private func bundledRequestProfileAsset(for request: EventJoinRequest) -> String? {
+        #if DEBUG
+        BirthdayMarketingFixtures.profileImageAssetName(forEmail: request.email)
+        #else
+        nil
+        #endif
+    }
+
+    private func requestProfileAvatar(_ image: Image) -> some View {
+        image
+            .resizable()
+            .scaledToFill()
+            .frame(width: 56, height: 56)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(.primary.opacity(0.1), lineWidth: 1))
+            .accessibilityHidden(true)
+    }
+
+    private func requestInitialsAvatar(for name: String) -> some View {
+        Text(initials(for: name))
+            .font(.system(size: 17, weight: .bold, design: .rounded))
+            .foregroundStyle(AppTheme.ColorToken.accent)
+            .frame(width: 56, height: 56)
+            .background(AppTheme.ColorToken.accent.opacity(0.14), in: Circle())
+            .overlay(Circle().stroke(.primary.opacity(0.1), lineWidth: 1))
+            .accessibilityHidden(true)
+    }
+
     private func pendingRequestRow(_ request: EventJoinRequest) -> some View {
         VStack(spacing: 7) {
             Group {
                 if let member = knownMember(for: request) {
                     ParticipantAvatarView(member: member, size: 56, style: .accent)
+                } else if let assetName = bundledRequestProfileAsset(for: request) {
+                    requestProfileAvatar(Image(assetName))
+                } else if let imageURL = request.profileImageURL {
+                    AsyncImage(url: imageURL) { phase in
+                        if let image = phase.image {
+                            requestProfileAvatar(image)
+                        } else {
+                            requestInitialsAvatar(for: request.name)
+                        }
+                    }
                 } else {
-                    Text(initials(for: request.name))
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppTheme.ColorToken.accent)
-                        .frame(width: 56, height: 56)
-                        .background(AppTheme.ColorToken.accent.opacity(0.14), in: Circle())
-                        .overlay(Circle().stroke(.primary.opacity(0.1), lineWidth: 1))
+                    requestInitialsAvatar(for: request.name)
                 }
             }
             .accessibilityHidden(true)
