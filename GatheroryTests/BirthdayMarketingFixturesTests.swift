@@ -36,7 +36,7 @@ struct BirthdayMarketingFixturesTests {
 
     @Test("Birthday archive retains people photos, assignments, choices, and dinner costs")
     func archivePreservesPlanningGroup() throws {
-        let workspace = BirthdayMarketingFixtures.makeWorkspace()
+        let workspace = BirthdayMarketingFixtures.makeWorkspace(locale: Locale(identifier: "en"))
         workspace.configureViewer(DevelopmentAccountFixtures.planner)
         let codec = WorkspaceArchiveCodec()
         let restored = try codec.decode(WorkspaceArchiveV1.self,
@@ -66,12 +66,14 @@ struct BirthdayMarketingFixturesTests {
         let card = try #require(restored.decisionQueue.first)
         #expect(card.title == "Candlelit birthday table")
         #expect(restored.teamResponseSummary(for: card) == .init(love: 2, maybe: 1, unanswered: 1))
+        let playlist = try #require(restored.ideas.first { $0.category == .music })
+        #expect(playlist.musicTracks.map(\.title) == ["With You Tonight", "Beneath the Stars", "One More Song"])
         #expect(restored.timeline.map(\.title).allSatisfy { !$0.localizedCaseInsensitiveContains("wedding") })
     }
 
     @Test("Birthday photos stay present and distinct through archive persistence")
     func archivePreservesDistinctMarketingPhotography() throws {
-        let workspace = BirthdayMarketingFixtures.makeWorkspace()
+        let workspace = BirthdayMarketingFixtures.makeWorkspace(locale: Locale(identifier: "en"))
         let codec = WorkspaceArchiveCodec()
         let restored = try codec.decode(WorkspaceArchiveV1.self,
             from: codec.encode(WorkspaceArchiveV1(workspace: workspace))).makeWorkspace()
@@ -84,6 +86,30 @@ struct BirthdayMarketingFixturesTests {
         #expect(imageBytes.count == 11)
         #expect(imageBytes.allSatisfy { !$0.isEmpty })
         #expect(Set(imageBytes).count == imageBytes.count)
+    }
+
+    @Test("Birthday fixture uses Spanish sample copy and local playlist metadata for Spanish previews")
+    func spanishPreviewContentIsLocalized() throws {
+        let workspace = BirthdayMarketingFixtures.makeWorkspace(locale: Locale(identifier: "es"))
+        let playlist = try #require(workspace.ideas.first { $0.category == .music })
+
+        #expect(workspace.title == "Cena de cumple de Maya")
+        #expect(workspace.venueName == "Casa de Alex")
+        #expect(workspace.location == "Detroit, Míchigan")
+        #expect(workspace.dressCode == "Ven como eres")
+        #expect(workspace.eventMessage.contains("Buena comida"))
+        #expect(workspace.ideas.map(\.title).contains("Mesa de cumpleaños a la luz de las velas"))
+        #expect(workspace.ideas.map(\.title).contains("Música para Maya"))
+        #expect(playlist.note.contains("Clásicos"))
+        #expect(playlist.musicTracks.map(\.title) == ["Aquí contigo", "Bajo las estrellas", "Una noche más"])
+        #expect(playlist.musicTracks.allSatisfy {
+            $0.providerID.rawValue == "local-fixture" && $0.externalURL == nil && $0.previewURL == nil
+        })
+        #expect(workspace.timeline.map(\.title).contains("Se sirve la cena"))
+        #expect(workspace.eventExpenses.map(\.title).contains("Compras para la cena"))
+        #expect(workspace.notes.first?.body.contains("La lista de reproducción está lista") == true)
+        #expect(workspace.todos.map(\.title).contains("Recoger el pastel de cumpleaños"))
+        #expect(workspace.members.first?.name == "Alex Morgan")
     }
 
     @Test("Pending requests include pictured requestors and remain transient and event scoped")

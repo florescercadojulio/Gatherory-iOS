@@ -58,7 +58,7 @@ struct NoteComposerView: View {
                                     in: RoundedRectangle(cornerRadius: AppTheme.Radius.card))
                         Text("\(trimmedNote.utf16.count)/750")
                             .font(.caption.monospacedDigit())
-                            .foregroundStyle(trimmedNote.utf16.count > 750 ? .red : .secondary)
+                            .foregroundStyle(trimmedNote.utf16.count > 750 ? AppTheme.ColorToken.warning : .secondary)
                             .frame(maxWidth: .infinity, alignment: .trailing)
                         if !workspace.canSendNote(to: event) {
                             Text("You can’t send notes for this event.")

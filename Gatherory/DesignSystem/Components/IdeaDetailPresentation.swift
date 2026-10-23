@@ -130,34 +130,37 @@ struct IdeaDetailPresentation<Summary: View, Details: View, Backdrop: View>: Vie
     @State private var scrollOffset: CGFloat = 0
 
     var body: some View {
-        GeometryReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                    VStack(spacing: 0) {
-                        Spacer(minLength: max(proxy.size.height * 0.42, 260) + 16)
-                        summary()
+        AdaptiveArtworkPresentation {
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+                        VStack(spacing: 0) {
+                            Spacer(minLength: min(276, max(80, proxy.size.height * 0.42)))
+                            summary()
+                        }
+                        .padding(.bottom, AppTheme.Spacing.standard)
+                        .frame(minHeight: proxy.size.height, alignment: .bottom)
+                        details()
                     }
-                    .padding(.bottom, AppTheme.Spacing.standard)
+                    .adaptiveReadingWidth(680)
+                    .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+                    .padding(.bottom, AppTheme.Layout.screenBottom)
                     .frame(minHeight: proxy.size.height, alignment: .bottom)
-                    details()
                 }
-                .padding(.horizontal, AppTheme.Layout.screenHorizontal)
-                .padding(.bottom, AppTheme.Layout.screenBottom)
-                .frame(minHeight: proxy.size.height, alignment: .bottom)
+                .scrollIndicators(.hidden)
+                .appSoftScrollEdges()
+                .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                    max(geometry.contentOffset.y + geometry.contentInsets.top, 0)
+                } action: { _, newOffset in
+                    scrollOffset = newOffset
+                }
             }
-            .scrollIndicators(.hidden)
-            .appSoftScrollEdges()
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                max(geometry.contentOffset.y + geometry.contentInsets.top, 0)
-            } action: { _, newOffset in
-                scrollOffset = newOffset
-            }
-            .background {
-                backdrop(reduceMotion ? 0 : min(max(scrollOffset / 220, 0), 1))
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-            }
+        } artwork: {
+            backdrop(reduceMotion ? 0 : min(max(scrollOffset / 220, 0), 1))
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
         }
+        .background(.black)
     }
 }
 

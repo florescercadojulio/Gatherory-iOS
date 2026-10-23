@@ -40,6 +40,7 @@ struct LocalGuestAccountView: View {
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(NotificationController.self) private var notifications
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(AppHaptics.preferenceKey) private var hapticsEnabled = true
     @State private var confirmsExit = false
     @State private var failed = false
 
@@ -61,6 +62,16 @@ struct LocalGuestAccountView: View {
                     .tint(AppTheme.ColorToken.accent)
                 }
                 Button(GuestCopy.signInToSave) { dismiss(); authentication.requestGuestSignIn() }
+            }
+            Section("App Settings") {
+                Toggle(isOn: $hapticsEnabled) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(String(localized: "haptics.title", defaultValue: "Haptic Feedback"), systemImage: "waveform")
+                        Text(String(localized: "haptics.help", defaultValue: "Use gentle vibrations for actions and confirmations."))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             Section {
                 Button(GuestCopy.leave, role: .destructive) { confirmsExit = true }
@@ -97,6 +108,7 @@ struct LocalGuestSignInGate: View {
         } description: { Text(message) } actions: {
             Button(GuestCopy.signInToSave) { authentication.requestGuestSignIn() }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
         }
     }
 }

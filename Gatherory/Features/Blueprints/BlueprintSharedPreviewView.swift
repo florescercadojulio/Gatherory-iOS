@@ -13,7 +13,7 @@ struct BlueprintSharedPreviewView: View {
         Group {
             if !model.isLoading, let entry = model.entry {
                 BlueprintPreviewView(
-                    entry: entry, sharedToken: token,
+                    entry: entry, presentationContext: .sharedLink, sharedToken: token,
                     usesSavedPreview: model.usesSavedPreview,
                     hasPendingInstallation: model.hasPendingInstallation,
                     onClose: { sharedLinks.dismiss() }

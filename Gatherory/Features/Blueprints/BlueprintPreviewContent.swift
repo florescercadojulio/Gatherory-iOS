@@ -20,6 +20,11 @@ struct BlueprintPreviewContent {
     let ideas: [BlueprintCatalogIdea]
     let guidance: [BlueprintCatalogInstruction]
     let todos: [BlueprintTodoDefinition]
+    let coverAssetID: UUID?
+    let publicCoverImageURL: String?
+    let publicChildCoverImageURLs: [String: String]
+    let publicIdeaCoverImageURLs: [String: String]
+    private let customizedChildKeys: Set<String>
 
     init?(entry: BlueprintCatalogEntry, customizations: BlueprintCustomization? = nil, eventName: String? = nil,
           creatorNameOverride: String? = nil) {
@@ -31,6 +36,7 @@ struct BlueprintPreviewContent {
         let effective = customizations.flatMap { try? $0.applying(to: entry) }
         if customizations != nil && effective == nil { return nil }
         children = effective?.tree.children ?? tree.children
+        customizedChildKeys = Set(customizations?.children.map(\.key) ?? [])
         let childKeys = Set(children.map(\.key))
         let sourceTodos = entry.definition.modules.first { $0.type == "todos" }?
             .decodeConfiguration(BlueprintTodosConfig.self)?.todos ?? []
@@ -40,6 +46,24 @@ struct BlueprintPreviewContent {
             case .child(let key): childKeys.contains(key)
             }
         }
+        let overridesCover = customizations?.overridesCover == true
+        coverAssetID = overridesCover ? customizations?.coverAssetId : entry.definition.presentation?.coverAssetID
+        publicCoverImageURL = overridesCover ? nil : BlueprintPublicCoverURL.validated(entry.discovery?.coverImageURL)?.absoluteString
+        let coverImages = entry.discovery?.coverImages
+        var childCoverURLs: [String: String] = [:]
+        for child in children {
+            guard !child.coverAssetIdWasProvided || child.coverAssetId != nil,
+                  let url = BlueprintPublicCoverURL.validated(coverImages?.children[child.key])?.absoluteString else { continue }
+            childCoverURLs[child.key] = url
+        }
+        publicChildCoverImageURLs = childCoverURLs
+        var ideaCoverURLs: [String: String] = [:]
+        for idea in (effective?.ideas.ideas ?? ideas.ideas) {
+            guard !idea.coverAssetIdWasProvided || idea.coverAssetId != nil,
+                  let url = BlueprintPublicCoverURL.validated(coverImages?.ideas[idea.key])?.absoluteString else { continue }
+            ideaCoverURLs[idea.key] = url
+        }
+        publicIdeaCoverImageURLs = ideaCoverURLs
         title = eventName.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } ?? entry.definition.blueprint.name
         summary = entry.discovery?.summary
         creatorName = creatorNameOverride ?? entry.creator?.displayName
@@ -67,8 +91,12 @@ struct BlueprintPreviewContent {
             guard case .child(let key) = todo.target else { return nil }
             return key
         })
-        let childKeys = lovedChildKeys.union(taskChildKeys)
-        return Self(title: title, summary: summary, creatorName: creatorName,
+        let childKeys = lovedChildKeys.union(taskChildKeys).union(customizedChildKeys)
+        return Self(title: title, summary: summary, creatorName: creatorName, coverAssetID: coverAssetID,
+                    publicCoverImageURL: publicCoverImageURL,
+                    publicChildCoverImageURLs: publicChildCoverImageURLs,
+                    publicIdeaCoverImageURLs: publicIdeaCoverImageURLs,
+                    customizedChildKeys: customizedChildKeys,
                     children: children.filter { childKeys.contains($0.key) },
                     ideas: lovedIdeas, guidance: guidance,
                     todos: todos.filter { todo in
@@ -79,10 +107,17 @@ struct BlueprintPreviewContent {
                     })
     }
 
-    private init(title: String, summary: String?, creatorName: String?, children: [BlueprintCatalogChild],
+    private init(title: String, summary: String?, creatorName: String?, coverAssetID: UUID?, publicCoverImageURL: String?,
+                 publicChildCoverImageURLs: [String: String], publicIdeaCoverImageURLs: [String: String],
+                 customizedChildKeys: Set<String>, children: [BlueprintCatalogChild],
                  ideas: [BlueprintCatalogIdea], guidance: [BlueprintCatalogInstruction],
                  todos: [BlueprintTodoDefinition]) {
         self.title = title
+        self.coverAssetID = coverAssetID
+        self.publicCoverImageURL = publicCoverImageURL
+        self.publicChildCoverImageURLs = publicChildCoverImageURLs
+        self.publicIdeaCoverImageURLs = publicIdeaCoverImageURLs
+        self.customizedChildKeys = customizedChildKeys
         self.summary = summary
         self.creatorName = creatorName
         self.children = children
@@ -118,13 +153,18 @@ struct BlueprintPreviewContent {
                 title: child.title, summary: nil, category: child.category,
                 children: [], ideas: ideas(for: childKey), guidance: guidance(for: childKey),
                 scheduleProposal: child.scheduleProposal,
-                todos: todos.filter { $0.target == .child(key: childKey) }
+                todos: todos.filter { $0.target == .child(key: childKey) },
+                coverAssetID: child.coverAssetId,
+                publicCoverImageURL: publicChildCoverImageURLs[child.key],
+                publicIdeaCoverImageURLs: publicIdeaCoverImageURLs
             )
         }
         return BlueprintPreviewEventContent(
             title: title, summary: summary, category: "event", children: children,
             ideas: ideas(), guidance: guidance(), scheduleProposal: nil,
-            todos: todos.filter { $0.target == .main }
+            todos: todos.filter { $0.target == .main },
+            coverAssetID: coverAssetID, publicCoverImageURL: publicCoverImageURL,
+            publicIdeaCoverImageURLs: publicIdeaCoverImageURLs
         )
     }
 
@@ -159,4 +199,7 @@ struct BlueprintPreviewEventContent {
     let guidance: [BlueprintCatalogInstruction]
     let scheduleProposal: BlueprintScheduleProposal?
     var todos: [BlueprintTodoDefinition] = []
+    var coverAssetID: UUID? = nil
+    var publicCoverImageURL: String? = nil
+    var publicIdeaCoverImageURLs: [String: String] = [:]
 }

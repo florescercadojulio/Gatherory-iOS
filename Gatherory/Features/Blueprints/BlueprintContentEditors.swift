@@ -1,35 +1,102 @@
 import SwiftUI
 
-/// A focused wrapper around the same name field used by workspace editors.
-struct BlueprintPreviewNameEditor: View {
+/// Stages the main event's editable values until the user saves the whole form.
+struct BlueprintMainEventDraftEditor: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var name: String
-    let onSave: (String) -> Void
+    @Environment(\.blueprintCoverSource) private var coverSource
+    @State private var values: BlueprintPreviewSession.MainEventValues
+    @State private var coverAssetID: UUID?
+    @State private var coverWasRemoved = false
+    private let publicCoverImageURL: String?
+    @State private var isUploadingCover = false
+    @State private var showsDateEditor = false
+    @State private var confirmsDate = false
+    let onSave: (BlueprintPreviewSession.MainEventValues, UUID?, Bool, Bool) -> Void
 
-    init(name: String, onSave: @escaping (String) -> Void) {
-        _name = State(initialValue: name)
+    init(values: BlueprintPreviewSession.MainEventValues, coverAssetID: UUID?, publicCoverImageURL: String? = nil,
+         onSave: @escaping (BlueprintPreviewSession.MainEventValues, UUID?, Bool, Bool) -> Void) {
+        _values = State(initialValue: values)
+        _coverAssetID = State(initialValue: coverAssetID)
+        self.publicCoverImageURL = publicCoverImageURL
         self.onSave = onSave
     }
 
-    private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmedName: String { values.name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var selectedTimeZone: TimeZone {
+        TimeZone(identifier: values.timeZoneIdentifier) ?? .autoupdatingCurrent
+    }
+    private var formattedStart: String {
+        values.startsAt.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, timeZone: selectedTimeZone))
+    }
+    private var isValid: Bool {
+        !isUploadingCover && !trimmedName.isEmpty && trimmedName.unicodeScalars.count <= 120
+            && values.startsAt.timeIntervalSince1970.isFinite
+            && TimeZone(identifier: values.timeZoneIdentifier) != nil
+    }
 
     var body: some View {
         Form {
-            BasicEditorNameField(label: Text("Title"), prompt: Text("Event name"), text: $name)
-            if trimmed.unicodeScalars.count > 120 {
-                Text("Titles can be up to 120 characters.").foregroundStyle(.red)
+            Section {
+                BasicEditorNameField(label: Text("Title"), prompt: Text("Event name"), text: $values.name)
+                if trimmedName.unicodeScalars.count > 120 {
+                    Text("Titles can be up to 120 characters.").foregroundStyle(AppTheme.ColorToken.destructive)
+                }
+            } header: {
+                Text(BlueprintCopy.eventName)
+            }
+
+            Section {
+                Button { showsDateEditor = true } label: {
+                    HStack(spacing: AppTheme.Spacing.standard) {
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                            Text(BlueprintCopy.dateTime)
+                                .foregroundStyle(.primary)
+                            Text("\(formattedStart) · \(selectedTimeZone.abbreviation(for: values.startsAt) ?? values.timeZoneIdentifier)")
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            Section {
+                BlueprintCoverField(assetID: $coverAssetID, source: coverSource, isUploading: $isUploadingCover,
+                                    publicImageURL: coverWasRemoved ? nil : publicCoverImageURL,
+                                    onCoverRemoved: { coverWasRemoved = true })
             }
         }
-        .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
-        .navigationTitle("Event name")
+        .navigationTitle("Edit Event")
         .navigationBarTitleDisplayMode(.inline)
         .appKeyboardDismissal()
+        .interactiveDismissDisabled(isUploadingCover)
+        .sheet(isPresented: $showsDateEditor) {
+            EventDateTimeEditorView(startsAt: values.startsAt, endsAt: nil, isAllDay: false,
+                                    timeZoneIdentifier: values.timeZoneIdentifier,
+                                    supportsExtendedSchedule: false) { date, _, _, zone in
+                values.startsAt = date
+                values.timeZoneIdentifier = zone
+                confirmsDate = true
+            }
+            .presentationDragIndicator(.visible)
+        }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { onSave(trimmed); dismiss() }
-                    .disabled(trimmed.isEmpty || trimmed.unicodeScalars.count > 120)
+                Button("Save") {
+                    values.name = trimmedName
+                    onSave(values, coverAssetID, confirmsDate, coverWasRemoved)
+                    dismiss()
+                }
+                .disabled(!isValid)
+                .keyboardShortcut(.defaultAction)
             }
         }
     }
@@ -37,8 +104,7 @@ struct BlueprintPreviewNameEditor: View {
 
 struct BlueprintPreviewEditorRoute: Identifiable {
     enum Item {
-        case name
-        case dateTime
+        case mainEvent
         case child(BlueprintCatalogChild?)
         case idea(BlueprintCatalogIdea?)
     }
@@ -56,6 +122,7 @@ struct BlueprintIdeaDraftEditor: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.blueprintCoverSource) private var coverSource
 
     let idea: BlueprintCatalogIdea?
     let children: [BlueprintCatalogChild]
@@ -65,19 +132,26 @@ struct BlueprintIdeaDraftEditor: View {
     @State private var category: IdeaCategory?
     @State private var notes: String
     @State private var targetKey: String
+    @State private var coverAssetID: UUID?
+    @State private var coverWasRemoved = false
+    @State private var isUploadingCover = false
     @State private var categoryPage = 0
     @State private var isChoosingCategory: Bool
+    private let publicCoverImageURL: String?
 
     init(
         idea: BlueprintCatalogIdea?,
         children: [BlueprintCatalogChild],
+        publicCoverImageURL: String? = nil,
         initialTarget: BlueprintTarget = .main,
         onSave: @escaping (BlueprintCatalogIdea) -> Void
     ) {
         self.idea = idea
         self.children = children
+        self.publicCoverImageURL = publicCoverImageURL
         self.onSave = onSave
         _title = State(initialValue: idea?.title ?? "")
+        _coverAssetID = State(initialValue: idea?.coverAssetId)
         _category = State(initialValue: idea.map { IdeaCategory(rawValue: $0.category) ?? .other })
         _notes = State(initialValue: idea?.notes ?? "")
         _targetKey = State(initialValue: Self.targetKey(for: idea?.target ?? initialTarget))
@@ -112,7 +186,7 @@ struct BlueprintIdeaDraftEditor: View {
     }
 
     private var isValid: Bool {
-        !trimmedTitle.isEmpty
+        !isUploadingCover && !trimmedTitle.isEmpty
             && trimmedTitle.unicodeScalars.count <= 120
             && notes.unicodeScalars.count <= 2_000
             && category.map { supportedCategories.contains($0) } == true
@@ -139,7 +213,6 @@ struct BlueprintIdeaDraftEditor: View {
                 detailsForm
             }
         }
-        .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
         .navigationTitle(idea == nil ? Text(String(localized: "Add Template Idea", defaultValue: "Add Idea")) : Text(String(localized: "Edit Template Idea", defaultValue: "Edit Idea")))
         .navigationBarTitleDisplayMode(.inline)
@@ -170,6 +243,12 @@ struct BlueprintIdeaDraftEditor: View {
                 validationHint
             } header: {
                 Text("Idea Details")
+            }
+
+            Section {
+                BlueprintCoverField(assetID: $coverAssetID, source: coverSource, isUploading: $isUploadingCover,
+                                    publicImageURL: coverWasRemoved ? nil : publicCoverImageURL,
+                                    onCoverRemoved: { coverWasRemoved = true })
             }
 
             Section("Category") {
@@ -213,7 +292,9 @@ struct BlueprintIdeaDraftEditor: View {
             category: category.rawValue,
             notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
             target: Self.target(from: targetKey),
-            configuration: idea?.configuration ?? ["version": .integer(1)]
+            configuration: idea?.configuration ?? ["version": .integer(1)],
+            coverAssetId: coverAssetID,
+            coverAssetIdWasProvided: coverWasRemoved || coverAssetID != idea?.coverAssetId || idea?.coverAssetIdWasProvided == true
         )
         onSave(updatedIdea)
         dismiss()
@@ -245,18 +326,25 @@ struct BlueprintIdeaDraftEditor: View {
 
 struct BlueprintChildDraftEditor: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.blueprintCoverSource) private var coverSource
 
     let child: BlueprintCatalogChild?
+    let publicCoverImageURL: String?
     let onSave: (BlueprintCatalogChild) -> Void
 
     @State private var title: String
     @State private var category: TimelineCategory
     @State private var purpose: EventPurpose
+    @State private var coverAssetID: UUID?
+    @State private var coverWasRemoved = false
+    @State private var isUploadingCover = false
 
-    init(child: BlueprintCatalogChild?, onSave: @escaping (BlueprintCatalogChild) -> Void) {
+    init(child: BlueprintCatalogChild?, publicCoverImageURL: String? = nil, onSave: @escaping (BlueprintCatalogChild) -> Void) {
         self.child = child
+        self.publicCoverImageURL = publicCoverImageURL
         self.onSave = onSave
         _title = State(initialValue: child?.title ?? "")
+        _coverAssetID = State(initialValue: child?.coverAssetId)
         _category = State(initialValue: child.flatMap { Self.timelineCategory(from: $0.category) } ?? .other)
         _purpose = State(initialValue: child?.purpose == "part_of_event" ? .eventExperience : .planning)
     }
@@ -266,7 +354,7 @@ struct BlueprintChildDraftEditor: View {
     }
 
     private var isValid: Bool {
-        !trimmedTitle.isEmpty && trimmedTitle.unicodeScalars.count <= 120
+        !isUploadingCover && !trimmedTitle.isEmpty && trimmedTitle.unicodeScalars.count <= 120
     }
 
     var body: some View {
@@ -280,6 +368,12 @@ struct BlueprintChildDraftEditor: View {
                 }
             } header: {
                 Text(BlueprintCopy.eventName)
+            }
+
+            Section {
+                BlueprintCoverField(assetID: $coverAssetID, source: coverSource, isUploading: $isUploadingCover,
+                                    publicImageURL: coverWasRemoved ? nil : publicCoverImageURL,
+                                    onCoverRemoved: { coverWasRemoved = true })
             }
 
             Section("Category") {
@@ -296,7 +390,6 @@ struct BlueprintChildDraftEditor: View {
                 Text("Purpose")
             }
         }
-        .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
         .navigationTitle(child == nil ? Text(String(localized: "Add Template Sub-event", defaultValue: "Add Event")) : Text(String(localized: "Edit Template Sub-event", defaultValue: "Edit Event")))
         .navigationBarTitleDisplayMode(.inline)
@@ -320,7 +413,9 @@ struct BlueprintChildDraftEditor: View {
             title: trimmedTitle,
             purpose: purpose == .eventExperience ? "part_of_event" : "planning_scouting",
             category: Self.blueprintCategory(from: category),
-            scheduleProposal: child?.scheduleProposal
+            scheduleProposal: child?.scheduleProposal,
+            coverAssetId: coverAssetID,
+            coverAssetIdWasProvided: coverWasRemoved || coverAssetID != child?.coverAssetId || child?.coverAssetIdWasProvided == true
         )
         onSave(updatedChild)
         dismiss()
@@ -345,4 +440,24 @@ struct BlueprintChildDraftEditor: View {
         default: category.rawValue
         }
     }
+}
+
+#Preview("Edit Blueprint Event · Light") {
+    NavigationStack {
+        BlueprintMainEventDraftEditor(
+            values: .init(name: "Garden celebration", startsAt: .now, timeZoneIdentifier: TimeZone.current.identifier),
+            coverAssetID: nil
+            ) { _, _, _, _ in }
+    }
+    .preferredColorScheme(.light)
+}
+
+#Preview("Edit Blueprint Event · Dark") {
+    NavigationStack {
+        BlueprintMainEventDraftEditor(
+            values: .init(name: "Garden celebration", startsAt: .now, timeZoneIdentifier: TimeZone.current.identifier),
+            coverAssetID: nil
+        ) { _, _, _, _ in }
+    }
+    .preferredColorScheme(.dark)
 }

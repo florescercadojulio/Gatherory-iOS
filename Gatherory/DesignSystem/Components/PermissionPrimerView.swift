@@ -60,6 +60,7 @@ struct PermissionPrimerView: View {
                                 .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.borderedProminent)
+                            .foregroundStyle(AppTheme.ColorToken.onAccent)
                             .controlSize(.large)
                             .disabled(isWorking)
 

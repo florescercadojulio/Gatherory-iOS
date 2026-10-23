@@ -40,7 +40,7 @@ struct BlueprintDiscoveryNavigation {
     }
 
     var restoresSearchFocus: Bool {
-        switch retainedSource {
+        switch retainedMode {
         case .results?, .recent?: true
         default: false
         }

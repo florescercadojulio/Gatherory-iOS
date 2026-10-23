@@ -217,6 +217,7 @@ struct ManageView: View {
                 }
             }
             .buttonStyle(.plain)
+            .adaptiveReadingWidth(760)
             .padding(.horizontal, AppTheme.Layout.screenHorizontal)
             .padding(.top, AppTheme.Layout.screenTop)
             .padding(.bottom, AppTheme.Layout.screenBottom)
@@ -229,13 +230,10 @@ struct ManageView: View {
             if let onExitWorkspace {
                 ToolbarItem(placement: .topBarLeading) { WorkspaceLibraryToolbarButton(action: onExitWorkspace) }
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                ToolbarGlassActionGroup {
-                    AccountToolbarButton(avatarSize: 28)
-                        .frame(width: 44, height: 44)
-                }
+            AdaptiveToolbarActions {
+                AccountToolbarButton(avatarSize: 28)
+                    .frame(width: 44, height: 44)
             }
-            .sharedBackgroundVisibility(.hidden)
         }
         .navigationDestination(for: ManageDestination.self) { destination in
             switch destination {
@@ -255,7 +253,7 @@ struct ManageView: View {
             await refreshRequests()
         }
         .refreshable { await refreshRequests(force: true) }
-        .sensoryFeedback(.success, trigger: successfulTakeHaptic)
+        .appHaptic(.success, trigger: successfulTakeHaptic)
         .alert(TodoCopy.saveFailed, isPresented: $todoTakeFailed) {
             Button(AppCopy.Common.close, role: .cancel) {}
         } message: { Text(TodoCopy.saveFailedHelp) }
@@ -283,6 +281,7 @@ struct ManageView: View {
         } catch {
             workspace.todos = previous
             todoTakeFailed = true
+            AppHaptics.play(.error)
         }
     }
 }

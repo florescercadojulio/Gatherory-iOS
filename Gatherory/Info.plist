@@ -47,6 +47,23 @@
 	<string>$(FORCE_ONBOARDING)</string>
 	<key>FCM_NOTIFICATIONS_ENABLED</key>
 	<string>$(FCM_NOTIFICATIONS_ENABLED)</string>
+	<key>EXPLORE_ADS_ENABLED</key>
+	<string>$(EXPLORE_ADS_ENABLED)</string>
+	<key>EXPLORE_ADS_TEST_MODE</key>
+	<string>$(EXPLORE_ADS_TEST_MODE)</string>
+	<key>GADApplicationIdentifier</key>
+	<string>$(ADMOB_APP_ID)</string>
+	<key>ADMOB_NATIVE_AD_UNIT_ID</key>
+	<string>$(ADMOB_NATIVE_AD_UNIT_ID)</string>
+	<key>GADDelayAppMeasurementInit</key>
+	<true/>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 	<key>FirebaseMessagingAutoInitEnabled</key>
 	<false/>
 	<key>GIDClientID</key>

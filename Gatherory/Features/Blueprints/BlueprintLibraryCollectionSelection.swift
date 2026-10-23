@@ -1,5 +1,39 @@
 import Foundation
 
+enum BlueprintLibraryPrimaryCollection: String, CaseIterable, Identifiable, Hashable, Sendable {
+    case yours, saved, liked
+
+    var id: Self { self }
+}
+
+struct BlueprintLibraryPrimaryCollectionPreferenceStore {
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+
+    func collection(ownerID: String) -> BlueprintLibraryPrimaryCollection? {
+        guard !ownerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let value = defaults.string(forKey: key(ownerID: ownerID))
+        else { return nil }
+        return BlueprintLibraryPrimaryCollection(rawValue: value)
+    }
+
+    func save(_ collection: BlueprintLibraryPrimaryCollection, ownerID: String) {
+        guard !ownerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        defaults.set(collection.rawValue, forKey: key(ownerID: ownerID))
+    }
+
+    func removeAll(accountID: String) throws { defaults.removeObject(forKey: key(ownerID: accountID)) }
+
+    private func key(ownerID: String) -> String {
+        let encoded = Data(ownerID.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "blueprintLibrary.primaryCollection.\(encoded)"
+    }
+}
+
 enum BlueprintLibraryCollection: String, CaseIterable, Identifiable, Sendable {
     case installedTemplates
     case inProgress
@@ -56,6 +90,7 @@ struct BlueprintLibraryCollectionPreferenceStore {
 
     func removeAll(accountID: String) throws {
         defaults.removeObject(forKey: key(ownerID: accountID))
+        try BlueprintLibraryPrimaryCollectionPreferenceStore(defaults: defaults).removeAll(accountID: accountID)
     }
 
     private func key(ownerID: String) -> String {

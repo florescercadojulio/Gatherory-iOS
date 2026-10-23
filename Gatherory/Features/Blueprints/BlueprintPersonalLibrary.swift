@@ -10,10 +10,11 @@ nonisolated struct BlueprintDraftContent: Codable, Equatable, Sendable {
     var ideas: [BlueprintCatalogIdea]
     var instructions: [BlueprintDraftInstruction]
     var todos: [BlueprintTodoDefinition]
+    var coverAssetId: UUID?
 
     init(name: String, description: String, experienceType: String,
          children: [BlueprintCatalogChild], ideas: [BlueprintCatalogIdea],
-         instructions: [BlueprintDraftInstruction], todos: [BlueprintTodoDefinition] = []) {
+         instructions: [BlueprintDraftInstruction], todos: [BlueprintTodoDefinition] = [], coverAssetId: UUID? = nil) {
         self.name = name
         self.description = description
         self.experienceType = experienceType
@@ -21,9 +22,10 @@ nonisolated struct BlueprintDraftContent: Codable, Equatable, Sendable {
         self.ideas = ideas
         self.instructions = instructions
         self.todos = todos
+        self.coverAssetId = coverAssetId
     }
 
-    private enum CodingKeys: String, CodingKey { case name, description, experienceType, children, ideas, instructions, todos }
+    private enum CodingKeys: String, CodingKey { case name, description, experienceType, children, ideas, instructions, todos, coverAssetId }
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -33,11 +35,13 @@ nonisolated struct BlueprintDraftContent: Codable, Equatable, Sendable {
         children = try container.decode([BlueprintCatalogChild].self, forKey: .children)
         ideas = try container.decode([BlueprintCatalogIdea].self, forKey: .ideas)
         instructions = try container.decode([BlueprintDraftInstruction].self, forKey: .instructions)
+        coverAssetId = try container.decodeIfPresent(UUID.self, forKey: .coverAssetId)
         todos = try container.decodeIfPresent([BlueprintTodoDefinition].self, forKey: .todos) ?? []
     }
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(coverAssetId, forKey: .coverAssetId)
         try container.encode(name, forKey: .name)
         try container.encode(description, forKey: .description)
         try container.encode(experienceType, forKey: .experienceType)
@@ -191,6 +195,7 @@ extension BlueprintPersonalRecord {
         }
         var result = draftContent
         result.name = session.mainEventValues.name
+        result.coverAssetId = content.coverAssetID
         result.children = content.children
         result.ideas = content.ideas
         return result
@@ -207,6 +212,7 @@ extension BlueprintPersonalRecord {
             .decodeConfiguration(BlueprintTodosConfig.self)?.todos ?? []
         return BlueprintDraftContent(name: catalogEntry.definition.blueprint.name, description: catalogEntry.description ?? catalogEntry.discovery?.summary ?? "",
             experienceType: catalogEntry.definition.experienceDefaults.type, children: children,
-            ideas: ideas, instructions: instructions, todos: todos)
+            ideas: ideas, instructions: instructions, todos: todos,
+            coverAssetId: catalogEntry.definition.presentation?.coverAssetID)
     }
 }

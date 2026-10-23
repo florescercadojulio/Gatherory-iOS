@@ -85,6 +85,7 @@ struct BlueprintShareQRCodeView: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(AppTheme.ColorToken.onAccent)
             .accessibilityLabel(BlueprintCopy.shareQRCodeTitle)
             .disabled(code?.pngData == nil)
             .privacySensitive()

@@ -3,6 +3,29 @@ import Testing
 @testable import Gatherory
 
 struct BlueprintLibraryCollectionSelectionTests {
+    @Test("Primary library sections cover Yours, Saved, and Liked")
+    func primarySections() {
+        #expect(BlueprintLibraryPrimaryCollection.allCases == [.yours, .saved, .liked])
+        for collection in BlueprintLibraryPrimaryCollection.allCases {
+            #expect(collection.id == collection)
+        }
+    }
+
+    @Test("Primary collection preference is isolated by authenticated owner")
+    func primaryOwnerIsolation() {
+        let suite = "BlueprintLibraryPrimaryCollectionPreferenceStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = BlueprintLibraryPrimaryCollectionPreferenceStore(defaults: defaults)
+
+        store.save(.saved, ownerID: "account-a")
+        store.save(.liked, ownerID: "account-b")
+
+        #expect(store.collection(ownerID: "account-a") == .saved)
+        #expect(store.collection(ownerID: "account-b") == .liked)
+        #expect(store.collection(ownerID: "account-c") == nil)
+    }
+
     @Test("An empty collection offers the other collection in both directions")
     func emptyCollectionSwitch() {
         #expect(BlueprintLibraryCollection.installedTemplates.other == .inProgress)

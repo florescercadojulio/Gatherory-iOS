@@ -91,12 +91,21 @@ extension BlueprintCatalogEntry {
     }
 
     func matches(query: String) -> Bool {
+        let locale = Locale.current
+        let searchable = searchableText(locale: locale)
+        return query.split(whereSeparator: \.isWhitespace).allSatisfy {
+            searchable.contains(Self.normalizedSearchToken(String($0), locale: locale))
+        }
+    }
+
+    func searchableText(locale: Locale) -> String {
         let fields = [definition.blueprint.name, catalogKey, discovery?.summary ?? ""]
             + (discovery?.tags ?? []) + browseCategories.flatMap { [$0.rawValue, $0.title] }
-        let searchable = fields.joined(separator: " ").folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-        return query.split(whereSeparator: \.isWhitespace).allSatisfy {
-            searchable.contains(String($0).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current))
-        }
+        return fields.joined(separator: " ").folding(options: [.caseInsensitive, .diacriticInsensitive], locale: locale)
+    }
+
+    static func normalizedSearchToken(_ value: String, locale: Locale) -> String {
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: locale)
     }
 }
 
@@ -137,6 +146,10 @@ final class BlueprintDiscoveryModel {
     private let ownerID: String
     private let history: BlueprintRecentHistory
     private var generation = UUID()
+    @ObservationIgnored private var indexedLocaleIdentifier = Locale.current.identifier
+    @ObservationIgnored private var searchableTextByEntryID: [String: String] = [:]
+    @ObservationIgnored private var entriesByCategory: [BlueprintBrowseCategory: [BlueprintCatalogEntry]] = [:]
+    @ObservationIgnored private var cachedAvailableCategories: [BlueprintBrowseCategory] = []
 
     init(ownerID: String, defaults: UserDefaults = .standard) {
         self.ownerID = ownerID
@@ -147,6 +160,33 @@ final class BlueprintDiscoveryModel {
     var recentEntries: [BlueprintCatalogEntry] {
         // Removed/retired entries cannot be resurrected from history.
         recentKeys.compactMap { key in entries.first { $0.catalogKey == key } }
+    }
+
+    var availableCategories: [BlueprintBrowseCategory] {
+        // The caches are observation-ignored, so track catalog changes through this dependency.
+        _ = entries.count
+        ensureLocalizedIndexIsCurrent()
+        return cachedAvailableCategories
+    }
+
+    func entries(in category: BlueprintBrowseCategory) -> [BlueprintCatalogEntry] {
+        // The caches are observation-ignored, so track catalog changes through this dependency.
+        _ = entries.count
+        ensureLocalizedIndexIsCurrent()
+        return entriesByCategory[category] ?? []
+    }
+
+    func searchResults(for query: String) -> [BlueprintCatalogEntry] {
+        ensureLocalizedIndexIsCurrent()
+        let locale = Locale.current
+        let tokens = query.split(whereSeparator: \.isWhitespace).map {
+            BlueprintCatalogEntry.normalizedSearchToken(String($0), locale: locale)
+        }
+        guard !tokens.isEmpty else { return entries }
+        return entries.filter { entry in
+            guard let searchable = searchableTextByEntryID[entry.id] else { return false }
+            return tokens.allSatisfy { searchable.contains($0) }
+        }
     }
 
     func recordAccess(_ entry: BlueprintCatalogEntry) {
@@ -176,9 +216,37 @@ final class BlueprintDiscoveryModel {
                 let order = $0.definition.blueprint.name.localizedStandardCompare($1.definition.blueprint.name)
                 return order == .orderedSame ? $0.catalogKey < $1.catalogKey : order == .orderedAscending
             }
+            rebuildCatalogIndex(locale: Locale.current)
         } catch {
             guard generation == token, !Task.isCancelled else { return }
             loadFailed = true
         }
+    }
+
+    private func ensureLocalizedIndexIsCurrent() {
+        let locale = Locale.current
+        guard indexedLocaleIdentifier != locale.identifier else { return }
+        rebuildCatalogIndex(locale: locale)
+    }
+
+    private func rebuildCatalogIndex(locale: Locale) {
+        indexedLocaleIdentifier = locale.identifier
+        var searchableText: [String: String] = [:]
+        var categoryEntries: [BlueprintBrowseCategory: [BlueprintCatalogEntry]] = [:]
+        var populatedCategories = Set<BlueprintBrowseCategory>()
+
+        for entry in entries {
+            let categories = entry.browseCategories
+            populatedCategories.formUnion(categories)
+            for category in Set(categories) {
+                categoryEntries[category, default: []].append(entry)
+            }
+
+            searchableText[entry.id] = entry.searchableText(locale: locale)
+        }
+
+        searchableTextByEntryID = searchableText
+        entriesByCategory = categoryEntries
+        cachedAvailableCategories = BlueprintBrowseCategory.allCases.filter { populatedCategories.contains($0) }
     }
 }

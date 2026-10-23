@@ -39,6 +39,41 @@ struct BlueprintCustomizationTests {
         #expect(try sourceConfigs(entry).ideas == source.ideas)
     }
 
+    @Test("Omitted target covers inherit, while explicit null survives customization encoding as removal")
+    func targetCoverInheritanceAndRemoval() throws {
+        let ids = (child: UUID(), idea: UUID())
+        let entry = try entryWithTargetCoverIDs(ids: ids)
+        var customization = BlueprintCustomization(
+            children: [BlueprintCatalogChild(key: "ceremony", title: "Updated ceremony", purpose: "part_of_event",
+                                             category: "ceremony", scheduleProposal: nil)],
+            ideas: [BlueprintCatalogIdea(key: "flowers", title: "Updated flowers", category: "flowers", notes: nil,
+                                         target: .main, configuration: ["version": .integer(1)])]
+        )
+        let inherited = try customization.applying(to: entry)
+        #expect(inherited.tree.children.first { $0.key == "ceremony" }?.coverAssetId == ids.child)
+        #expect(inherited.ideas.ideas.first { $0.key == "flowers" }?.coverAssetId == ids.idea)
+        let omitted = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(customization)) as? [String: Any])
+        let omittedChild = try #require((omitted["children"] as? [[String: Any]])?.first)
+        let omittedIdea = try #require((omitted["ideas"] as? [[String: Any]])?.first)
+        #expect(omittedChild["coverAssetId"] == nil)
+        #expect(omittedIdea["coverAssetId"] == nil)
+
+        customization.children = [BlueprintCatalogChild(key: "ceremony", title: "Updated ceremony", purpose: "part_of_event",
+                                                        category: "ceremony", scheduleProposal: nil, coverAssetIdWasProvided: true)]
+        customization.ideas = [BlueprintCatalogIdea(key: "flowers", title: "Updated flowers", category: "flowers", notes: nil,
+                                                   target: .main, configuration: ["version": .integer(1)],
+                                                   coverAssetIdWasProvided: true)]
+        let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(customization)) as? [String: Any]
+        let encodedChild = try #require((encoded?["children"] as? [[String: Any]])?.first)
+        let encodedIdea = try #require((encoded?["ideas"] as? [[String: Any]])?.first)
+        #expect(encodedChild["coverAssetId"] is NSNull)
+        #expect(encodedIdea["coverAssetId"] is NSNull)
+        let decoded = try JSONDecoder().decode(BlueprintCustomization.self, from: JSONEncoder().encode(customization))
+        let removed = try decoded.applying(to: entry)
+        #expect(removed.tree.children.first { $0.key == "ceremony" }?.coverAssetId == nil)
+        #expect(removed.ideas.ideas.first { $0.key == "flowers" }?.coverAssetId == nil)
+    }
+
     @Test("Customization validates counts, categories, Unicode scalar lengths, keys, and targets")
     func validatesEffectiveData() throws {
         let entry = try weddingEntry()
@@ -231,6 +266,32 @@ struct BlueprintCustomizationTests {
         let url = try #require(Bundle(for: BlueprintCustomizationFixtureBundle.self)
             .url(forResource: "wedding-catalog.v1", withExtension: "json"))
         return try #require(JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: url)).entries.first)
+    }
+
+    private func entryWithTargetCoverIDs(ids: (child: UUID, idea: UUID)) throws -> BlueprintCatalogEntry {
+        let entry = try weddingEntry()
+        var root = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(entry)) as? [String: Any])
+        var definition = try #require(root["definition"] as? [String: Any])
+        var modules = try #require(definition["modules"] as? [[String: Any]])
+        let treeIndex = try #require(modules.firstIndex { $0["type"] as? String == "experience_tree" })
+        var treeConfig = try #require(modules[treeIndex]["config"] as? [String: Any])
+        var children = try #require(treeConfig["children"] as? [[String: Any]])
+        if let index = children.firstIndex(where: { $0["key"] as? String == "ceremony" }) {
+            children[index]["coverAssetId"] = ids.child.uuidString
+        }
+        treeConfig["children"] = children
+        modules[treeIndex]["config"] = treeConfig
+        let ideasIndex = try #require(modules.firstIndex { $0["type"] as? String == "ideas" })
+        var ideaConfig = try #require(modules[ideasIndex]["config"] as? [String: Any])
+        var catalogIdeas = try #require(ideaConfig["ideas"] as? [[String: Any]])
+        if let index = catalogIdeas.firstIndex(where: { $0["key"] as? String == "flowers" }) {
+            catalogIdeas[index]["coverAssetId"] = ids.idea.uuidString
+        }
+        ideaConfig["ideas"] = catalogIdeas
+        modules[ideasIndex]["config"] = ideaConfig
+        definition["modules"] = modules
+        root["definition"] = definition
+        return try JSONDecoder().decode(BlueprintCatalogEntry.self, from: JSONSerialization.data(withJSONObject: root))
     }
 
     private func sourceConfigs(

@@ -18,6 +18,11 @@ nonisolated enum BlueprintSetupDateLabel {
 
 /// Local confirmation policy only. Suggestions never count as confirmed dates.
 nonisolated enum BlueprintInstallReadiness {
+    static func isValidEventName(_ value: String) -> Bool {
+        let name = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !name.isEmpty && name.unicodeScalars.count <= 120
+    }
+
     static func missingChildren(selected: Set<String>, confirmed: [String: Date]) -> Set<String> {
         selected.subtracting(confirmed.filter { $0.value.timeIntervalSince1970.isFinite }.map(\.key))
     }

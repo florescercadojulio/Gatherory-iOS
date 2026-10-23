@@ -335,6 +335,7 @@ struct GatheroryLaunchContainer: View {
         } actions: {
             Button(AppCopy.Common.retry) { Task { await authentication.restoreSession() } }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
             Button("Sign In") { restorationSignInRequested = true }
         }
         .disabled(authentication.isProcessing)
@@ -362,6 +363,7 @@ struct GatheroryLaunchContainer: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
             }
         }
         .confirmationDialog(DeletionCleanupCopy.removeTitle, isPresented: $confirmsDeviceRemoval, titleVisibility: .visible) {
@@ -382,6 +384,7 @@ struct GatheroryLaunchContainer: View {
                 Task { try? await authentication.discardGuestSession() }
             }
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(AppTheme.ColorToken.onAccent)
         }
         .disabled(authentication.isProcessing)
     }
@@ -394,6 +397,7 @@ struct GatheroryLaunchContainer: View {
         } actions: {
             Button(AppCopy.Common.retry) { preparationAttempt += 1 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
             Button("Sign Out") { Task { await authentication.signOut(keepingPendingChanges: true) } }
         }
     }
@@ -429,6 +433,7 @@ struct GatheroryLaunchContainer: View {
                     Task { await cloudSync.retryInitialBootstrap() }
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
 
                 Button(role: .destructive) {
                     // Bootstrap may be unavailable even though a stale local

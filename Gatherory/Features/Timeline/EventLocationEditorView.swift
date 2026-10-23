@@ -6,11 +6,11 @@ import SwiftUI
 
 struct EventLocationEditorView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dismissSearch) private var dismissSearch
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var searchModel = LocationSearchModel()
     @StateObject private var currentLocationModel = CurrentLocationModel()
     @State private var draft: EventLocation?
+    @State private var isSearchPresented = false
     @State private var isResolvingSelection = false
     private let save: (EventLocation?) -> Void
 
@@ -54,7 +54,7 @@ struct EventLocationEditorView: View {
                 guard let location else { return }
                 draft = location
                 searchModel.query = ""
-                dismissSearch()
+                isSearchPresented = false
             }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
@@ -65,6 +65,7 @@ struct EventLocationEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             .searchable(
                 text: $searchModel.query,
+                isPresented: $isSearchPresented,
                 placement: .navigationBarDrawer(displayMode: .always),
                 prompt: "Search Locations"
             )
@@ -108,6 +109,7 @@ struct EventLocationEditorView: View {
                         .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
                 .buttonBorderShape(.capsule)
                 .tint(AppTheme.ColorToken.accent)
                 .listRowBackground(Color.clear)
@@ -261,7 +263,7 @@ struct EventLocationEditorView: View {
             if let resolvedLocation = await searchModel.resolve(completion) {
                 draft = resolvedLocation
                 searchModel.query = ""
-                dismissSearch()
+                isSearchPresented = false
             }
         }
     }

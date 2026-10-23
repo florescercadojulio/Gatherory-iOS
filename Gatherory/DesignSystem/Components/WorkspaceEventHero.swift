@@ -23,7 +23,7 @@ struct WorkspaceEventHero<Artwork: View, People: View, Metadata: View, Badge: Vi
                 ], startPoint: .top, endPoint: .bottom
             )
             VStack(spacing: AppTheme.Spacing.standard) {
-                Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 120 : 220)
+                Spacer(minLength: AppTheme.Spacing.spacious)
                 people()
                 VStack(spacing: 8) {
                     Text(title)
@@ -37,6 +37,7 @@ struct WorkspaceEventHero<Artwork: View, People: View, Metadata: View, Badge: Vi
             }
             .foregroundStyle(.white)
             .padding(AppTheme.Spacing.spacious)
+            .adaptiveReadingWidth(640)
             VStack {
                 HStack {
                     badge()

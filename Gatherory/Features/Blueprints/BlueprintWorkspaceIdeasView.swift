@@ -4,7 +4,9 @@ import SwiftUI
 /// This view intentionally has no live workspace or account dependencies.
 struct BlueprintWorkspaceIdeasView: View {
     let ideas: [BlueprintCatalogIdea]
+    var publicCoverImageURLs: [String: String] = [:]
     var responses: [String: DecisionChoice] = [:]
+    var showsPersonalResponses = true
     var emptyStateTitle: String = IdeaFilter.all.emptyTitle
     var emptyStateSymbol: String = "square.grid.2x2"
     var onEdit: ((BlueprintCatalogIdea) -> Void)? = nil
@@ -26,10 +28,10 @@ struct BlueprintWorkspaceIdeasView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, AppTheme.Spacing.section)
                 } else {
-                    MasonryLayout(
+                    AdaptiveMasonry(
                         columnCount: dynamicTypeSize.isAccessibilitySize ? 1 : 2,
                         spacing: 12,
-                        layoutDirection: layoutDirection
+                        layoutDirection: layoutDirection, minimumColumnWidth: 170
                     ) {
                         ForEach(ideas) { idea in
                             Button {
@@ -38,6 +40,7 @@ struct BlueprintWorkspaceIdeasView: View {
                                 ideaCard(idea)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("blueprint.preview.idea.\(idea.key)")
                             .accessibilityHint(ExploreCopy.openHint)
                             .contextMenu {
                                 if let onEdit {
@@ -61,9 +64,9 @@ struct BlueprintWorkspaceIdeasView: View {
             if let idea = ideas.first(where: { $0.key == key }) {
                 Group {
                     if reduceMotion {
-                        BlueprintIdeaPreview(idea: idea, onEdit: onEdit.map { edit in { edit(idea) } })
+                        BlueprintIdeaPreview(idea: idea, publicImageURL: publicCoverImageURLs[idea.key], onEdit: onEdit.map { edit in { edit(idea) } })
                     } else {
-                        BlueprintIdeaPreview(idea: idea, onEdit: onEdit.map { edit in { edit(idea) } })
+                        BlueprintIdeaPreview(idea: idea, publicImageURL: publicCoverImageURLs[idea.key], onEdit: onEdit.map { edit in { edit(idea) } })
                             .navigationTransition(.zoom(sourceID: idea.key, in: ideaTransition))
                     }
                 }
@@ -79,15 +82,17 @@ struct BlueprintWorkspaceIdeasView: View {
             category: category,
             aspectRatio: category.collectionAspectRatio
         ) {
-            MediaArtwork(
-                imageData: nil,
-                symbol: category.symbol,
-                colors: category.artworkColors,
-                accent: category.artworkAccent,
-                ambientBlurRadius: 12,
-                progressiveBlurRadius: 22,
-                blurStart: 0.30
-            )
+            BlueprintCoverArtwork(assetID: idea.coverAssetId, publicImageURL: publicCoverImageURLs[idea.key]) {
+                MediaArtwork(
+                    imageData: nil,
+                    symbol: category.symbol,
+                    colors: category.artworkColors,
+                    accent: category.artworkAccent,
+                    ambientBlurRadius: 12,
+                    progressiveBlurRadius: 22,
+                    blurStart: 0.30
+                )
+            }
         } supporting: {
             if let notes = idea.notes, !notes.isEmpty {
                 Text(notes)
@@ -96,17 +101,19 @@ struct BlueprintWorkspaceIdeasView: View {
         }
         .matchedTransitionSource(id: idea.key, in: ideaTransition)
         .overlay(alignment: .bottom) {
-            TeamResponseBar(summary: BlueprintIdeaResponsePresentation.summary(responses[idea.key]),
-                            showsTitle: false, showsSymbols: false, barHeight: 6)
-                .padding(.horizontal, 24)
-                .shadow(color: .black.opacity(0.18), radius: 3, y: 2)
-                .offset(y: 4)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+            if showsPersonalResponses {
+                TeamResponseBar(summary: BlueprintIdeaResponsePresentation.summary(responses[idea.key]),
+                                showsTitle: false, showsSymbols: false, barHeight: 6)
+                    .padding(.horizontal, 24)
+                    .shadow(color: .black.opacity(0.18), radius: 3, y: 2)
+                    .offset(y: 4)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
         }
-        .padding(.bottom, 10)
+        .padding(.bottom, showsPersonalResponses ? 10 : 0)
         .accessibilityElement(children: .combine)
-        .accessibilityValue(BlueprintIdeaResponsePresentation.title(responses[idea.key]))
+        .accessibilityValue(showsPersonalResponses ? BlueprintIdeaResponsePresentation.title(responses[idea.key]) : "")
     }
 }
 

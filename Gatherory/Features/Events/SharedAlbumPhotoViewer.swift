@@ -238,7 +238,10 @@ struct SharedAlbumPhotoViewer: View {
                 saveResult = nil
                 let result = await saver.save([moment])
                 // A completed save belongs to the photo that initiated it, even after a swipe.
-                if viewer.selectedMomentID == moment.id { saveResult = result }
+                if viewer.selectedMomentID == moment.id {
+                    saveResult = result
+                    if case .saved = result { AppHaptics.play(.success) }
+                }
             }
         } label: {
             HStack(spacing: 8) {
@@ -283,6 +286,7 @@ struct SharedAlbumPhotoViewer: View {
             deletionFailed = true
             return
         }
+        AppHaptics.play(.success)
         removePhoto(id: candidate.id)
     }
 

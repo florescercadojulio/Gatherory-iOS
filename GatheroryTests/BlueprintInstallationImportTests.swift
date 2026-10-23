@@ -150,10 +150,13 @@ struct BlueprintInstallationImportTests {
             let shareToken = String(repeating: "f6", count: 32)
             var input = weddingInstallInput(shareToken: shareToken)
             if customized {
-                input.customizations = BlueprintCustomization(
+                var customization = BlueprintCustomization(
                     children: [.init(key: "venue_visit", title: "Private venue tour", purpose: "planning_scouting", category: "venue", scheduleProposal: nil)],
                     ideas: [.init(key: "venue", title: "Garden venue", category: "venue", notes: "Our notes", target: .main, configuration: ["version": .integer(1)])]
                 )
+                customization.overridesCover = true
+                customization.coverAssetId = nil
+                input.customizations = customization
             }
             let catalogURL = try #require(Bundle(for: BlueprintInstallURLProtocol.self)
                 .url(forResource: "wedding-catalog.v1", withExtension: "json"))
@@ -189,6 +192,7 @@ struct BlueprintInstallationImportTests {
                 let overlay = try #require(body["customizations"] as? [String: Any])
                 #expect((overlay["ideas"] as? [[String: Any]])?.first?["title"] as? String == "Garden venue")
                 #expect((overlay["children"] as? [[String: Any]])?.first?["title"] as? String == "Private venue tour")
+                #expect(overlay["coverAssetId"] is NSNull)
             }
             #expect(persistedIntents.count == 1)
             if !historyWritesFail { #expect(try historyCache.load(ownerID: ownerID).isEmpty) }
@@ -324,6 +328,244 @@ struct BlueprintInstallationImportTests {
         #expect(BlueprintInstallURLProtocol.lastInstallBody == (try expectedEncoder.encode(input)))
         #expect(try BlueprintInstallationIntentStore(directoryURL: intentDirectory)
             .pending(ownerUserID: ownerID).isEmpty)
+    }
+
+    @Test("Recovery uses only the canonical durable request body")
+    func rejectsNoncanonicalPendingIntent() async throws {
+        let fixtureData = try weddingFixtureData()
+        let archive = try WorkspaceArchiveCodec().decode(WorkspaceArchiveV1.self, from: fixtureData)
+        let ownerID = try #require(archive.members.first?.userID)
+        BlueprintInstallURLProtocol.configure(archiveBytes: fixtureData, scopeID: archive.mainEventID)
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [BlueprintInstallURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let transport = PostgresSyncTransport(
+            baseURL: URL(string: "https://blueprint-install.invalid")!,
+            urlSession: session,
+            tokenStore: BlueprintInstallTokenStore()
+        )
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false, ownerUserID: ownerID)
+        let intentDirectory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: intentDirectory) }
+        let input = weddingInstallInput()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let store = BlueprintInstallationIntentStore(directoryURL: intentDirectory)
+        let canonical = try store.prepare(
+            ownerUserID: ownerID,
+            requestID: input.requestID,
+            requestBody: try encoder.encode(input)
+        )
+        let altered = BlueprintInstallationIntent(
+            requestID: canonical.requestID,
+            ownerUserID: canonical.ownerUserID,
+            requestBody: Data(#"{"requestId":"changed"}"#.utf8),
+            createdAt: canonical.createdAt
+        )
+        let coordinator = BlueprintInstallationCoordinator(
+            baseURL: URL(string: "https://blueprint-install.invalid")!,
+            persistence: persistence,
+            library: library,
+            intents: store,
+            transport: transport
+        )
+
+        await #expect(throws: BlueprintInstallationIntentFailure.intentNotPending) {
+            try await coordinator.resume(altered)
+        }
+        #expect(BlueprintInstallURLProtocol.statusRequestCount == 0)
+        #expect(try store.pending(ownerUserID: ownerID) == [canonical])
+        #expect(library.workspaces.isEmpty)
+    }
+
+    @Test("An install for another owner is rejected before an intent is written")
+    func ownerScopedInstallRejectsMismatchBeforePersistingIntent() async throws {
+        let fixtureData = try weddingFixtureData()
+        let archive = try WorkspaceArchiveCodec().decode(WorkspaceArchiveV1.self, from: fixtureData)
+        let ownerID = try #require(archive.members.first?.userID)
+        BlueprintInstallURLProtocol.configure(archiveBytes: fixtureData, scopeID: archive.mainEventID)
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [BlueprintInstallURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let transport = PostgresSyncTransport(
+            baseURL: URL(string: "https://blueprint-install.invalid")!,
+            urlSession: session,
+            tokenStore: BlueprintInstallTokenStore()
+        )
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false, ownerUserID: ownerID)
+        library.configureViewer(UserAccount(
+            id: ownerID,
+            email: "riley@example.test",
+            displayName: "Riley Example",
+            role: .planner,
+            authenticationProvider: .password,
+            createdAt: .now
+        ))
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = BlueprintInstallationIntentStore(directoryURL: directory)
+        let coordinator = BlueprintInstallationCoordinator(
+            baseURL: URL(string: "https://blueprint-install.invalid")!,
+            persistence: persistence,
+            library: library,
+            intents: store,
+            transport: transport
+        )
+
+        await #expect(throws: CancellationError.self) {
+            try await coordinator.install(weddingInstallInput(), ownerUserID: "another-account")
+        }
+        #expect(try store.pending(ownerUserID: ownerID).isEmpty)
+        #expect(try store.pending(ownerUserID: "another-account").isEmpty)
+        #expect(BlueprintInstallURLProtocol.statusRequestCount == 0)
+        #expect(BlueprintInstallURLProtocol.installRequestCount == 0)
+    }
+
+    @Test("A cleanup failure keeps the imported event out of the active handoff")
+    func cleanupFailureDoesNotOpenImportedWorkspace() async throws {
+        let fixtureData = try weddingFixtureData()
+        let archive = try WorkspaceArchiveCodec().decode(WorkspaceArchiveV1.self, from: fixtureData)
+        let ownerID = try #require(archive.members.first?.userID)
+        BlueprintInstallURLProtocol.configure(
+            archiveBytes: fixtureData,
+            scopeID: archive.mainEventID,
+            holdBootstrapResponse: true,
+            loseInstallResponse: false
+        )
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [BlueprintInstallURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let transport = PostgresSyncTransport(
+            baseURL: URL(string: "https://blueprint-install.invalid")!,
+            urlSession: session,
+            tokenStore: BlueprintInstallTokenStore()
+        )
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false, ownerUserID: ownerID)
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let intentStore = BlueprintInstallationIntentStore(directoryURL: directory.appending(path: "intents"))
+        let draftStore = BlueprintSetupDraftStore(directoryURL: directory.appending(path: "drafts"))
+        let input = weddingInstallInput()
+        let catalogURL = try #require(Bundle(for: BlueprintInstallURLProtocol.self)
+            .url(forResource: "wedding-catalog.v1", withExtension: "json"))
+        let entry = try #require(JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: catalogURL)).entries.first)
+        let draft = BlueprintSetupDraft(
+            ownerUserID: ownerID,
+            entry: entry,
+            requestID: input.requestID,
+            eventName: input.mainEvent.name,
+            startsAt: input.mainEvent.startsAt,
+            timeZoneIdentifier: input.mainEvent.timeZone,
+            selectedChildren: Set(input.selectedChildren.map(\.key)),
+            selectedIdeas: Set(input.selectedIdeaKeys),
+            confirmedDates: [:]
+        )
+        try draftStore.save(draft)
+        let coordinator = BlueprintInstallationCoordinator(
+            baseURL: URL(string: "https://blueprint-install.invalid")!,
+            persistence: persistence,
+            library: library,
+            intents: intentStore,
+            setupDrafts: draftStore,
+            transport: transport
+        )
+
+        let installTask = Task { try await coordinator.install(input, ownerUserID: ownerID) }
+        #expect(await waitForBootstrapRequest())
+
+        let ownerComponent = Data(ownerID.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        let catalogComponent = Data(entry.catalogKey.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        let draftURL = directory.appending(path: "drafts")
+            .appending(path: ownerComponent, directoryHint: .isDirectory)
+            .appending(path: catalogComponent, directoryHint: .isDirectory)
+            .appending(path: "draft.json")
+        try Data("unreadable draft".utf8).write(to: draftURL)
+        BlueprintInstallURLProtocol.releaseBootstrapResponse.signal()
+
+        await #expect(throws: BlueprintSetupDraftStore.StoreError.corruptData) {
+            try await installTask.value
+        }
+        #expect(library.workspaces.contains { $0.mainEventID == archive.mainEventID })
+        #expect(library.selectedWorkspaceID == nil)
+        #expect(try intentStore.pending(ownerUserID: ownerID).count == 1)
+
+        try draftStore.save(draft)
+        BlueprintInstallURLProtocol.allowBootstrap()
+        let pending = try #require(intentStore.pending(ownerUserID: ownerID).first)
+        let recovered = try await coordinator.resume(pending)
+        #expect(recovered.mainEventID == archive.mainEventID)
+        #expect(library.selectedWorkspaceID == archive.mainEventID)
+        #expect(BlueprintInstallURLProtocol.installRequestCount == 1)
+        #expect(try intentStore.pending(ownerUserID: ownerID).isEmpty)
+        #expect(try draftStore.all(ownerUserID: ownerID).isEmpty)
+    }
+
+    @Test("A completed receipt stays pending until its bootstrap workspace arrives")
+    func retriesImportWhenWorkspaceIsMissingFromBootstrap() async throws {
+        let fixtureData = try weddingFixtureData()
+        let archive = try WorkspaceArchiveCodec().decode(WorkspaceArchiveV1.self, from: fixtureData)
+        let ownerID = try #require(archive.members.first?.userID)
+        let input = weddingInstallInput()
+        BlueprintInstallURLProtocol.configure(
+            archiveBytes: fixtureData,
+            scopeID: archive.mainEventID,
+            bootstrapRequestIDs: [UUID().uuidString],
+            bootstrapOnlyCommittedInstallations: true,
+            loseInstallResponse: false
+        )
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [BlueprintInstallURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let transport = PostgresSyncTransport(
+            baseURL: URL(string: "https://blueprint-install.invalid")!,
+            urlSession: session,
+            tokenStore: BlueprintInstallTokenStore()
+        )
+        let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
+        let library = persistence.restoreLibrary(seedData: false, ownerUserID: ownerID)
+        let intentDirectory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: intentDirectory) }
+        let store = BlueprintInstallationIntentStore(directoryURL: intentDirectory)
+        let coordinator = BlueprintInstallationCoordinator(
+            baseURL: URL(string: "https://blueprint-install.invalid")!,
+            persistence: persistence,
+            library: library,
+            intents: store,
+            transport: transport
+        )
+
+        await #expect(throws: BlueprintInstallationFailure.workspaceNotInBootstrap) {
+            try await coordinator.install(input, ownerUserID: ownerID)
+        }
+        let pending = try #require(store.pending(ownerUserID: ownerID).first)
+        #expect(pending.requestID == input.requestID)
+        #expect(library.workspaces.isEmpty)
+        #expect(library.selectedWorkspaceID == nil)
+
+        BlueprintInstallURLProtocol.includeCommittedRequests([input.requestID.uuidString])
+        let imported = try await coordinator.resume(pending)
+        #expect(imported.mainEventID == archive.mainEventID)
+        #expect(library.selectedWorkspaceID == archive.mainEventID)
+        #expect(BlueprintInstallURLProtocol.installRequestCount == 1)
+        #expect(try store.pending(ownerUserID: ownerID).isEmpty)
     }
 
     @Test("Bootstrap saves edits made to another workspace while the response is in flight")
@@ -730,6 +972,7 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
     private static var bootstrapOnlyCommittedInstallations = false
     private static var scopeID = UUID()
     private static var installCount = 0
+    private static var statusCount = 0
     private static var committedRequestIDs = Set<String>()
     private static var initialStatus: String?
     private static var loseInstallResponse = true
@@ -751,6 +994,12 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
         lock.lock()
         defer { lock.unlock() }
         return installCount
+    }
+
+    static var statusRequestCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return statusCount
     }
 
     static var lastInstallRequestID: String? {
@@ -777,6 +1026,19 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
         return bootstrapRequestStartedValue
     }
 
+    static func allowBootstrap() {
+        lock.lock()
+        holdBootstrapResponse = false
+        lock.unlock()
+    }
+
+    static func includeCommittedRequests(_ requestIDs: [String]) {
+        lock.lock()
+        bootstrapRequestIDs = requestIDs.map { $0.lowercased() }
+        holdBootstrapResponse = false
+        lock.unlock()
+    }
+
     static func configure(
         archiveBytes: Data,
         scopeID: UUID,
@@ -800,6 +1062,7 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
         self.bootstrapRequestIDs = bootstrapRequestIDs.map { $0.lowercased() }
         self.bootstrapOnlyCommittedInstallations = bootstrapOnlyCommittedInstallations
         installCount = 0
+        statusCount = 0
         committedRequestIDs = []
         self.initialStatus = initialStatus
         self.loseInstallResponse = loseInstallResponse
@@ -834,6 +1097,7 @@ private final class BlueprintInstallURLProtocol: URLProtocol, @unchecked Sendabl
             if request.httpMethod == "GET", url.path.hasPrefix("/api/blueprints/installations/") {
                 let requestID = url.lastPathComponent.lowercased()
                 Self.lock.lock()
+                Self.statusCount += 1
                 let isCommitted = Self.committedRequestIDs.contains(requestID)
                 let initialStatus = Self.initialStatus
                 let result = Self.installResultOverrides[requestID] ?? Self.installResultObject()

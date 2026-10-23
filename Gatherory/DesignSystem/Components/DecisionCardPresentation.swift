@@ -9,9 +9,7 @@ struct DecisionCardPresentation<Artwork: View, Guide: View, Feedback: View, Summ
     @ViewBuilder var summary: () -> Summary
 
     var body: some View {
-        ZStack {
-            artwork()
-
+        AdaptiveArtworkPresentation {
             VStack(spacing: 0) {
                 guide()
 
@@ -24,6 +22,9 @@ struct DecisionCardPresentation<Artwork: View, Guide: View, Feedback: View, Summ
                 summary()
             }
             .padding(AppTheme.Spacing.standard)
+        } artwork: {
+            artwork()
         }
+        .background(AppTheme.ColorToken.background)
     }
 }

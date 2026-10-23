@@ -1,12 +1,15 @@
 import Foundation
 
 enum ExploreCopy {
+    static var exploreBlueprints: String { String(localized: "explore.create.exploreBlueprints", defaultValue: "Explore Blueprints") }
+    static var startFromScratch: String { String(localized: "explore.create.startFromScratch", defaultValue: "Start from Scratch") }
     static var title: String { String(localized: "explore.title", defaultValue: "Explore") }
     static var searchTitle: String { String(localized: "explore.searchTitle", defaultValue: "Search") }
     static var search: String { String(localized: "explore.search", defaultValue: "Search blueprints") }
     static var recent: String { String(localized: "explore.recent", defaultValue: "Recently Viewed") }
     static var clear: String { String(localized: "explore.clear", defaultValue: "Clear") }
     static var loading: String { String(localized: "explore.loading", defaultValue: "Loading blueprints…") }
+    static var refresh: String { String(localized: "explore.refresh", defaultValue: "Refresh") }
     static var unavailable: String { String(localized: "explore.unavailable", defaultValue: "Can’t Load Blueprints") }
     static var connection: String { String(localized: "explore.connection", defaultValue: "Connect to the internet and sign in to browse blueprints. Your events are still available offline.") }
     static var refreshFailed: String { String(localized: "explore.refreshFailed", defaultValue: "Couldn’t refresh. Showing the last loaded blueprints.") }

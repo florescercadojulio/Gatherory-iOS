@@ -2,10 +2,12 @@ import ImagePlayground
 import PhotosUI
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct PhotoAttachmentPicker: View {
     @Binding var imageData: Data?
     @State private var isChoosingImage = false
+    @State private var pickerGeneration = UUID()
 
     let emptySymbol: String
     var showsPreview = true
@@ -13,24 +15,23 @@ struct PhotoAttachmentPicker: View {
     var fallbackColors: [Color]? = nil
     var fallbackAccent: Color = .accentColor
     var suggestedConcept: String = "Wedding celebration artwork"
+    var showsExistingImage = false
 
     private var hasVisibleArtwork: Bool {
-        imageData != nil || fallbackAssetName != nil || fallbackColors != nil
+        imageData != nil || fallbackAssetName != nil || fallbackColors != nil || showsExistingImage
     }
 
     var body: some View {
         Group {
             if showsPreview {
                 Button {
-                    isChoosingImage = true
+                    openImagePicker()
                 } label: {
                     preview
                         .overlay(alignment: .bottomTrailing) {
                             Label(
-                                hasVisibleArtwork ? "Edit Image" : "Add Image",
-                                systemImage: hasVisibleArtwork
-                                    ? "slider.horizontal.3"
-                                    : "photo.badge.plus"
+                                hasVisibleArtwork ? CoverImageCopy.changeImage : CoverImageCopy.addImage,
+                                systemImage: hasVisibleArtwork ? "photo" : "photo.badge.plus"
                             )
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
@@ -44,18 +45,14 @@ struct PhotoAttachmentPicker: View {
                 .buttonStyle(.plain)
             } else {
                 Button {
-                    isChoosingImage = true
+                    openImagePicker()
                 } label: {
                     HStack(spacing: AppTheme.Spacing.compact) {
                         Label(
-                            hasVisibleArtwork ? "Edit Image" : "Add Image",
-                            systemImage: hasVisibleArtwork
-                                ? "slider.horizontal.3"
-                                : "photo.badge.plus"
+                            hasVisibleArtwork ? CoverImageCopy.changeImage : CoverImageCopy.addImage,
+                            systemImage: hasVisibleArtwork ? "photo" : "photo.badge.plus"
                         )
-
                         Spacer(minLength: 0)
-
                         Image(systemName: "chevron.forward")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.tertiary)
@@ -67,11 +64,12 @@ struct PhotoAttachmentPicker: View {
                 .buttonStyle(.plain)
             }
         }
-        .accessibilityLabel(hasVisibleArtwork ? "Edit image" : "Add image")
-        .accessibilityHint("Opens image choices")
-        .sheet(isPresented: $isChoosingImage) {
+        .accessibilityLabel(hasVisibleArtwork ? CoverImageCopy.changeImage : CoverImageCopy.addImage)
+        .accessibilityHint(CoverImageCopy.openChoices)
+        .sheet(isPresented: imagePickerPresentation) {
             AddImageView(
                 imageData: $imageData,
+                sourceRequestID: $pickerGeneration,
                 emptySymbol: emptySymbol,
                 fallbackAssetName: fallbackAssetName,
                 fallbackColors: fallbackColors,
@@ -83,6 +81,21 @@ struct PhotoAttachmentPicker: View {
         }
     }
 
+    private func openImagePicker() {
+        pickerGeneration = UUID()
+        isChoosingImage = true
+    }
+
+    private var imagePickerPresentation: Binding<Bool> {
+        Binding(
+            get: { isChoosingImage },
+            set: { isPresented in
+                if !isPresented { pickerGeneration = UUID() }
+                isChoosingImage = isPresented
+            }
+        )
+    }
+
     @ViewBuilder
     private var preview: some View {
         if let imageData, let image = UIImage(data: imageData) {
@@ -92,7 +105,7 @@ struct PhotoAttachmentPicker: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 210)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
-                .accessibilityLabel("Selected image")
+                .accessibilityLabel(CoverImageCopy.selectedImage)
         } else if fallbackAssetName != nil || fallbackColors != nil {
             MediaArtwork(
                 imageData: nil,
@@ -105,12 +118,12 @@ struct PhotoAttachmentPicker: View {
             .frame(maxWidth: .infinity)
             .frame(height: 210)
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
-            .accessibilityLabel("Current event artwork")
+            .accessibilityLabel(CoverImageCopy.defaultArtwork)
         } else {
             ContentUnavailableView(
-                "Add an Image",
+                CoverImageCopy.addImage,
                 systemImage: emptySymbol,
-                description: Text("Choose or create artwork that helps everyone recognize it.")
+                description: Text(CoverImageCopy.emptyPrompt)
             )
             .frame(maxWidth: .infinity)
             .frame(height: 210)
@@ -124,14 +137,19 @@ struct PhotoAttachmentPicker: View {
 
 private struct AddImageView: View {
     @Binding var imageData: Data?
+    @Binding var sourceRequestID: UUID
     @Environment(\.dismiss) private var dismiss
 
     @State private var selectedPhoto: PhotosPickerItem?
-    @State private var isLoadingPhoto = false
+    @State private var isLoadingImage = false
     @State private var isShowingCamera = false
     @State private var isShowingImagePlayground = false
+    @State private var isImportingFile = false
     @State private var playgroundConcept = ""
     @State private var errorMessage: String?
+    @State private var cameraRequestID = UUID()
+    @State private var fileRequestID = UUID()
+    @State private var playgroundRequestID = UUID()
 
     let emptySymbol: String
     let fallbackAssetName: String?
@@ -156,76 +174,96 @@ private struct AddImageView: View {
         NavigationStack {
             Form {
                 if imageData != nil || fallbackAssetName != nil || fallbackColors != nil {
-                    Section("Current Image") {
+                    Section(CoverImageCopy.currentImage) {
                         currentPreview
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
+
                     }
                 }
 
                 Section {
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
                         ImageSourceRow(
-                            title: "Choose from Photos",
-                            detail: "Select an image from your photo library.",
+                            title: CoverImageCopy.chooseFromPhotos,
+                            detail: CoverImageCopy.photosDetail,
                             systemImage: "photo.on.rectangle.angled"
                         )
                     }
                     .buttonStyle(.plain)
-                    .overlay(alignment: .trailing) {
-                        if isLoadingPhoto {
-                            ProgressView()
-                        }
-                    }
+                    .disabled(isLoadingImage)
 
                     Button {
+                        fileRequestID = beginRequest()
+                        isImportingFile = true
+                    } label: {
+                        ImageSourceRow(
+                            title: CoverImageCopy.browseFiles,
+                            detail: CoverImageCopy.filesDetail,
+                            systemImage: "folder"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isLoadingImage)
+
+                    Button {
+                        cameraRequestID = beginRequest()
                         isShowingCamera = true
                     } label: {
                         ImageSourceRow(
-                            title: "Take Photo",
-                            detail: cameraAvailable
-                                ? "Use the camera to create a new image."
-                                : "Camera isn’t available on this device.",
+                            title: CoverImageCopy.takePhoto,
+                            detail: cameraAvailable ? CoverImageCopy.cameraDetail : CoverImageCopy.cameraUnavailable,
                             systemImage: "camera.fill"
                         )
                     }
                     .buttonStyle(.plain)
-                    .disabled(!cameraAvailable)
+                    .disabled(!cameraAvailable || isLoadingImage)
 
                     Button {
                         playgroundConcept = suggestedConcept
+                        playgroundRequestID = beginRequest()
                         isShowingImagePlayground = true
                     } label: {
                         ImageSourceRow(
-                            title: "Create with Image Playground",
-                            detail: imagePlaygroundAvailable
-                                ? "Generate original artwork using Apple’s experience."
-                                : "Image Playground isn’t available on this device.",
+                            title: CoverImageCopy.playground,
+                            detail: imagePlaygroundAvailable ? CoverImageCopy.playgroundDetail : CoverImageCopy.playgroundUnavailable,
                             systemImage: "apple.intelligence"
                         )
                     }
                     .buttonStyle(.plain)
-                    .disabled(!imagePlaygroundAvailable)
+                    .disabled(!imagePlaygroundAvailable || isLoadingImage)
                 } header: {
-                    Text("Choose a Source")
+                    Text(CoverImageCopy.chooseSource)
                 } footer: {
                     if let errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.circle.fill")
                             .foregroundStyle(AppTheme.ColorToken.destructive)
+                    } else if isLoadingImage {
+                        HStack(spacing: AppTheme.Spacing.compact) {
+                            ProgressView()
+                            Text(CoverImageCopy.loading)
+                        }
+                            .foregroundStyle(.secondary)
                     } else {
-                        Text("You’ll review a photo or generated image before it becomes part of the event.")
+                        Text(CoverImageCopy.reviewBeforeUse)
                     }
+                }
+
+                Section(CoverImageCopy.curated) {
+                    curatedCoverCollection
+                        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                        .listRowBackground(Color.clear)
                 }
 
                 if imageData != nil {
                     Section {
                         if fallbackAssetName != nil || fallbackColors != nil {
-                            Button("Use Default Artwork", systemImage: "arrow.counterclockwise") {
+                            Button(CoverImageCopy.useDefault, systemImage: "arrow.counterclockwise") {
                                 imageData = nil
                                 dismiss()
                             }
                         } else {
-                            Button("Remove Image", systemImage: "trash", role: .destructive) {
+                            Button(CoverImageCopy.removeImage, systemImage: "trash", role: .destructive) {
                                 imageData = nil
                                 dismiss()
                             }
@@ -235,11 +273,12 @@ private struct AddImageView: View {
             }
             .scrollContentBackground(.hidden)
             .background(AppTheme.ColorToken.background)
-            .navigationTitle("Choose Image")
+            .navigationTitle(CoverImageCopy.chooseImage)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", systemImage: "xmark") {
+                    Button(CoverImageCopy.close, systemImage: "xmark") {
+                        sourceRequestID = UUID()
                         dismiss()
                     }
                     .labelStyle(.iconOnly)
@@ -248,26 +287,61 @@ private struct AddImageView: View {
         }
         .onChange(of: selectedPhoto) { _, newValue in
             guard let newValue else { return }
+            let requestID = beginRequest()
             errorMessage = nil
-            isLoadingPhoto = true
+            isLoadingImage = true
 
             Task {
-                defer { isLoadingPhoto = false }
-                guard let data = try? await newValue.loadTransferable(type: Data.self) else {
-                    errorMessage = "The selected image couldn’t be loaded. Choose another image and try again."
-                    return
+                defer {
+                    if sourceRequestID == requestID { isLoadingImage = false }
                 }
-
-                imageData = data
-                dismiss()
+                do {
+                    guard let data = try await newValue.loadTransferable(type: Data.self) else {
+                        throw ImageLoadError.unavailable
+                    }
+                    await stageImage(data, requestID: requestID)
+                } catch {
+                    showError(CoverImageCopy.loadFailed, requestID: requestID)
+                }
+                if sourceRequestID == requestID { selectedPhoto = nil }
+            }
+        }
+        .fileImporter(
+            isPresented: $isImportingFile,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: false
+        ) { result in
+            let requestID = fileRequestID
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                Task {
+                    isLoadingImage = true
+                    errorMessage = nil
+                    defer {
+                        if sourceRequestID == requestID { isLoadingImage = false }
+                    }
+                    let hasAccess = url.startAccessingSecurityScopedResource()
+                    defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
+                    do {
+                        let data = try await Self.readImage(at: url)
+                        await stageImage(data, requestID: requestID)
+                    } catch {
+                        showError(CoverImageCopy.loadFailed, requestID: requestID)
+                    }
+                }
+            case .failure(let error):
+                let nsError = error as NSError
+                if nsError.code != NSUserCancelledError {
+                    showError(CoverImageCopy.loadFailed, requestID: requestID)
+                }
             }
         }
         .fullScreenCover(isPresented: $isShowingCamera) {
             CameraCaptureView { capturedData in
                 isShowingCamera = false
                 guard let capturedData else { return }
-                imageData = capturedData
-                dismiss()
+                Task { await stageImage(capturedData, requestID: cameraRequestID) }
             }
             .ignoresSafeArea()
         }
@@ -275,8 +349,56 @@ private struct AddImageView: View {
             isPresented: $isShowingImagePlayground,
             concept: playgroundConcept,
             sourceImage: sourceImage,
-            onCompletion: saveGeneratedImage
+            onCompletion: { url in
+                let requestID = playgroundRequestID
+                isLoadingImage = true
+                Task {
+                    do {
+                        let data = try await Self.readImage(at: url)
+                        await stageImage(data, requestID: requestID)
+                    } catch {
+                        showError(CoverImageCopy.generatedFailed, requestID: requestID)
+                    }
+                }
+            }
         )
+    }
+
+    private var curatedCoverCollection: some View {
+        ScrollView(.horizontal) {
+            HStack(alignment: .top, spacing: AppTheme.Spacing.compact) {
+                ForEach(CuratedCover.allCases) { cover in
+                    Button {
+                        guard let data = cover.imageData else {
+                            errorMessage = CoverImageCopy.loadFailed
+                            return
+                        }
+                        beginLoading(data)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Image(cover.assetName)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 112, height: 84)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            Text(cover.title)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .frame(width: 112, alignment: .leading)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(cover.title)
+                    .disabled(isLoadingImage)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .scrollIndicators(.hidden)
+        .accessibilityLabel(CoverImageCopy.curated)
     }
 
     @ViewBuilder
@@ -286,9 +408,9 @@ private struct AddImageView: View {
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)
-                .frame(height: 210)
+                .frame(height: 180)
                 .clipped()
-                .accessibilityLabel("Current image")
+                .accessibilityLabel(CoverImageCopy.currentPreview)
         } else {
             MediaArtwork(
                 imageData: nil,
@@ -299,19 +421,65 @@ private struct AddImageView: View {
                 progressiveBlurRadius: 0
             )
             .frame(maxWidth: .infinity)
-            .frame(height: 210)
+            .frame(height: 180)
             .clipped()
-            .accessibilityLabel("Default artwork")
+            .accessibilityLabel(CoverImageCopy.defaultArtwork)
         }
     }
 
-    private func saveGeneratedImage(at url: URL) {
-        do {
-            imageData = try Data(contentsOf: url)
-            dismiss()
-        } catch {
-            errorMessage = "The generated image couldn’t be saved. Try creating it again."
+    private func beginRequest() -> UUID {
+        let requestID = UUID()
+        sourceRequestID = requestID
+        errorMessage = nil
+        return requestID
+    }
+
+    private func beginLoading(_ data: Data) {
+        let requestID = beginRequest()
+        isLoadingImage = true
+        Task { await stageImage(data, requestID: requestID) }
+    }
+
+    @MainActor
+    private func stageImage(_ data: Data, requestID: UUID) async {
+        guard sourceRequestID == requestID else { return }
+        isLoadingImage = true
+        errorMessage = nil
+        guard data.count <= CoverImagePreparation.maximumInputBytes else {
+            showError(CoverImageCopy.tooLarge, requestID: requestID)
+            return
         }
+
+        let normalizedData = await Task.detached(priority: .userInitiated) {
+            CoverImagePreparation.normalizeJPEG(data)
+        }.value
+
+        guard sourceRequestID == requestID else { return }
+        guard let normalizedData else {
+            showError(CoverImageCopy.prepareFailed, requestID: requestID)
+            return
+        }
+
+        errorMessage = nil
+        isLoadingImage = false
+        imageData = normalizedData
+        dismiss()
+    }
+
+    private func showError(_ message: String, requestID: UUID) {
+        guard sourceRequestID == requestID else { return }
+        errorMessage = message
+        isLoadingImage = false
+    }
+
+    private enum ImageLoadError: Error {
+        case unavailable
+    }
+
+    nonisolated private static func readImage(at url: URL) async throws -> Data {
+        try await Task.detached(priority: .userInitiated) {
+            try Data(contentsOf: url, options: .mappedIfSafe)
+        }.value
     }
 }
 
@@ -333,15 +501,12 @@ private struct ImageSourceRow: View {
                 )
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .foregroundStyle(.primary)
-
+                Text(title).foregroundStyle(.primary)
                 Text(detail)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.leading)
             }
-
             Spacer(minLength: 0)
         }
         .frame(minHeight: AppTheme.Layout.minimumTouchTarget)

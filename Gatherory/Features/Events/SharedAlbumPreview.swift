@@ -22,7 +22,7 @@ struct SharedAlbumPreview<Actions: View>: View {
                     .frame(maxWidth: .infinity, minHeight: 120)
             } else {
                 MasonryLayout(
-                    columnCount: AlbumPresentation.columnCount(isPad: UIDevice.current.userInterfaceIdiom == .pad, availableWidth: availableWidth - 24),
+                    columnCount: AlbumPresentation.columnCount(availableWidth: availableWidth - 24),
                     spacing: 10, layoutDirection: layoutDirection
                 ) {
                     ForEach(Array(moments.prefix(4))) { moment in

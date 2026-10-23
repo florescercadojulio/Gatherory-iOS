@@ -9,13 +9,22 @@ import SwiftUI
 
 private enum LibraryTab: Hashable { case workspaces, blueprints, explore }
 
+private struct BlueprintLibraryCreationRoute: Identifiable {
+    let ownerID: String
+    var id: String { ownerID }
+}
+
 struct AppRootView: View {
     @Environment(AuthenticationSession.self) private var authentication
     @State private var selectedTab = LibraryTab.workspaces
     @State private var isPreviewingBlueprint = false
     @Environment(WorkspaceLibrary.self) private var workspaceLibrary
+    @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(\.currentUserAccount) private var currentUserAccount
     @Environment(GuestInvitationStore.self) private var guests
+    @State private var blueprintActions: BlueprintActionStore?
+    @State private var blueprintCreation: BlueprintLibraryCreationRoute?
+    @State private var blueprintLibraryRefreshID = UUID()
 
     private var isPresentingWorkspace: Binding<Bool> {
         Binding(
@@ -29,8 +38,16 @@ struct AppRootView: View {
         )
     }
 
+    private var tabSelection: Binding<LibraryTab> {
+        Binding(get: { selectedTab }, set: { tab in
+            guard selectedTab != tab else { return }
+            AppHaptics.play(.selection)
+            selectedTab = tab
+        })
+    }
+
     var body: some View {
-        TabView(selection: $selectedTab) {
+        TabView(selection: tabSelection) {
             Tab("Workspaces", systemImage: "rectangle.stack.fill", value: .workspaces) {
                 NavigationStack {
                     WorkspaceBrowserView(onExplore: { selectedTab = .explore })
@@ -43,8 +60,15 @@ struct AppRootView: View {
                     } else {
                         BlueprintLibraryView(
                             ownerID: currentUserAccount?.id ?? "",
-                            isActive: selectedTab == .blueprints
+                            isActive: selectedTab == .blueprints,
+                            actionStore: blueprintActions?.ownerID == currentUserAccount?.id ? blueprintActions : nil,
+                            onExplore: { selectedTab = .explore },
+                            onCreate: {
+                                guard let account = currentUserAccount, !authentication.isGuestMode else { return }
+                                blueprintCreation = BlueprintLibraryCreationRoute(ownerID: account.id)
+                            }
                         )
+                        .id(blueprintLibraryRefreshID)
                     }
                 }
                 .id(currentUserAccount?.id)
@@ -67,6 +91,13 @@ struct AppRootView: View {
         .tabBarMinimizeBehavior(.onScrollDown)
         .tint(AppTheme.ColorToken.accent)
         .environment(\.blueprintPreviewPresented, $isPreviewingBlueprint)
+        .sheet(item: $blueprintCreation, onDismiss: { blueprintLibraryRefreshID = UUID() }) { route in
+            if currentUserAccount?.id == route.ownerID, !authentication.isGuestMode {
+                BlueprintLibraryCreationView(ownerID: route.ownerID) { selectedTab = .workspaces }
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+        }
         .fullScreenCover(isPresented: isPresentingWorkspace) {
             if let eventID = guests.selectedEventID {
                 GuestEventInvitationView(eventID: eventID)
@@ -85,9 +116,35 @@ struct AppRootView: View {
                 workspaceLibrary.configureViewer(currentUserAccount)
             }
         }
+        .task(id: "\(currentUserAccount?.id ?? "")|\(String(describing: cloudSync.accountOnboardingState))") {
+#if DEBUG
+            if let fixture = BlueprintPreviewActionsVisualFixture.load(ownerID: currentUserAccount?.id ?? "") {
+                blueprintActions = fixture.actionStore
+                await fixture.prepareActions()
+                return
+            }
+            if BlueprintLibraryVisualFixture.load(ownerID: currentUserAccount?.id ?? "") != nil { return }
+#endif
+            if let currentUserAccount {
+                if let blueprintActions, blueprintActions.ownerID != currentUserAccount.id {
+                    blueprintActions.resetForAccountChange()
+                    self.blueprintActions = nil
+                }
+                if self.blueprintActions?.ownerID != currentUserAccount.id,
+                   let coordinator = cloudSync.makeBlueprintInstallationCoordinator() {
+                    let store = BlueprintActionStore(ownerID: currentUserAccount.id, transport: coordinator)
+                    self.blueprintActions = store
+                    await store.loadPreferences()
+                }
+            } else {
+                blueprintActions?.resetForAccountChange()
+                blueprintActions = nil
+            }
+        }
         .onChange(of: currentUserAccount?.id) { _, _ in
             selectedTab = .workspaces
             isPreviewingBlueprint = false
+            blueprintCreation = nil
         }
     }
 }
@@ -135,6 +192,7 @@ struct ContentView: View {
         Binding(
             get: { selectedTab },
             set: { newValue in
+                if newValue != selectedTab { AppHaptics.play(.selection) }
                 if newValue == .home, selectedTab == .home {
                     homeReselectionTrigger += 1
                 }

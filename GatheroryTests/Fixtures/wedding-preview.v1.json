@@ -1,9 +1,14 @@
 {
   "plan": {
-    "todos": [],
     "plannerVersion": 1,
     "experienceType": "wedding",
-    "categoryOrder": ["venue", "attire", "food", "flowers", "photography"],
+    "categoryOrder": [
+      "venue",
+      "attire",
+      "food",
+      "flowers",
+      "photography"
+    ],
     "main": {
       "sourceKey": "main",
       "name": "Riley and Jordan",
@@ -13,7 +18,8 @@
       "parentSourceKey": null,
       "purpose": null,
       "category": null,
-      "planningStatus": null
+      "planningStatus": null,
+      "coverAssetId": null
     },
     "children": [
       {
@@ -25,7 +31,8 @@
         "parentSourceKey": "main",
         "purpose": "planning_scouting",
         "category": "venue",
-        "planningStatus": "approved"
+        "planningStatus": "approved",
+        "coverAssetId": null
       },
       {
         "sourceKey": "ceremony",
@@ -36,7 +43,8 @@
         "parentSourceKey": "main",
         "purpose": "part_of_event",
         "category": "ceremony",
-        "planningStatus": "approved"
+        "planningStatus": "approved",
+        "coverAssetId": null
       }
     ],
     "ideas": [
@@ -49,7 +57,8 @@
         "configuration": {
           "version": 1
         },
-        "status": "new"
+        "status": "new",
+        "coverAssetId": null
       },
       {
         "sourceKey": "food",
@@ -60,7 +69,8 @@
         "configuration": {
           "version": 1
         },
-        "status": "new"
+        "status": "new",
+        "coverAssetId": null
       },
       {
         "sourceKey": "photography",
@@ -71,7 +81,8 @@
         "configuration": {
           "version": 1
         },
-        "status": "new"
+        "status": "new",
+        "coverAssetId": null
       }
     ],
     "instructions": [
@@ -90,6 +101,7 @@
         "targetSourceKey": "ceremony"
       }
     ],
+    "todos": [],
     "omissions": [
       {
         "sourceKey": "reception_guidance",

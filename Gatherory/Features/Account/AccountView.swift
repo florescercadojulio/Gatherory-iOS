@@ -1,15 +1,23 @@
 import SwiftUI
 
 struct AccountView: View {
+    var sharedBlueprintActions: BlueprintActionStore? = nil
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(NotificationController.self) private var notifications
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @AppStorage(AppColorThemeChoice.storageKey) private var colorThemeRawValue = AppColorThemeChoice.gatheroryBlue.rawValue
+    @AppStorage(AppHaptics.preferenceKey) private var hapticsEnabled = true
     @State private var isEditingProfile = false
     @State private var isDeletingAccount = false
     @State private var weatherAttribution: EventWeatherAttribution?
+    @State private var localBlueprintActions: BlueprintActionStore?
+    @State private var showingMeasurementSettingsError = false
+
+    private var blueprintActions: BlueprintActionStore? {
+        sharedBlueprintActions ?? localBlueprintActions
+    }
 
     private var selectedAppearance: AppAppearance {
         AppAppearance(rawValue: appearanceRawValue) ?? .system
@@ -166,11 +174,53 @@ struct AccountView: View {
             .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("App Settings") {
+                Toggle(isOn: $hapticsEnabled) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(String(localized: "haptics.title", defaultValue: "Haptic Feedback"), systemImage: "waveform")
+                        Text(String(localized: "haptics.help", defaultValue: "Use gentle vibrations for actions and confirmations."))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Toggle(isOn: notificationToggle) {
                     Label("Event and Task Notifications", systemImage: "bell.badge")
                 }
                 .disabled(!notifications.isConfigured || notificationPrincipal == nil)
                 .tint(AppTheme.ColorToken.accent)
+
+                Toggle(isOn: Binding(
+                    get: { blueprintActions?.measurementEnabled ?? false },
+                    set: { enabled in
+                        Task {
+                            guard let blueprintActions else { return }
+                            if !(await blueprintActions.setMeasurementEnabled(enabled)) {
+                                showingMeasurementSettingsError = true
+                            }
+                        }
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(BlueprintCopy.improveRecommendations, systemImage: "sparkles")
+                        Text(BlueprintCopy.measurementExplanation)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(blueprintActions == nil)
+                .tint(AppTheme.ColorToken.accent)
+
+                Text(BlueprintCopy.likeRecommendationExplanation)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                if let blueprintActions {
+                    NavigationLink {
+                        SavedBlueprintsView(actionStore: blueprintActions)
+                    } label: {
+                        Label(BlueprintCopy.notInterested, systemImage: "eye.slash")
+                    }
+                }
 
                 Picker(selection: appearanceSelection) {
                     ForEach(AppAppearance.allCases) { option in
@@ -304,6 +354,37 @@ struct AccountView: View {
         .task {
             weatherAttribution = try? await WeatherKitEventWeatherProvider().attribution()
         }
+        .task(id: "\(authentication.currentUser?.id ?? "")|\(String(describing: cloudSync.accountOnboardingState))") {
+            if let sharedBlueprintActions {
+                guard authentication.currentUser?.id == sharedBlueprintActions.ownerID else {
+                    sharedBlueprintActions.resetForAccountChange()
+                    return
+                }
+                await sharedBlueprintActions.loadPreferences()
+                await sharedBlueprintActions.loadMeasurementSetting()
+                return
+            }
+            guard let ownerID = authentication.currentUser?.id,
+                  let coordinator = cloudSync.makeBlueprintInstallationCoordinator() else {
+                localBlueprintActions?.resetForAccountChange()
+                localBlueprintActions = nil
+                return
+            }
+            if let localBlueprintActions, localBlueprintActions.ownerID != ownerID {
+                localBlueprintActions.resetForAccountChange()
+                self.localBlueprintActions = nil
+            }
+            let store = BlueprintActionStore(ownerID: ownerID, transport: coordinator)
+            localBlueprintActions = store
+            await store.loadPreferences()
+            await store.loadMeasurementSetting()
+        }
+        .alert(BlueprintCopy.actionUpdateFailed, isPresented: $showingMeasurementSettingsError) {
+            Button(AppCopy.Common.retry) { Task { await blueprintActions?.retryMeasurementSetting() } }
+            Button(AppCopy.Common.cancel, role: .cancel) { blueprintActions?.clearError() }
+        } message: {
+            Text(blueprintActions?.error?.localizedDescription ?? BlueprintCopy.actionUpdateFailed)
+        }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") {
@@ -426,7 +507,7 @@ private struct DeleteAccountView: View {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
                         Label("This is permanent", systemImage: "exclamationmark.triangle.fill")
                             .font(.headline)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(AppTheme.ColorToken.destructive)
 
                         Text("Deleting your account removes your Gatherory identity, private events you solely own, participation, decisions, and uploaded photos. Shared events remain available to their other members.")
                             .font(.subheadline)
@@ -450,7 +531,7 @@ private struct DeleteAccountView: View {
                 } footer: {
                     if let errorMessage {
                         Text(errorMessage)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(AppTheme.ColorToken.destructive)
                     } else {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("You may be asked to sign in again if your current session is no longer recent.")
@@ -506,21 +587,15 @@ private struct AppColorThemeOptionLabel: View {
             }
             .accessibilityHidden(true)
 
-            Text(option.accountSettingsTitle)
+            Text(option.localizedTitle)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(option.title)
+        .accessibilityLabel(option.localizedTitle)
     }
 }
 
 private extension AppColorThemeChoice {
-    var accountSettingsTitle: String {
-        switch self {
-        case .gatheroryBlue: "Blue"
-        case .orchid: "Orchid"
-        case .sage: "Sage"
-        }
-    }
+    var localizedTitle: String { NSLocalizedString(title, comment: "Color theme name") }
 }
 
 private struct EditProfileView: View {

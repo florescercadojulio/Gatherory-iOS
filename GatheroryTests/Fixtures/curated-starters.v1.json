@@ -69,7 +69,13 @@
               "version": 2,
               "required": true,
               "config": {
-                "categoryOrder": ["event", "food", "invitations", "decor", "other"],
+                "categoryOrder": [
+                  "event",
+                  "food",
+                  "invitations",
+                  "decor",
+                  "other"
+                ],
                 "ideas": [
                   {
                     "key": "gathering_plans",
@@ -168,9 +174,32 @@
           ]
         },
         "discovery": {
-          "categories": ["birthdays"],
-          "tags": ["birthday", "party", "cake", "games", "celebration"],
-          "summary": "Bring a birthday party together with food, activities, and time to celebrate."
+          "categories": [
+            "birthdays"
+          ],
+          "tags": [
+            "birthday",
+            "party",
+            "cake",
+            "games",
+            "celebration"
+          ],
+          "summary": "Bring a birthday party together with food, activities, and time to celebrate.",
+          "coverImageURL": "https://cdn.gatherory.com/explore/covers/birthday/242060a2df01bdb28ab1a2cff74c86de5010935c2724135cfb34e1b61b100c42/card.jpg",
+          "coverImages": {
+            "children": {
+              "gathering_setup": "https://cdn.gatherory.com/explore/covers/decor/afb0d7b80fed1dd00960ab705b330478e0e07021dd5ccb0cbd38500cb0164760/card.jpg",
+              "birthday_gathering": "https://cdn.gatherory.com/explore/covers/chess/96917957a3ef2825663c6380ef98e6781b12de0d09e21a72aa1de2ddb9ebe6a0/card.jpg",
+              "shared_food": "https://cdn.gatherory.com/explore/covers/birthday/242060a2df01bdb28ab1a2cff74c86de5010935c2724135cfb34e1b61b100c42/card.jpg"
+            },
+            "ideas": {
+              "gathering_plans": "https://cdn.gatherory.com/explore/covers/gathering/40a163134276f57809efcb635947c0d6590e63066f3f208a3411e46528033468/card.jpg",
+              "food_and_drinks": "https://cdn.gatherory.com/explore/covers/food/38c1dde60af39956b5f26a753086e4f1ca2d5b70e50f0fc077385eeab25428ed/card.jpg",
+              "invitations": "https://cdn.gatherory.com/explore/covers/invitations/058538161d6148a42f5adf557082439a6033e74eda9e8032a8ffc836e9040a6e/card.jpg",
+              "decor_and_setup": "https://cdn.gatherory.com/explore/covers/decor/afb0d7b80fed1dd00960ab705b330478e0e07021dd5ccb0cbd38500cb0164760/card.jpg",
+              "activities": "https://cdn.gatherory.com/explore/covers/chess/96917957a3ef2825663c6380ef98e6781b12de0d09e21a72aa1de2ddb9ebe6a0/card.jpg"
+            }
+          }
         }
       },
       {
@@ -241,7 +270,13 @@
               "version": 2,
               "required": true,
               "config": {
-                "categoryOrder": ["event", "food", "invitations", "other", "decor"],
+                "categoryOrder": [
+                  "event",
+                  "food",
+                  "invitations",
+                  "other",
+                  "decor"
+                ],
                 "ideas": [
                   {
                     "key": "gathering_plans",
@@ -340,9 +375,32 @@
           ]
         },
         "discovery": {
-          "categories": ["holidays"],
-          "tags": ["thanksgiving", "friendsgiving", "holiday", "dinner", "potluck"],
-          "summary": "Plan a Thanksgiving gathering on your chosen date, with shared food and time together."
+          "categories": [
+            "holidays"
+          ],
+          "tags": [
+            "thanksgiving",
+            "friendsgiving",
+            "holiday",
+            "dinner",
+            "potluck"
+          ],
+          "summary": "Plan a Thanksgiving gathering on your chosen date, with shared food and time together.",
+          "coverImageURL": "https://cdn.gatherory.com/explore/covers/decor/afb0d7b80fed1dd00960ab705b330478e0e07021dd5ccb0cbd38500cb0164760/card.jpg",
+          "coverImages": {
+            "children": {
+              "gathering_preparation": "https://cdn.gatherory.com/explore/covers/gathering/40a163134276f57809efcb635947c0d6590e63066f3f208a3411e46528033468/card.jpg",
+              "thanksgiving_gathering": "https://cdn.gatherory.com/explore/covers/gathering/40a163134276f57809efcb635947c0d6590e63066f3f208a3411e46528033468/card.jpg",
+              "shared_meal": "https://cdn.gatherory.com/explore/covers/food/38c1dde60af39956b5f26a753086e4f1ca2d5b70e50f0fc077385eeab25428ed/card.jpg"
+            },
+            "ideas": {
+              "gathering_plans": "https://cdn.gatherory.com/explore/covers/gathering/40a163134276f57809efcb635947c0d6590e63066f3f208a3411e46528033468/card.jpg",
+              "food_and_drinks": "https://cdn.gatherory.com/explore/covers/food/38c1dde60af39956b5f26a753086e4f1ca2d5b70e50f0fc077385eeab25428ed/card.jpg",
+              "invitations": "https://cdn.gatherory.com/explore/covers/invitations/058538161d6148a42f5adf557082439a6033e74eda9e8032a8ffc836e9040a6e/card.jpg",
+              "shared_activities": "https://cdn.gatherory.com/explore/covers/chess/96917957a3ef2825663c6380ef98e6781b12de0d09e21a72aa1de2ddb9ebe6a0/card.jpg",
+              "table_and_space": "https://cdn.gatherory.com/explore/covers/decor/afb0d7b80fed1dd00960ab705b330478e0e07021dd5ccb0cbd38500cb0164760/card.jpg"
+            }
+          }
         }
       },
       {
@@ -424,7 +482,13 @@
               "version": 2,
               "required": true,
               "config": {
-                "categoryOrder": ["venue", "attire", "food", "flowers", "photography"],
+                "categoryOrder": [
+                  "venue",
+                  "attire",
+                  "food",
+                  "flowers",
+                  "photography"
+                ],
                 "ideas": [
                   {
                     "key": "venue",
@@ -531,9 +595,32 @@
           ]
         },
         "discovery": {
-          "categories": ["weddings"],
-          "tags": ["wedding", "ceremony", "reception", "celebration"],
-          "summary": "Plan your wedding, from the first venue visit to the celebration."
+          "categories": [
+            "weddings"
+          ],
+          "tags": [
+            "wedding",
+            "ceremony",
+            "reception",
+            "celebration"
+          ],
+          "summary": "Plan your wedding, from the first venue visit to the celebration.",
+          "coverImageURL": "https://cdn.gatherory.com/explore/covers/garden-wedding/d168d90dbd69f719b04301fe1c173a01aa57102ac86737dc4ceb8bc6ce9e3750/card.jpg",
+          "coverImages": {
+            "children": {
+              "venue_visit": "https://cdn.gatherory.com/explore/covers/venue-garden/ca327ac86a493e2bf5176013c75d93e22264cf0c7c7c943fda399efcb6ec2764/card.jpg",
+              "rehearsal": "https://cdn.gatherory.com/explore/covers/gathering/40a163134276f57809efcb635947c0d6590e63066f3f208a3411e46528033468/card.jpg",
+              "ceremony": "https://cdn.gatherory.com/explore/covers/garden-wedding/d168d90dbd69f719b04301fe1c173a01aa57102ac86737dc4ceb8bc6ce9e3750/card.jpg",
+              "reception": "https://cdn.gatherory.com/explore/covers/gathering/40a163134276f57809efcb635947c0d6590e63066f3f208a3411e46528033468/card.jpg"
+            },
+            "ideas": {
+              "venue": "https://cdn.gatherory.com/explore/covers/venue-garden/ca327ac86a493e2bf5176013c75d93e22264cf0c7c7c943fda399efcb6ec2764/card.jpg",
+              "attire": "https://cdn.gatherory.com/explore/covers/attire-garden/f880923aea2c1427069691761a0550c6cf8a9b8011474beedff314c4b29a3bfa/card.jpg",
+              "food": "https://cdn.gatherory.com/explore/covers/food/38c1dde60af39956b5f26a753086e4f1ca2d5b70e50f0fc077385eeab25428ed/card.jpg",
+              "flowers": "https://cdn.gatherory.com/explore/covers/flowers/d36598aa3a91ec2ed0f5cadde1c8009b7f9e1a0f055ce8363d278a8cccb19afa/card.jpg",
+              "photography": "https://cdn.gatherory.com/explore/covers/photography/27ec09e82a6beb313a4e7c9230b8ce95e7b7562315f2a570c137609ed9d0102b/card.jpg"
+            }
+          }
         }
       }
     ]
@@ -592,28 +679,39 @@
             "key": "gathering_setup",
             "localDateTime": "2027-06-15T10:00:00",
             "status": "suggested",
-            "candidates": ["2027-06-15T14:00:00Z"]
+            "candidates": [
+              "2027-06-15T14:00:00Z"
+            ]
           },
           {
             "key": "birthday_gathering",
             "localDateTime": "2027-06-15T14:00:00",
             "status": "suggested",
-            "candidates": ["2027-06-15T18:00:00Z"]
+            "candidates": [
+              "2027-06-15T18:00:00Z"
+            ]
           },
           {
             "key": "shared_food",
             "localDateTime": "2027-06-15T16:00:00",
             "status": "suggested",
-            "candidates": ["2027-06-15T20:00:00Z"]
+            "candidates": [
+              "2027-06-15T20:00:00Z"
+            ]
           }
         ]
       },
       "preview": {
         "plan": {
-          "todos": [],
           "plannerVersion": 1,
           "experienceType": "birthday",
-          "categoryOrder": ["event", "food", "invitations", "decor", "other"],
+          "categoryOrder": [
+            "event",
+            "food",
+            "invitations",
+            "decor",
+            "other"
+          ],
           "main": {
             "sourceKey": "main",
             "name": "Birthday Party",
@@ -623,7 +721,8 @@
             "parentSourceKey": null,
             "purpose": null,
             "category": null,
-            "planningStatus": null
+            "planningStatus": null,
+            "coverAssetId": null
           },
           "children": [
             {
@@ -635,7 +734,8 @@
               "parentSourceKey": "main",
               "purpose": "planning_scouting",
               "category": "other",
-              "planningStatus": "approved"
+              "planningStatus": "approved",
+              "coverAssetId": null
             },
             {
               "sourceKey": "birthday_gathering",
@@ -646,7 +746,8 @@
               "parentSourceKey": "main",
               "purpose": "part_of_event",
               "category": "other",
-              "planningStatus": "approved"
+              "planningStatus": "approved",
+              "coverAssetId": null
             },
             {
               "sourceKey": "shared_food",
@@ -657,7 +758,8 @@
               "parentSourceKey": "main",
               "purpose": "part_of_event",
               "category": "other",
-              "planningStatus": "approved"
+              "planningStatus": "approved",
+              "coverAssetId": null
             }
           ],
           "ideas": [
@@ -670,7 +772,8 @@
               "configuration": {
                 "version": 1
               },
-              "status": "new"
+              "status": "new",
+              "coverAssetId": null
             },
             {
               "sourceKey": "food_and_drinks",
@@ -681,7 +784,8 @@
               "configuration": {
                 "version": 1
               },
-              "status": "new"
+              "status": "new",
+              "coverAssetId": null
             },
             {
               "sourceKey": "invitations",
@@ -692,7 +796,8 @@
               "configuration": {
                 "version": 1
               },
-              "status": "new"
+              "status": "new",
+              "coverAssetId": null
             },
             {
               "sourceKey": "decor_and_setup",
@@ -703,7 +808,8 @@
               "configuration": {
                 "version": 1
               },
-              "status": "new"
+              "status": "new",
+              "coverAssetId": null
             },
             {
               "sourceKey": "activities",
@@ -714,7 +820,8 @@
               "configuration": {
                 "version": 1
               },
-              "status": "new"
+              "status": "new",
+              "coverAssetId": null
             }
           ],
           "instructions": [
@@ -733,12 +840,12 @@
               "targetSourceKey": "birthday_gathering"
             }
           ],
+          "todos": [],
           "omissions": []
         },
         "contentHash": "50c7519d13d6e62b00ee05ea481547175b74047cf3a95aed02546448158bd10d"
       },
       "archive": {
-        "todos": [],
         "mainEventID": "10000000-1000-4000-8000-000000000001",
         "title": "Birthday Party",
         "mainEventStartsAt": 834778800,
@@ -820,7 +927,9 @@
             "updatedAt": 813758400
           }
         ],
-        "mainEventParticipantIDs": ["10000000-7000-4000-8000-000000000001"],
+        "mainEventParticipantIDs": [
+          "10000000-7000-4000-8000-000000000001"
+        ],
         "ideas": [
           {
             "id": "10000000-2000-4000-8000-000000000001",
@@ -957,7 +1066,9 @@
             "isAllDay": false,
             "timeZoneIdentifier": "America/Detroit",
             "eventLocation": null,
-            "participantIDs": ["10000000-7000-4000-8000-000000000001"],
+            "participantIDs": [
+              "10000000-7000-4000-8000-000000000001"
+            ],
             "parentEventID": "10000000-1000-4000-8000-000000000001",
             "status": "approved",
             "statusBeforeArchiving": null,
@@ -981,7 +1092,9 @@
             "isAllDay": false,
             "timeZoneIdentifier": "America/Detroit",
             "eventLocation": null,
-            "participantIDs": ["10000000-7000-4000-8000-000000000001"],
+            "participantIDs": [
+              "10000000-7000-4000-8000-000000000001"
+            ],
             "parentEventID": "10000000-1000-4000-8000-000000000001",
             "status": "approved",
             "statusBeforeArchiving": null,
@@ -1005,7 +1118,9 @@
             "isAllDay": false,
             "timeZoneIdentifier": "America/Detroit",
             "eventLocation": null,
-            "participantIDs": ["10000000-7000-4000-8000-000000000001"],
+            "participantIDs": [
+              "10000000-7000-4000-8000-000000000001"
+            ],
             "parentEventID": "10000000-1000-4000-8000-000000000001",
             "status": "approved",
             "statusBeforeArchiving": null,
@@ -1048,9 +1163,16 @@
             "visibility": "event_participants"
           }
         ],
+        "todos": [],
         "experienceConfiguration": {
           "experienceType": "birthday",
-          "categoryOrder": ["event", "food", "invitations", "decor", "other"]
+          "categoryOrder": [
+            "event",
+            "food",
+            "invitations",
+            "decor",
+            "other"
+          ]
         },
         "isMainEventDeleted": false,
         "registry": [],
@@ -1115,28 +1237,39 @@
             "key": "gathering_preparation",
             "localDateTime": "2027-10-10T16:00:00",
             "status": "suggested",
-            "candidates": ["2027-10-10T20:00:00Z"]
+            "candidates": [
+              "2027-10-10T20:00:00Z"
+            ]
           },
           {
             "key": "thanksgiving_gathering",
             "localDateTime": "2027-10-11T13:00:00",
             "status": "suggested",
-            "candidates": ["2027-10-11T17:00:00Z"]
+            "candidates": [
+              "2027-10-11T17:00:00Z"
+            ]
           },
           {
             "key": "shared_meal",
             "localDateTime": "2027-10-11T16:00:00",
             "status": "suggested",
-            "candidates": ["2027-10-11T20:00:00Z"]
+            "candidates": [
+              "2027-10-11T20:00:00Z"
+            ]
           }
         ]
       },
       "preview": {
         "plan": {
-          "todos": [],
           "plannerVersion": 1,
           "experienceType": "holiday",
-          "categoryOrder": ["event", "food", "invitations", "other", "decor"],
+          "categoryOrder": [
+            "event",
+            "food",
+            "invitations",
+            "other",
+            "decor"
+          ],
           "main": {
             "sourceKey": "main",
             "name": "Thanksgiving",
@@ -1146,7 +1279,8 @@
             "parentSourceKey": null,
             "purpose": null,
             "category": null,
-            "planningStatus": null
+            "planningStatus": null,
+            "coverAssetId": null
           },
           "children": [
             {
@@ -1158,7 +1292,8 @@
               "parentSourceKey": "main",
               "purpose": "planning_scouting",
               "category": "other",
-              "planningStatus": "approved"
+              "planningStatus": "approved",
+              "coverAssetId": null
             },
             {
               "sourceKey": "thanksgiving_gathering",
@@ -1169,7 +1304,8 @@
               "parentSourceKey": "main",
               "purpose": "part_of_event",
               "category": "other",
-              "planningStatus": "approved"
+              "planningStatus": "approved",
+              "coverAssetId": null
             },
             {
               "sourceKey": "shared_meal",
@@ -1180,7 +1316,8 @@
               "parentSourceKey": "main",
               "purpose": "part_of_event",
               "category": "other",
-              "planningStatus": "approved"
+              "planningStatus": "approved",
+              "coverAssetId": null
             }
           ],
           "ideas": [
@@ -1193,7 +1330,8 @@
               "configuration": {
                 "version": 1
               },
-              "status": "new"
+              "status": "new",
+              "coverAssetId": null
             },
             {
               "sourceKey": "food_and_drinks",
@@ -1204,7 +1342,8 @@
               "configuration": {
                 "version": 1
               },
-              "status": "new"
+              "status": "new",
+              "coverAssetId": null
             },
             {
               "sourceKey": "invitations",
@@ -1215,7 +1354,8 @@
               "configuration": {
                 "version": 1
               },
-              "status": "new"
+              "status": "new",
+              "coverAssetId": null
             },
             {
               "sourceKey": "shared_activities",
@@ -1226,7 +1366,8 @@
               "configuration": {
                 "version": 1
               },
-              "status": "new"
+              "status": "new",
+              "coverAssetId": null
             },
             {
               "sourceKey": "table_and_space",
@@ -1237,7 +1378,8 @@
               "configuration": {
                 "version": 1
               },
-              "status": "new"
+              "status": "new",
+              "coverAssetId": null
             }
           ],
           "instructions": [
@@ -1256,12 +1398,12 @@
               "targetSourceKey": "thanksgiving_gathering"
             }
           ],
+          "todos": [],
           "omissions": []
         },
         "contentHash": "1133e9e24493fdc68a5e15b42740f7ce279b94cb881194ed73a94594b4ef8380"
       },
       "archive": {
-        "todos": [],
         "mainEventID": "20000000-1000-4000-8000-000000000001",
         "title": "Thanksgiving",
         "mainEventStartsAt": 844977600,
@@ -1343,7 +1485,9 @@
             "updatedAt": 813758400
           }
         ],
-        "mainEventParticipantIDs": ["20000000-7000-4000-8000-000000000001"],
+        "mainEventParticipantIDs": [
+          "20000000-7000-4000-8000-000000000001"
+        ],
         "ideas": [
           {
             "id": "20000000-2000-4000-8000-000000000001",
@@ -1480,7 +1624,9 @@
             "isAllDay": false,
             "timeZoneIdentifier": "America/Toronto",
             "eventLocation": null,
-            "participantIDs": ["20000000-7000-4000-8000-000000000001"],
+            "participantIDs": [
+              "20000000-7000-4000-8000-000000000001"
+            ],
             "parentEventID": "20000000-1000-4000-8000-000000000001",
             "status": "approved",
             "statusBeforeArchiving": null,
@@ -1504,7 +1650,9 @@
             "isAllDay": false,
             "timeZoneIdentifier": "America/Toronto",
             "eventLocation": null,
-            "participantIDs": ["20000000-7000-4000-8000-000000000001"],
+            "participantIDs": [
+              "20000000-7000-4000-8000-000000000001"
+            ],
             "parentEventID": "20000000-1000-4000-8000-000000000001",
             "status": "approved",
             "statusBeforeArchiving": null,
@@ -1528,7 +1676,9 @@
             "isAllDay": false,
             "timeZoneIdentifier": "America/Toronto",
             "eventLocation": null,
-            "participantIDs": ["20000000-7000-4000-8000-000000000001"],
+            "participantIDs": [
+              "20000000-7000-4000-8000-000000000001"
+            ],
             "parentEventID": "20000000-1000-4000-8000-000000000001",
             "status": "approved",
             "statusBeforeArchiving": null,
@@ -1571,9 +1721,16 @@
             "visibility": "event_participants"
           }
         ],
+        "todos": [],
         "experienceConfiguration": {
           "experienceType": "holiday",
-          "categoryOrder": ["event", "food", "invitations", "other", "decor"]
+          "categoryOrder": [
+            "event",
+            "food",
+            "invitations",
+            "other",
+            "decor"
+          ]
         },
         "isMainEventDeleted": false,
         "registry": [],

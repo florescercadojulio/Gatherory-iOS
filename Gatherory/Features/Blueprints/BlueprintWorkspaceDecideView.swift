@@ -85,6 +85,7 @@ struct BlueprintWorkspaceDecideView: View {
             }
             // Mask the artwork, not the deck: swipes may leave its layout bounds.
         }
+        .adaptiveReadingWidth(580)
         .padding(.horizontal, AppTheme.Layout.screenHorizontal)
         .padding(.top, AppTheme.Layout.screenTop)
         .padding(.bottom, AppTheme.Layout.screenTop)
@@ -157,9 +158,9 @@ struct BlueprintWorkspaceDecideView: View {
             if let idea = ideas.first(where: { $0.key == ideaKey }) {
                 Group {
                     if reduceMotion {
-                        BlueprintIdeaPreview(idea: idea)
+                        BlueprintIdeaPreview(idea: idea, publicImageURL: content.publicIdeaCoverImageURLs[idea.key])
                     } else {
-                        BlueprintIdeaPreview(idea: idea)
+                        BlueprintIdeaPreview(idea: idea, publicImageURL: content.publicIdeaCoverImageURLs[idea.key])
                             .navigationTransition(.zoom(sourceID: idea.id, in: previewTransition))
                     }
                 }
@@ -180,9 +181,11 @@ struct BlueprintWorkspaceDecideView: View {
 
     private func cardArtwork(for idea: BlueprintCatalogIdea) -> some View {
         let category = IdeaCategory(rawValue: idea.category) ?? .other
-        return MediaArtwork(imageData: nil, symbol: category.symbol,
+        return BlueprintCoverArtwork(assetID: idea.coverAssetId, publicImageURL: content.publicIdeaCoverImageURLs[idea.key]) {
+            MediaArtwork(imageData: nil, symbol: category.symbol,
                             colors: category.artworkColors, accent: category.artworkAccent,
                             ambientBlurRadius: 10, progressiveBlurRadius: 22, blurStart: 0.46)
+        }
     }
 
     private func cardSummary(for idea: BlueprintCatalogIdea) -> some View {
@@ -271,6 +274,7 @@ struct BlueprintWorkspaceDecideView: View {
                     selectFilter(.maybes)
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
             }
             if filter != .passes && count(for: .passes) > 0 {
                 Button("Review My Passes", systemImage: "hand.thumbsdown") {

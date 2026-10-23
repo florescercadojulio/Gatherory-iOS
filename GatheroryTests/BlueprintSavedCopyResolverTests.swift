@@ -5,6 +5,40 @@ import Testing
 
 @MainActor
 struct BlueprintSavedCopyResolverTests {
+    @Test("Native copy snapshots remain aligned with the server round-trip fixture")
+    func nativeCopySnapshotBridgeMatchesFixture() throws {
+        let sourceURL = try #require(Bundle(for: SavedCopyFixtureBundle.self)
+            .url(forResource: "explore-catalog.v1", withExtension: "json"))
+        let source = try JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: sourceURL))
+        let fixtureURL = try #require(Bundle(for: SavedCopyFixtureBundle.self)
+            .url(forResource: "blueprint-native-copy-snapshots.v1", withExtension: "json"))
+        let fixture = try JSONDecoder().decode(NativeCopyBridgeFixture.self, from: Data(contentsOf: fixtureURL))
+        #expect(fixture.formatVersion == 1)
+        #expect(fixture.cases.count == 19)
+        let curated = try source.entries.sorted { $0.catalogKey < $1.catalogKey }.map { entry in
+            NativeCopyBridgeCase(label: "curated:\(entry.catalogKey)", source: entry,
+                                 content: try BlueprintDraftContent.snapshot(of: entry))
+        }
+        let wedding = try weddingEntry()
+        let authored = try [
+            authoredEntry(from: wedding, key: "authored_single_native_bridge", singleEvent: true),
+            authoredEntry(from: wedding, key: "authored_capability_native_bridge", singleEvent: false),
+        ].map { entry in
+            NativeCopyBridgeCase(label: "authored:\(entry.catalogKey)", source: entry,
+                                 content: try BlueprintDraftContent.snapshot(of: entry))
+        }
+        let actual = curated + authored
+        let expectedByLabel = Dictionary(uniqueKeysWithValues: fixture.cases.map { ($0.label, $0) })
+        #expect(actual.map(\.label) == fixture.cases.map(\.label))
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        for value in actual {
+            let expected = try #require(expectedByLabel[value.label])
+            #expect(try encoder.encode(value.source) == encoder.encode(expected.source), Comment(rawValue: value.label))
+            #expect(try encoder.encode(value.content) == encoder.encode(expected.content), Comment(rawValue: value.label))
+        }
+    }
+
     @Test("Saved-copy snapshots preserve main and child to-dos with their stable targets")
     func snapshotPreservesTodos() throws {
         let source = try weddingEntry()
@@ -33,6 +67,59 @@ struct BlueprintSavedCopyResolverTests {
 
         let decodedCopy = try decoder.decode(BlueprintCatalogEntry.self, from: encoder.encode(entry))
         #expect(try BlueprintDraftContent.snapshot(of: decodedCopy).todos == snapshot.todos)
+    }
+
+    @Test("Copy validation accepts only a validated source Explore cover on the main event")
+    func curatedMainCoverCopyValidation() throws {
+        let coverURL = "https://cdn.gatherory.com/explore/covers/wedding/\(String(repeating: "c", count: 64))/card.jpg"
+        var source = try weddingEntry()
+        var discovery = try #require(source.discovery)
+        discovery.coverImageURL = coverURL
+        source.discovery = discovery
+        let sourceContent = try BlueprintDraftContent.snapshot(of: source)
+        let copied = try weddingEntry(
+            catalogKey: "private_\(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased())",
+            coverID: UUID()
+        )
+
+        #expect(try copiedSnapshotMatches(sourceContent, sourceEntry: source, entry: copied))
+
+        var unrelatedSource = source
+        var unrelatedDiscovery = try #require(unrelatedSource.discovery)
+        unrelatedDiscovery.coverImageURL = "https://example.com/cover.jpg"
+        unrelatedSource.discovery = unrelatedDiscovery
+        #expect(try !copiedSnapshotMatches(sourceContent, sourceEntry: unrelatedSource, entry: copied))
+
+        let childCoverCopy = try entryWithChildCover(copied, childCoverID: UUID())
+        var sourceWithoutChildCoverMap = source
+        var discoveryWithoutChildCoverMap = try #require(sourceWithoutChildCoverMap.discovery)
+        discoveryWithoutChildCoverMap.coverImages = nil
+        sourceWithoutChildCoverMap.discovery = discoveryWithoutChildCoverMap
+        #expect(try !copiedSnapshotMatches(sourceContent, sourceEntry: sourceWithoutChildCoverMap, entry: childCoverCopy))
+    }
+
+    @Test("Copy validation allows materialized covers only for mapped child and idea targets")
+    func curatedTargetCoverCopyValidation() throws {
+        let url = "https://cdn.gatherory.com/explore/covers/wedding/\(String(repeating: "f", count: 64))/card.jpg"
+        var source = try weddingEntry()
+        var discovery = try #require(source.discovery)
+        discovery.coverImages = BlueprintTargetCoverImages(children: ["venue_visit": url], ideas: ["flowers": url])
+        source.discovery = discovery
+        let snapshot = try BlueprintDraftContent.snapshot(of: source)
+        #expect(snapshot.children.allSatisfy { $0.coverAssetId == nil })
+        #expect(snapshot.ideas.allSatisfy { $0.coverAssetId == nil })
+        var copied = try weddingEntry(catalogKey: "private_\(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased())")
+        copied = try entryWithTargetCovers(copied, childKey: "venue_visit", ideaKey: "flowers")
+        let copiedSnapshot = try BlueprintDraftContent.snapshot(of: copied)
+        #expect(copiedSnapshot.children.first { $0.key == "venue_visit" }?.coverAssetId != nil)
+        #expect(copiedSnapshot.ideas.first { $0.key == "flowers" }?.coverAssetId != nil)
+        #expect(try copiedSnapshotMatches(snapshot, sourceEntry: source, entry: copied))
+
+        var unrelated = source
+        var unrelatedDiscovery = try #require(unrelated.discovery)
+        unrelatedDiscovery.coverImages = BlueprintTargetCoverImages(children: ["rehearsal": url], ideas: ["flowers": url])
+        unrelated.discovery = unrelatedDiscovery
+        #expect(try !copiedSnapshotMatches(snapshot, sourceEntry: unrelated, entry: copied))
     }
 
     @Test("Copies the original snapshot and attaches a differently keyed private catalog entry")
@@ -290,7 +377,87 @@ struct BlueprintSavedCopyResolverTests {
         return Context(directory: directory, store: store, draft: draft)
     }
 
-    private func weddingEntry(catalogKey: String = "wedding") throws -> BlueprintCatalogEntry {
+    private func authoredEntry(
+        from source: BlueprintCatalogEntry,
+        key: String,
+        singleEvent: Bool
+    ) throws -> BlueprintCatalogEntry {
+        let encoder = JSONEncoder()
+        let decoder = JSONDecoder()
+        var root = try #require(JSONSerialization.jsonObject(with: encoder.encode(source)) as? [String: Any])
+        root["catalogKey"] = key
+        root["revision"] = 3
+        root["contentHash"] = String(repeating: "0", count: 64)
+        root["description"] = "A native copy bridge fixture with public instructions, ideas and notes."
+        var definition = try #require(root["definition"] as? [String: Any])
+        var blueprint = try #require(definition["blueprint"] as? [String: Any])
+        blueprint["id"] = key
+        blueprint["revision"] = 3
+        blueprint["name"] = singleEvent ? "Native Single Event" : "Native Capability Matrix"
+        definition["blueprint"] = blueprint
+        definition["experienceDefaults"] = ["type": "custom"]
+        var modules = try #require(definition["modules"] as? [[String: Any]])
+        let treeIndex = try #require(modules.firstIndex { $0["type"] as? String == "experience_tree" })
+        var tree = try #require(modules[treeIndex]["config"] as? [String: Any])
+        tree["mainEventType"] = "custom"
+        var children = try #require(tree["children"] as? [[String: Any]])
+        if singleEvent {
+            children = []
+        } else {
+            for index in children.indices {
+                children[index]["coverAssetId"] = "10000000-0000-4000-8000-\(String(format: "%012d", index + 1))"
+            }
+        }
+        tree["children"] = children
+        modules[treeIndex]["config"] = tree
+        let ideaIndex = try #require(modules.firstIndex { $0["type"] as? String == "ideas" })
+        var ideaConfig = try #require(modules[ideaIndex]["config"] as? [String: Any])
+        var ideas = try #require(ideaConfig["ideas"] as? [[String: Any]])
+        for index in ideas.indices {
+            if singleEvent {
+                ideas[index]["target"] = ["kind": "main"]
+            } else {
+                ideas[index]["coverAssetId"] = "20000000-0000-4000-8000-\(String(format: "%012d", index + 1))"
+            }
+        }
+        ideaConfig["ideas"] = ideas
+        modules[ideaIndex]["config"] = ideaConfig
+        if let instructionsIndex = modules.firstIndex(where: { $0["type"] as? String == "instructions" }) {
+            var instructionConfig = try #require(modules[instructionsIndex]["config"] as? [String: Any])
+            var sections = try #require(instructionConfig["sections"] as? [[String: Any]])
+            if singleEvent {
+                for index in sections.indices { sections[index]["target"] = ["kind": "main"] }
+            }
+            instructionConfig["sections"] = sections
+            modules[instructionsIndex]["config"] = instructionConfig
+        }
+        if singleEvent {
+            definition.removeValue(forKey: "presentation")
+            modules.removeAll { $0["type"] as? String == "todos" }
+        } else {
+            definition["presentation"] = [
+                "coverAssetId": "30000000-0000-4000-8000-000000000001",
+            ]
+            let childKey = try #require(children.first?["key"] as? String)
+            modules.append([
+                "key": "starter_todos", "type": "todos", "version": 1, "required": false,
+                "config": ["todos": [
+                    ["key": "confirm_main", "title": "Confirm main event", "target": ["kind": "main"]],
+                    ["key": "book_child", "title": "Book child activity", "websiteURL": "https://example.com/activity",
+                     "target": ["kind": "child", "key": childKey]],
+                ]],
+            ])
+        }
+        definition["modules"] = modules
+        root["definition"] = definition
+        if var discovery = root["discovery"] as? [String: Any] {
+            discovery["summary"] = "A public native bridge fixture summary."
+            root["discovery"] = discovery
+        }
+        return try decoder.decode(BlueprintCatalogEntry.self, from: JSONSerialization.data(withJSONObject: root))
+    }
+
+    private func weddingEntry(catalogKey: String = "wedding", coverID: UUID? = nil) throws -> BlueprintCatalogEntry {
         let url = try #require(Bundle(for: SavedCopyFixtureBundle.self)
             .url(forResource: "wedding-catalog.v1", withExtension: "json"))
         let response = try JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: url))
@@ -302,13 +469,55 @@ struct BlueprintSavedCopyResolverTests {
             schema: source.definition.schema, kind: source.definition.kind,
             schemaVersion: source.definition.schemaVersion, blueprint: identity,
             experienceDefaults: source.definition.experienceDefaults, roles: source.definition.roles,
-            modules: source.definition.modules, presentation: source.definition.presentation
+            modules: source.definition.modules,
+            presentation: coverID.map { ExperiencePresentationHints(theme: nil, coverAssetID: $0, moduleOrder: nil) }
+                ?? source.definition.presentation
         )
         let digest = SHA256.hash(data: Data("\(source.contentHash):\(catalogKey)".utf8))
             .map { String(format: "%02x", $0) }.joined()
         return BlueprintCatalogEntry(catalogKey: catalogKey, revision: source.revision,
                                      contentHash: digest, definition: definition,
                                      discovery: source.discovery, description: source.description)
+    }
+
+    private func entryWithChildCover(_ entry: BlueprintCatalogEntry, childCoverID: UUID) throws -> BlueprintCatalogEntry {
+        var root = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(entry)) as? [String: Any])
+        var definition = try #require(root["definition"] as? [String: Any])
+        var modules = try #require(definition["modules"] as? [[String: Any]])
+        let index = try #require(modules.firstIndex { $0["type"] as? String == "experience_tree" })
+        var config = try #require(modules[index]["config"] as? [String: Any])
+        var children = try #require(config["children"] as? [[String: Any]])
+        children[0]["coverAssetId"] = childCoverID.uuidString
+        config["children"] = children
+        modules[index]["config"] = config
+        definition["modules"] = modules
+        root["definition"] = definition
+        return try JSONDecoder().decode(BlueprintCatalogEntry.self, from: JSONSerialization.data(withJSONObject: root))
+    }
+
+    private func entryWithTargetCovers(_ entry: BlueprintCatalogEntry, childKey: String, ideaKey: String) throws -> BlueprintCatalogEntry {
+        var root = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(entry)) as? [String: Any])
+        var definition = try #require(root["definition"] as? [String: Any])
+        var modules = try #require(definition["modules"] as? [[String: Any]])
+        let treeIndex = try #require(modules.firstIndex { $0["type"] as? String == "experience_tree" })
+        var treeConfig = try #require(modules[treeIndex]["config"] as? [String: Any])
+        var children = try #require(treeConfig["children"] as? [[String: Any]])
+        if let index = children.firstIndex(where: { $0["key"] as? String == childKey }) {
+            children[index]["coverAssetId"] = UUID().uuidString
+        }
+        treeConfig["children"] = children
+        modules[treeIndex]["config"] = treeConfig
+        let ideasIndex = try #require(modules.firstIndex { $0["type"] as? String == "ideas" })
+        var ideaConfig = try #require(modules[ideasIndex]["config"] as? [String: Any])
+        var ideas = try #require(ideaConfig["ideas"] as? [[String: Any]])
+        if let index = ideas.firstIndex(where: { $0["key"] as? String == ideaKey }) {
+            ideas[index]["coverAssetId"] = UUID().uuidString
+        }
+        ideaConfig["ideas"] = ideas
+        modules[ideasIndex]["config"] = ideaConfig
+        definition["modules"] = modules
+        root["definition"] = definition
+        return try JSONDecoder().decode(BlueprintCatalogEntry.self, from: JSONSerialization.data(withJSONObject: root))
     }
 
     private func copyRecord() throws -> BlueprintPersonalRecord {
@@ -322,6 +531,17 @@ struct BlueprintSavedCopyResolverTests {
         let file = try #require(files.allObjects.compactMap { $0 as? URL }.first { $0.lastPathComponent == "draft.json" })
         return try Data(contentsOf: file)
     }
+}
+
+private struct NativeCopyBridgeFixture: Decodable {
+    let formatVersion: Int
+    let cases: [NativeCopyBridgeCase]
+}
+
+private struct NativeCopyBridgeCase: Codable {
+    let label: String
+    let source: BlueprintCatalogEntry
+    let content: BlueprintDraftContent
 }
 
 private struct Context {

@@ -4,14 +4,14 @@ import ImageIO
 
 /// Geometry and selection rules shared by the album's previews and full gallery.
 enum AlbumPresentation {
-    /// Keep the familiar two-column collage on iPhone. iPad responds to its
-    /// actual window width, including narrow Split View and Stage Manager windows.
-    static func columnCount(isPad: Bool, availableWidth: CGFloat) -> Int {
-        guard isPad, availableWidth.isFinite, availableWidth > 0 else { return 2 }
+    /// Keep two columns in narrow spaces and add columns as the available
+    /// width grows. Even counts keep a column from straddling a center fold.
+    static func columnCount(availableWidth: CGFloat) -> Int {
+        guard availableWidth.isFinite, availableWidth > 0 else { return 2 }
         let minimumCardWidth: CGFloat = 190
         let spacing: CGFloat = 12
         let count = ((availableWidth + spacing) / (minimumCardWidth + spacing)).rounded(.down)
-        return Int(min(6, max(2, count)))
+        return Int(min(6, max(2, count))) / 2 * 2
     }
 
     /// Read encoded dimensions without decoding the full photo into memory.

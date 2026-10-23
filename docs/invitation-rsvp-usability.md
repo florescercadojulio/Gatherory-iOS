@@ -22,10 +22,20 @@ acceptance and the deployed release.
   beside the choices. A retry names and resends the attempted choice. The old
   Try Again action only refreshed the feed; it did not resend a failed RSVP.
   Feed/cache errors instead offer Refresh Event without pretending to resend.
-- Selected responses have a visible checkmark and VoiceOver selected state.
-  Response labels are localized and use system text styles without font shrinking;
-  accessibility text sizes use a vertical layout. Existing imagery, semantic
-  colors, and minimum touch targets are retained.
+- Selected responses use the accent tint and VoiceOver selected state. Response
+  labels are localized. Compact native capsules use the caption text style and
+  the earlier implementation’s minimum scale factor of 0.78. Existing imagery,
+  semantic colors and minimum touch targets are retained.
+
+## RSVP layout rule
+
+Going, Not Sure and Not Going must always appear together in one horizontal row.
+Never stack these buttons vertically, including narrow windows, folded Duo panes
+and accessibility text sizes. Use the compact native bordered capsule styling
+from commit `5825bc8a`: symbols beside labels, caption semibold text, 6-point
+spacing and the existing minimum touch target. Keep the visible “Your Response”
+heading and response drop shadow removed. Preserve localized labels, selected
+tint and VoiceOver selected state.
 
 ## Boundaries and recovery
 

@@ -292,9 +292,9 @@ private struct RSVPOverviewRing: View {
 
     private var segments: [(count: Int, color: Color, label: String)] {
         [
-            (summary.going, .green, String(localized: "Going")),
-            (summary.maybe, .yellow, String(localized: "Maybe")),
-            (summary.declined, .red, String(localized: "Can't go")),
+            (summary.going, AppTheme.ColorToken.success, String(localized: "Going")),
+            (summary.maybe, AppTheme.ColorToken.warning, String(localized: "Maybe")),
+            (summary.declined, AppTheme.ColorToken.destructive, String(localized: "Can't go")),
             (summary.awaiting, .gray, String(localized: "Awaiting"))
         ]
     }
@@ -333,15 +333,26 @@ private struct RSVPOverviewRing: View {
             }
             .frame(width: 88, height: 88)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    legendItem(segments[0])
-                    legendItem(segments[1])
+            ViewThatFits(in: .horizontal) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        legendItem(segments[0], fitsSingleLine: true)
+                        legendItem(segments[1], fitsSingleLine: true)
+                    }
+                    HStack(spacing: 8) {
+                        legendItem(segments[2], fitsSingleLine: true)
+                        legendItem(segments[3], fitsSingleLine: true)
+                    }
                 }
-                HStack(spacing: 8) {
-                    legendItem(segments[2])
-                    legendItem(segments[3])
+                .fixedSize(horizontal: true, vertical: false)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(segments.indices, id: \.self) { index in
+                        legendItem(segments[index], fitsSingleLine: false)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
+                .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -351,15 +362,14 @@ private struct RSVPOverviewRing: View {
         .accessibilityValue(segments.map { "\($0.count.formatted()) \($0.label)" }.joined(separator: ", "))
     }
 
-    private func legendItem(_ segment: (count: Int, color: Color, label: String)) -> some View {
+    private func legendItem(_ segment: (count: Int, color: Color, label: String), fitsSingleLine: Bool) -> some View {
         HStack(spacing: 4) {
             Circle().fill(segment.color).frame(width: 6, height: 6)
             Text("\(segment.count.formatted()) \(segment.label)")
-                .font(.system(size: 9, weight: .medium))
+                .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .lineLimit(fitsSingleLine ? 1 : nil)
+                .fixedSize(horizontal: fitsSingleLine, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

@@ -5,20 +5,18 @@ import SwiftUI
 struct BlueprintWorkspaceEventDetail: View {
     let event: BlueprintPreviewEventContent
     let artwork: BlueprintPreviewEventArtwork
+    var scheduledDate: String? = nil
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var scrollProgress = CGFloat.zero
 
     var body: some View {
-        GeometryReader { proxy in
-            let heroHeight = max(
-                proxy.size.height + proxy.safeAreaInsets.top,
-                dynamicTypeSize.isAccessibilitySize ? 760 : 680
-            )
-
-            ZStack {
-                backdrop(progress: scrollProgress)
+        AdaptiveArtworkPresentation {
+            GeometryReader { proxy in
+                let heroHeight = LayoutDimensions.heroHeight(
+                    availableHeight: proxy.size.height,
+                    isAccessibilitySize: dynamicTypeSize.isAccessibilitySize)
 
                 ScrollView {
                     VStack(spacing: 0) {
@@ -30,12 +28,20 @@ struct BlueprintWorkspaceEventDetail: View {
                             Text(artwork.category.title)
                                 .font(.subheadline.weight(.medium))
                         } timingLocation: {
+                            if let scheduledDate {
+                                Text(scheduledDate)
+                                    .font(.headline)
+                            }
                             if let proposal = event.scheduleProposal,
-                               let schedule = BlueprintReviewPresentation.schedule(
+                                let schedule = BlueprintReviewPresentation.schedule(
                                     dayOffset: proposal.dayOffset,
                                     localTime: proposal.localTime
-                               ) {
-                                Text(String.localizedStringWithFormat(BlueprintCopy.previewSuggestedScheduleFormat, schedule))
+                                )
+                            {
+                                Text(
+                                    String.localizedStringWithFormat(
+                                        BlueprintCopy.previewSuggestedScheduleFormat, schedule)
+                                )
                                 .font(.headline)
                                 .fixedSize(horizontal: false, vertical: true)
                             }
@@ -43,7 +49,7 @@ struct BlueprintWorkspaceEventDetail: View {
                             EmptyView()
                         }
 
-                        information(bottomInset: proxy.safeAreaInsets.bottom)
+                        information
                     }
                 }
                 .scrollIndicators(.hidden)
@@ -55,7 +61,8 @@ struct BlueprintWorkspaceEventDetail: View {
                     scrollProgress = newProgress
                 }
             }
-            .ignoresSafeArea(edges: .top)
+        } artwork: {
+            backdrop(progress: scrollProgress).ignoresSafeArea()
         }
         .background(.black)
         .navigationTitle("")
@@ -65,14 +72,16 @@ struct BlueprintWorkspaceEventDetail: View {
     private func backdrop(progress: CGFloat) -> some View {
         ZStack {
             Color.black
-            MediaArtwork(
-                imageData: nil,
-                symbol: artwork.symbol,
-                colors: artwork.colors,
-                accent: artwork.accent,
-                ambientBlurRadius: 36,
-                progressiveBlurRadius: 0
-            )
+            BlueprintCoverArtwork(assetID: event.coverAssetID, publicImageURL: event.publicCoverImageURL) {
+                MediaArtwork(
+                    imageData: nil,
+                    symbol: artwork.symbol,
+                    colors: artwork.colors,
+                    accent: artwork.accent,
+                    ambientBlurRadius: 36,
+                    progressiveBlurRadius: 0
+                )
+            }
             .scaleEffect(1 + (0.06 * (reduceMotion ? 0 : progress)))
             .blur(radius: reduceTransparency || reduceMotion ? 0 : 38 * progress, opaque: true)
             .clipped()
@@ -93,7 +102,7 @@ struct BlueprintWorkspaceEventDetail: View {
     }
 
     @ViewBuilder
-    private func information(bottomInset: CGFloat) -> some View {
+    private var information: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
             if let summary = event.summary,
                !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -135,17 +144,22 @@ struct BlueprintWorkspaceEventDetail: View {
                     VStack(spacing: 0) {
                         ForEach(Array(event.ideas.enumerated()), id: \.element.id) { index, idea in
                             NavigationLink {
-                                BlueprintIdeaPreview(idea: idea)
+                                BlueprintIdeaPreview(idea: idea, publicImageURL: event.publicIdeaCoverImageURLs[idea.key])
                             } label: {
                                 HStack(spacing: 12) {
                                     let ideaCategory = IdeaCategory(rawValue: idea.category) ?? .other
-                                    ProgressiveArtwork(
-                                        symbol: ideaCategory.symbol,
-                                        colors: ideaCategory.artworkColors,
-                                        accent: ideaCategory.artworkAccent,
-                                        ambientBlurRadius: 8,
-                                        progressiveBlurRadius: 0
-                                    )
+                                    BlueprintCoverArtwork(
+                                        assetID: idea.coverAssetId,
+                                        publicImageURL: event.publicIdeaCoverImageURLs[idea.key]
+                                    ) {
+                                        ProgressiveArtwork(
+                                            symbol: ideaCategory.symbol,
+                                            colors: ideaCategory.artworkColors,
+                                            accent: ideaCategory.artworkAccent,
+                                            ambientBlurRadius: 8,
+                                            progressiveBlurRadius: 0
+                                        )
+                                    }
                                     .frame(width: 48, height: 56)
                                     .clipShape(.rect(cornerRadius: 12))
 
@@ -181,7 +195,7 @@ struct BlueprintWorkspaceEventDetail: View {
         }
         .padding(.horizontal, AppTheme.Layout.screenHorizontal)
         .padding(.top, AppTheme.Spacing.section)
-        .padding(.bottom, max(bottomInset, 96))
+        .padding(.bottom, AppTheme.Layout.screenBottom)
         .foregroundStyle(.white)
         .appImageOverlayAppearance()
     }

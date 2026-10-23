@@ -59,7 +59,7 @@ struct EventInvitationScreen: View {
                 purpose: nil,
                 statusTitle: workspace.currentMainEventStatus.title,
                 statusSymbol: workspace.currentMainEventStatus.symbol,
-                peopleLabel: "Who's Coming",
+                peopleLabel: String(localized: "Who's Coming"),
                 people: attendees,
                 showsAttendeeList: true,
                 response: workspace.currentViewerResponse(for: .main),
@@ -94,7 +94,7 @@ struct EventInvitationScreen: View {
                 purpose: item.purpose,
                 statusTitle: workspace.currentMainEventStatus == .cancelled ? AppCopy.Lifecycle.cancelled : item.status.title,
                 statusSymbol: workspace.currentMainEventStatus == .cancelled ? "calendar.badge.minus" : item.status.symbol,
-                peopleLabel: "Who's Coming",
+                peopleLabel: String(localized: "Who's Coming"),
                 people: attendees,
                 showsAttendeeList: true,
                 response: workspace.currentViewerResponse(for: .subevent(id)),
@@ -161,19 +161,13 @@ struct EventInvitationScreen: View {
     var body: some View {
         Group {
             if let presentation {
-                GeometryReader { proxy in
-                    let heroHeight = max(
-                        proxy.size.height + proxy.safeAreaInsets.top,
-                        dynamicTypeSize.isAccessibilitySize ? 760 : 680
-                    )
-
-                    ZStack {
-                        EventInvitationBackdrop(
-                            presentation: presentation,
-                            scrollState: scrollState,
-                            reduceMotion: reduceMotion,
-                            reduceTransparency: reduceTransparency
-                        )
+                AdaptiveArtworkPresentation {
+                    GeometryReader { proxy in
+                        let heroHeight = min(
+                            LayoutDimensions.heroHeight(
+                                availableHeight: proxy.size.height,
+                                isAccessibilitySize: dynamicTypeSize.isAccessibilitySize),
+                            LayoutDimensions.nonnegative(proxy.size.height - AppTheme.Spacing.section))
 
                         // This is a finite event detail surface, not an unbounded feed.
                         // Resolving the complete layout up front keeps the bottom edge stable
@@ -193,7 +187,11 @@ struct EventInvitationScreen: View {
                             scrollState.progress = newOffset
                         }
                     }
-                    .ignoresSafeArea(edges: .top)
+                } artwork: {
+                    EventInvitationBackdrop(
+                        presentation: presentation, scrollState: scrollState,
+                        reduceMotion: reduceMotion, reduceTransparency: reduceTransparency
+                    )
                 }
             } else {
                 ContentUnavailableView("Event unavailable", systemImage: "calendar.badge.exclamationmark")
@@ -302,8 +300,6 @@ struct EventInvitationScreen: View {
         } response: {
             if event.permitsResponse || event.response != nil {
                 VStack(spacing: AppTheme.Spacing.compact) {
-                    Text(RSVPCopy.title)
-                        .font(.subheadline.weight(.semibold))
                     EventResponseControl(selection: event.response) { response in
                         withAnimation(.snappy) {
                             setResponse(response)
@@ -311,6 +307,13 @@ struct EventInvitationScreen: View {
                     }
                     .disabled(!event.permitsResponse || isUpdatingAttendance)
                     attendanceFeedback
+                        .appHaptic(.success, trigger: attendanceUpdate) { _, update in
+                            update?.phase == .saved
+                        }
+                        .appHaptic(.error, trigger: attendanceUpdate) { _, update in
+                            if case .failed = update?.phase { return true }
+                            return false
+                        }
                         .disabled(!event.permitsResponse || isUpdatingAttendance)
                 }
                 .padding(.top, AppTheme.Spacing.compact)
@@ -359,15 +362,7 @@ struct EventInvitationScreen: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
             peopleCard(event)
             if let announcementEventID {
-                NavigationLink {
-                    EventAnnouncementsView(eventID: announcementEventID)
-                } label: {
-                    Label(AnnouncementCopy.title, systemImage: "megaphone")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                EventInvitationUpdatesPreview(eventID: announcementEventID)
             }
             timingCard(event)
 
@@ -518,9 +513,9 @@ struct EventInvitationScreen: View {
     private func attendeeSummary(for people: [EventPersonPresentation]) -> String {
         let confirmedCount = people.filter { $0.member?.attendance == .going }.count
         if confirmedCount > 0 {
-            return confirmedCount == 1 ? "1 person going" : "\(confirmedCount) people going"
+            return AppCopy.Home.peopleGoing(confirmedCount)
         }
-        return people.count == 1 ? "1 person invited" : "\(people.count) people invited"
+        return AppCopy.Home.peopleInvited(people.count)
     }
 
     private func attendeeAccessibilitySummary(for people: [EventPersonPresentation]) -> String {
@@ -529,47 +524,72 @@ struct EventInvitationScreen: View {
     }
 
     private func timingCard(_ event: EventPresentation) -> some View {
-        EventInvitationFeatureCard {
-            VStack(spacing: AppTheme.Spacing.standard) {
-                Label(event.categoryTitle, systemImage: event.categorySymbol)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.70))
-
-                Text(scheduleSummary(event))
-                    .font(.title2.weight(.bold))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: AppTheme.Spacing.compact) {
-                        eventMetadataPill(event.statusTitle, symbol: event.statusSymbol)
-                        if let purpose = event.purpose {
-                            eventMetadataPill(purpose.shortTitle, symbol: purpose.symbol)
-                        }
-                    }
-
-                    VStack(spacing: AppTheme.Spacing.compact) {
-                        eventMetadataPill(event.statusTitle, symbol: event.statusSymbol)
-                        if let purpose = event.purpose {
-                            eventMetadataPill(purpose.shortTitle, symbol: purpose.symbol)
-                        }
-                    }
-                }
-                if event.startsAt != nil {
-                    Button(AppCopy.Calendar.add, systemImage: "calendar.badge.plus") {
-                        calendarDraft = CalendarEventDraft.make(title: event.title, startsAt: event.startsAt,
-                            endsAt: event.endsAt, isAllDay: event.isAllDay, timeZoneIdentifier: event.timeZoneIdentifier,
-                            location: event.location?.formatted, notes: event.note)
-                    }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.capsule)
-                    Text(AppCopy.Calendar.copyExplanation).font(.caption).foregroundStyle(.white.opacity(0.72))
-                        .multilineTextAlignment(.center)
-                }
+        EventInvitationScheduleCard(
+            categoryTitle: event.categoryTitle,
+            categorySymbol: event.categorySymbol,
+            dateText: event.startsAt.map {
+                invitationDateText($0, endsAt: event.endsAt, isAllDay: event.isAllDay, timeZoneIdentifier: event.timeZoneIdentifier)
+            } ?? String(localized: "Date to be decided"),
+            timeText: event.startsAt.flatMap { invitationTimeText($0, endsAt: event.endsAt, isAllDay: event.isAllDay, timeZoneIdentifier: event.timeZoneIdentifier) },
+            statusTitle: event.statusTitle,
+            statusSymbol: event.statusSymbol,
+            purposeTitle: event.purpose?.shortTitle,
+            purposeSymbol: event.purpose?.symbol,
+            addToCalendar: event.startsAt == nil ? nil : {
+                calendarDraft = CalendarEventDraft.make(
+                    title: event.title,
+                    startsAt: event.startsAt,
+                    endsAt: event.endsAt,
+                    isAllDay: event.isAllDay,
+                    timeZoneIdentifier: event.timeZoneIdentifier,
+                    location: event.location?.formatted,
+                    notes: event.note
+                )
             }
-            .frame(maxWidth: .infinity)
-            .accessibilityElement(children: .combine)
-        }
+        )
+    }
+
+    private func invitationDateText(_ date: Date, endsAt: Date?, isAllDay: Bool, timeZoneIdentifier: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .autoupdatingCurrent
+        formatter.dateStyle = .full
+        formatter.timeStyle = .none
+        let start = formatter.string(from: date)
+        guard isAllDay, let endsAt else { return start }
+
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.timeZone = formatter.timeZone
+        guard !calendar.isDate(date, inSameDayAs: endsAt) else { return start }
+        return "\(start) – \(formatter.string(from: endsAt))"
+    }
+
+    private func invitationTimeText(_ startsAt: Date, endsAt: Date?, isAllDay: Bool, timeZoneIdentifier: String) -> String {
+        guard !isAllDay else { return String(localized: "All-day") }
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .autoupdatingCurrent
+        formatter.timeZone = timeZone
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        let start = formatter.string(from: startsAt)
+        var endDateText: String?
+        let range = endsAt.map { end -> String in
+            var calendar = Calendar.autoupdatingCurrent
+            calendar.timeZone = timeZone
+            if !calendar.isDate(startsAt, inSameDayAs: end) {
+                let dateFormatter = DateFormatter()
+                dateFormatter.locale = .autoupdatingCurrent
+                dateFormatter.timeZone = timeZone
+                dateFormatter.dateStyle = .full
+                dateFormatter.timeStyle = .none
+                endDateText = dateFormatter.string(from: end)
+            }
+            return "\(start) – \(formatter.string(from: end))"
+        } ?? start
+        let zoneName = timeZone.abbreviation(for: startsAt) ?? timeZone.identifier
+        let endDate = endDateText.map { " · \($0)" } ?? ""
+        return "\(range)\(endDate) · \(zoneName)"
     }
 
     @ViewBuilder
@@ -781,14 +801,6 @@ struct EventInvitationScreen: View {
         return meaningfulDetails.isEmpty ? nil : meaningfulDetails.joined(separator: " · ")
     }
 
-    private func eventMetadataPill(_ title: String, symbol: String) -> some View {
-        Label(title, systemImage: symbol)
-            .font(.subheadline.weight(.semibold))
-            .padding(.horizontal, AppTheme.Spacing.standard)
-            .padding(.vertical, 8)
-            .background(.white.opacity(0.12), in: Capsule())
-    }
-
     private func scheduleCard(_ children: [TimelineItem]) -> some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
             Label("Schedule", systemImage: "clock.fill")
@@ -801,7 +813,8 @@ struct EventInvitationScreen: View {
                             item: item,
                             transitionNamespace: childTransition,
                             showsPlanningStatus: false,
-                            cardAspectRatio: 0.78
+                            cardAspectRatio: 0.78,
+                            artworkBlurStart: 0.62
                         ) {
                             selectedChild = item
                         }
@@ -853,16 +866,6 @@ struct EventInvitationScreen: View {
 
     private func openSharedAlbum(initialMomentID: UUID? = nil) {
         sharedAlbumRoute = SharedAlbumRoute(initialMomentID: initialMomentID, ownerUserID: account?.id)
-    }
-
-    private func scheduleSummary(_ event: EventPresentation) -> String {
-        guard let startsAt = event.startsAt else { return "To be decided" }
-        return EventSchedule(
-            startsAt: startsAt,
-            endsAt: event.endsAt,
-            isAllDay: event.isAllDay,
-            timeZoneIdentifier: event.timeZoneIdentifier
-        ).summary
     }
 
     private func setResponse(_ response: EventResponse) {
@@ -1135,8 +1138,8 @@ private struct EventPlaylistArtworkPreview: View {
     var body: some View {
         Button(action: openPlaylist) {
             EventPlaylistArtworkGrid(tracks: displayedTracks)
-                .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
-            .contentShape(Rectangle())
+                .frame(maxWidth: .infinity, minHeight: 194)
+                .contentShape(Rectangle())
         }
         .buttonStyle(EventPlaylistPreviewButtonStyle())
         .accessibilityLabel(accessibilityLabel)
@@ -1151,10 +1154,16 @@ private struct EventPlaylistArtworkPreview: View {
     }
 }
 
-private struct EventPlaylistArtworkGrid: View {
+private struct EventPlaylistArtworkGrid<Artwork: View>: View {
     let tracks: [MusicTrack]
+    private let artwork: (MusicTrack) -> Artwork
 
-    private let tileSide: CGFloat = 52
+    init(tracks: [MusicTrack], @ViewBuilder artwork: @escaping (MusicTrack) -> Artwork = { MusicTrackArtwork(track: $0) }) {
+        self.tracks = tracks
+        self.artwork = artwork
+    }
+
+    private let tileSide: CGFloat = 88
     private let gap: CGFloat = 4
 
     var body: some View {
@@ -1176,7 +1185,7 @@ private struct EventPlaylistArtworkGrid: View {
                 spacing: gap
             ) {
                 ForEach(tracks.prefix(4)) { track in
-                    MusicTrackArtwork(track: track)
+                    artwork(track)
                         .frame(width: tileSide, height: tileSide)
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .overlay {
@@ -1188,6 +1197,222 @@ private struct EventPlaylistArtworkGrid: View {
             }
         }
     }
+}
+
+private struct EventInvitationScheduleCard: View {
+    let categoryTitle: String
+    let categorySymbol: String
+    let dateText: String
+    let timeText: String?
+    let statusTitle: String
+    let statusSymbol: String
+    let purposeTitle: String?
+    let purposeSymbol: String?
+    let addToCalendar: (() -> Void)?
+
+    var body: some View {
+        EventInvitationFeatureCard {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.compact) {
+                        categoryLabel
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                        Spacer(minLength: AppTheme.Spacing.compact)
+                        statusLabel
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        categoryLabel
+                        statusLabel
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(dateText)
+                        .font(.title3.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let timeText {
+                        Label(timeText, systemImage: "clock")
+                            .font(.body)
+                            .foregroundStyle(.white.opacity(0.86))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let purposeTitle, let purposeSymbol {
+                        Label(purposeTitle, systemImage: purposeSymbol)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.68))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if let addToCalendar {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .center, spacing: AppTheme.Spacing.compact) {
+                            calendarButton(addToCalendar)
+                            Text(AppCopy.Calendar.copyExplanation)
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.70))
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            calendarButton(addToCalendar)
+                            Text(AppCopy.Calendar.copyExplanation)
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.70))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(.top, 2)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .appImageOverlayAppearance()
+    }
+
+    private var categoryLabel: some View {
+        Label(categoryTitle, systemImage: categorySymbol)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white.opacity(0.72))
+    }
+
+    private var statusLabel: some View {
+        Label(statusTitle, systemImage: statusSymbol)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.white.opacity(0.74))
+    }
+
+    private func calendarButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(AppCopy.Calendar.add, systemImage: "calendar.badge.plus")
+                .font(.subheadline.weight(.semibold))
+                .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+    }
+}
+
+#Preview("Main event schedule") {
+    EventInvitationScheduleCard(
+        categoryTitle: "Main Event",
+        categorySymbol: "calendar",
+        dateText: "Sunday, June 13, 2027",
+        timeText: "4:00 PM – 1:00 AM · Monday, June 14, 2027 · EDT",
+        statusTitle: "Confirmed",
+        statusSymbol: "checkmark.circle",
+        purposeTitle: nil,
+        purposeSymbol: nil,
+        addToCalendar: {}
+    )
+    .padding()
+    .background(.black)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Main event schedule · Light") {
+    EventInvitationScheduleCard(
+        categoryTitle: "Main Event",
+        categorySymbol: "calendar",
+        dateText: "Sunday, June 13, 2027",
+        timeText: "4:00 PM – 1:00 AM · Monday, June 14, 2027 · EDT",
+        statusTitle: "Confirmed",
+        statusSymbol: "checkmark.circle",
+        purposeTitle: nil,
+        purposeSymbol: nil,
+        addToCalendar: {}
+    )
+    .padding()
+    .background(Color.gray.opacity(0.28))
+    .preferredColorScheme(.light)
+}
+
+#Preview("Main event schedule · Large text") {
+    EventInvitationScheduleCard(
+        categoryTitle: "Main Event",
+        categorySymbol: "calendar",
+        dateText: "Sunday, June 13, 2027",
+        timeText: "4:00 PM – 1:00 AM · Monday, June 14, 2027 · EDT",
+        statusTitle: "Confirmed",
+        statusSymbol: "checkmark.circle",
+        purposeTitle: nil,
+        purposeSymbol: nil,
+        addToCalendar: {}
+    )
+    .padding()
+    .background(.black)
+    .environment(\.dynamicTypeSize, .accessibility2)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Overnight event · June 13–14") {
+    EventInvitationScheduleCard(
+        categoryTitle: "Main Event",
+        categorySymbol: "calendar",
+        dateText: "Sunday, June 13, 2027",
+        timeText: "4:00 PM – 1:00 AM · Monday, June 14, 2027 · EDT",
+        statusTitle: "Confirmed",
+        statusSymbol: "checkmark.circle",
+        purposeTitle: nil,
+        purposeSymbol: nil,
+        addToCalendar: {}
+    )
+    .padding()
+    .background(.black)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("All-day event · June 13–14") {
+    EventInvitationScheduleCard(
+        categoryTitle: "Main Event",
+        categorySymbol: "calendar",
+        dateText: "Sunday, June 13 – Monday, June 14, 2027",
+        timeText: String(localized: "All-day"),
+        statusTitle: "Confirmed",
+        statusSymbol: "checkmark.circle",
+        purposeTitle: nil,
+        purposeSymbol: nil,
+        addToCalendar: {}
+    )
+    .padding()
+    .background(.black)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Four-song playlist artwork") {
+    let sampleTracks = (1...4).map { index in
+        MusicTrack(
+            providerID: .appleMusic,
+            catalogID: "preview-\(index)",
+            title: "Song \(index)",
+            artistName: "Sample Artist",
+            albumTitle: nil,
+            artworkURL: nil,
+            externalURL: nil,
+            isrc: nil,
+            duration: 210
+        )
+    }
+    return EventPlaylistArtworkGrid(tracks: sampleTracks) { track in
+        ZStack {
+            LinearGradient(
+                colors: [Color(hue: Double(Int(track.catalogID.suffix(1)) ?? 1) * 0.17, saturation: 0.54, brightness: 0.72), .black.opacity(0.6)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            Image(systemName: "music.note")
+                .font(.title2.weight(.medium))
+                .foregroundStyle(.white.opacity(0.9))
+        }
+    }
+    .frame(maxWidth: .infinity, minHeight: 194)
+    .padding()
+    .background(.black)
+    .preferredColorScheme(.dark)
 }
 
 private struct EventPlaylistPreviewButtonStyle: ButtonStyle {
@@ -1407,9 +1632,9 @@ private struct EventAttendeeListView: View {
     private func attendanceColor(for attendance: AttendanceStatus) -> Color {
         switch attendance {
         case .invited: .secondary
-        case .going: .green
-        case .maybe: .orange
-        case .declined: .red
+        case .going: AppTheme.ColorToken.success
+        case .maybe: AppTheme.ColorToken.warning
+        case .declined: AppTheme.ColorToken.destructive
         }
     }
 

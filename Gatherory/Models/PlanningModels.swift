@@ -1002,11 +1002,11 @@ enum EventStatus: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .draft: "Draft"
-        case .approved: "Approved"
-        case .notSure: "Not Sure"
-        case .rejected: "Rejected"
-        case .archived: "Archived"
+        case .draft: AppCopy.EventStatus.draft
+        case .approved: AppCopy.EventStatus.approved
+        case .notSure: AppCopy.EventStatus.notSure
+        case .rejected: AppCopy.EventStatus.rejected
+        case .archived: AppCopy.EventStatus.archived
         case .cancelled: AppCopy.Lifecycle.cancelled
         }
     }
@@ -1033,9 +1033,9 @@ enum MainEventStatus: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .draft: "Draft"
-        case .ongoing: "Ongoing"
-        case .finished: "Finished"
+        case .draft: AppCopy.EventStatus.draft
+        case .ongoing: AppCopy.EventStatus.ongoing
+        case .finished: AppCopy.EventStatus.finished
         case .cancelled: AppCopy.Lifecycle.cancelled
         }
     }
@@ -1281,7 +1281,7 @@ enum TimelineCategory: String, CaseIterable, Identifiable, Codable {
         case .rehearsal: "Rehearsal"
         case .ceremony: "Ceremony"
         case .reception: "Reception"
-        case .other: "Other"
+        case .other: String(localized: "Other")
         }
     }
 
@@ -1310,15 +1310,15 @@ enum EventPurpose: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .planning: "Planning & Scouting"
-        case .eventExperience: "Part of the Event"
+        case .planning: AppCopy.Home.planningAndScouting
+        case .eventExperience: AppCopy.Home.partOfEvent
         }
     }
 
     var shortTitle: String {
         switch self {
-        case .planning: "Planning"
-        case .eventExperience: "Event"
+        case .planning: String(localized: "event.purpose.planning.short", defaultValue: "Planning")
+        case .eventExperience: String(localized: "event.purpose.experience.short", defaultValue: "Event")
         }
     }
 

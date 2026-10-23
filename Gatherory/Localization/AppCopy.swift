@@ -15,6 +15,51 @@ enum AppCopy {
         static var leave: String { String(localized: "event.leave", defaultValue: "Leave Event") }
         static var leaveMessage: String { String(localized: "event.leave.message", defaultValue: "You’ll lose access to this invitation. The event and everyone else’s plans stay unchanged. You can join again with a valid invitation.") }
     }
+    enum Home {
+        static func daysAway(_ count: Int) -> String {
+            count == 1
+                ? String(localized: "home.daysAway.one", defaultValue: "1 day away")
+                : String(localized: "home.daysAway.many", defaultValue: "\(count) days away")
+        }
+        static func peopleGoing(_ count: Int) -> String {
+            count == 1
+                ? String(localized: "home.peopleGoing.one", defaultValue: "1 person going")
+                : String(localized: "home.peopleGoing.many", defaultValue: "\(count) people going")
+        }
+        static func peopleInvited(_ count: Int) -> String {
+            count == 1
+                ? String(localized: "home.peopleInvited.one", defaultValue: "1 person invited")
+                : String(localized: "home.peopleInvited.many", defaultValue: "\(count) people invited")
+        }
+        static var planningAndScouting: String { String(localized: "event.purpose.planning", defaultValue: "Planning & Scouting") }
+        static var partOfEvent: String { String(localized: "event.purpose.experience", defaultValue: "Part of the Event") }
+    }
+    enum EventStatus {
+        static var draft: String { String(localized: "event.status.draft", defaultValue: "Draft") }
+        static var approved: String { String(localized: "event.status.approved", defaultValue: "Approved") }
+        static var notSure: String { String(localized: "event.status.notSure", defaultValue: "Not Sure") }
+        static var rejected: String { String(localized: "event.status.rejected", defaultValue: "Rejected") }
+        static var archived: String { String(localized: "event.status.archived", defaultValue: "Archived") }
+        static var ongoing: String { String(localized: "event.status.ongoing", defaultValue: "Ongoing") }
+        static var finished: String { String(localized: "event.status.finished", defaultValue: "Finished") }
+    }
+    enum Music {
+        static func songCount(_ count: Int) -> String {
+            count == 1
+                ? String(localized: "idea.music.songCount.one", defaultValue: "1 song")
+                : String(localized: "idea.music.songCount.many", defaultValue: "\(count) songs")
+        }
+        static var sharedPlaylist: String { String(localized: "idea.music.sharedPlaylist", defaultValue: "Shared playlist") }
+        static func submittedBy(_ name: String) -> String {
+            String(localized: "idea.submittedBy", defaultValue: "From \(name)")
+        }
+    }
+    enum IdeaScope {
+        static var allIdeas: String { String(localized: "All Ideas") }
+        static func filtered(_ title: String) -> String {
+            String(localized: "%@, filtered", defaultValue: "\(title), filtered")
+        }
+    }
     enum Calendar {
         static var add: String { String(localized: "calendar.add", defaultValue: "Add to Calendar") }
         static var copyExplanation: String { String(localized: "calendar.copyExplanation", defaultValue: "Saves a copy. Later changes in Gatherory won’t update your calendar.") }

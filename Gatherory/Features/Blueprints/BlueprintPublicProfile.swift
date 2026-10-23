@@ -103,7 +103,7 @@ struct BlueprintCreatorNameSheet: View {
                     if didEditName && normalizedName == nil {
                         Text(BlueprintCopy.creatorNameInvalid)
                             .font(.footnote)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(AppTheme.ColorToken.destructive)
                     }
                 }
             }

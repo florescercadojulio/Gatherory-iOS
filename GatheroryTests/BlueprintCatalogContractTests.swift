@@ -65,6 +65,36 @@ struct BlueprintCatalogContractTests {
         )
         #expect(attributedCatalog.entries.first?.creator == BlueprintCreatorMetadata(displayName: "Garden Hosts"))
     }
+
+    @Test("Production catalog image assignments cover every child and idea by stable key")
+    func productionTargetImageAssignments() throws {
+        let bundle = Bundle(for: BlueprintFixtureBundle.self)
+        let url = try #require(bundle.url(forResource: "explore-catalog.v1", withExtension: "json"))
+        let response = try JSONDecoder().decode(BlueprintCatalogResponse.self, from: Data(contentsOf: url))
+        #expect(response.entries.count == 17)
+
+        var childAssignments = 0
+        var ideaAssignments = 0
+        var rootAssignments = 0
+        for entry in response.entries {
+            let tree = try #require(entry.definition.modules.first { $0.type == "experience_tree" }?
+                .decodeConfiguration(BlueprintExperienceTreeConfig.self))
+            let ideas = try #require(entry.definition.modules.first { $0.type == "ideas" }?
+                .decodeConfiguration(BlueprintIdeasConfig.self))
+            let images = try #require(entry.discovery?.coverImages)
+            #expect(Set(images.children.keys) == Set(tree.children.map(\.key)))
+            #expect(Set(images.ideas.keys) == Set(ideas.ideas.map(\.key)))
+            #expect(images.children.values.allSatisfy { BlueprintPublicCoverURL.validated($0) != nil })
+            #expect(images.ideas.values.allSatisfy { BlueprintPublicCoverURL.validated($0) != nil })
+            #expect(BlueprintPublicCoverURL.validated(entry.discovery?.coverImageURL) != nil)
+            childAssignments += images.children.count
+            ideaAssignments += images.ideas.count
+            rootAssignments += 1
+        }
+        #expect(childAssignments == 66)
+        #expect(ideaAssignments == 99)
+        #expect(rootAssignments == 17)
+    }
 }
 
 private final class BlueprintFixtureBundle: NSObject {}

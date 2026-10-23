@@ -133,6 +133,7 @@ struct SharedAlbumView: View {
                 let result = await saver.save(photos)
                 saveResult = result
                 if case .saved(let count) = result {
+                    AppHaptics.play(.success)
                     PostHogSDK.shared.capture("album_photos_saved", properties: ["photo_count": count])
                     selection.clear()
                 }
@@ -145,6 +146,7 @@ struct SharedAlbumView: View {
             .frame(maxWidth: .infinity, minHeight: 36)
         }
         .buttonStyle(.borderedProminent)
+        .foregroundStyle(AppTheme.ColorToken.onAccent)
         .disabled(selection.isEmpty || saver.isSaving)
         .accessibilityIdentifier("album.saveSelection")
     }
@@ -152,6 +154,7 @@ struct SharedAlbumView: View {
     private func tapPhoto(_ moment: EventMoment) {
         if isSelecting {
             selection.toggle(moment.id)
+            AppHaptics.play(.selection)
             saveResult = nil
         } else { selectedPhoto = moment }
     }

@@ -15,8 +15,13 @@ POSTHOG_PROJECT_TOKEN = phc_xPbBBJcQnKQBmZMeS49hS6KKrcsugidmPV7GEJTaBX7A
 POSTHOG_HOST = https:/$()/us.i.posthog.com
 // Independent of Release; set to NO to disable telemetry in this configuration.
 POSTHOG_ENABLED = YES
-// Local Firebase/APNs device testing; Release remains disabled.
+// Local Firebase/APNs device testing uses the development APNs environment.
 FCM_NOTIFICATIONS_ENABLED = YES
+// Explore uses Gatherory's UMP app configuration with Google's sample native unit.
+EXPLORE_ADS_ENABLED = YES
+EXPLORE_ADS_TEST_MODE = YES
+ADMOB_APP_ID = ca-app-pub-4218523458506277~8970323130
+ADMOB_NATIVE_AD_UNIT_ID = ca-app-pub-3940256099942544/3986624511
 APS_ENVIRONMENT = development
 OTHER_LDFLAGS = $(inherited) -ObjC
 SWIFT_OBJC_BRIDGING_HEADER = $(SRCROOT)/Gatherory/Gatherory-Bridging-Header.h

@@ -35,7 +35,7 @@ struct IdeasView: View {
     private var scopeTitle: String {
         switch scope {
         case .all:
-            "All Ideas"
+            AppCopy.IdeaScope.allIdeas
         case .selectedEvent:
             workspace.selectedEventTitle
         }
@@ -63,20 +63,17 @@ struct IdeasView: View {
                 statusFilterMenu
             }
 
-            ToolbarItem(placement: .topBarTrailing) {
-                ToolbarGlassActionGroup {
-                    Button("Add idea", systemImage: "plus") {
-                        addIdeaDetent = .medium
-                        isAddingIdea = true
-                    }
-                    .labelStyle(.iconOnly)
-                    .frame(width: 44, height: 44)
-
-                    AccountToolbarButton(avatarSize: 28)
-                        .frame(width: 44, height: 44)
+            AdaptiveToolbarActions {
+                Button("Add idea", systemImage: "plus") {
+                    addIdeaDetent = .medium
+                    isAddingIdea = true
                 }
+                .labelStyle(.iconOnly)
+                .frame(width: 44, height: 44)
+
+                AccountToolbarButton(avatarSize: 28)
+                    .frame(width: 44, height: 44)
             }
-            .sharedBackgroundVisibility(.hidden)
         }
         .sheet(isPresented: $isAddingIdea) {
             NavigationStack {
@@ -108,10 +105,10 @@ struct IdeasView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, AppTheme.Spacing.section)
         } else {
-            MasonryLayout(
+            AdaptiveMasonry(
                 columnCount: dynamicTypeSize.isAccessibilitySize ? 1 : 2,
                 spacing: 12,
-                layoutDirection: layoutDirection
+                layoutDirection: layoutDirection, minimumColumnWidth: 170
             ) {
                 ForEach(filteredIdeas) { idea in
                     ideaButton(idea)
@@ -135,9 +132,11 @@ struct IdeasView: View {
         Menu {
             ForEach(IdeaFilter.allCases) { option in
                 Button {
+                    guard filter != option else { return }
                     withAnimation(.snappy) {
                         filter = option
                     }
+                    AppHaptics.play(.selection)
                 } label: {
                     Label(
                         option.title,
@@ -223,8 +222,12 @@ struct IdeasView: View {
     }
 
     private func update(_ idea: PlanningIdea, to status: IdeaStatus) {
+        let previousStatus = workspace.ideas.first { $0.id == idea.id }?.status
         withAnimation {
             workspace.updateIdea(idea, status: status)
+        }
+        if workspace.ideas.first(where: { $0.id == idea.id })?.status != previousStatus {
+            AppHaptics.play(.success)
         }
     }
 }
@@ -240,7 +243,7 @@ struct IdeasEventScopeAccessory: View {
 
     private var scopeTitle: String {
         switch scope {
-        case .all: "All Ideas"
+        case .all: AppCopy.IdeaScope.allIdeas
         case .selectedEvent: workspace.selectedEventTitle
         }
     }
@@ -250,7 +253,9 @@ struct IdeasEventScopeAccessory: View {
     var body: some View {
         Menu {
             Button {
+                guard scope != .all else { return }
                 withAnimation(.snappy) { scope = .all }
+                AppHaptics.play(.selection)
             } label: {
                 Label("All Ideas", systemImage: scope == .all ? "checkmark" : "square.grid.2x2")
             }
@@ -259,10 +264,12 @@ struct IdeasEventScopeAccessory: View {
 
             ForEach(workspace.availableEventContexts, id: \.self) { reference in
                 Button {
+                    guard scope != .selectedEvent || workspace.selectedEventReference != reference else { return }
                     withAnimation(.snappy) {
                         workspace.selectEventContext(reference)
                         scope = .selectedEvent
                     }
+                    AppHaptics.play(.selection)
                 } label: {
                     Label(
                         workspace.eventTitle(for: eventID(for: reference)),
@@ -295,7 +302,7 @@ struct IdeasEventScopeAccessory: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 20)
         .accessibilityLabel("Ideas event filter")
-        .accessibilityValue(isFilteringToEvent ? "\(scopeTitle), filtered" : "All Ideas")
+        .accessibilityValue(isFilteringToEvent ? AppCopy.IdeaScope.filtered(scopeTitle) : AppCopy.IdeaScope.allIdeas)
         .accessibilityHint("Choose which event’s ideas to show")
     }
 
@@ -325,11 +332,11 @@ enum IdeaFilter: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .all: "All"
-        case .inbox: "Inbox"
-        case .saved: "Saved"
-        case .approved: "Approved"
-        case .passed: "Passed"
-        case .archived: "Archive"
+        case .inbox: String(localized: "idea.filter.inbox", defaultValue: "Inbox")
+        case .saved: String(localized: "idea.filter.saved", defaultValue: "Saved")
+        case .approved: AppCopy.IdeaStatus.approved
+        case .passed: String(localized: "idea.filter.passed", defaultValue: "Passed")
+        case .archived: String(localized: "idea.filter.archive", defaultValue: "Archive")
         }
     }
 
@@ -414,7 +421,9 @@ private struct IdeaCollectionCard: View {
         } supporting: {
             HStack(spacing: 4) {
                 Text(cardSupportingText)
-                    .lineLimit(1)
+                    .lineLimit(idea.category == .music ? 2 : 1)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
 
                 Spacer(minLength: 4)
 
@@ -475,11 +484,11 @@ private struct IdeaCollectionCard: View {
         if idea.category == .event,
            idea.status == .chosen,
            idea.eventConfiguration?.proposedDate == nil {
-            return "Ready to schedule"
+            return String(localized: "Ready to schedule")
         }
-        guard idea.category == .music else { return "From \(idea.submittedBy)" }
+        guard idea.category == .music else { return AppCopy.Music.submittedBy(idea.submittedBy) }
         let count = idea.musicTracks.count
-        return "\(count) \(count == 1 ? "song" : "songs") · Shared playlist"
+        return "\(AppCopy.Music.songCount(count)) · \(AppCopy.Music.sharedPlaylist)"
     }
 }
 
@@ -530,39 +539,31 @@ struct IdeaDetailView: View {
                         Menu("Idea actions", systemImage: "ellipsis") {
                         if idea.status != .new {
                             Button("Move to Inbox", systemImage: "tray") {
-                                withAnimation {
-                                    workspace.updateIdea(idea, status: .new)
-                                }
+                                updateStatus(idea, to: .new)
                             }
                         }
 
                         if idea.status != .shortlisted {
                             Button("Shortlist", systemImage: "heart.fill") {
-                                withAnimation {
-                                    workspace.updateIdea(idea, status: .shortlisted)
-                                }
+                                updateStatus(idea, to: .shortlisted)
                             }
                         }
 
                         if idea.status != .maybe {
                             Button("Save for Now", systemImage: "bookmark.fill") {
-                                withAnimation {
-                                    workspace.updateIdea(idea, status: .maybe)
-                                }
+                                updateStatus(idea, to: .maybe)
                             }
                         }
 
                         if idea.status != .chosen {
                             Button("Approve", systemImage: "checkmark.circle.fill") {
-                                withAnimation {
-                                    workspace.updateIdea(idea, status: .chosen)
-                                }
+                                updateStatus(idea, to: .chosen)
                             }
                         }
 
                         if idea.status != .passed {
                             Button("Decline for Event", systemImage: "xmark.circle") {
-                                workspace.updateIdea(idea, status: .passed)
+                                updateStatus(idea, to: .passed)
                             }
                         }
 
@@ -588,15 +589,11 @@ struct IdeaDetailView: View {
 
                         if idea.status == .archived {
                             Button("Restore", systemImage: "arrow.uturn.backward") {
-                                withAnimation {
-                                    workspace.updateIdea(idea, status: .new)
-                                }
+                                updateStatus(idea, to: .new)
                             }
                         } else {
                             Button("Archive", systemImage: "archivebox.fill") {
-                                withAnimation {
-                                    workspace.updateIdea(idea, status: .archived)
-                                }
+                                updateStatus(idea, to: .archived)
                             }
                         }
                         }
@@ -618,6 +615,16 @@ struct IdeaDetailView: View {
             }
         }
         .navigationTransition(.zoom(sourceID: ideaID, in: transitionNamespace))
+    }
+
+    private func updateStatus(_ idea: PlanningIdea, to status: IdeaStatus) {
+        let previousStatus = workspace.ideas.first { $0.id == idea.id }?.status
+        withAnimation {
+            workspace.updateIdea(idea, status: status)
+        }
+        if workspace.ideas.first(where: { $0.id == idea.id })?.status != previousStatus {
+            AppHaptics.play(.success)
+        }
     }
 }
 
@@ -1016,6 +1023,7 @@ struct IdeaCategoryDetailContent: View {
                         .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
             }
         }
         .ideaDetailCard()
@@ -1096,7 +1104,7 @@ struct IdeaCategoryDetailContent: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Shared Event Playlist")
                         .font(.headline)
-                    Text("\(idea.musicTracks.count) \(idea.musicTracks.count == 1 ? "song" : "songs")")
+                    Text(AppCopy.Music.songCount(idea.musicTracks.count))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -1110,6 +1118,7 @@ struct IdeaCategoryDetailContent: View {
                         Label("Add Songs", systemImage: "music.note.badge.plus")
                     }
                     .buttonStyle(.borderedProminent)
+                    .foregroundStyle(AppTheme.ColorToken.onAccent)
                 }
             }
 
@@ -2632,7 +2641,7 @@ struct IdeaEditorView: View {
                         Text(
                             musicTracks.isEmpty
                                 ? "Ready for its first song"
-                                : "\(musicTracks.count) \(musicTracks.count == 1 ? "song" : "songs")"
+                                : AppCopy.Music.songCount(musicTracks.count)
                         )
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -2703,10 +2712,15 @@ struct IdeaEditorView: View {
 
     private func saveIdea() {
         guard canEditMusicPlaylist, canEditEventIdea else { return }
+        let previousIdea = workspace.ideas.first { $0.id == editedIdea.id }
         if ideaBeingEdited == nil {
             workspace.addIdea(editedIdea)
         } else {
             workspace.updateIdea(editedIdea)
+        }
+        if let savedIdea = workspace.ideas.first(where: { $0.id == editedIdea.id }),
+           savedIdea != previousIdea {
+            AppHaptics.play(.success)
         }
         dismiss()
     }

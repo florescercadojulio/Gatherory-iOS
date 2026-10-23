@@ -4,6 +4,8 @@ nonisolated struct BlueprintCustomization: Codable, Equatable, Sendable {
     var version: Int
     var children: [BlueprintCatalogChild]
     var ideas: [BlueprintCatalogIdea]
+    var coverAssetId: UUID? = nil
+    var overridesCover = false
 
     init(version: Int = 1, children: [BlueprintCatalogChild] = [], ideas: [BlueprintCatalogIdea] = []) {
         self.version = version
@@ -11,10 +13,12 @@ nonisolated struct BlueprintCustomization: Codable, Equatable, Sendable {
         self.ideas = ideas
     }
 
-    private enum CodingKeys: String, CodingKey { case version, children, ideas }
+    private enum CodingKeys: String, CodingKey { case version, children, ideas, coverAssetId }
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        overridesCover = container.contains(.coverAssetId)
+        coverAssetId = try container.decodeIfPresent(UUID.self, forKey: .coverAssetId)
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
         children = try container.decodeIfPresent([BlueprintCatalogChild].self, forKey: .children) ?? []
         ideas = try container.decodeIfPresent([BlueprintCatalogIdea].self, forKey: .ideas) ?? []
@@ -22,12 +26,13 @@ nonisolated struct BlueprintCustomization: Codable, Equatable, Sendable {
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        if overridesCover { try container.encode(coverAssetId, forKey: .coverAssetId) }
         try container.encode(version, forKey: .version)
         try container.encode(children, forKey: .children)
         try container.encode(ideas, forKey: .ideas)
     }
 
-    var isEmpty: Bool { children.isEmpty && ideas.isEmpty }
+    var isEmpty: Bool { children.isEmpty && ideas.isEmpty && !overridesCover }
 
     enum CustomizationError: Error, Equatable {
         case unsupportedVersion(Int)
@@ -88,7 +93,12 @@ nonisolated struct BlueprintCustomization: Codable, Equatable, Sendable {
         for child in normalizedChildren {
             try Self.validate(child)
             if let index = effectiveChildren.firstIndex(where: { $0.key == child.key }) {
-                effectiveChildren[index] = child
+                var inherited = child
+                if !child.coverAssetIdWasProvided {
+                    inherited.coverAssetId = effectiveChildren[index].coverAssetId
+                    inherited.coverAssetIdWasProvided = effectiveChildren[index].coverAssetIdWasProvided
+                }
+                effectiveChildren[index] = inherited
             } else {
                 effectiveChildren.append(child)
             }
@@ -102,7 +112,12 @@ nonisolated struct BlueprintCustomization: Codable, Equatable, Sendable {
         for idea in normalizedIdeas {
             try Self.validate(idea)
             if let index = effectiveIdeas.firstIndex(where: { $0.key == idea.key }) {
-                effectiveIdeas[index] = idea
+                var inherited = idea
+                if !idea.coverAssetIdWasProvided {
+                    inherited.coverAssetId = effectiveIdeas[index].coverAssetId
+                    inherited.coverAssetIdWasProvided = effectiveIdeas[index].coverAssetIdWasProvided
+                }
+                effectiveIdeas[index] = inherited
             } else {
                 effectiveIdeas.append(idea)
             }
@@ -138,7 +153,9 @@ nonisolated struct BlueprintCustomization: Codable, Equatable, Sendable {
             title: child.title.trimmingCharacters(in: .whitespacesAndNewlines),
             purpose: child.purpose,
             category: child.category,
-            scheduleProposal: child.scheduleProposal
+            scheduleProposal: child.scheduleProposal,
+            coverAssetId: child.coverAssetId,
+            coverAssetIdWasProvided: child.coverAssetIdWasProvided
         )
     }
 
@@ -154,7 +171,9 @@ nonisolated struct BlueprintCustomization: Codable, Equatable, Sendable {
             category: idea.category,
             notes: idea.notes?.trimmingCharacters(in: .whitespacesAndNewlines),
             target: target,
-            configuration: idea.configuration
+            configuration: idea.configuration,
+            coverAssetId: idea.coverAssetId,
+            coverAssetIdWasProvided: idea.coverAssetIdWasProvided
         )
     }
 

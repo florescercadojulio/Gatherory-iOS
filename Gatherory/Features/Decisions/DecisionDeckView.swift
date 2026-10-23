@@ -170,6 +170,7 @@ struct DecisionDeckView: View {
                                 selectFilter(.maybes)
                             }
                             .buttonStyle(.borderedProminent)
+                            .foregroundStyle(AppTheme.ColorToken.onAccent)
                         }
                         if session.filter != .passes && count(for: .passes) > 0 {
                             Button("Review My Passes", systemImage: "hand.thumbsdown") {
@@ -194,6 +195,7 @@ struct DecisionDeckView: View {
             // The artwork is masked by DecisionCard; the deck must not crop
             // the moving card or its shadow at the layout container's edges.
         }
+        .adaptiveReadingWidth(580)
         .padding(.horizontal, AppTheme.Layout.screenHorizontal)
         .padding(.top, AppTheme.Layout.screenTop)
         .padding(.bottom, AppTheme.Layout.screenTop)
@@ -208,36 +210,34 @@ struct DecisionDeckView: View {
                 decisionResponseFilterMenu
             }
 
-            ToolbarItem(placement: .topBarTrailing) {
-                ToolbarGlassActionGroup {
-                    if workspace.canUndoDecision {
-                        Button("Undo last decision", systemImage: "arrow.uturn.backward") {
-                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.24)) {
-                                if let ideaID = workspace.undoLastDecision() {
-                                    let choice = motionHistory.undo(for: ideaID) ?? .love
-                                    let restored = workspace.ideas.first { $0.id == ideaID }
-                                    if !reduceMotion, let restored {
-                                        flight.returnCard(restored, choice: choice) { $0.id == ideaID }
-                                    } else {
-                                        flight.reset()
-                                    }
-                                    let filter = DecisionQueueFilter(restoring: restored.flatMap(workspace.response(on:)))
-                                    if session.filter != filter { session.selectFilter(filter) }
-                                    session.undoDecision(on: ideaID)
+            AdaptiveToolbarActions {
+                if workspace.canUndoDecision {
+                    Button("Undo last decision", systemImage: "arrow.uturn.backward") {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.24)) {
+                            if let ideaID = workspace.undoLastDecision() {
+                                AppHaptics.play(.selection)
+                                let choice = motionHistory.undo(for: ideaID) ?? .love
+                                let restored = workspace.ideas.first { $0.id == ideaID }
+                                if !reduceMotion, let restored {
+                                    flight.returnCard(restored, choice: choice) { $0.id == ideaID }
+                                } else {
+                                    flight.reset()
                                 }
-                                drag = .init()
-                                decisionScope = .queue
+                                let filter = DecisionQueueFilter(restoring: restored.flatMap(workspace.response(on:)))
+                                if session.filter != filter { session.selectFilter(filter) }
+                                session.undoDecision(on: ideaID)
                             }
+                            drag = .init()
+                            decisionScope = .queue
                         }
-                        .labelStyle(.iconOnly)
-                        .frame(width: 44, height: 44)
                     }
-
-                    AccountToolbarButton(avatarSize: 28)
-                        .frame(width: 44, height: 44)
+                    .labelStyle(.iconOnly)
+                    .frame(width: 44, height: 44)
                 }
+
+                AccountToolbarButton(avatarSize: 28)
+                    .frame(width: 44, height: 44)
             }
-            .sharedBackgroundVisibility(.hidden)
         }
         .navigationDestination(item: $selectedIdeaID) { ideaID in
             IdeaDetailView(
@@ -300,17 +300,21 @@ struct DecisionDeckView: View {
     }
 
     private func selectFilter(_ filter: DecisionQueueFilter) {
+        let didChange = session.filter != filter
         flight.reset()
         withAnimation(reduceMotion ? nil : .snappy) {
             session.selectFilter(filter)
             drag = .init()
         }
+        if didChange { AppHaptics.play(.selection) }
     }
 
     private var decisionScopeMenu: some View {
         Menu {
             Button {
+                guard decisionScope != .queue else { return }
                 decisionScope = .queue
+                AppHaptics.play(.selection)
             } label: {
                 Label(
                     "Follow decision queue",
@@ -323,7 +327,9 @@ struct DecisionDeckView: View {
             ForEach(workspace.availableEventContexts, id: \.self) { reference in
                 let scope = DecisionScope.event(eventID(for: reference))
                 Button {
+                    guard decisionScope != scope else { return }
                     decisionScope = scope
+                    AppHaptics.play(.selection)
                 } label: {
                     Label(
                         workspace.eventTitle(for: eventID(for: reference)),
@@ -360,7 +366,11 @@ struct DecisionDeckView: View {
         drag = .init()
         motionHistory.record(choice, for: idea.id)
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
+            let previousResponse = workspace.response(on: idea)
             workspace.decide(choice, on: idea)
+            if workspace.response(on: idea) != previousResponse {
+                AppHaptics.play(.impact)
+            }
             session.recordDecision(on: idea.id)
             PostHogSDK.shared.capture(
                 "idea_decided",

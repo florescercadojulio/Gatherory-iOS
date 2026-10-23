@@ -28,7 +28,7 @@ struct EventReadingHero<EyebrowStatus: View, TimingLocation: View, Response: Vie
 
     var body: some View {
         VStack(spacing: AppTheme.Spacing.standard) {
-            Spacer(minLength: topSpacer)
+            Spacer(minLength: min(topSpacer, height * 0.25))
 
             VStack(spacing: AppTheme.Spacing.standard) {
                 eyebrowStatus()
@@ -41,14 +41,14 @@ struct EventReadingHero<EyebrowStatus: View, TimingLocation: View, Response: Vie
                 timingLocation()
                     .multilineTextAlignment(.center)
             }
+            .shadow(color: .black.opacity(0.34), radius: 10, y: 4)
             .accessibilityElement(children: .combine)
 
             response()
         }
         .foregroundStyle(.white)
-        .shadow(color: .black.opacity(0.34), radius: 10, y: 4)
         .padding(AppTheme.Spacing.spacious)
-        .frame(maxWidth: .infinity)
-        .frame(height: LayoutDimensions.nonnegative(height))
+        .adaptiveReadingWidth(680)
+        .frame(minHeight: LayoutDimensions.nonnegative(height), alignment: .bottom)
     }
 }

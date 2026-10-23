@@ -106,8 +106,8 @@ struct BlueprintPreviewEditingTests {
         #expect(session.draft?.confirmedDates == ["ceremony": startsAt])
     }
 
-    @Test("Explicit save preserves identity and content without selecting unanswered additions")
-    func saveEditsPreservingSetupState() throws {
+    @Test("Explicit save preserves existing selections and selects new content additions")
+    func saveEditsPreservingSelectionsAndSetupState() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = BlueprintSetupDraftStore(directoryURL: directory)
@@ -143,8 +143,8 @@ struct BlueprintPreviewEditingTests {
         #expect(saved.eventName == "Updated celebration")
         #expect(saved.startsAt == newStartsAt)
         #expect(saved.timeZoneIdentifier == "UTC")
-        #expect(saved.selectedChildren.isEmpty)
-        #expect(saved.selectedIdeas.isEmpty)
+        #expect(saved.selectedChildren == ["ceremony", "welcome_party"])
+        #expect(saved.selectedIdeas == ["venue", "welcome_gifts"])
         #expect(saved.confirmedDates == draft.confirmedDates)
         #expect(saved.confirmedDates["welcome_party"] == nil)
         #expect(saved.customizations?.children.map(\.key) == ["welcome_party"])
@@ -204,8 +204,8 @@ struct BlueprintPreviewEditingTests {
         #expect(try store.load(ownerUserID: "account-a", catalogKey: entry.catalogKey)?.customizations?.ideas.map(\.key) == ["account_a_idea"])
     }
 
-    @Test("Install selections match Home, including custom targets and reconsidered Loves")
-    func installationMatchesHome() throws {
+    @Test("New draft selects authored content and explicit additions regardless of Decide responses")
+    func newDraftSelectionDoesNotDependOnDecideResponses() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = BlueprintSetupDraftStore(directoryURL: directory)
@@ -221,20 +221,44 @@ struct BlueprintPreviewEditingTests {
         try session.save(to: store, hasPendingInstallation: false)
         let saved = try #require(session.draft)
         let content = try #require(session.content)
-        let home = content.homeContent(responses: session.responses)
-        #expect(saved.selectedIdeas == Set(home.ideas.map(\.key)))
-        #expect(saved.selectedChildren == Set(home.children.map(\.key)))
-        #expect(saved.selectedIdeas == ["venue", "gifts"])
-        #expect(saved.selectedChildren == ["welcome_party"])
+        #expect(saved.selectedIdeas == Set(content.ideas.map(\.key)))
+        #expect(saved.selectedChildren == Set(content.children.map(\.key)))
         let requestID = saved.requestID
         session.decide(.maybe, key: "gifts")
         session.decide(.pass, key: "venue")
         try session.save(to: store, hasPendingInstallation: false)
-        #expect(session.draft?.selectedIdeas.isEmpty == true)
-        #expect(session.draft?.selectedChildren.isEmpty == true)
+        #expect(session.draft?.selectedIdeas == saved.selectedIdeas)
+        #expect(session.draft?.selectedChildren == saved.selectedChildren)
         #expect(session.draft?.requestID == requestID)
         #expect(session.content?.ideas.contains { $0.key == "gifts" } == true)
         #expect(try store.all(ownerUserID: "another-account").isEmpty)
+    }
+
+    @Test("Editing an existing excluded child or idea keeps its selection excluded")
+    func editingExcludedExistingContentPreservesExclusion() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = BlueprintSetupDraftStore(directoryURL: directory)
+        let entry = try weddingEntry()
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let draft = BlueprintSetupDraft(
+            ownerUserID: "account-a", entry: entry, requestID: UUID(), eventName: "Our celebration",
+            startsAt: date, timeZoneIdentifier: "America/Detroit", selectedChildren: [], selectedIdeas: [],
+            confirmedDates: ["ceremony": date], mainDateConfirmed: true
+        )
+        try store.save(draft)
+        var session = makeSession(entry, draft: draft)
+
+        try session.editChild(child("ceremony", title: "Updated ceremony"))
+        try session.editIdea(idea("venue", title: "Updated venue"))
+        try session.save(to: store, hasPendingInstallation: false)
+
+        let saved = try #require(session.draft)
+        #expect(saved.requestID == draft.requestID)
+        #expect(saved.selectedChildren.isEmpty)
+        #expect(saved.selectedIdeas.isEmpty)
+        #expect(saved.confirmedDates == draft.confirmedDates)
+        #expect(saved.mainDateConfirmed == true)
     }
 
     @Test("Create Workspace copies content but never reuses an installation request or confirmed dates")
@@ -394,8 +418,11 @@ struct BlueprintPreviewEditingTests {
         try session.save(to: store, hasPendingInstallation: false)
         let saved = try #require(session.draft)
         #expect(saved.requestID != source.requestID)
-        #expect(saved.confirmedDates.isEmpty)
-        #expect(saved.mainDateConfirmed != true)
+        #expect(saved.eventName == source.eventName)
+        #expect(saved.startsAt == source.startsAt)
+        #expect(saved.timeZoneIdentifier == source.timeZoneIdentifier)
+        #expect(saved.confirmedDates == source.confirmedDates)
+        #expect(saved.mainDateConfirmed == source.mainDateConfirmed)
         #expect(saved.customizations?.ideas.contains { $0.key == "custom" } == true)
         try cache.updateSource(saved, installationID: receipt.id, ownerID: "a")
         let updated = try #require(try cache.load(ownerID: "a").first)

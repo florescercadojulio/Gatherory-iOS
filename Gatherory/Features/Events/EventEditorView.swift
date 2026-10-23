@@ -592,6 +592,9 @@ struct EventEditorView: View {
         .confirmationDialog("Delete this event?", isPresented: $isConfirmingDeletion, titleVisibility: .visible) {
             Button("Delete Event", role: .destructive) {
                 workspace.deleteMainEvent()
+                if workspace.isMainEventDeleted {
+                    AppHaptics.play(.success)
+                }
                 PostHogSDK.shared.capture("main_event_deleted")
                 dismiss()
             }
@@ -763,6 +766,7 @@ struct EventEditorView: View {
     }
 
     private func save() {
+        let couldManageMainEvent = workspace.canManageMainEvent
         if isMainEvent {
             if !workspace.isScopedEvent {
                 _ = workspace.updateWorkspaceBudgetCap(parsedMainBudget)
@@ -814,6 +818,13 @@ struct EventEditorView: View {
             }
         }
         workspace.replaceExpenses(eventExpenses, forEventID: expenseEventID)
+        let saveSucceeded = isMainEvent
+            ? couldManageMainEvent && workspace.title == trimmedTitle && workspace.mainEventStatus == mainStatus
+            : workspace.canAddChildEvent(to: workspace.mainEventID)
+                && workspace.timeline.contains(where: { $0.id == draftEventID && $0.title == resolvedTitle })
+        if saveSucceeded {
+            AppHaptics.play(.success)
+        }
         PostHogSDK.shared.capture(
             isCreating ? "event_created" : "event_updated",
             properties: [
@@ -831,6 +842,7 @@ struct EventEditorView: View {
         } else {
             selectedParticipantIDs.insert(member.id)
         }
+        AppHaptics.play(.selection)
     }
 }
 

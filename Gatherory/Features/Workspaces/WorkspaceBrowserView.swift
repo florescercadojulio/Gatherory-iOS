@@ -20,18 +20,10 @@ struct WorkspaceBrowserView: View {
     @Environment(GuestInvitationStore.self) private var guests
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(AuthenticationSession.self) private var authentication
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var activeSheet: WorkspaceBrowserSheet?
     @State private var selectedFilter: WorkspaceFilter = .all
+    @State private var focusedEventID: UUID?
     var onExplore: () -> Void = {}
-
-    private var columns: [GridItem] {
-        if dynamicTypeSize.isAccessibilitySize {
-            return [GridItem(.flexible())]
-        }
-
-        return [GridItem(.adaptive(minimum: 300, maximum: 520), spacing: AppTheme.Spacing.standard)]
-    }
 
     private var filteredWorkspaces: [PlanningWorkspace] {
         selectedFilter.workspaces(from: browsableWorkspaces, for: authentication.currentUser)
@@ -49,15 +41,17 @@ struct WorkspaceBrowserView: View {
                 emptyState
             } else {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: AppTheme.Spacing.standard) {
+                    LazyVStack(spacing: AppTheme.Spacing.standard) {
                         ForEach(filteredWorkspaces, id: \.mainEventID) { workspace in
                             Button {
                                 if workspace.isInvitationProjection { guests.selectedEventID = workspace.mainEventID }
                                 else { library.open(workspace) }
+                                AppHaptics.play(.impact)
                             } label: {
                                 WorkspacePreviewCard(workspace: workspace)
                             }
                             .buttonStyle(.plain)
+                            .adaptiveReadingWidth(760)
                             .accessibilityHint("Opens this workspace")
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
                             .contextMenu {
@@ -84,10 +78,12 @@ struct WorkspaceBrowserView: View {
                             }
                         }
                     }
+                    .scrollTargetLayout()
                     .padding(.horizontal, AppTheme.Layout.screenHorizontal)
-                    .padding(.top, AppTheme.Layout.screenTop)
-                    .padding(.bottom, AppTheme.Layout.screenBottom)
                 }
+                .contentMargins(.vertical, AppTheme.Spacing.compact, for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+                .scrollPosition(id: $focusedEventID, anchor: .top)
                 .scrollIndicators(.hidden)
                 .appSoftScrollEdges()
             }
@@ -111,22 +107,28 @@ struct WorkspaceBrowserView: View {
             ToolbarItem(placement: .topBarLeading) {
                 workspaceFilterMenu
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                ToolbarGlassActionGroup {
-                    Button("Add workspace", systemImage: "plus") {
+            AdaptiveToolbarActions {
+                Menu("Add workspace", systemImage: "plus") {
+                    Button(ExploreCopy.exploreBlueprints, systemImage: "magnifyingglass") {
+                        onExplore()
+                    }
+                    Button(ExploreCopy.startFromScratch, systemImage: "square.and.pencil") {
                         activeSheet = .addWorkspace
                     }
-                    .labelStyle(.iconOnly)
-                    .frame(width: 44, height: 44)
-
-                    AccountToolbarButton(avatarSize: 28)
-                        .frame(width: 44, height: 44)
                 }
+                .labelStyle(.iconOnly)
+                .frame(width: 44, height: 44)
+
+                AccountToolbarButton(avatarSize: 28)
+                    .frame(width: 44, height: 44)
             }
-            .sharedBackgroundVisibility(.hidden)
+        }
+        .onChange(of: selectedFilter) { _, _ in
+            focusedEventID = filteredWorkspaces.first?.mainEventID
         }
         .onChange(of: authentication.currentUser?.id) { _, _ in
             activeSheet = nil
+            focusedEventID = nil
         }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
@@ -189,10 +191,18 @@ struct WorkspaceBrowserView: View {
             Text(selectedFilter.emptyDescription)
         } actions: {
             if selectedFilter == .all, browsableWorkspaces.isEmpty {
-                Button("Add Workspace", systemImage: "plus") {
-                    activeSheet = .addWorkspace
+                VStack(spacing: AppTheme.Spacing.compact) {
+                    Button(ExploreCopy.exploreBlueprints, systemImage: "magnifyingglass") {
+                        onExplore()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .foregroundStyle(AppTheme.ColorToken.onAccent)
+
+                    Button(ExploreCopy.startFromScratch, systemImage: "square.and.pencil") {
+                        activeSheet = .addWorkspace
+                    }
+                    .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -201,30 +211,37 @@ struct WorkspaceBrowserView: View {
 
     private var workspaceFilterMenu: some View {
         Menu {
-            ForEach(WorkspaceFilter.primaryFilters) { filter in
-                filterButton(filter)
-            }
-            Divider()
-            ForEach(WorkspaceFilter.participationFilters) { filter in
-                filterButton(filter)
+            Picker("Filter workspaces", selection: Binding(
+                get: { selectedFilter },
+                set: { filter in
+                    withAnimation(.snappy) { selectedFilter = filter }
+                }
+            )) {
+                Section {
+                    ForEach(WorkspaceFilter.primaryFilters) { filter in
+                        filterOption(filter)
+                    }
+                }
+                Section {
+                    ForEach(WorkspaceFilter.participationFilters) { filter in
+                        filterOption(filter)
+                    }
+                }
             }
         } label: {
-            Image(systemName: selectedFilter.symbol)
+            Text(selectedFilter.title)
                 .font(.body.weight(.semibold))
-                .frame(width: 44, height: 44)
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
+        .menuIndicator(.hidden)
         .accessibilityLabel("Filter workspaces")
         .accessibilityValue(selectedFilter.title)
     }
 
-    private func filterButton(_ filter: WorkspaceFilter) -> some View {
-        Button {
-            withAnimation(.snappy) { selectedFilter = filter }
-        } label: {
-            Label("\(filter.title) (\(filterCount(for: filter)))",
-                  systemImage: selectedFilter == filter ? "checkmark" : filter.symbol)
-        }
+    private func filterOption(_ filter: WorkspaceFilter) -> some View {
+        Label("\(filter.title) (\(filterCount(for: filter)))", systemImage: filter.symbol)
+            .tag(filter)
     }
 
     private func filterCount(for filter: WorkspaceFilter) -> Int {
@@ -377,10 +394,7 @@ private struct WorkspacePreviewCard: View {
                 symbol: IdeaCategory.event.symbol,
                 colors: IdeaCategory.event.artworkColors,
                 accent: IdeaCategory.event.artworkAccent,
-                // Keep the library's first frame lightweight. Full-screen event
-                // views can afford Glur; collection thumbnails already gain
-                // legibility from the gradient below.
-                progressiveBlurRadius: 0,
+                progressiveBlurRadius: 22,
                 blurStart: 0.5
             )
 
@@ -404,7 +418,7 @@ private struct WorkspacePreviewCard: View {
                 Spacer(minLength: AppTheme.Spacing.section)
 
                 Text(workspace.title)
-                    .font(AppTheme.Typography.sectionTitle)
+                    .font(.system(.title, design: .rounded, weight: .bold))
                     .lineLimit(2)
 
                 Text(workspace.invitationDateIsUndecided || (workspace.isScopedEvent && !workspace.mainEventHasScheduledDate)
@@ -430,7 +444,10 @@ private struct WorkspacePreviewCard: View {
         }
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity)
-        .frame(height: dynamicCardHeight)
+        .containerRelativeFrame(.vertical) { height, _ in
+            max(height - AppTheme.Spacing.spacious,
+                dynamicTypeSize.isAccessibilitySize ? 620 : 360)
+        }
         .background(AppTheme.ColorToken.surface)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
         .overlay {
@@ -440,10 +457,6 @@ private struct WorkspacePreviewCard: View {
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilitySummary)
-    }
-
-    private var dynamicCardHeight: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 560 : 470
     }
 
     private var accessibilitySummary: String {
@@ -611,6 +624,9 @@ struct NewWorkspaceView: View {
                         onWorkspaceCreated(workspace)
                     } else {
                         library.add(workspace)
+                        if library.workspaces.contains(where: { $0 === workspace }) {
+                            AppHaptics.play(.success)
+                        }
                     }
                     dismiss()
                 }
@@ -659,5 +675,29 @@ struct WorkspaceLibraryToolbarButton: View {
         Button(title, systemImage: "rectangle.grid.2x2.fill", action: action)
             .labelStyle(.iconOnly)
             .accessibilityHint(hint)
+    }
+}
+
+#Preview("Events · Large Cards") {
+    @Previewable @State var library = WorkspaceLibrary.sample
+    TabView {
+        Tab("Workspaces", systemImage: "rectangle.stack.fill") {
+            NavigationStack {
+                ScrollView {
+                    LazyVStack(spacing: AppTheme.Spacing.standard) {
+                        ForEach(library.workspaces, id: \.mainEventID) { workspace in
+                            WorkspacePreviewCard(workspace: workspace)
+                                .adaptiveReadingWidth(760)
+                        }
+                    }
+                    .scrollTargetLayout()
+                    .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+                }
+                .contentMargins(.vertical, AppTheme.Spacing.compact, for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+                .scrollIndicators(.hidden)
+                .appSoftScrollEdges()
+            }
+        }
     }
 }

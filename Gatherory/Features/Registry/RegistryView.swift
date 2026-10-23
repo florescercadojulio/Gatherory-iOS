@@ -268,14 +268,19 @@ private struct RegistryItemDetailView: View {
                     }
 
                     Button {
+                        let previousCount = workspace.registry.first { $0.id == item.id }?.committedCount
                         withAnimation(.snappy) {
                             workspace.commitToRegistryItem(item)
+                        }
+                        if workspace.registry.first(where: { $0.id == item.id })?.committedCount != previousCount {
+                            AppHaptics.play(.success)
                         }
                         PostHogSDK.shared.capture("registry_item_reserved")
                     } label: {
                         Text(item.isFulfilled ? "Reserved" : "Reserve")
                     }
                     .buttonStyle(.borderedProminent)
+                    .foregroundStyle(AppTheme.ColorToken.onAccent)
                     .disabled(!workspace.isRegistryShared || item.isFulfilled)
                 }
             }
@@ -553,6 +558,10 @@ private struct RegistryItemEditorView: View {
                         workspace.addRegistryItem(updatedItem)
                     } else {
                         workspace.updateRegistryItem(updatedItem)
+                    }
+                    if workspace.canManageRegistry,
+                       workspace.registry.contains(where: { $0.id == updatedItem.id }) {
+                        AppHaptics.play(.success)
                     }
                     PostHogSDK.shared.capture(
                         item == nil ? "registry_item_created" : "registry_item_updated",

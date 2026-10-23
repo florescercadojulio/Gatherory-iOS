@@ -1,5 +1,104 @@
 # Gatherory App Store release and review handoff
 
+## TestFlight build 5 — October 23, 2026
+
+Version **1.0 (5)** was signed for Guide Systems LLC (`LW97NHT3JA`) and
+successfully uploaded to Gatherory's existing App Store Connect app
+(`6820635528`) at **2:09 PM America/Detroit**. The upload command completed
+with `EXPORT SUCCEEDED`. After processing, App Store Connect lists build 5 as
+**Testing**, expiring in 90 days, and shows it assigned to both existing
+Friends & Family and External Friends & Family groups. External Friends & Family
+has four invitees; the internal group has none. The build detail confirms both
+groups are attached. Submit for Review completed with automatic tester
+notification enabled. The overall build status is **Testing**; no separate
+external review approval was observed. The saved What to Test notes cover Explore
+search/discovery, Yours/Saved/Liked, Use and retry, push, ads, light/dark
+appearance, feedback and PostHog. See the [App Store Connect build detail](https://appstoreconnect.apple.com/teams/56187352-94ba-429f-82d1-35f22508a99b/apps/6820635528/testflight/ios/26074dbf-5cb8-4c14-86f7-583d1e1cbe50).
+
+The archived source is native HEAD `9190bc3da97a57bcf7bc8a3794a287edbfa0e70f`
+plus the current working-tree changes and build-number increment. Existing
+uncommitted work was included without a Git commit/push. Version remains 1.0;
+the app and test targets now use build 5.
+
+The submitted, distribution-signed app and its store provisioning profile were
+both verified with `aps-environment=production`, `get-task-allow=false` and the
+exact Gatherory bundle/team. Release enables opt-in push, consent-gated
+production Explore ads and existing PostHog telemetry. It targets iOS 26.0,
+uses `https://app.gatherory.com`, bundles the matching Firebase config and
+disables development seeding, sign-in bypass and forced onboarding. Firebase's
+production APNs key is configured; actual TestFlight delivery remains a device
+acceptance check.
+
+The complete native non-UI suite passed **1,016 tests / 1,150 executions** with
+zero failures/skips/runtime warnings, and localization passed for **1,695
+English/Spanish strings**. See [build verification](testing-verification.md#testflight-build-5-verification--october-23-2026).
+
+Apple accepted the binary with two non-blocking symbol-upload warnings:
+the vendor `GoogleMobileAds.framework` and `UserMessagingPlatform.framework`
+dSYMs are missing. Stack traces inside those two SDKs may be less detailed;
+this did not reject the build. No SDK version was changed to address this.
+App archive compilation also emitted the existing App Intents metadata warning.
+
+Archive: `~/Library/Developer/Xcode/Archives/2026-10-23/Gatherory 1.0 (5).xcarchive`.
+Logs and verified distribution settings: `/tmp/gatherory-testflight-1.0-5-*`.
+No production database reset, backend deployment or public App Store release
+was performed as part of this upload.
+
+## Beta configuration decision — October 23, 2026
+
+The release owner chose a fresh database and beta-based acceptance/feedback.
+The owner will perform the reset; this configuration change does not reset,
+seed or deploy anything. Recreate the current schema, publish the intended
+Blueprint catalog, and deploy the compatible backend. Resetting removes the
+need to preserve old rows, but does not remove the schema/server requirement.
+
+Release now enables `FCM_NOTIFICATIONS_ENABLED=YES` and
+`EXPLORE_ADS_ENABLED=YES`. `EXPLORE_ADS_TEST_MODE=NO` retains Gatherory's
+production native ad unit. Existing UMP consent and notification opt-in remain
+required. Debug retains Google's sample ad unit and development APNs.
+`POSTHOG_ENABLED=YES` remains unchanged. General PostHog telemetry does not
+enable the separate, default-off recommendation measurement setting.
+
+Production APNs setup was completed in Safari on October 23 for
+`gatherory-e4d8b` / `com.guide-systems.gatherory`, with the release owner's
+explicit upload confirmation. Apple lists the existing key `KL2Y639363` as
+**Sandbox & Production**, despite its “Gatherory Push Development” name. Its
+existing `.p8` was reused in Firebase's production slot; Firebase now lists both
+development and production entries with team `LW97NHT3JA`. No new key was
+created or revoked, and no private key contents were added to source or logs.
+Apple's exact Gatherory App ID also has Push Notifications enabled.
+
+Build 4, uploaded before this configuration, had FCM disabled. The later build 5
+distribution signature and provisioning profile both verify the production APNs
+entitlement; actual TestFlight push delivery remains a device acceptance check.
+Current server code
+uses [one best-effort attempt after saving](../../../gatherory-web-app/docs/roadmaps/notifications-roadmap/04-best-effort-delivery.md);
+the retry scheduler remains disabled. Production server credentials and actual
+delivery have not been verified by this configuration change.
+
+The last AdMob inspection (October 22) showed Gatherory Requires review.
+Enabling the local flag does not establish app approval, ad fill or revenue.
+See [advertising setup](explore-advertising.md) for provider/device checks and
+[Google's test-ad guidance](https://developers.google.com/admob/ios/test-ads)
+for testing interactions without live advertising traffic.
+
+The release owner reports the previous invalid-frame warning is resolved.
+Remaining user journeys will be evaluated through the beta; this is not a claim
+that all production/device checks passed. This configuration change did not
+upload a build; the subsequent build 5 upload and current processing status are
+recorded above. Verification for this change is recorded in
+[testing verification](testing-verification.md).
+
+## AdMob pre-release setup — October 22, 2026
+
+The AdMob account is approved, but Gatherory still Requires review and has no
+public store listing linked. European/US privacy messages and publisher website
+files are prepared; production IDs are configured behind disabled Release ads.
+Debug uses Gatherory's app ID with Google's native test unit for consent testing.
+See [advertising setup and acceptance gates](explore-advertising.md) before changing
+Release enablement or submitting privacy/age-rating answers. This setup did not
+upload a native build, submit App Store answers or establish device ad acceptance.
+
 ## Current mobile V1 checkpoint — October 21, 2026
 
 Use the [guest and invitation audit](../../../gatherory-web-app/docs/release/mobile-v1-guest-invitation-audit.md)
@@ -23,7 +122,31 @@ sign-in. See [App Review Guideline 2.1](https://developer.apple.com/app-store/re
 [Providing information for a complete review](https://developer.apple.com/help/app-review/before-submitting-for-review/complete-review),
 and [Apple’s App Review overview](https://developer.apple.com/app-store/review/).
 
-## Source compatibility baseline — October 15, 2026
+## TestFlight build 4 — October 21, 2026
+
+- Version **1.0 (4)** was archived from source commit `c766f14c` plus the build
+  number increment, signed for Guide Systems LLC (`LW97NHT3JA`), and uploaded
+  successfully to the existing Gatherory App Store Connect app. Apple accepted
+  the package for processing at 12:36 PM America/Detroit. App Store Connect was
+  then verified in the release owner's Safari session: build 4 shows **Testing**
+  for both existing Friends & Family and External Friends & Family groups.
+  Testing notes cover guest/account handover, shared to-dos, update audiences,
+  reusable QR invitations, CSV exports, offline edits, and account isolation.
+  Automatic tester notification remains enabled.
+- The archive targets iOS 26.0, uses `https://app.gatherory.com`, and disables
+  development seeding and sign-in bypass. Existing Release telemetry is retained.
+  **FCM remains disabled in Release**, so this candidate does not test push
+  notifications. Production APNs/FCM enablement remains a separate release gate.
+- All **892 non-UI tests across 126 suites** passed. UI tests were excluded.
+  Localization checks passed for 1,500 English/Spanish strings; deployment-target
+  checks passed for all app and test configurations.
+- The archive is retained outside the repository in Xcode's local Archives
+  directory. Build/upload/test logs are in `/tmp/gatherory-testflight-1.0-4-*`.
+  No backend deployment, database migration, Git commit, or public App Store
+  submission was performed. Physical-device and backend rollout checks from the
+  linked audit remain outstanding.
+
+## Historical source compatibility baseline — October 15, 2026
 
 The current source targets iOS/iPadOS 26 or later for iPhone and iPad. Music
 selection and audio-session APIs introduced in iOS 27 have guarded iOS 26
@@ -34,7 +157,7 @@ This does not change the already-uploaded version 1.0 (3), which was built with
 an iOS 27 minimum. Distributing iOS 26 support requires a new, incremented build;
 no replacement TestFlight upload is part of this source change.
 
-## Latest TestFlight verification — October 14, 2026
+## Historical TestFlight verification — October 14, 2026
 
 - Version **1.0 (3)** was archived, successfully uploaded, processed, and submitted
   to TestFlight beta review for the existing External Friends & Family group.

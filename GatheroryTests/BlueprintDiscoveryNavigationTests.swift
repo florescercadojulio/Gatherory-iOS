@@ -18,6 +18,16 @@ struct BlueprintDiscoveryNavigationTests {
         #expect(navigation.retainedQuery == "wedding") // Still presented, not ready to clear.
     }
 
+    @Test("Browse preview from the Search results source does not restore Search focus")
+    func browsePreviewFromResultsDoesNotRestoreSearchFocus() throws {
+        let entry = try fixture()
+        var navigation = BlueprintDiscoveryNavigation()
+        navigation.open(entry, from: .results, entries: [entry], mode: .browse, query: "wedding")
+
+        #expect(navigation.mode(isFocused: false, query: "wedding") == .browse)
+        #expect(!navigation.restoresSearchFocus)
+    }
+
     @Test("Recent-history reordering and catalog refresh do not move or replace the zoom source")
     func retainsRecentOrder() throws {
         let entry = try fixture()

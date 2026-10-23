@@ -63,6 +63,45 @@ struct PostgresSyncTransportTests {
         #expect(try JSONSerialization.jsonObject(with: response) as? [String: Any] != nil)
     }
 
+    @Test("Paged Blueprint catalog opts into baseline ranking and forwards opaque cursors")
+    func rankedBlueprintCatalogPages() async throws {
+        let fixture = SyncHTTPFixture("blueprint-catalog")
+        defer { fixture.session.invalidateAndCancel() }
+
+        let firstPage = try await fixture.transport.blueprintCatalogPage(
+            limit: 20,
+            category: "weddings",
+            query: "cottage"
+        )
+        #expect(firstPage.nextCursor == "cursor/+?=&")
+
+        let nextPage = try await fixture.transport.blueprintCatalogPage(
+            cursor: firstPage.nextCursor,
+            limit: 20,
+            category: "weddings",
+            query: "cottage"
+        )
+        #expect(nextPage.nextCursor == nil)
+
+        // History and other legacy callers keep the unpaged catalog request.
+        let fullCatalog = try await fixture.transport.blueprintCatalog()
+        #expect(fullCatalog.entries.isEmpty)
+    }
+
+    @Test("Discovery context is sent for browse pages and omitted for typed search")
+    func discoveryContextHeaderBoundary() async throws {
+        let fixture = SyncHTTPFixture("blueprint-discovery")
+        defer { fixture.session.invalidateAndCancel() }
+        let context = BlueprintDiscoveryRequestContext(
+            sessionId: UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!,
+            startedAt: .now,
+            seen: [.init(catalogKey: "seen-key", lastSeenAt: .now.addingTimeInterval(-1))]
+        )
+        _ = try await fixture.transport.blueprintCatalogPage(discoveryContext: context)
+        _ = try await fixture.transport.blueprintCatalogPage(cursor: "next", discoveryContext: context)
+        _ = try await fixture.transport.blueprintCatalogPage(query: "cottage", discoveryContext: context)
+    }
+
     @Test("Push preserves durable mutation identity and decodes each server disposition",
           arguments: ["applied", "duplicate", "conflict", "rejected"])
     func pushContract(disposition: String) async throws {
@@ -198,6 +237,41 @@ private final class SyncHTTPProtocol: URLProtocol, @unchecked Sendable {
                 #expect(request.value(forHTTPHeaderField: "Idempotency-Key") == "44444444-4444-4444-8444-444444444444")
                 #expect(try bodyData() == Data(#"{"requestId":"44444444-4444-4444-8444-444444444444","catalogKey":"wedding"}"#.utf8))
                 payload = ["installationID": "55555555-5555-4555-8555-555555555555", "organizationID": "org", "scopeID": "66666666-6666-4666-8666-666666666666"]
+            case "blueprint-catalog":
+                #expect(url.path == "/api/blueprints/catalog")
+                #expect(request.httpMethod == "GET")
+                payload = ["entries": []]
+                let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                let queryValue = { (name: String) in queryItems.first(where: { $0.name == name })?.value }
+                if let cursor = queryValue("cursor") {
+                    #expect(queryValue("ranking") == "baseline_v1")
+                    #expect(queryValue("limit") == "20")
+                    #expect(queryValue("category") == "weddings")
+                    #expect(queryValue("q") == "cottage")
+                    #expect(cursor == "cursor/+?=&")
+                } else if queryValue("ranking") != nil {
+                    #expect(queryValue("ranking") == "baseline_v1")
+                    #expect(queryValue("limit") == "20")
+                    #expect(queryValue("category") == "weddings")
+                    #expect(queryValue("q") == "cottage")
+                    payload = ["entries": [], "nextCursor": "cursor/+?=&"]
+                } else {
+                    #expect(queryItems.isEmpty)
+                }
+            case "blueprint-discovery":
+                #expect(url.path == "/api/blueprints/catalog")
+                let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                if items.contains(where: { $0.name == "q" && $0.value == "cottage" }) {
+                    #expect(request.value(forHTTPHeaderField: "X-Gatherory-Discovery-Context") == nil)
+                } else {
+                    let raw = try #require(request.value(forHTTPHeaderField: "X-Gatherory-Discovery-Context"))
+                    #expect(raw.utf8.count <= BlueprintDiscoveryContextPolicy.headerByteLimit)
+                    let object = try #require(JSONSerialization.jsonObject(with: Data(raw.utf8)) as? [String: Any])
+                    #expect(object["version"] as? Int == 1)
+                    #expect(object["sessionId"] as? String == "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA")
+                    #expect(object["seen"] != nil)
+                }
+                payload = ["entries": []]
             case "applied", "duplicate", "conflict", "rejected":
                 #expect(url.path == "/api/sync/push")
                 #expect(request.httpMethod == "POST")
@@ -260,7 +334,11 @@ private final class SyncHTTPProtocol: URLProtocol, @unchecked Sendable {
                 Issue.record("Unexpected HTTP request to \(scenario)")
                 throw URLError(.badURL)
             }
-            if !["applied", "duplicate", "conflict", "rejected", "pull-initial", "pull-next", "blueprint-install"].contains(scenario) {
+            let hasDedicatedRoute = [
+                "applied", "duplicate", "conflict", "rejected", "pull-initial", "pull-next",
+                "blueprint-install", "blueprint-catalog", "blueprint-discovery"
+            ].contains(scenario)
+            if !hasDedicatedRoute {
                 #expect(url.path == "/api/sync/bootstrap")
                 #expect(request.httpMethod == "GET")
             }

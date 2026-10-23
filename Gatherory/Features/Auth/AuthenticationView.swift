@@ -20,6 +20,7 @@ struct AuthenticationView: View {
     @State private var errorMessage: String?
     @State private var currentAppleNonce: String?
     @State private var showsGuestName = false
+    @State private var presentationContext = AuthenticationPresentationContext()
     @FocusState private var focusedField: Field?
 
     var body: some View {
@@ -47,6 +48,7 @@ struct AuthenticationView: View {
                     .allowsHitTesting(false)
             }
         }
+        .background(AuthenticationPresentationAnchor(presentationContext: presentationContext))
         .tint(AppTheme.ColorToken.accent)
         .animation(reduceMotion ? nil : .snappy, value: errorMessage)
         .toolbar {
@@ -235,6 +237,7 @@ struct AuthenticationView: View {
             }
             .accessibilityLabel(mode.primaryActionTitle)
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(AppTheme.ColorToken.onAccent)
             .controlSize(.large)
             .disabled(!canSubmitCredentials || authentication.isProcessing)
         }
@@ -364,7 +367,7 @@ struct AuthenticationView: View {
     private func authenticateWithGoogle() {
         errorMessage = nil
 
-        guard let presenter = Self.presentingViewController else {
+        guard let presenter = presentationContext.presentingViewController else {
             errorMessage = AuthenticationFailure.providerUnavailable.localizedDescription
             return
         }
@@ -480,18 +483,33 @@ struct AuthenticationView: View {
             .map { String(format: "%02x", $0) }
             .joined()
     }
+}
 
-    private static var presentingViewController: UIViewController? {
-        let window = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first(where: \.isKeyWindow)
+@MainActor
+private final class AuthenticationPresentationContext {
+    weak var anchorView: UIView?
 
-        var presenter = window?.rootViewController
+    var presentingViewController: UIViewController? {
+        var presenter = anchorView?.window?.rootViewController
         while let presented = presenter?.presentedViewController {
             presenter = presented
         }
         return presenter
+    }
+}
+
+private struct AuthenticationPresentationAnchor: UIViewRepresentable {
+    let presentationContext: AuthenticationPresentationContext
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        presentationContext.anchorView = view
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        presentationContext.anchorView = uiView
     }
 }
 

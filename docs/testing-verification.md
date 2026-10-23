@@ -55,6 +55,884 @@ load live credentials as part of the ordinary local check.
 
 ## What the tests protect
 
+### TestFlight build 5 verification — October 23, 2026
+
+Version **1.0 (5)** was archived from native HEAD
+`9190bc3da97a57bcf7bc8a3794a287edbfa0e70f` plus the current working-tree
+changes and build-number increment. Apple's versioning utility advanced the
+app and test targets to build 5; the project plist validates. Existing source
+and pinned dependencies were preserved.
+
+- The complete non-UI `GatheroryTests` target passed **1,016 tests / 1,150
+  executions**, including 53 parameterized tests with 187 parameter executions.
+  There were zero failures, skips or runtime warnings on iPhone 18 Pro / iOS 27.0
+  simulator. Result: `/tmp/gatherory-testflight-1.0-next-tests-20261023.xcresult`;
+  log: `/tmp/gatherory-testflight-1.0-next-tests-20261023.log`.
+- Localization passed for **1,695 EN/ES strings**. The existing dynamic-key
+  extraction warning remains in `AppCopy.swift`.
+  Log: `/tmp/gatherory-testflight-1.0-5-localizations.log`.
+- The signed Release device archive passed. Its Info.plist confirms version
+  1.0 (5), iOS 26.0 minimum, production origin/environment, ads and FCM enabled,
+  ad test mode off, PostHog enabled, and seeding/login bypass/forced onboarding
+  disabled. Its bundled Firebase configuration matches the app/project.
+- The App Store Connect export re-signed the app for **Guide Systems LLC /
+  LW97NHT3JA**. Both the actual distribution app signature and embedded store
+  provisioning profile were inspected: `aps-environment=production`,
+  `get-task-allow=false`, and application identifier
+  `LW97NHT3JA.com.guide-systems.gatherory`. Deep signature verification passed.
+  The initial development-signed archive's sandbox entitlement was replaced
+  during distribution export; the submitted app was checked separately.
+
+Archive: `~/Library/Developer/Xcode/Archives/2026-10-23/Gatherory 1.0 (5).xcarchive`.
+Archive log: `/tmp/gatherory-testflight-1.0-5-archive.log`.
+Distribution configuration evidence:
+`/tmp/gatherory-testflight-1.0-5-verified-config.json`.
+The archive emits only the App Intents metadata-extraction warning because this
+app does not depend on AppIntents.framework. Upload succeeded with two
+non-blocking missing-vendor-dSYM warnings for GoogleMobileAds and
+UserMessagingPlatform. These limit SDK stack symbolication, not upload acceptance.
+Upload log: `/tmp/gatherory-testflight-1.0-5-upload.log`.
+UI tests and real device push
+delivery were not rerun for this release. No backend deployment or database
+reset is included. See [release status](app-store-release.md) for upload and
+tester-group acceptance, which is separate from the local checks above.
+App Store Connect now shows the build's overall status as **Testing** with both
+existing groups attached (Friends & Family: 0 invitees; External Friends &
+Family: 4 invitees); automatic tester notification was enabled. This does not
+establish separate external review approval or real-device push delivery.
+See the [App Store Connect build detail](https://appstoreconnect.apple.com/teams/56187352-94ba-429f-82d1-35f22508a99b/apps/6820635528/testflight/ios/26074dbf-5cb8-4c14-86f7-583d1e1cbe50).
+
+### Beta ads, push and telemetry configuration — October 23, 2026
+
+At the release owner's request, Release now enables consent-gated Explore ads
+with Gatherory's production unit and opt-in FCM with production APNs. PostHog
+remains enabled. Debug retains sample ads and development APNs. No package,
+onboarding, permission flow or server behavior changed.
+
+Focused Debug regression run: **28 tests passed, zero failures/skips/runtime
+warnings** in `ExploreAdConfigurationTests`, `ExploreAdPlacementTests`,
+`ExploreAdSessionLifecycleTests`, `NotificationControllerTests`,
+`NotificationNavigationTests`, and `AnalyticsConfigurationTests` on iPhone 18 Pro
+/ iOS 27.0 simulator. These cover the ad enable/disable switch, production ID
+validation, Debug sample-only inventory, consent separation, stable placement,
+inventory lifecycle, notification identity/permission/tap controls, and suppression
+of telemetry in tests. No new tests mirroring the configuration constants were
+added; existing behavior coverage was rerun.
+
+Result: `/tmp/gatherory-beta-services-debug-20261023.xcresult`;
+log: `/tmp/gatherory-beta-services-debug-20261023.log`.
+The initial Release test attempt did not run assertions: the ordinary Release
+module is built without `-enable-testing`, so `@testable import Gatherory` was
+rejected. Regression checks were rerun in the supported Debug test configuration;
+this is not a passing Release test-suite result.
+
+Built Release `Info.plist` inspection confirms production origin/environment,
+ads on, ad test mode off, FCM on, PostHog on, seeding/authentication bypass off,
+and Firebase auto-init off. The bundled Firebase configuration is present,
+matches `com.guide-systems.gatherory`, and identifies `gatherory-e4d8b`.
+
+The stock Release simulator build also passed with `CODE_SIGNING_ALLOWED=NO`
+and no feature/telemetry overrides:
+`/tmp/gatherory-beta-services-release-20261023.log`. This verifies compilation
+and bundled configuration, not a signed device archive or live provider delivery.
+
+The initial Firebase inspection found only the development key. A subsequent
+browser setup, explicitly confirmed by the release owner, reused the existing
+`KL2Y639363` `.p8` in Firebase's production slot. Apple confirms this key supports
+Sandbox & Production and the Gatherory App ID has Push Notifications enabled.
+Firebase now lists both development and production keys under team `LW97NHT3JA`.
+No new key was created or revoked and private key contents were not logged.
+Source/provider configuration does not establish distribution provisioning,
+FCM delivery or deployed server credentials. The current server attempts one
+best-effort send after saving, superseding older manual-dispatch notes. No
+notification was sent, database reset or deployment performed as part of this
+configuration change. The later build 5 upload is recorded above. The owner
+reports the earlier layout warning is resolved.
+See [the beta release decision](app-store-release.md#beta-configuration-decision--october-23-2026).
+
+### Unseen-first discovery and browsing sessions — October 23, 2026
+
+Three Luna agents split server ordering/HTTP validation, native history/session
+integration, and repeated-visit evaluation. The parent reviewed boundaries,
+added native UI coverage, integrated the standard Refresh button and ran Xcode
+serially. Pinned open-source references and the policy/evaluation artifact live
+in [roadmap 16](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/16-unseen-first-discovery.md).
+
+Native history records only browse cards at least half visible for one second,
+separately from analytics consent. It is exact-account, bounded to 200 valid keys
+and 30 days, with a 16 KiB request-context limit. Live views do not mutate the
+active header snapshot. Foreground pagination, preview return and quick tab
+return keep the session. Returning after 30 minutes away or tapping the native
+toolbar Refresh button creates another snapshot. Typed queries omit it. A
+stale browse cursor renews the context before the feed's existing one-time
+restart. Account changes fence late callbacks; deletion clears only its history.
+
+Final verification passed **36/36 distinct native checks (34 unit/two UI), 48
+executions, zero failures/skips** on iPhone 18 Pro/iOS 27.0 simulator:
+`/tmp/gatherory-unseen-final.xcresult` and `/tmp/gatherory-unseen-final.log`.
+The focused run contains no runtime warnings. The four unit suites are
+`BlueprintDiscoveryContextStoreTests`, `BlueprintDiscoveryTests`,
+`PostgresSyncTransportTests` and `AccountDeletionLocalCleanupTests`.
+
+Coverage includes bounded/expired history, isolated accounts, frozen header
+bytes across pages, foreground continuity, short/long away return, clock
+rollback, long-key rejection, stale-cursor renewal, typed-search header omission,
+account deletion and existing feed cancellation/scope/retry behavior.
+`testSeenHistoryWaitsForRefreshAndPreviewAndTabReturnPreserveBrowse` passes in
+normal Light/Dark. It checks meaningful live views against the frozen snapshot,
+excludes fetched offscreen keys, preserves card position and first-page request
+count after preview/tab return, and verifies Refresh starts a new request with
+the accumulated view history. `testExploreSwipeReturnRestoresSearchQuery` also
+passes. UI uses the fixed local catalog and a Debug-only audit value with isolated
+defaults; it does not simulate or claim the server's actual ranking order.
+
+The final simulator Release build passed with exit 0 and no compiler diagnostics
+in `/tmp/gatherory-unseen-release.log`. No packages were installed.
+
+Both final Light/Dark screenshots under `/tmp/gatherory-unseen-final-shots` were
+inspected. Localization verifies all **1,695 EN/ES strings** in
+`/tmp/gatherory-unseen-localization.log`, with the existing dynamic-key extraction
+warning. The onboarding and ordinary creation reference hashes are unchanged.
+
+The server passed **85 tests across nine files**: 52 ranking/paging/HTTP/search/
+freshness checks and 33 measurement/action/baseline-evaluation regressions.
+Logs: `/tmp/gatherory-unseen-server-tests-r2.log` and
+`/tmp/gatherory-unseen-measurement-tests.log`. Typecheck, generated contract check
+and deterministic artifact check pass. The synthetic five-visit evaluation
+reports 47 candidate versus 10 baseline distinct top-ten cards and 0% versus
+60% previously viewed top-ten cards on visits 2–5, while unseen inventory remains.
+These are repetition-policy fixtures, not online relevance/usefulness estimates.
+
+Earlier failures are retained for diagnosis. The first native attempt failed
+compilation on dictionary tuple labels; the next found a missing continuation
+call in the new regression and a transport-fixture route allowlist omission.
+Those are corrected. UI testing also needed to expand the system-minimized tab
+bar before selecting another tab. Two pull attempts did not invoke the masonry
+ScrollView refresh action (`/tmp/gatherory-unseen-native-r3.xcresult`,
+`/tmp/gatherory-unseen-ui-r4.xcresult`). The delivered manual path is a native
+SwiftUI toolbar button; there is no custom pull gesture or UIKit introspection.
+Do not claim pull-to-refresh is verified. The original evaluation clock advanced
+sessions without advancing request time; it was corrected before final results.
+
+No database migration, production rollout or physical-device acceptance was
+performed. History is local to one device; compatible server deployment is
+needed for it to affect order. Catalog/listing/preferences can invalidate a
+snapshot and trigger recovery. Real repeated visits, cross-device expectations
+and usefulness still need product acceptance against the deployed catalog.
+
+### Use to created-event handoff — October 23, 2026
+
+Three smaller Luna agents split native import/recovery, native fixture/UI
+coverage, and server content/replay coverage; parent integration ran serial
+Xcode checks and reviewed screenshots.
+
+The coordinator now opens the exact receipt scope only after canonical import,
+setup-draft cleanup and durable intent completion succeed. A cleanup error
+keeps recovery available without selecting the event underneath failed setup.
+Another owner is rejected before an intent is written; resume rejects altered
+or stale caller intents that differ from the exact stored request.
+
+New native regressions cover wrong-owner writes, altered intent bodies, cleanup
+failure followed by successful receipt recovery, and completed receipts whose
+workspace is temporarily absent from bootstrap. Both recovery cases import and
+open the original scope without another installation POST. Existing focused
+coverage also checks customized event/idea content, independent repeated Uses,
+account generations, local edits across relaunch, copy request replay and exact
+draft cleanup. Imports do not create duplicate local outbox writes.
+
+The expanded UI fixture exercises the production copy, schedule, preview,
+installation, receipt and bootstrap transport paths. It passes the actual app
+workspace library into the coordinator and keeps persistence, drafts, intents
+and history isolated. Discovery/Light success and Yours/Dark transient-failure
+retry confirm dates, submit distinct event names, dismiss setup and preview,
+and reach the real event Home/Ideas screens with the selected child and ideas.
+The retry fixture rejects changed bodies/IDs and requires the idempotency
+header to equal the body request ID. Date confirmation/cancellation and
+reopened name/time-zone/date progress also pass in normal Light/Dark.
+
+Final native source passed **37/37 distinct checks (35 unit/two UI), 40 test
+executions, zero failures/skips**, on iPhone 18 Pro/iOS 27.0 simulator:
+`/tmp/gatherory-use-handoff-final.xcresult` and
+`/tmp/gatherory-use-handoff-final.log`. The five unit suites are
+`BlueprintInstallationImportTests`, `BlueprintInstallationIntentTests`,
+`BlueprintSavedCopyResolverTests`, `BlueprintSetupRecoveryTests`, and
+`BlueprintInstallReadinessTests`. The UI methods are
+`testDiscoveryUseCopiesInstallsImportsAndLandsInCreatedEventWithRetry` and
+`testDiscoveryBookmarkAppearsInSavedLibraryCollection`. The former contains
+both Discovery/Light and Yours/Dark journeys. The earlier
+`/tmp/gatherory-use-handoff-ui-r2.xcresult` passed both the handoff method and
+`testBlueprintUseOpensRealSetupAndRequiresExplicitDateConfirmation`; this makes
+38 distinct passing native methods across staged runs, not 38 additional tests.
+
+Light/Dark captures were exported and inspected under
+`/tmp/gatherory-use-handoff-final-shots` (manifest maps methods and appearances).
+The final result contains one instance of the existing frame-dimension warning;
+the previous two-method UI bundle contains two. Localization verifies all
+1,694 EN/ES strings (`/tmp/gatherory-use-handoff-localization.log`), with the
+existing non-literal-key extraction warning at `AppCopy.swift:341`. Onboarding
+and its existing creation reference match their pre-task hashes.
+The final simulator Release build passed with exit 0 and no compiler diagnostics
+in `/tmp/gatherory-use-handoff-release.log`.
+
+Server tests ran against a new loopback-only PostgreSQL 18 container, migrated
+with the current 23 migrations. All **three database test files/tests passed,
+zero skipped**:
+
+```sh
+RUN_BLUEPRINT_DB_TESTS=1 pnpm vitest run \
+  tests/integration/blueprint-attribution-copy.database.test.ts \
+  tests/integration/blueprint-installation.database.test.ts \
+  tests/integration/blueprint-saved-copy.database.test.ts
+```
+
+They verify the exact saved/published definition and installation source
+snapshot; created main/child dates and metadata; idea notes and category-specific
+native configuration defaults; to-do targets; and guide bodies, audiences and
+targets. Same-request copy/install replay, changed-copy conflict and a provider
+response lost after commit are covered. Provider provisioning runs once after
+that lost response. `pnpm typecheck` passed. The disposable container and its
+volume were removed; the shared development database was untouched.
+
+Evaluation caught two fixture problems before the passing rerun: compilation
+used an inaccessible idea setter, and the simulated copy dropped a description
+that came from the discovery summary. The corrected fixture uses the existing
+idea mutation API and preserves the submitted portable description. An initial
+compile attempt is retained in `/tmp/gatherory-use-handoff-units.log`; the two
+failed UI suggestion assertions are in `/tmp/gatherory-use-handoff-ui.xcresult`.
+They are superseded by the passing bundles above. An initial
+idea-configuration database assertion was corrected to expect the intentional
+category-specific native projection rather than a portable version marker.
+
+This is local native protocol/UI plus real PostgreSQL workflow evidence. The
+native UI does not connect to that PostgreSQL-backed server during these tests;
+server provisioning and cover storage use test adapters. Deployed sign-in,
+real-account creation, actual media-byte transfer and physical-device acceptance
+remain separate. The existing invalid-frame-dimension warning still appears in
+the date/editor journey. No production rollout or onboarding changes occurred.
+
+### Use action and edit sheets — October 23, 2026
+
+The Yours bottom action now says **Use** (Spanish: **Usar**) and opens the
+existing event-creation flow. The final form retains its explicit Create Events
+confirmation. Main-event, child-event and idea editors (including Add) present
+as native large sheets with Save/Cancel and a drag indicator. The Yours Blueprint
+preview remains full screen, matching Liked. No new package or onboarding edit.
+
+Focused UI verification checks the Use label and bottom reachability in normal
+Light/Dark, native sheet placement for event/idea editors, and Save/Cancel/Add
+behavior. **All three focused UI methods passed**, zero failures/skips, on the
+Xcode 27.1 / iPhone 18 Pro / iOS 27.0 simulator. Bundle:
+`/tmp/gatherory-use-edit-sheets.xcresult`; Debug app compilation is included.
+The standard Light/Dark captures in `/tmp/gatherory-use-edit-sheets-shots`
+were exported and inspected. Localization passes for **1,694 EN/ES strings**;
+scoped source/whitespace and documentation checks pass. The existing frame
+warning still appears twice; it is not claimed resolved. No separate Release
+build or live server/device creation was run for this small follow-up.
+
+### Yours bottom controls and native creation form — October 23, 2026
+
+Current follow-up moves Create Events and Add from the Yours navigation bar to
+native bottom toolbar items. Setup opens full height and uses onboarding's
+native grouped-form/date-editor patterns: editable name, common time zone,
+explicit main and included-event date confirmations, and a native bottom action.
+The onboarding screen/form is unchanged. Per explicit user direction, iOS work
+uses the existing Gatherory/SwiftUI design system without ReUI guidance.
+
+The old forced graphical calendar popover is replaced with the shared date/time
+editor. Done commits and confirms; Cancel leaves the prior value intact. Child
+dates use the common main-event zone. Saved creation selections are restored
+without re-projecting legacy Blueprint Decide responses. Readiness and action
+entry enforce trimmed event names within 120 Unicode scalars. Stale date edits
+must retain the owner/generation/request captured when presented.
+
+Three Luna agents handled native implementation, regression updates and
+read-only state/recovery review. Parent integration added naming policy tests,
+keyboard focus handling, final route correction and serial Xcode verification.
+
+- `/tmp/gatherory-blueprint-native-creation-r1.xcresult`: **69 distinct checks
+  passed** (65 unit and four UI; 73 executions including parameter cases), zero
+  failures/skips. Coverage includes native bottom actions, normal Light/Dark
+  overview/direct editing/Add, and date confirmation/cancellation/reopening.
+- `/tmp/gatherory-blueprint-native-creation-final.xcresult`: **67 distinct checks
+  passed** (65 unit and two UI; 71 executions including parameter cases), zero
+  failures/skips. The setup journey now runs both normal Light/Dark appearances,
+  checks empty-name readiness after all dates are confirmed, and clears name
+  focus when date editing starts. Bottom Create Events is fully inside the
+  window bounds. This run preceded the final setup-route correction below.
+- Screenshot review caught a first-presentation problem missed by the initial
+  assertions: the boolean-driven sheet could open with nil creation owner and
+  show legacy Continue/inclusion controls. The preview now presents an
+  identifiable setup route carrying its immutable owner, and dismisses a route
+  after account replacement. UI tests assert Create Events on the first
+  presentation, before editing any form field.
+- `/tmp/gatherory-blueprint-native-creation-route-final.xcresult`: **both final
+  route UI methods passed**, zero failures/skips. The complete Use setup journey
+  runs in normal Light/Dark and asserts the Create Events label before editing;
+  the Yours Dark entry also verifies the first-presented title/action. Final
+  route captures were exported and inspected in
+  `/tmp/gatherory-blueprint-native-creation-route-final-shots`.
+- OnboardingView and WorkspaceBrowserView hashes match their pre-task values.
+  Shared date-editor timezone editing defaults remain unchanged for existing
+  callers; Blueprint child-date editing opts out of changing the common zone.
+  Native AGENTS.md now records the user's explicit native-only guidance.
+- Final simulator **Release build passed** (exit 0):
+  `/tmp/gatherory-blueprint-native-creation-release.log`. Scoped source and
+  whitespace checks and documentation formatting passed.
+- EN/ES coverage passes for **1,693 strings**, with the existing AppCopy.swift:341
+  non-literal extraction warning; log
+  `/tmp/gatherory-blueprint-native-creation-localization.log`.
+
+Captures in `/tmp/gatherory-blueprint-native-creation-final-shots` were inspected
+in normal Light/Dark: a full-height grouped form, keyboard-dismissed creation
+button, and reachable bottom-toolbar actions over the masonry overview.
+No super-large layouts ran. The existing frame-dimension diagnostic still
+appears (two occurrences in r1, one in each subsequent run), without a source
+location. It is not claimed resolved.
+
+The setup fixture seeds a private source pin and answers date suggestions only;
+it never simulates a successful copy/install. Live server creation, real-account
+personal saves, physical VoiceOver/device acceptance and deployment are not
+claimed. No dependency was installed and no onboarding behavior was changed.
+
+### Yours full-screen and direct editing — October 23, 2026
+
+Current behavior supersedes the sheet/Edit/Decide iteration below. Yours opens
+with the same standard fullScreenCover as Liked. Main-event, child-event and
+masonry idea taps open existing native editors directly with Save/Cancel.
+Create Events and Add use the native navigation toolbar. Blueprint Decide is
+removed; only created event/workspaces provide that workflow. Root previews
+and editor forms use system full-screen presentation; date setup retains its
+existing sheet.
+
+Library cards resolve their actual customized cover/source instead of always
+showing category artwork. New plans include all authored content independently
+of legacy preview responses; saved subsets and exclusions survive name/cover/
+date edits. Only newly added items default into the selection. Saving reusable source edits retains confirmed dates and allocates a fresh
+working request identity. Explicit fresh-workspace-copy date resets remain
+unchanged.
+Pending-install/account/version guards and retry paths remain intact.
+
+Tests use standard text sizes in Light/Dark. Dedicated super-large/XXXL methods
+were removed at the user's request; app Dynamic Type support is retained.
+Three smaller Luna agents split native UI, content/selection and regression
+coverage; parent integration handled review, source checks, screenshots and
+serial Xcode execution. On Xcode 27.1 / iPhone 18 Pro / iOS 27.0:
+
+- **72 distinct focused methods passed across staged runs: 57 unit and 15 UI.**
+- `/tmp/gatherory-yours-direct-edit-r3.xcresult`: 67 passed and five failed,
+  zero skipped. Twelve UI methods passed, including full-screen recovery,
+  standard Light/Dark masonry, read-only public detail, Explore native return
+  and retained search. Two unit expectations still required the old Love-only
+  selection behavior. Two UI assertions incorrectly compared a native toolbar
+  to a scroll view whose accessible bounds start at zero; the working-copy
+  test expected a fixture title different from the explicit source default.
+- `/tmp/gatherory-yours-direct-edit-final.xcresult`: **62/62 passed**, zero
+  failures/skips, on final source (57 unit and five UI). This reruns all six
+  unit suites and the three corrected UI journeys, plus final normal-size
+  Light/Dark overview and editor/Add checks after keeping the native Create
+  Events text label visible. Main/child/idea direct Save/Cancel, no Edit mode/
+  Blueprint Decide, native toolbar hierarchy, actual date setup cancellation,
+  and the Saved → Use → Yours working-copy journey pass.
+- The first two compile attempts stopped at Swift initializer argument ordering
+  in the new library-cover call. The final build and tests include that fix.
+- Final screenshots in `/tmp/gatherory-yours-direct-edit-final-shots` were
+  exported and inspected: standard Light/Dark main overview and editor,
+  masonry, Saved/working copy, and date setup. No super-large layouts ran.
+- Final simulator **Release build passed** (exit 0):
+  `/tmp/gatherory-yours-direct-edit-release.log`.
+- Localization passes for **1,693 English/Spanish strings**, with the existing
+  non-literal extraction warning at `AppCopy.swift:341`; log
+  `/tmp/gatherory-yours-direct-edit-localization.log`.
+- Native-adapted C1–C4 source checks, manual system-control/accessibility/state
+  review, scoped whitespace and documentation formatting pass. Native lint and
+  audit-checklist tooling are unavailable; no dependency was installed.
+
+The final result records two occurrences of the existing **Invalid frame
+dimension (negative or non-finite)** runtime warning without a source location.
+Passing interaction checks do not resolve it. The setup fixture uses a seeded
+private pin and a schedule-only transport: it does not submit live creation or
+prove server personal-save/copy/install success. Live signed-in server/device,
+physical VoiceOver and Reduce Motion acceptance remain open. No backend/DB
+change, deployment or physical-device installation occurred.
+
+### Yours single-scroll preview — October 23, 2026
+
+Historical sheet/Edit/Decide iteration, superseded by the full-screen/direct-edit
+correction above. Its tests and XXXL captures do not verify the current design.
+
+Yours now reads as one overview: main event, related events and masonry ideas.
+Create Events is the primary action; secondary Edit reveals content editors and
+Add controls, while Decide opens a separate native navigation destination.
+The existing local response indicators and excluded-event labels distinguish
+the full editable content from the subset selected for creation. Saved choices
+and installation projection remain unchanged.
+
+Authored, working and previously used Yours cards open a native large sheet.
+Back and the system swipe-down gesture return to the library; inner
+detail/Decide navigation returns to the overview first. Unsaved choices and an
+active save disable sheet dismissal. Native Back retains staged choices when
+returning from Decide; overview Back retains Save/Discard confirmation.
+
+At accessibility sizes, secondary Edit/Decide actions use native toolbar
+buttons so they do not consume the reading viewport. Child-event editors stack
+below their details. The three-section overview uses a regular VStack to avoid
+lazy height-estimate jumps when editing changes offscreen sections.
+
+On Xcode 27.1 / iPhone 18 Pro / iOS 27.0, **75 distinct focused methods passed
+across staged runs: 61 unit methods and 14 UI methods**. Three UI methods are
+new; existing context, working-copy, recovery and dirty-close checks were updated.
+
+- `/tmp/gatherory-yours-single-scroll-r1.xcresult`: 56 unit methods and ten UI
+  methods passed. Public preferences, single-scroll details, masonry, search
+  return and date-confirmation checks passed. Three new Yours assertions failed.
+- `/tmp/gatherory-yours-single-scroll-r3.xcresult`: the 56 unit methods passed
+  again, alongside the new Yours Create Events setup/cancellation check and
+  four other UI methods. This schedule-only fixture does not submit creation.
+- `/tmp/gatherory-yours-single-scroll-final.xcresult`: **all seven Yours UI
+  methods passed**, zero failures/skips. This covers Light/Dark reading and
+  native sheet dismissal, working/recovery return, rename/save/reopen, nested
+  Decide return, actual Maybe queue advancement, dirty swipe prevention,
+  close cancellation/discard, date-confirmation handoff and Accessibility XXXL.
+- `/tmp/gatherory-yours-single-scroll-polish.xcresult`: **five geometry unit
+  methods and two UI methods passed**, zero failures/skips. The editor journey
+  and both XXXL appearances were rerun after the Add Idea header was stacked
+  and shared cover frames normalized to finite, nonnegative geometry.
+
+Evaluation caught genuine accessibility row/header compression and lazy
+height-estimate shifts; responsive stacking and a regular three-section VStack
+fix those. It also proved that zoom return bypassed the unsaved-change guard on
+this simulator. Attempts to change UIKit zoom options did not solve that;
+the final implementation uses a standard SwiftUI sheet, and the temporary
+UIKit bridge was removed. Initial test assumptions about card accessibility
+bounds, nested Save Changes and swiping a text fragment were corrected. Early
+compiler errors in the pending-intent expression and discarded UIKit prototype
+are superseded by the passing final builds and runs.
+
+Final Light/Dark masonry and XXXL captures were exported and inspected in
+`/tmp/gatherory-yours-single-scroll-final-shots` and
+`/tmp/gatherory-yours-single-scroll-polish-shots`, including the readable Add
+Idea header and actual setup handoff. C1–C4, Swift parsing and scoped whitespace
+checks pass. EN/ES coverage passes for **1,693 strings** in
+`/tmp/gatherory-yours-single-scroll-localization.log`, with the existing
+dynamic-key extraction warning. Native lint/ReUI audit tooling is unavailable;
+labels, ordering, touch targets and native controls were reviewed manually.
+
+The final **Release simulator build passed** with no compiler diagnostics in
+`/tmp/gatherory-yours-single-scroll-release-final.log`.
+
+One runtime diagnostic remains: Xcode reports “Invalid frame dimension
+(negative or non-finite)” in the collection/personal editor journey, without a
+source location. Its behavior assertions pass and cover-frame normalization did
+not eliminate it. This is recorded as an unresolved diagnostic, not a clean
+runtime-warning result. Live auth/server creation, physical VoiceOver and Reduce
+Motion device acceptance remain separate checks. No deployment or DB reset
+was performed.
+
+### Explore preview Back and swipe return — October 23, 2026
+
+Explore connects its existing matched card source to the system zoom transition
+on the full-screen Blueprint presentation. The discovery preview's top-left
+control is a native back chevron with the existing localized Back label. The
+same presentation callback resumes the covered feed and retained search query;
+personal/library previews retain the library control and unsaved-change guard.
+
+Four UI regressions were added alongside this feature. On Xcode 27.1 / iPhone
+18 Pro / iOS 27.0, **31 distinct focused methods passed across two runs**:
+
+- `/tmp/gatherory-preview-back-r1.xcresult`: **27 unit methods and three UI
+  methods passed**. Unit suites cover discovery navigation snapshots,
+  preview editing/presentation and ad-session lifecycle. UI checks exercise
+  Back, normal preview scrolling, edge-swipe dismissal, reopening in Light/Dark,
+  a nested event-detail swipe returning to the Blueprint before leaving, and
+  the search query surviving swipe return. The fourth UI method reached the
+  unsaved-changes prompt but assumed a visible Cancel button.
+- `/tmp/gatherory-preview-back-personal-r2.xcresult`: the **personal unsaved
+  UI method passed**, zero failures/skips. A Decide change remains dirty after
+  cancelling close, and only explicit Discard exits. The native anchored
+  confirmation popover on this simulator omits Cancel; the test taps outside
+  when that button is absent. No product confirmation controls were changed.
+
+Both Light/Dark Back-arrow captures were exported to
+`/tmp/gatherory-preview-back-r1-shots` and inspected. Localization passes for
+1,684 English/Spanish strings in `/tmp/gatherory-preview-back-localization.log`,
+with the existing dynamic-key warning. No strings or dependencies were added.
+C1–C4 source and whitespace checks passed; system controls and labels were
+reviewed manually. Native lint and ReUI audit tooling remain unavailable.
+
+The final **Release simulator build passed** with no compiler warnings in
+`/tmp/gatherory-preview-back-release.log`.
+
+Feature regression expectations are now recorded outside the managed block in
+the native `AGENTS.md`, in the web/server `AGENTS.md`, and in AI onboarding.
+These UI fixtures do not verify live auth/creation, real SDK inventory during a
+gesture, physical VoiceOver or Reduce Motion behavior on a device. See
+[roadmap 15](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/15-single-preview-and-event-creation.md#explore-return-navigation).
+
+### Public preview idea masonry — October 23, 2026
+
+The combined public preview now uses the same `AdaptiveMasonry` as the personal
+Ideas view, replacing its row-aligned `LazyVGrid`. Natural card ratios,
+12-point spacing, layout direction and the one-column accessibility fallback
+remain shared with the existing layout component. The preview remains one scroll.
+
+Two focused UI methods passed across staged runs on iPhone 18 Pro / iOS 27.0.
+The existing Light/Dark Accessibility XXXL event/idea-detail check passed in
+`/tmp/gatherory-public-ideas-masonry-r1.xcresult`. The new ordinary-size
+Light/Dark method passed in `/tmp/gatherory-public-ideas-masonry-r2.xcresult`;
+it verifies different card heights, the next card immediately below the shorter
+column, and read-only detail navigation. Its initial two-point accessibility
+bounds tolerance was too tight (2.27-point difference); four-point spacing
+tolerance plus an independent check that the shorter column advances before
+the taller card ends distinguishes masonry from a shared grid row.
+
+Both exported Light/Dark captures were inspected in
+`/tmp/gatherory-public-ideas-masonry-r2-shots`. C1–C4, scoped whitespace and
+roadmap formatting passed. The UI runs compile Debug app/test targets; Release
+and broad unit suites were not repeated for this layout-only correction.
+No strings, dependencies, motion or creation behavior changed. Native lint and
+ReUI audit tooling remain unavailable. Live creation acceptance remains the
+next flow check.
+
+### Single public preview and event creation — October 23, 2026
+
+Public discovery, Saved/Liked and shared links now show one read-only scroll
+containing the main event, included events and ideas. Tapping opens read-only
+details; Home/Ideas tabs and the event picker are absent. Yours retains the
+personal planning workspace and an explicit Create Events action, including
+reusable previously used sources. Setup confirms dates; legacy setup retains
+event-inclusion switches but no longer repeats event/idea editors. Its disabled
+primary label uses a semantic secondary foreground.
+
+New explicit Use plans include all authored ideas and events through local
+personal inclusion choices and retained child definitions. This fixes the prior
+empty-default projection, including events without child-targeted ideas. Public
+likes and live votes are unaffected. Existing drafts keep their prior choices,
+confirmed dates and pinned sources unchanged.
+
+Three smaller Luna agents implemented the public view, focused setup/copy and
+the isolated UI harness. Parent integration fixed accessibility identifier
+inheritance, fixture initialization/inclusion, explicit repeat creation from
+Yours, and scrolling confirmation above the medium sheet's bottom action bar.
+The pure preview presentation policy is nonisolated, avoiding its prior
+actor-isolated Equatable warnings.
+
+With Xcode 27.1 on iPhone 18 Pro / iOS 27.0, the staged results cover
+**99 distinct passing methods: 94 unit and five UI**:
+
+- `/tmp/gatherory-single-preview-r2.xcresult`: all **93 unit methods** passed,
+  including preview policy/session/editing, readiness, date context, recovery,
+  disk drafts, saved-copy resolver, installation intents, canonical import and
+  library model. The two parameterized methods add six executions. The run's
+  two UI failures are superseded below; they exposed inherited identifiers and
+  a fixture whose selected child lacked a personal inclusion override.
+- `/tmp/gatherory-single-preview-r3.xcresult`: **28 unit methods and four UI
+  methods passed**. This includes the additional default-inclusion regression
+  and repeated helper/session/editing coverage. UI checks cover Light/Dark
+  preferences, public previews without workspace tabs, read-only event and idea
+  details at Accessibility XXXL in both appearances, Saved's direct Use,
+  Save → Saved → local working copy → Yours, and personal editing/Create Events.
+  One setup UI failure is superseded by the final focused pass: the confirmation
+  was below the medium sheet's action bar, so the test had not tapped it.
+- `/tmp/gatherory-single-preview-setup-r5.xcresult`: the **actual SetupView UI
+  method passed**, zero failed/skipped. It checks Create Events disabled before
+  confirmations and after the main date alone, scrolls the native form to the
+  child confirmation, confirms it, then closes and reopens setup. Both dates
+  and the enabled action survive resume. No install action is submitted.
+- Localization passes for **1,684 English/Spanish strings**, with the existing
+  `AppCopy.swift` dynamic-key warning, in
+  `/tmp/gatherory-single-preview-localization.log`.
+
+Ten successful captures are in `/tmp/gatherory-single-preview-r3-shots` and two
+setup captures in `/tmp/gatherory-single-preview-setup-r5-shots`. Standard
+Light/Dark public previews, Saved, Dark Accessibility XXXL public content/detail,
+and confirmed setup were inspected. There is no public picker to truncate at
+large text sizes. This is not a full personal-workspace large-text audit.
+
+The final **Release simulator build passed** with no compiler warnings in
+`/tmp/gatherory-single-preview-release.log`; fixture-only routes are excluded.
+The Debug test build still reports existing unrelated test warnings. The first
+attempt was interrupted after detecting an overloaded fixture initializer that
+recursed; distinct internal argument labels fixed it before the recorded reruns.
+
+The ordinary DEBUG preview fixture still uses its explicit temporary working-copy
+shortcut for the library handoff test. The additional
+`-BlueprintSetupDateConfirmationFixture` presents the actual setup view with a
+temporary draft store, an already-resolved private pin and the production
+coordinator over a schedule-only local URLProtocol. It seeds once, then resumes
+the real saved dates. Unexpected routes, including installation, return HTTP
+503; it never fabricates creation success. Separate native URLProtocol/import
+tests cover copy retries and owner/replaced-draft guards, exact request/body
+recovery, canonical bootstrap selection and source retention. These are local
+client/transport proofs, not deployed server copy/install or physical-device
+acceptance. No server, migration, deployment or database reset occurred.
+
+Scoped C1–C4 and whitespace checks passed; no dependency or custom motion was
+added. Manual native review covers system navigation/buttons, explicit labels,
+growing hero text, loading/retry and date confirmation. ReUI audit tooling and a
+native lint configuration are unavailable; physical VoiceOver remains open.
+See [roadmap 15](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/15-single-preview-and-event-creation.md).
+
+### Context-specific Blueprint previews — October 23, 2026
+
+The later single public scroll above supersedes this slice's public Home/Ideas
+layout; its context and authorization boundaries remain.
+
+Explore public previews now show Like, Save and More, with Use Blueprint and
+Not interested inside More. Saved/Liked previews keep direct Use; shared links
+keep direct Use without public preferences. Public Home, Ideas and idea detail
+are read-only: no editor, Add, personal response controls, Decide or private
+draft overlay. Yours keeps personal editing, Add, Decide and Save Changes.
+Preferences require the current account's action store and do not create copies.
+
+Explicit Use creates or resumes a local working plan through
+`BlueprintPreviewWorkingCopy.prepare` before opening the existing setup flow.
+Existing edits, dates, revision and shared-source identity are preserved;
+pending installation and empty-owner guards run before any write. Switching
+back to Yours reloads the collection so a newly prepared working copy appears
+immediately. Existing backend pin/copy/install and import gates remain in place.
+
+Three smaller Luna agents handled policy/helper tests, read-only workspace
+views and the native UI harness; parent integration wired routes, ownership
+guards and the library refresh. With Xcode 27.1 on iPhone 18 Pro / iOS 27.0:
+
+- **61 tests passed, zero failed/skipped**, in
+  `/tmp/gatherory-preview-actions-r2.xcresult`: 58 unit methods across
+  `BlueprintPreviewPresentationTests`, `BlueprintPreviewWorkingCopyTests`,
+  `BlueprintPreviewSessionTests`, `BlueprintActionsTests`,
+  `BlueprintPreviewEditingTests` and `BlueprintPersonalLibraryTests`, plus
+  three `BlueprintPreviewActionsUITests` methods. These check owner/context
+  isolation, pending-import protection, unchanged existing working copies,
+  acknowledged preferences, Light/Dark discovery controls, Saved's direct Use,
+  personal Add/Decide and the fixture Explore → Save → Saved → Use → Yours
+  journey. The initial run's missing working card exposed the stale Yours
+  collection; reloading on selection fixed it and the journey passed in r2.
+- **One additional UI method passed, zero failed/skipped**, in
+  `/tmp/gatherory-preview-actions-accessibility.xcresult`. It opens public Ideas
+  and idea detail in Dark Accessibility XXXL and checks that Add, Edit, Decide
+  and personal response filters remain absent. Together these runs cover
+  **62 distinct methods: 58 unit and four UI**.
+- Six standard captures are in `/tmp/gatherory-preview-actions-r2-shots`;
+  two accessibility captures are in
+  `/tmp/gatherory-preview-actions-accessibility-shots`. Light/Dark discovery,
+  Saved, working-copy Ideas, public Ideas and idea detail were inspected. The
+  existing event picker truncates its label at Accessibility XXXL; this is
+  read-only-control evidence, not a full large-text layout pass.
+- Localization passes for **1,678 English/Spanish strings** in
+  `/tmp/gatherory-preview-actions-localization.log`, with the existing
+  `AppCopy.swift` dynamic-key warning. No dependency was added.
+
+The DEBUG-only `-BlueprintPreviewActionsVisualFixture` requires seeded
+development data, an ephemeral store, skipped authentication and a nonempty
+owner. It uses an in-memory preference transport and a temporary real draft
+store. Its Use action calls the production working-copy helper, then closes
+preview instead of opening setup; the subsequent Yours card is a local recovery
+plan. It does not exercise authenticated server pin/copy/install or canonical
+import. Public/shared source separation and cross-owner/pending behavior have
+unit coverage. Live copy/install, physical devices and VoiceOver remain separate
+acceptance checks. Release excludes the fixture.
+
+The final **Release simulator build passed** with no compiler warnings in
+`/tmp/gatherory-preview-actions-release.log`.
+
+Scoped C1–C4 source and whitespace checks passed. Manual native review retains
+system controls, icon accessibility labels, loading/retry behavior and current
+account guards. The web-specific ReUI audit tool and native lint configuration
+are unavailable. No web/server code changed, so web tests were not rerun. See
+[roadmap 13](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/13-discovery-and-library-actions.md).
+
+### Unified Yours library — October 23, 2026
+
+Yours is one grid for authored personal records, saved customizations/recovery,
+and installation-receipt sources. The Drafts/Installed scope selector is removed
+and the primary Yours/Saved/Liked picker stays directly below the navigation
+bar, including the empty state. Existing draft files and preference cleanup
+remain compatible; no migration or reset is required. Continue setup appears
+only for confirmed setup-date progress, with the pending canonical-import
+recovery banner retained. Create Blueprint opens the native managed-event
+chooser and existing private capture/review flow.
+
+With Xcode 27.1 on the iPhone 18 Pro / iOS 27.0 simulator:
+
+- **42 unit tests passed** for `BlueprintLibraryProjectionTests`,
+  `BlueprintLibraryCollectionSelectionTests`, `BlueprintLibraryModelTests`,
+  `BlueprintSetupRecoveryTests` and `BlueprintPreviewSessionTests` in
+  `/tmp/gatherory-yours-library-r2.xcresult`. Seven new projection tests check
+  exact full-payload deduplication, normalized sets, different source/share/
+  revision/progress, nested definition changes despite equal hashes, corrupt
+  or foreign receipt sources, and contextual setup progress. This run's three
+  UI failures were fixed and superseded by r3: an inherited container ID hid
+  action identifiers, and two tests tapped the tab before initial routing
+  settled. A first compile attempt also caught missing `try` in a test helper.
+- **3 UI tests passed, zero failed/skipped** in
+  `/tmp/gatherory-yours-library-r3.xcresult`. Light/Dark empty-state checks
+  assert the picker near the top, no secondary scope, reachable Create/Explore,
+  managed-event chooser presentation/dismissal, and Explore navigation. Mixed
+  content checks all three source types, recovery preview return and scrolling;
+  pending setup checks the visible recovery row and Continue setup banner.
+  Seven captures are in `/tmp/gatherory-yours-library-r3-shots`; Light/Dark empty
+  states, chooser, mixed grid, preview and pending banner were inspected.
+- **35 additional unit methods passed, zero failed/skipped** in
+  `/tmp/gatherory-yours-recovery-regression.xcresult` for
+  `BlueprintSetupDraftTests`, `BlueprintPreviewEditingTests`,
+  `BlueprintCaptureLinkTests` and `BlueprintPersonalLibraryTests`. One method
+  runs three dynamic parameter cases (37 executions, 35 methods).
+- Localization passed for **1,677 English/Spanish strings** in
+  `/tmp/gatherory-yours-localization.log`, with the existing `AppCopy.swift`
+  dynamic-key warning. No dependency was added.
+
+The final **Release simulator build passed** with no compiler warnings in its
+log: `/tmp/gatherory-yours-library-release.log`. The fixture remains Debug-only.
+
+The UI harness uses `-BlueprintLibraryVisualFixture` and
+`-BlueprintLibraryFixtureState empty|mixed|pending`, guarded by Debug, seeded
+development data, an ephemeral store and skipped authentication. Feature API
+loads and per-account library/draft files are bypassed; fixture mutations are
+disabled. The preview reads its fixture recovery payload in memory. The
+Explore return also uses its existing local visual fixture. The chooser lists
+seeded manageable events; no authenticated capture, publication, sharing,
+installation or live account-switch sequence is performed by these UI tests.
+Those boundaries retain unit coverage; physical device/VoiceOver and live
+capture acceptance remain separate.
+
+Scoped C1–C4 source and whitespace checks passed with no matches. Native manual
+review retains system controls, labels, account/permission gates, Dynamic Type
+one-column behavior, and large empty-state buttons. The web-specific ReUI audit
+tool and native lint configuration are unavailable. No server code changed;
+web tests were not rerun. See [roadmap 14](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/14-unified-yours-library.md).
+
+### Native Search/profile alignment — October 23, 2026
+
+Explore replaces the separate expanded title row with native
+`.toolbarTitleDisplayMode(.inlineLarge)`. At the top, Search and the existing
+profile action share a row; scrolling uses the compact system title. The
+native `.searchable` field and focus bindings are retained.
+
+**7 focused tests passed, zero failed/skipped**, using Xcode 27.1 on the iPhone
+18 Pro / iOS 27.0 simulator: six `BlueprintDiscoveryNavigationTests` and
+`BlueprintExploreHeaderUITests.testNativeHeaderAlignmentTypingAndScrolling`.
+The UI method runs Light and Dark, checks title/profile centers within eight
+points, enters `wedding`, scrolls results while preserving the query, dismisses
+search, and checks the aligned Browse header and reachable controls. Eight
+screenshots were exported; aligned Light/Dark, Light typing, and Dark
+scrolled/compact captures were inspected. The first run failed because the
+test assumed the dismissal action was named Cancel; the observed native iOS 27
+button is Close. The corrected test queries the navigation bar's native
+Close/Cancel action. No custom dismissal control was added.
+
+Result: `/tmp/gatherory-inline-search-header-r2.xcresult`; screenshots:
+`/tmp/gatherory-inline-search-header-r2-shots`; log:
+`/tmp/gatherory-inline-search-header-r2.log`. The Release simulator build passed
+(`/tmp/gatherory-inline-search-header-release.log`). C1–C4 scoped source and
+whitespace checks passed with no matches; native manual accessibility review
+retains the profile label and system focus/keyboard handling. The web-specific
+ReUI audit tool and native lint configuration are unavailable. No new strings
+or dependencies were added. Existing unrelated compiler warnings in other
+test files remain. This local fixture does not test server relevance, live
+catalog authorization or physical VoiceOver. The subsequent preview action
+implementation is recorded separately above and in
+[the action review](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/13-discovery-and-library-actions.md).
+
+### Ads-enabled Explore stability — October 23, 2026
+
+The ad-enabled follow-up prefetches upcoming slots, admits a first creative only
+below the viewport, and retains a measured reservation for admitted slots through
+lazy remounts and creative expiry. Preview presentation suspends ad work without
+discarding unexpired same-account inventory; dismissal resumes Browse without
+activating Search. Original expiry deadlines and account/privacy resets remain.
+See [advertising behavior](explore-advertising.md#october-23-native-scroll-verification)
+and [the roadmap evaluation](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/12-ads-enabled-feed-stability.md).
+
+With Xcode 27.1 on iPhone 18 Pro / iOS 27.0 simulator:
+
+- **38 tests passed, zero failed/skipped**: 35 unit tests covering placement,
+  session lifecycle, discovery/navigation and layout dimensions, plus three UI
+  tests. These cover real Google SDK sample ads in Light/Dark, 20-to-40-item
+  pagination, organic preview return without Search activation, no-ad card
+  geometry, and a Dark accessibility XXXL native-ad remount.
+- After adding stale geometry callback rejection, **9 follow-up tests passed,
+  zero failed/skipped**: the new Light/Dark arrival test checks visible card
+  x/y/width/height within one point before scrolling when the prefetched sample
+  is ready, and repeats all eight placement-policy tests. These are overlapping
+  runs, not 47 distinct tests.
+- The inspected Light/Dark SDK captures both report **No implementation issues
+  found** in Google's native validator. Accessibility text wraps naturally
+  within the one-column width; long content remains scrollable. Preview-return
+  and final arrival screenshots were also inspected in both appearances.
+- English/Spanish localization coverage passed for **1,671 strings**. The
+  existing dynamic-key warning in `AppCopy.swift` remains unrelated.
+- The final **Release simulator build passed** without the sample app ID
+  override. Its built Info.plist retains `EXPLORE_ADS_ENABLED=NO` and
+  `EXPLORE_ADS_TEST_MODE=NO`, with Gatherory's configured production IDs.
+
+Evidence: `/tmp/gatherory-ad-scroll-final.xcresult`,
+`/tmp/gatherory-ad-scroll-final-shots` (22 captures),
+`/tmp/gatherory-ad-arrival-final.xcresult`,
+`/tmp/gatherory-ad-arrival-final-shots` (2 captures),
+`/tmp/gatherory-ad-scroll-localization.log`, and
+`/tmp/gatherory-ad-scroll-release.log`.
+
+Scoped C1–C4 source checks and native manual accessibility/layout review passed.
+The sole duration-pattern match is the existing non-animation impression dwell
+calculation in `BlueprintDiscoveryCards.swift:153`. No custom animation or
+per-frame state updates were added. Tracked and new native files passed
+whitespace checks. The web-specific ReUI audit tool and a native lint
+configuration are unavailable; neither was represented as an automated pass.
+The web roadmap files passed Prettier checks; no server code changed in this
+follow-up, so web application tests were not rerun.
+
+The SDK UI runs use `-BlueprintAdsScrollVerification`, an ephemeral local
+40-item catalog with 20-item pages and disabled Blueprint actions/measurement.
+Build with `ADMOB_APP_ID=ca-app-pub-3940256099942544~1458002511` for these Debug
+tests; the sample native unit is already configured. This uses the existing
+exact sample-pair consent exception, not Gatherory's UMP messages. The checked-in
+Debug configuration is unchanged. Native Release ads remain disabled.
+
+The broad test selectors were `GatheroryUITests/BlueprintAdsScrollUITests`,
+`GatheroryUITests/BlueprintCatalogLayoutUITests`, and `GatheroryTests/` suites
+`ExploreAdPlacementTests`, `ExploreAdSessionLifecycleTests`,
+`BlueprintDiscoveryNavigationTests`, `BlueprintDiscoveryTests`, and
+`LayoutDimensionTests`. The follow-up selected
+`BlueprintAdsScrollUITests/testPrefetchedAdDoesNotMoveVisibleBlueprints` and
+`ExploreAdPlacementTests`. Both used the repeatable command above with sample
+app ID override, the named simulator, and
+`-derivedDataPath /tmp/gatherory-admob-release-gate-derived`.
+
+Placement-policy tests exercise late first fill, missing/invalid geometry,
+creative loss and reservation retention, fitting visible replacements, taller
+below-viewport replacements, width changes, and reset. Original 55-minute
+expiry timing was reviewed in code rather than exercised over 55 minutes.
+SDK validation popups were dismissed; advertiser actions were never tapped.
+This does not verify production authenticated catalog access, Gatherory UMP,
+physical-device VoiceOver/scrolling, ad conversions, copy/install attribution,
+or frame rate. No-fill estimates can still leave uneven column tails.
+
+October 22, 2026: **Explore card stability and search restoration**. The custom
+search field and experimental shared large-title/profile row were reverted to
+the standard native title, toolbar profile action and system search field.
+Catalog cards no longer resize from decoded cover aspect ratios, retain the
+dark text-contrast gradient without Glur, and preserve stable grid identities.
+Screens with no ad session no longer allocate phantom ad-slot height estimates.
+
+`BlueprintCatalogLayoutUITests.testCardGeometrySurvivesImageLoadingAndScrollRemounts`
+passed in explicit **light and dark app appearances** using forty DEBUG-only
+entries with mixed category ratios, long/short titles, and optional bylines.
+It waits for decoded artwork, checks card height/placement within one point,
+scrolls to the end and back, and checks for oversized empty column tails. Eight
+screenshots were exported; selected loaded/scrolled/returned captures were
+visually inspected in both appearances. Result:
+`/tmp/gatherory-card-stability-no-inactive-slots.xcresult`; attachments:
+`/tmp/gatherory-card-stability-no-inactive-slots-shots`.
+
+**32 focused native tests passed** across discovery, navigation, preview session
+and layout dimensions (`/tmp/gatherory-card-stability-unit.xcresult`). Localization
+coverage passed for **1,671 English/Spanish strings**. The final Release simulator build passed
+(`/tmp/gatherory-card-stability-release-final.log`). Native manual accessibility/source review and C1–C4 checks passed;
+the existing dwell-duration calculation is not animation. The web-specific
+ReUI audit tool and native lint configuration are unavailable. The fixture
+skips Explore API actions, ads and measurement; this does not verify live ad
+creative sizing, authentication, server search scoring, physical VoiceOver or
+scroll frame-rate performance. See [the rendering handoff](explore-performance.md).
+
 The mobile session lifecycle refactor was verified on October 20, 2026 with
 **790 tests in 108 suites passed**, running only `GatheroryTests` on the iPhone
 18 Pro simulator. English/Spanish localization coverage passed for **1,384
@@ -108,13 +986,13 @@ excluded as requested. Physical-device accessibility, multi-device/offline and
 deployment acceptance remain in the
 [shared To-dos handoff](../../../gatherory-web-app/docs/roadmaps/to-dos-reminders-roadmap/01-shared-event-to-dos.md).
 
-| Area | Coverage |
-| --- | --- |
-| Authentication | Canonical Better Auth identity, stored-session restore, verification-required registration, provider token forwarding, sign-out waiting for pending sync, failed sign-in/restore recovery, deletion failure retaining the account until acknowledgement. |
-| Local persistence and sync | Atomic workspace/outbox writes, stable mutation IDs, batching, retries, conflict/rejection handling, tombstones, reopening disk stores, canceled/stale work, per-account leases and cache isolation. |
-| Sync HTTP boundary | Fresh bearer tokens after account switches, missing/empty tokens, bootstrap compatibility, push envelopes and retry identity, pull scope/cursor encoding, remote change decoding, all push dispositions, HTTP/network/decoding error classification. |
-| Event access | Invitation acceptance and approval states, host/collaborator/guest routing, per-event RSVP and leave behavior, guest projection restrictions, account-scoped invitation/join-request caches. |
-| Presentation | Account loading renders real UIKit-backed content; UI tests exercise workspace entry, sharing, invitation forms, event deletion/cancellation/archive, editor presentation, and the Decide primer. |
+| Area                       | Coverage                                                                                                                                                                                                                                                 |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication             | Canonical Better Auth identity, stored-session restore, verification-required registration, provider token forwarding, sign-out waiting for pending sync, failed sign-in/restore recovery, deletion failure retaining the account until acknowledgement. |
+| Local persistence and sync | Atomic workspace/outbox writes, stable mutation IDs, batching, retries, conflict/rejection handling, tombstones, reopening disk stores, canceled/stale work, per-account leases and cache isolation.                                                     |
+| Sync HTTP boundary         | Fresh bearer tokens after account switches, missing/empty tokens, bootstrap compatibility, push envelopes and retry identity, pull scope/cursor encoding, remote change decoding, all push dispositions, HTTP/network/decoding error classification.     |
+| Event access               | Invitation acceptance and approval states, host/collaborator/guest routing, per-event RSVP and leave behavior, guest projection restrictions, account-scoped invitation/join-request caches.                                                             |
+| Presentation               | Account loading renders real UIKit-backed content; UI tests exercise workspace entry, sharing, invitation forms, event deletion/cancellation/archive, editor presentation, and the Decide primer.                                                        |
 
 `PostgresSyncTransportTests` intercepts every request through an injected
 `URLProtocol` and uses `.invalid` hosts. Its fixtures have no shared mutable
@@ -284,7 +1162,6 @@ not add fixture images to the actual Photos library. Before release, verify
 real-device grant/denial/Settings recovery and saving, pinch/double-tap/swipe
 interaction, and iPad multitasking resizing. Live backend behavior and uploads were not verified in this pass.
 
-
 ## Native QR distribution — October 19, 2026
 
 Owner Create & Share and Share Blueprint now offer an inline QR
@@ -360,7 +1237,6 @@ iOS 26 compilation/configuration checks do not establish device behavior.
   native release. This QR slice needs no new API or migration. No live backend,
   physical-device run, database reset/seed, upload or deployment was performed.
 
-
 ### Simpler sharing follow-up — October 19, 2026
 
 Workspaces Share Blueprint now opens the existing owned-template link flow,
@@ -404,7 +1280,6 @@ xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
   POSTHOG_ENABLED=NO
 bash scripts/verify-localizations.sh
 ```
-
 
 ### Reusable owner sharing links — October 19, 2026
 
@@ -470,7 +1345,6 @@ xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
   POSTHOG_ENABLED=NO
 bash scripts/verify-localizations.sh
 ```
-
 
 ### Blueprint product wording — October 19, 2026
 
@@ -565,7 +1439,6 @@ xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
 bash scripts/verify-localizations.sh
 ```
 
-
 ## Unlisted sharing and optional Search — October 19, 2026
 
 This supersedes the earlier requirement to publish to Search before sharing.
@@ -611,6 +1484,7 @@ Whitespace checks passed in both repositories. UI tests and live database/device
 checks were excluded. Physical-device and deployment checks above remain open.
 
 Native test command:
+
 ```sh
 xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
   -destination 'platform=iOS Simulator,id=3A4621C1-A19F-4EDD-A25F-6A1AB7663D6F' \
@@ -620,7 +1494,6 @@ xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
   POSTHOG_ENABLED=NO
 bash scripts/verify-localizations.sh
 ```
-
 
 ## Plain-language sharing review — October 19, 2026
 
@@ -660,7 +1533,6 @@ focus order, light/dark appearance, Spanish, iPad and error/retry states on iOS 
 and the current OS. Earlier physical QR/deployed-link checks remain open.
 No deployment, database reset, build upload, commit or push was performed.
 
-
 Verification: the native app build and **674 non-UI tests / 792 executions**
 passed with zero failures/skips on iPhone 18 Pro / iOS 27 Simulator.
 Localization validation passed for **1,275 English/Spanish strings**, with the
@@ -681,7 +1553,6 @@ xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
   POSTHOG_ENABLED=NO
 bash scripts/verify-localizations.sh
 ```
-
 
 ## Compact private saving — October 19, 2026
 
@@ -706,7 +1577,6 @@ large text/VoiceOver and account switching. Confirm no link or Search listing is
 created. Earlier physical-device/deployment checks remain open. UI tests remain
 excluded. No deployment, reset, upload, commit or push was performed.
 
-
 Verification: **674 native non-UI tests / 792 executions** passed with zero
 failures/skips on iPhone 18 Pro / iOS 27 Simulator. The private-save test now
 asserts that opening/reviewing makes no writes, followed by exactly one private
@@ -719,7 +1589,6 @@ new web checks.
 Native test evidence: `/tmp/gatherory-private-save-review-20261019.xcresult`,
 using the earlier full non-UI test command with that result-bundle path.
 Final build log: `/tmp/gatherory-private-save-final-build.log`.
-
 
 ## Sharing actions menu and existing-edit verification — October 19, 2026
 
@@ -767,7 +1636,6 @@ Dynamic Type/VoiceOver, iPad, and physical scan/deployed universal-link behavior
 on iOS 26/current OS. UI tests remain excluded. No deployment, database reset,
 build upload, commit or push was performed.
 
-
 Verification: native build and **678 non-UI tests / 796 executions** passed
 with zero failures/skips on iPhone 18 Pro / iOS 27 Simulator. Replacement tests
 cover both stores retaining the old URL/credential during the request, switching
@@ -794,7 +1662,6 @@ xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
   POSTHOG_ENABLED=NO
 bash scripts/verify-localizations.sh
 ```
-
 
 ## Simpler blueprint browsing and use — October 19, 2026
 
@@ -942,7 +1809,6 @@ Result: `/tmp/gatherory-catalog-controls-native-20261020.xcresult`.
 Log: `/tmp/gatherory-catalog-controls-native-20261020.log`. Use the full non-UI
 command above with this result path. No UI tests or deployment were performed.
 
-
 ## Device guest V1 candidate — October 20, 2026
 
 Continue as Guest now creates a named device profile for local planning and
@@ -975,7 +1841,6 @@ accessibility acceptance remain. Follow the full cross-repository
 [guest implementation handoff](../../../gatherory-web-app/docs/roadmaps/v1-guest-release-candidate-roadmap/01-device-guest-mode.md)
 for commands, architecture boundaries and remaining release checks. Browser-only
 guest RSVP and other research priorities remain outside this first native slice.
-
 
 ## Attend as guest; sign in to help plan — October 20, 2026
 
@@ -1397,3 +2262,315 @@ offline relaunch and explicit rejoin checks remain outstanding. No database,
 deployment, build upload or push was performed. The source changes are committed
 at the user's request; existing build-number and TestFlight release-note edits
 remain outside this commit.
+
+## Mobile notification policy compatibility — October 21, 2026
+
+The server policy keeps draft event edits quiet and classifies eligible schedule,
+location, cancellation and reopening alerts in English and Spanish. It preserves
+the `event_changed` wire type and the existing principal-bound native navigation;
+no iOS source or Release configuration changes are needed for these alerts.
+
+Focused `NotificationControllerTests` and `NotificationNavigationTests` pass:
+**12 non-UI tests in 2 suites**, using the cached simulator command above with
+only those suites selected and `POSTHOG_ENABLED=NO`. Native localization coverage
+passes for **1,523 English/Spanish strings**, with the existing dynamic AppCopy
+extraction warning. New server alert wording is verified in the server tests.
+
+Native log: `/tmp/gatherory-notification-policy-native.log`.
+Result: `/tmp/gatherory-event-qr-derived/Logs/Test/Test-Gatherory-2026.10.21_15-52-44--0400.xcresult`.
+Localization log: `/tmp/gatherory-notification-policy-localizations.log`.
+See the [server policy and verification](../../../gatherory-web-app/docs/roadmaps/notifications-roadmap/05-mobile-notification-policy.md)
+for the 627 passing server tests, 14 enabled database integration cases, additive
+migration and remaining physical-device checks. No UI tests, live push sends,
+build uploads, commits or deployments were performed by this pass. Existing
+build-number and TestFlight release-note edits remain preserved.
+
+## Native haptic feedback — October 21, 2026
+
+**922 tests in 130 suites passed**, selecting only `GatheroryTests`, with
+parallel workers and diagnostics collection disabled. Four new `AppHapticsTests`
+verify default-on behavior, opt-out suppression, foreground gating and preference
+changes applying to an existing player. Injected emitters keep these tests
+independent of physical haptic hardware. Existing guest/account, invitation,
+RSVP, persistence, blueprint, album, budget and decision regressions remain in
+the full target. No UI automation was executed.
+
+```sh
+xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
+  -destination 'platform=iOS Simulator,id=3A4621C1-A19F-4EDD-A25F-6A1AB7663D6F' \
+  -derivedDataPath /tmp/gatherory-event-qr-derived \
+  -only-testing:GatheroryTests -parallel-testing-enabled NO \
+  -disableAutomaticPackageResolution -collect-test-diagnostics never POSTHOG_ENABLED=NO
+bash scripts/verify-localizations.sh
+```
+
+English/Spanish localization coverage passes for **1,532 strings**, with the
+existing dynamic AppCopy extraction warning. This pass adds only `haptics.title`
+and `haptics.help`; all pre-existing catalog entries are preserved. Swift parsing
+and `git diff --check` pass. The user’s current layout, blueprint setup, iPhone
+Duo, marketing-fixture, build-number and release-note changes remain intact.
+
+Final test log: `/tmp/gatherory-haptics-native-verified.log`.
+Result: `/tmp/gatherory-event-qr-derived/Logs/Test/Test-Gatherory-2026.10.21_21-37-55--0400.xcresult`.
+Localization log: `/tmp/gatherory-haptics-localizations.log`.
+
+See [haptic feedback](haptic-feedback.md) for semantic mapping, settings, action
+coverage and physical-device acceptance. The simulator cannot establish tactile
+strength or timing. No device installation, build upload, commit, push, deployment,
+backend change, production configuration or database operation was performed.
+
+## Curated Explore cover carryover — October 22, 2026
+
+**272 tests across all 40 Blueprint suites passed**, with only Blueprint unit
+suites selected, parallel testing disabled, and `POSTHOG_ENABLED=NO`. New tests
+cover validated public artwork in main-event previews, explicit removal of a
+public cover without a private asset ID, persisted/encoded nil overrides, and
+narrow acceptance of the server-imported main cover in copied snapshots. Child
+and idea nil-to-ID enrichment remains rejected. The broader run also updated
+previous Home-edit expectations for explicitly customized child inclusion and
+compares dynamic palette values by resolved RGBA rather than provider identity.
+
+Result:
+`/tmp/gatherory-event-qr-derived/Logs/Test/Test-Gatherory-2026.10.22_12-13-13--0400.xcresult`.
+The iPhone Duo simulator build and English/Spanish localization checks passed.
+Corresponding server verification passed 289 tests, including a disposable local
+PostgreSQL copy-to-install integration using mocked image/storage I/O. See the
+[cover architecture](../../../gatherory-web-app/docs/architecture/blueprint-cover-images.md)
+for the complete path and rollout requirements. No phone installation or server
+deployment was performed, and completed existing copies were not backfilled.
+
+## Current scan-first Blueprint cards — October 22, 2026
+
+The current card keeps the cover/fallback, a prominent purpose-led title, and
+small optional creator byline. Titles should say what experience the Blueprint
+is for (for example, “Cottage Weekend” or “Backyard Birthday Party”); no title
+validation or automatic renaming was added, and card metadata should not
+compensate for vague titles. The existing whole-card button still opens the
+read-only preview; categories, summaries, highlights, and a visible preview CTA
+are omitted. Preview navigation remains read-only and the existing setup flow
+stays explicit.
+
+The native build and focused non-UI navigation/content/session suites passed **25
+tests in three suites** after this card reduction. English/Spanish localization
+validation passed **1,638 strings**, with the existing dynamic AppCopy extraction
+warning. No new UI tests were added for the visual reduction.
+
+```sh
+xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
+  -destination 'platform=iOS Simulator,id=3A4621C1-A19F-4EDD-A25F-6A1AB7663D6F' \
+  -derivedDataPath /tmp/gatherory-event-qr-derived \
+  -only-testing:GatheroryTests/BlueprintDiscoveryNavigationTests \
+  -only-testing:GatheroryTests/BlueprintPreviewContentTests \
+  -only-testing:GatheroryTests/BlueprintPreviewSessionTests \
+  -parallel-testing-enabled NO -disableAutomaticPackageResolution \
+  -collect-test-diagnostics never \
+  -resultBundlePath /tmp/gatherory-blueprint-scan-cards-20261022.xcresult \
+  POSTHOG_ENABLED=NO
+bash scripts/verify-localizations.sh
+```
+
+Log: `/tmp/gatherory-blueprint-scan-cards-20261022.log`. The isolated synthetic
+fixture at `/tmp/gatherory-blueprint-scan-card-visual-20261022` compiles the
+production card, cover helper, and portable contracts. Light/dark two-column
+cards and an AX3 one-column long-title/byline card were visually inspected for
+wrapping and overlap. The fixture stubs cover transport, category/theme values,
+and copy lookup; it is not signed-in feed or navigation evidence, and it does
+not establish spoken VoiceOver or physical-device behavior. No full target rerun
+was performed for this visual reduction. The captures are `light.png`,
+`dark.png`, and `large-text.png`.
+
+## Superseded Blueprint discovery highlight prototype — October 22, 2026
+
+The following historical results describe the removed event/idea-highlight
+prototype only. They are not current behavior or acceptance evidence for the
+title-led card. The projection and its nine tests, as well as preview-label
+localization, were removed when the accepted direction changed.
+
+The full non-UI native target built and passed **941 tests in 132 suites**.
+After unused count metadata was removed and preview action text was included in
+the accessibility label, a rebuilt focused run passed **34 tests in four suites**:
+`BlueprintDiscoveryCardContentTests`, `BlueprintDiscoveryNavigationTests`,
+`BlueprintPreviewContentTests`, and `BlueprintPreviewSessionTests`.
+
+Nine new projection tests verified deterministic published event/idea highlights,
+source identity, caps, empty and one-type content, invalid/unsupported independent
+modules, ambiguous keys, orphan targets, blank/duplicate titles, and source
+nonmutation. Existing navigation/session tests protect preview source retention
+and the existing explicit setup flow. No automated UI tests were run.
+
+```sh
+xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
+  -destination 'platform=iOS Simulator,id=3A4621C1-A19F-4EDD-A25F-6A1AB7663D6F' \
+  -derivedDataPath /tmp/gatherory-event-qr-derived \
+  -only-testing:GatheroryTests -parallel-testing-enabled NO \
+  -disableAutomaticPackageResolution -collect-test-diagnostics never \
+  -resultBundlePath /tmp/gatherory-blueprint-discovery-cards-20261022.xcresult \
+  POSTHOG_ENABLED=NO
+bash scripts/verify-localizations.sh
+```
+
+The focused rerun used the same options with one `-only-testing:GatheroryTests/…`
+flag per suite above and result path
+`/tmp/gatherory-blueprint-discovery-cards-final-20261022.xcresult`.
+Full log: `/tmp/gatherory-blueprint-discovery-cards-20261022.log`.
+Focused log: `/tmp/gatherory-blueprint-discovery-cards-final-20261022.log`.
+
+English/Spanish localization verification passed for **1,639 strings**, with the
+existing dynamic AppCopy extraction warning. This slice added only
+`explore.previewBlueprint`; existing localization content was preserved.
+Scoped whitespace checks passed. No server code, portable contracts or database
+schema changed, so no web test run was needed for this slice.
+
+See [Explore rendering](explore-performance.md#superseded-eventidea-highlight-prototype-history)
+for isolated simulator fixture details and visual evidence limits. Physical-device
+scrolling, spoken VoiceOver, accessibility settings and real-feed preview opening
+remain acceptance checks. No phone installation, release upload, commit, push or
+deployment was performed by this slice; pre-existing work remains intact.
+
+## Blueprint card tray removal — October 22, 2026
+
+Blueprint card text now overlays the full progressive blurred cover, with a
+smooth contrast fade and no solid tray. The title/byline and single existing
+preview action remain. No strings, contracts, server behavior or persistence
+changed, and no new tests were added for this visual adjustment.
+
+The simulator app build and **27 tests in three suites passed**, selecting
+`BlueprintDiscoveryNavigationTests`, `BlueprintPreviewContentTests` and
+`BlueprintPreviewSessionTests`. The command uses the same device, derived-data
+path and non-UI test options as the current scan-first card record above, with
+result path `/tmp/gatherory-blueprint-card-overlay-20261022.xcresult`.
+Log: `/tmp/gatherory-blueprint-card-overlay-20261022.log`.
+The full test target was not rerun. No automated UI tests were executed.
+
+See [Explore rendering](explore-performance.md#full-cover-text-overlay-follow-up)
+for isolated fixture captures and their limits. Light/dark, missing artwork and
+AX3 long-title layouts were visually inspected. Physical-device scrolling and
+spoken VoiceOver remain acceptance checks; no phone install or release occurred.
+
+## Blueprint content search — October 22, 2026
+
+The simulator app built and **37 tests in four suites passed**, including two
+new `BlueprintDiscoveryTests` feed cases. They prove server-only nested matches
+survive the legacy local metadata matcher, relevance order survives page merges,
+query/cursor values are forwarded, and a late superseded query page is discarded.
+Existing discovery navigation, preview content and preview-session checks pass.
+The native public feed already preserves server results; no production Swift,
+portable response or display strings changed in this search slice.
+
+```sh
+xcodebuild test -project Gatherory.xcodeproj -scheme Gatherory \
+  -destination 'platform=iOS Simulator,id=3A4621C1-A19F-4EDD-A25F-6A1AB7663D6F' \
+  -derivedDataPath /tmp/gatherory-event-qr-derived \
+  -only-testing:GatheroryTests/BlueprintDiscoveryTests \
+  -only-testing:GatheroryTests/BlueprintDiscoveryNavigationTests \
+  -only-testing:GatheroryTests/BlueprintPreviewContentTests \
+  -only-testing:GatheroryTests/BlueprintPreviewSessionTests \
+  -parallel-testing-enabled NO -disableAutomaticPackageResolution \
+  -collect-test-diagnostics never \
+  -resultBundlePath /tmp/gatherory-blueprint-content-search-20261022.xcresult \
+  POSTHOG_ENABLED=NO
+```
+
+Log: `/tmp/gatherory-blueprint-content-search-20261022-native.log`.
+The full native target and UI automation were not run. No new localization
+validation was required because no display copy changed. The owning server
+[search record](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/02-content-search-and-related-terms.md#verification-and-handoff--october-22)
+records web typecheck, full contract/test verification and a final focused
+category-scope case. Server implementation is local, not deployed. Actual
+signed-in search/preview on a phone remains runtime acceptance.
+
+## Blueprint actions and measurement — October 22, 2026
+
+Native actions require a public catalog `viewerState`. Likes, bookmarks and Not
+interested are independent account preferences; commands are serialized,
+request-ID retries are idempotent, and local state changes only after an
+acknowledgement matching the requested catalog key, revision and hash. Account
+generation changes clear in-memory state and cancel action tasks; late responses
+cannot update the replacement account's store. Explore and Account settings
+share one store when the toolbar sheet opens; dismissal and return to the active
+tab/scene refresh preferences, consent, and catalog state. The saved-reference
+screen rechecks the exact key in the current public catalog before reopening,
+and saved opens submit no discovery signal or copy exposure. Unavailable rows
+keep no private title or artwork.
+
+Measurement is separate from functional preferences and starts disabled. The
+Account setting uses an explicit PATCH when the person changes it; it does not
+submit a signal on initial load. Passive impressions require the card's 50%
+scroll-visibility callback plus a one-second uninterrupted dwell in active
+Explore with no preview or covering account/category screen; query, category,
+scene, account, consent, exposure, or preview changes invalidate the dwell task.
+Opens are sent only on an explicit browse/category/search selection with a
+matching unexpired server exposure. Recent-history cards and ad slots do not
+submit signals. Signal errors do not interrupt the UI.
+Optional `viewerState`, `discoveryContext`, and `discoveryExposureId` preserve
+decoding and copy behavior when omitted by older payloads.
+
+The new focused suite is `BlueprintActionsTests` (preference retry/acknowledgement,
+serialized requests, account reset with late response, in-flight refresh merging,
+shared account/Explore state, stale-key removal, failed-refresh preservation,
+visibility threshold, expired
+exposure and signal deduplication, no consent write on GET, opt-out behavior,
+and optional copy-field decoding). Run it together with
+`BlueprintDiscoveryTests`, `BlueprintSavedCopyResolverTests`, and
+`BlueprintPreviewSessionTests` to cover catalog refresh, copy forwarding, and
+existing preview behavior. Parent validation completed on the iPhone 18 Pro /
+iOS 27.0 simulator using Xcode 27.1 and `POSTHOG_ENABLED=NO`:
+
+- Simulator build and full `GatheroryTests` target: **949 tests in 132 suites
+  passed**, log `/tmp/gatherory-blueprint-actions-native-final4.log`, result
+  `/tmp/gatherory-blueprint-actions-native-final4.xcresult`.
+- After adding a dedicated consent retry (so a failed opt-out cannot retry an
+  unrelated card action) and its regression test, the four named suites passed
+  **42 tests** on the final source. Log
+  `/tmp/gatherory-blueprint-actions-native-verified.log`, result
+  `/tmp/gatherory-blueprint-actions-native-verified.xcresult`.
+- Localization coverage passed for **1,658 English/Spanish strings**, with the
+  existing dynamic-key extraction warning at `AppCopy.swift:341`. Both repos'
+  `git diff --check` passed.
+
+The server passed typecheck, generated contract freshness and 693 web tests;
+both new isolated-PostgreSQL suites passed, including quotas and attribution.
+See [slice 03](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/03-actions-and-measurement.md#verification-and-handoff--october-22)
+for migrations, privacy/retention and rollout boundaries. Automated UI tests,
+signed-in deployed-server flows, physical-device/VoiceOver acceptance and
+deployment are not claimed here.
+
+## Explicit native Blueprint catalog ranking — October 22, 2026
+
+Paged native catalog transport now sends `ranking=baseline_v1` on every request,
+including cursor continuations. The focused transport contract test verifies
+the ranking capability, opaque cursor forwarding, category/query retention, and
+that the legacy full-catalog request remains parameter-free. Existing
+`BlueprintDiscoveryTests` verify that page merges retain server result order.
+Browse, category, and search share this paged coordinator path; recent history
+continues using its separate full-catalog request.
+
+The simulator app build and **36 tests in four suites passed**:
+`PostgresSyncTransportTests`, `BlueprintDiscoveryTests`,
+`BlueprintDiscoveryNavigationTests` and `BlueprintActionsTests`. Xcode 27.1,
+iPhone 18 Pro / iOS 27.0, `POSTHOG_ENABLED=NO`. Log:
+`/tmp/gatherory-ranking-native-verified.log`; result:
+`/tmp/gatherory-ranking-native-verified.xcresult`.
+
+The new transport fixture preserves category/query scope across first and
+continuation pages; its URL protocol responds with catalog-shaped payloads and
+keeps bootstrap checks separate. There is no new display copy, card layout,
+analytics call or ad policy. No UI automation or new screenshot fixture was
+needed for this transport-only change. Signed-in target-server/device flows
+remain rollout acceptance.
+
+The server passed typecheck, 710 web tests with contract freshness, final 17
+policy/paging tests and three isolated PostgreSQL suites. Its nullable exposure
+policy-label migration was tested only in that disposable database. See
+[slice 04](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/04-recommendation-baseline.md#verification-and-handoff--october-22)
+for policy, compatibility, migration and rollout details. Nothing was deployed.
+
+## Blueprint library collections — October 22, 2026
+
+The native Blueprint library now has a fixed **Blueprints** title with Yours, Saved, and Liked primary filters. Yours uses existing account-owned Blueprint records, drafts, and installation history. Saved and Liked remain independent private preferences; Not interested remains in Account. The detailed data/privacy boundaries and acceptance checks are in the [web/server roadmap](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/10-blueprint-library-collections.md).
+
+- Targeted native Xcode tests passed: **89/89**, zero skipped, including the final account-switch rendering guards. Result bundle: `/tmp/gatherory-library-collections-native-rerun.xcresult`. The preceding rerun could not launch because Simulator SpringBoard crashed; booting the test simulator again allowed the same built test runner to pass.
+- The iOS simulator Release build passed with exit code 0. Log: `/tmp/gatherory-library-collections-release-verified.log`.
+- Web tests passed: **771 passed, 54 skipped** across 118 passed and 36 skipped files. Typecheck and generated contract checks passed. Eight Blueprint integration tests across six files passed against disposable PostgreSQL 18. All four ranking artifacts remained unchanged; targeted Prettier and `git diff --check` passed. English/Spanish localization verified **1,671 strings**.
+- ReUI C1–C4 source review ran twice on the changed files and found no UI violations. Native accessibility source review covered system picker/buttons/empty states, combined card text, labeled 44-point unavailable-source removal control, accessibility-size one-column layout, full titles, and layout direction. Live VoiceOver and device acceptance were not run.
+- Xcode Canvas crashed; the latest recorded failure at 18:24:35 was `EXC_BAD_ACCESS` / `SIGSEGV` in SwiftUI Preview/JIT frames. Visual acceptance remains unverified. The audit checklist tool was unavailable, so review used a manual native-adapted checklist; no native lint configuration or run is claimed. No deployment or phone release occurred.

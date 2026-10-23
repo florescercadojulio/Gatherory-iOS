@@ -12,7 +12,13 @@ POSTHOG_PROJECT_TOKEN = phc_xPbBBJcQnKQBmZMeS49hS6KKrcsugidmPV7GEJTaBX7A
 POSTHOG_HOST = https:/$()/us.i.posthog.com
 // Independent of Debug; set to NO to disable telemetry in this configuration.
 POSTHOG_ENABLED = YES
-FCM_NOTIFICATIONS_ENABLED = NO
+// Beta enables opt-in notifications; distribution provisioning and production APNs are required.
+FCM_NOTIFICATIONS_ENABLED = YES
+// Beta enables consent-gated production inventory; AdMob controls serving availability.
+EXPLORE_ADS_ENABLED = YES
+EXPLORE_ADS_TEST_MODE = NO
+ADMOB_APP_ID = ca-app-pub-4218523458506277~8970323130
+ADMOB_NATIVE_AD_UNIT_ID = ca-app-pub-4218523458506277/9237741437
 APS_ENVIRONMENT = production
 OTHER_LDFLAGS = $(inherited) -ObjC
 SWIFT_OBJC_BRIDGING_HEADER = $(SRCROOT)/Gatherory/Gatherory-Bridging-Header.h

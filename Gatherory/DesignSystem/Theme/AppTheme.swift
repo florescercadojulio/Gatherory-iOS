@@ -1,6 +1,39 @@
 import SwiftUI
 import UIKit
 
+private func adaptiveBrandColor(
+    light: UInt,
+    dark: UInt,
+    highContrastLight: UInt,
+    highContrastDark: UInt
+) -> Color {
+    Color(
+        uiColor: UIColor { traits in
+            let isDark = traits.userInterfaceStyle == .dark
+            let isHighContrast = traits.accessibilityContrast == .high
+            let hex: UInt
+            switch (isDark, isHighContrast) {
+            case (true, true): hex = highContrastDark
+            case (true, false): hex = dark
+            case (false, true): hex = highContrastLight
+            case (false, false): hex = light
+            }
+            return UIColor(
+                red: CGFloat((hex >> 16) & 0xFF) / 255,
+                green: CGFloat((hex >> 8) & 0xFF) / 255,
+                blue: CGFloat(hex & 0xFF) / 255,
+                alpha: 1
+            )
+        }
+    )
+}
+
+private var adaptiveAccentForeground: Color {
+    Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark ? .black : .white
+    })
+}
+
 /// A complete, swappable visual theme. Views consume semantic tokens and
 /// never need to know the palette's hues.
 struct AppVisualTheme {
@@ -16,36 +49,73 @@ struct AppVisualTheme {
 
     static let orchid = AppVisualTheme.branded(
         name: "Orchid",
-        accent: Color(uiColor: .systemPurple),
-        secondary: Color(uiColor: .systemIndigo),
-        tertiary: Color(uiColor: .systemPink)
+        accent: adaptiveBrandColor(light: 0x7540A3, dark: 0xC49AEB, highContrastLight: 0x63318D, highContrastDark: 0xD4B1F2),
+        secondary: adaptiveBrandColor(light: 0x41489A, dark: 0xA1A7FF, highContrastLight: 0x30357D, highContrastDark: 0xB3B8FF),
+        tertiary: adaptiveBrandColor(light: 0x9A315D, dark: 0xF08FB5, highContrastLight: 0x812348, highContrastDark: 0xF6A5C5)
     )
 
     static let sage = AppVisualTheme.branded(
         name: "Sage",
-        accent: Color(red: 0.18, green: 0.53, blue: 0.43),
-        secondary: Color(red: 0.17, green: 0.42, blue: 0.40),
-        tertiary: Color(red: 0.53, green: 0.61, blue: 0.32)
+        accent: adaptiveBrandColor(light: 0x246B50, dark: 0x7ACAA5, highContrastLight: 0x18543C, highContrastDark: 0x8AD9B6),
+        secondary: adaptiveBrandColor(light: 0x146B62, dark: 0x6FE0D1, highContrastLight: 0x0D514A, highContrastDark: 0x81EBDD),
+        tertiary: adaptiveBrandColor(light: 0x59681E, dark: 0xB1C86A, highContrastLight: 0x414D12, highContrastDark: 0xC3D87B)
     )
 
-    /// Convenience for quickly auditioning a new brand trio while retaining
-    /// Gatherory's adaptive surfaces, feedback colors, and event artwork.
+    static let rose = AppVisualTheme.branded(
+        name: "Rose",
+        accent: adaptiveBrandColor(light: 0xA12C57, dark: 0xF284AA, highContrastLight: 0x852044, highContrastDark: 0xF99ABB),
+        secondary: adaptiveBrandColor(light: 0x6B3B91, dark: 0xC0A0F0, highContrastLight: 0x542A77, highContrastDark: 0xD0B5FA),
+        tertiary: adaptiveBrandColor(light: 0x9A4A25, dark: 0xE6A071, highContrastLight: 0x7C3517, highContrastDark: 0xF0B38B)
+    )
+
+    static let coral = AppVisualTheme.branded(
+        name: "Coral",
+        accent: adaptiveBrandColor(light: 0xA83827, dark: 0xF28B78, highContrastLight: 0x8C2C1D, highContrastDark: 0xF8A092),
+        secondary: adaptiveBrandColor(light: 0x8B315D, dark: 0xED91B5, highContrastLight: 0x702148, highContrastDark: 0xF3A8C6),
+        tertiary: adaptiveBrandColor(light: 0x755020, dark: 0xDAB276, highContrastLight: 0x5D3D15, highContrastDark: 0xE7C18E)
+    )
+
+    static let amber = AppVisualTheme.branded(
+        name: "Amber",
+        accent: adaptiveBrandColor(light: 0x895600, dark: 0xE8AE43, highContrastLight: 0x704500, highContrastDark: 0xF2C15E),
+        secondary: adaptiveBrandColor(light: 0x754183, dark: 0xD19BE5, highContrastLight: 0x5F326C, highContrastDark: 0xDEB2EE),
+        tertiary: adaptiveBrandColor(light: 0x00664F, dark: 0x63D3AB, highContrastLight: 0x00513E, highContrastDark: 0x7BE2BC)
+    )
+
+    static let ocean = AppVisualTheme.branded(
+        name: "Ocean",
+        accent: adaptiveBrandColor(light: 0x00617A, dark: 0x62CBE5, highContrastLight: 0x004D62, highContrastDark: 0x7DDBF1),
+        secondary: adaptiveBrandColor(light: 0x35468C, dark: 0x97A7F4, highContrastLight: 0x29366F, highContrastDark: 0xAAB7FF),
+        tertiary: adaptiveBrandColor(light: 0x006B60, dark: 0x60D2C6, highContrastLight: 0x00544B, highContrastDark: 0x79E1D7)
+    )
+
+    static let midnight = AppVisualTheme.branded(
+        name: "Midnight",
+        accent: adaptiveBrandColor(light: 0x3C478E, dark: 0x9AA8F5, highContrastLight: 0x2F3978, highContrastDark: 0xAFBAFF),
+        secondary: adaptiveBrandColor(light: 0x6C3D88, dark: 0xCEA1E4, highContrastLight: 0x56316E, highContrastDark: 0xDDB8EF),
+        tertiary: adaptiveBrandColor(light: 0x00666E, dark: 0x4AC7CE, highContrastLight: 0x005156, highContrastDark: 0x65D5DB)
+    )
+
+    /// Convenience for quickly auditioning a brand trio while retaining
+    /// Gatherory's adaptive surfaces and distinct category artwork.
     static func branded(
         name: String,
         accent: Color,
         secondary: Color,
         tertiary: Color
     ) -> AppVisualTheme {
-        AppVisualTheme(
+        let colors = AppColorTheme(
+            accent: accent,
+            accentSecondary: secondary,
+            accentTertiary: tertiary
+        )
+        return AppVisualTheme(
             name: name,
-            colors: AppColorTheme(
-                accent: accent,
-                accentSecondary: secondary,
-                accentTertiary: tertiary
-            ),
-            artwork: .gatheroryBlue
+            colors: colors,
+            artwork: .gatheroryBlue.applyingBrandTint(colors)
         )
     }
+
 }
 
 struct AppColorTheme {
@@ -71,7 +141,7 @@ struct AppColorTheme {
     let informational: Color
     let mainEventMarker: Color
 
-    // Fixed contrast roles for colorful artwork and prominent controls.
+    // Contrast roles for colorful artwork and prominent controls.
     let foregroundOnAccent: Color
     let foregroundOnMedia: Color
     let foregroundOnPastel: Color
@@ -105,7 +175,7 @@ struct AppColorTheme {
         destructive: Color = Color(uiColor: .systemRed),
         informational: Color? = nil,
         mainEventMarker: Color = Color(uiColor: .systemOrange),
-        foregroundOnAccent: Color = .white,
+        foregroundOnAccent: Color = adaptiveAccentForeground,
         foregroundOnMedia: Color = .white,
         foregroundOnPastel: Color = .black,
         immersiveCanvas: Color = .black,
@@ -147,14 +217,7 @@ struct AppColorTheme {
         self.mint = mint
         self.coral = coral
         self.navy = navy
-        self.avatarPalette = avatarPalette ?? [
-            accent,
-            accentSecondary,
-            accentTertiary,
-            Color(uiColor: .systemPurple),
-            Color(uiColor: .systemCyan),
-            Color(uiColor: .systemOrange)
-        ]
+        self.avatarPalette = avatarPalette ?? [accent, accentSecondary, accentTertiary]
     }
 
     static let gatheroryBlue = AppColorTheme(
@@ -185,15 +248,7 @@ struct AppColorTheme {
         pink: Color(red: 239 / 255, green: 212 / 255, blue: 212 / 255),
         mint: Color(red: 200 / 255, green: 230 / 255, blue: 205 / 255),
         coral: Color(red: 243 / 255, green: 201 / 255, blue: 182 / 255),
-        navy: Color(red: 31 / 255, green: 29 / 255, blue: 61 / 255),
-        avatarPalette: [
-            Color(uiColor: .systemBlue),
-            Color(uiColor: .systemIndigo),
-            Color(uiColor: .systemTeal),
-            Color(uiColor: .systemPurple),
-            Color(uiColor: .systemCyan),
-            Color(uiColor: .systemOrange)
-        ]
+        navy: Color(red: 31 / 255, green: 29 / 255, blue: 61 / 255)
     )
 }
 
@@ -241,6 +296,48 @@ struct AppArtworkTheme {
     )
 }
 
+private extension AppArtworkTheme {
+    func applyingBrandTint(_ brand: AppColorTheme, amount: CGFloat = 0.30) -> AppArtworkTheme {
+        let lightTraits = UITraitCollection(userInterfaceStyle: .light)
+        let brandStops = [brand.accent, brand.accentSecondary, brand.accentTertiary].map {
+            UIColor($0).resolvedColor(with: lightTraits)
+        }
+
+        func tint(_ colors: [Color]) -> [Color] {
+            colors.enumerated().map { index, baseColor in
+                var baseRed: CGFloat = 0
+                var baseGreen: CGFloat = 0
+                var baseBlue: CGFloat = 0
+                var baseAlpha: CGFloat = 1
+                var brandRed: CGFloat = 0
+                var brandGreen: CGFloat = 0
+                var brandBlue: CGFloat = 0
+                var brandAlpha: CGFloat = 1
+                let baseUIColor = UIColor(baseColor)
+                let brandUIColor = brandStops[index % brandStops.count]
+
+                guard
+                    baseUIColor.getRed(&baseRed, green: &baseGreen, blue: &baseBlue, alpha: &baseAlpha),
+                    brandUIColor.getRed(&brandRed, green: &brandGreen, blue: &brandBlue, alpha: &brandAlpha)
+                else { return baseColor }
+
+                return Color(
+                    red: baseRed * (1 - amount) + brandRed * amount,
+                    green: baseGreen * (1 - amount) + brandGreen * amount,
+                    blue: baseBlue * (1 - amount) + brandBlue * amount,
+                    opacity: baseAlpha * (1 - amount) + brandAlpha * amount
+                )
+            }
+        }
+
+        return AppArtworkTheme(
+            ideas: ideas.mapValues(tint),
+            registry: registry.mapValues(tint),
+            timeline: timeline.mapValues(tint)
+        )
+    }
+}
+
 enum AppAppearance: String, CaseIterable, Identifiable {
     static let storageKey = "appAppearance"
 
@@ -273,12 +370,17 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 
 /// The person's app-wide color preference. This belongs to their account
 /// settings rather than to any individual workspace.
-enum AppColorThemeChoice: String, CaseIterable, Identifiable {
+enum AppColorThemeChoice: String, CaseIterable, Identifiable, Sendable {
     static let storageKey = "appColorTheme"
 
     case gatheroryBlue
     case orchid
     case sage
+    case rose
+    case coral
+    case amber
+    case ocean
+    case midnight
 
     var id: Self { self }
 
@@ -287,6 +389,11 @@ enum AppColorThemeChoice: String, CaseIterable, Identifiable {
         case .gatheroryBlue: .gatheroryBlue
         case .orchid: .orchid
         case .sage: .sage
+        case .rose: .rose
+        case .coral: .coral
+        case .amber: .amber
+        case .ocean: .ocean
+        case .midnight: .midnight
         }
     }
 
@@ -309,8 +416,38 @@ enum AppColorThemeChoice: String, CaseIterable, Identifiable {
     }
 }
 
-private struct AppColorThemeChoiceKey: EnvironmentKey {
+@available(iOS 17.0, *)
+private struct AppColorThemeTrait: UITraitDefinition {
     static let defaultValue = AppColorThemeChoice.gatheroryBlue
+    static let affectsColorAppearance = true
+}
+
+@available(iOS 17.0, *)
+extension UITraitCollection {
+    fileprivate var appColorThemeChoice: AppColorThemeChoice {
+        self[AppColorThemeTrait.self]
+    }
+}
+
+@available(iOS 17.0, *)
+extension UIMutableTraits {
+    fileprivate var appColorThemeChoice: AppColorThemeChoice {
+        get { self[AppColorThemeTrait.self] }
+        set { self[AppColorThemeTrait.self] = newValue }
+    }
+}
+
+@available(iOS 17.0, *)
+private struct AppColorThemeChoiceKey: UITraitBridgedEnvironmentKey {
+    static let defaultValue = AppColorThemeChoice.gatheroryBlue
+
+    static func read(from traitCollection: UITraitCollection) -> AppColorThemeChoice {
+        traitCollection.appColorThemeChoice
+    }
+
+    static func write(to mutableTraits: inout any UIMutableTraits, value: AppColorThemeChoice) {
+        mutableTraits.appColorThemeChoice = value
+    }
 }
 
 private struct AppContentColorSchemeKey: EnvironmentKey {
@@ -336,63 +473,98 @@ enum AppTheme {
         AppColorThemeChoice.selected.visualTheme
     }
 
+    private static func dynamicColor(
+        _ colorForTheme: @escaping (AppVisualTheme) -> Color
+    ) -> Color {
+        Color(uiColor: UIColor { traits in
+            let choice = traits.appColorThemeChoice
+            return UIColor(colorForTheme(choice.visualTheme)).resolvedColor(with: traits)
+        })
+    }
+
     enum ColorToken {
-        private static var theme: AppColorTheme { AppTheme.active.colors }
+        static let background = token(\.background)
+        static let surface = token(\.surface)
+        static let elevatedSurface = token(\.elevatedSurface)
+        static let textPrimary = token(\.textPrimary)
+        static let textSecondary = token(\.textSecondary)
+        static let ink = textPrimary
+        static let onPastel = token(\.foregroundOnPastel)
+        static let inverseCanvas = token(\.immersiveCanvas)
+        static let inverseInk = token(\.foregroundOnMedia)
+        static let hairline = token(\.hairline)
+        static let cardBorder = token(\.cardBorder)
 
-        static var background: Color { theme.background }
-        static var surface: Color { theme.surface }
-        static var elevatedSurface: Color { theme.elevatedSurface }
-        static var textPrimary: Color { theme.textPrimary }
-        static var textSecondary: Color { theme.textSecondary }
-        static var ink: Color { theme.textPrimary }
-        static var onPastel: Color { theme.foregroundOnPastel }
-        static var inverseCanvas: Color { theme.immersiveCanvas }
-        static var inverseInk: Color { theme.foregroundOnMedia }
-        static var hairline: Color { theme.hairline }
-        static var cardBorder: Color { theme.cardBorder }
+        static let accent = token(\.accent)
+        static let accentSecondary = token(\.accentSecondary)
+        static let accentTertiary = token(\.accentTertiary)
+        static let celebration = token(\.celebration)
+        static let success = token(\.success)
+        static let warning = token(\.warning)
+        static let destructive = token(\.destructive)
+        static let informational = token(\.informational)
+        static let mainEventMarker = token(\.mainEventMarker)
+        static let onAccent = token(\.foregroundOnAccent)
+        static let onMedia = token(\.foregroundOnMedia)
+        static let mediaScrim = token(\.mediaScrim)
 
-        static var accent: Color { theme.accent }
-        static var accentSecondary: Color { theme.accentSecondary }
-        static var accentTertiary: Color { theme.accentTertiary }
-        static var celebration: Color { theme.celebration }
-        static var success: Color { theme.success }
-        static var warning: Color { theme.warning }
-        static var destructive: Color { theme.destructive }
-        static var informational: Color { theme.informational }
-        static var mainEventMarker: Color { theme.mainEventMarker }
-        static var onAccent: Color { theme.foregroundOnAccent }
-        static var onMedia: Color { theme.foregroundOnMedia }
-        static var mediaScrim: Color { theme.mediaScrim }
+        static let lime = token(\.lime)
+        static let lilac = token(\.lilac)
+        static let cream = token(\.cream)
+        static let pink = token(\.pink)
+        static let mint = token(\.mint)
+        static let coral = token(\.coral)
+        static let navy = token(\.navy)
 
-        static var lime: Color { theme.lime }
-        static var lilac: Color { theme.lilac }
-        static var cream: Color { theme.cream }
-        static var pink: Color { theme.pink }
-        static var mint: Color { theme.mint }
-        static var coral: Color { theme.coral }
-        static var navy: Color { theme.navy }
+        private static func token(_ keyPath: KeyPath<AppColorTheme, Color>) -> Color {
+            AppTheme.dynamicColor { $0.colors[keyPath: keyPath] }
+        }
 
         static func avatar(_ index: Int) -> Color {
-            guard !theme.avatarPalette.isEmpty else { return accent }
-            return theme.avatarPalette[index % theme.avatarPalette.count]
+            AppTheme.dynamicColor { theme in
+                guard !theme.colors.avatarPalette.isEmpty else { return theme.colors.accent }
+                return theme.colors.avatarPalette[index % theme.colors.avatarPalette.count]
+            }
         }
     }
 
     enum Artwork {
         static func colors(for category: IdeaCategory) -> [Color] {
-            active.artwork.ideas[category] ?? fallback
+            (0..<3).map { index in
+                AppTheme.dynamicColor { theme in
+                    guard let palette = theme.artwork.ideas[category], index < palette.count else {
+                        return fallbackColor(index, in: theme)
+                    }
+                    return palette[index]
+                }
+            }
         }
 
         static func colors(for category: RegistryCategory) -> [Color] {
-            active.artwork.registry[category] ?? fallback
+            (0..<3).map { index in
+                AppTheme.dynamicColor { theme in
+                    guard let palette = theme.artwork.registry[category], index < palette.count else {
+                        return fallbackColor(index, in: theme)
+                    }
+                    return palette[index]
+                }
+            }
         }
 
         static func colors(for category: TimelineCategory) -> [Color] {
-            active.artwork.timeline[category] ?? fallback
+            (0..<3).map { index in
+                AppTheme.dynamicColor { theme in
+                    guard let palette = theme.artwork.timeline[category], index < palette.count else {
+                        return fallbackColor(index, in: theme)
+                    }
+                    return palette[index]
+                }
+            }
         }
 
-        private static var fallback: [Color] {
-            [ColorToken.accentSecondary, ColorToken.accent, ColorToken.accentTertiary]
+        private static func fallbackColor(_ index: Int, in theme: AppVisualTheme) -> Color {
+            let fallback = [theme.colors.accentSecondary, theme.colors.accent, theme.colors.accentTertiary]
+            return fallback[index % fallback.count]
         }
     }
 
@@ -495,7 +667,7 @@ extension View {
     /// Keeps content legible beneath floating navigation controls without
     /// introducing a hard, opaque boundary as the user scrolls.
     func appSoftScrollEdges() -> some View {
-        scrollEdgeEffectStyle(.soft, for: .top)
+        scrollEdgeEffectStyle(.soft, for: .all)
     }
 
     /// Keeps the navigation bar visually connected to the content beneath it.

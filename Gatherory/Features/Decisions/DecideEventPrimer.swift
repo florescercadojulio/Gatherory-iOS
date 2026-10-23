@@ -55,6 +55,7 @@ struct DecideEventPrimer: View {
                     .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
             }
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(AppTheme.ColorToken.onAccent)
             .buttonBorderShape(.capsule)
             .controlSize(.large)
             .frame(maxWidth: 632)

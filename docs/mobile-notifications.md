@@ -1,8 +1,51 @@
-# Mobile collaboration notifications (local proof of concept)
+# Mobile collaboration notifications
+
+## Beta enablement — October 23, 2026
+
+The release owner enabled notifications for the next beta:
+`Config/Release.xcconfig` now sets `FCM_NOTIFICATIONS_ENABLED=YES` with
+`APS_ENVIRONMENT=production`. User opt-in and system permission are unchanged;
+Firebase auto-init remains disabled until consent. The matching local SDK plist
+is present. These settings do not establish production delivery.
+
+Production APNs setup is complete in Firebase. In the release owner's Safari
+session, Apple confirmed existing key `KL2Y639363` supports **Sandbox & Production**,
+despite its Development name. After explicit confirmation, the existing `.p8`
+was uploaded into Firebase's production slot for this app. Both development and
+production entries show key `KL2Y639363`, team `LW97NHT3JA`. The exact Apple App ID
+`com.guide-systems.gatherory` has Push Notifications enabled. No key was created,
+revoked or modified; private contents remain outside source and logs.
+
+The next signed distribution archive and actual TestFlight delivery still need
+verification. The previously uploaded build 4 has FCM disabled; use a new build
+containing the enabled Release configuration. After installing, enable **Event
+and Task Notifications** in the app and allow the iOS notification prompt. From
+a second authorized planner, assign an unfinished To-do or send a Planning
+update in the same event; test receipt while backgrounded and tap to open the
+authorized event/To-dos. This tests the actual app/server path; Firebase's saved
+credential alone is not evidence that server credentials or delivery work.
+
+The current server performs [a bounded best-effort send after saving](../../../gatherory-web-app/docs/roadmaps/notifications-roadmap/04-best-effort-delivery.md);
+do not enable the retained retry worker or manually dispatch historical work
+for this beta. Verify server credentials and actual device delivery separately.
+No new credential was created and no real notification was sent during setup.
+
+The implementation history below records earlier defaults and device tests;
+its statements that Release is disabled or dispatch is manual are superseded by
+this section and the current server policy.
 
 FCM transports assignment, exact-event change, and explicit announcement notifications. Better Auth and
 device guest proofs remain Gatherory's identity system. No Firebase Auth,
 personal reminder scheduling, browser push, or analytics integration is added.
+
+The [mobile V1 notification policy](../../../gatherory-web-app/docs/roadmaps/notifications-roadmap/05-mobile-notification-policy.md)
+keeps automatic Draft event edits quiet. Eligible event changes use generic
+English/Spanish schedule, location, cancellation or reopening wording; names,
+addresses and message content remain inside the authorized app. The payload
+continues to use `event_changed` and the existing account/guest tap checks.
+Explicit Updates and assignment notifications retain their existing behavior.
+The server's additive classification migration must precede its deployment;
+no native Release setting is changed by this policy pass.
 
 ## Explicit announcements
 

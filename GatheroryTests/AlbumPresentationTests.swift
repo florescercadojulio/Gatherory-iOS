@@ -7,28 +7,24 @@ import UniformTypeIdentifiers
 
 @MainActor
 struct AlbumPresentationTests {
-    @Test("iPhone keeps two columns in portrait and landscape")
-    func phoneColumns() {
-        for width: CGFloat in [320, 393, 430, 844, 1024] {
-            #expect(AlbumPresentation.columnCount(isPad: false, availableWidth: width) == 2)
+    @Test("Narrow spaces keep two columns regardless of the device")
+    func narrowColumns() {
+        for width: CGFloat in [320, 393, 430, 590] {
+            #expect(AlbumPresentation.columnCount(availableWidth: width) == 2)
         }
     }
 
-    @Test("iPad adapts to the window instead of assuming a full-screen device")
-    func padColumns() {
-        #expect(AlbumPresentation.columnCount(isPad: true, availableWidth: 320) == 2)
-        #expect(AlbumPresentation.columnCount(isPad: true, availableWidth: 590) == 2)
-        #expect(AlbumPresentation.columnCount(isPad: true, availableWidth: 594) == 3)
-        #expect(AlbumPresentation.columnCount(isPad: true, availableWidth: 800) == 4)
-        #expect(AlbumPresentation.columnCount(isPad: true, availableWidth: 1024) == 5)
-        #expect(AlbumPresentation.columnCount(isPad: true, availableWidth: 1366) == 6)
-        #expect(AlbumPresentation.columnCount(isPad: true, availableWidth: .greatestFiniteMagnitude) == 6)
+    @Test("Even column counts follow available width when the same scene grows and shrinks")
+    func resizableColumns() {
+        let widths: [CGFloat] = [320, 594, 795, 796, 1024, 1199, 1200, 1366, 800, 430, 320]
+        #expect(widths.map { AlbumPresentation.columnCount(availableWidth: $0) } == [2, 2, 2, 4, 4, 4, 6, 6, 4, 2, 2])
+        #expect(AlbumPresentation.columnCount(availableWidth: .greatestFiniteMagnitude) == 6)
     }
 
     @Test("Invalid and unresolved widths use a stable two-column layout")
     func invalidWidths() {
         for width: CGFloat in [0, -1, .nan, .infinity, -.infinity] {
-            #expect(AlbumPresentation.columnCount(isPad: true, availableWidth: width) == 2)
+            #expect(AlbumPresentation.columnCount(availableWidth: width) == 2)
         }
     }
 

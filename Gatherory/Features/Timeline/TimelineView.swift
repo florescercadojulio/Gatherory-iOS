@@ -64,9 +64,11 @@ struct TimelineView: View {
                     Menu {
                         ForEach(TimelineFilter.allCases) { option in
                             Button {
+                                guard filter != option else { return }
                                 withAnimation(.snappy) {
                                     filter = option
                                 }
+                                AppHaptics.play(.selection)
                             } label: {
                                 Label(
                                     option.title,
@@ -122,6 +124,7 @@ struct TimelineView: View {
                 workspace.selectEventContext(.main)
             }
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(AppTheme.ColorToken.onAccent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(AppTheme.Layout.screenHorizontal)
@@ -138,10 +141,10 @@ struct TimelineView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, AppTheme.Spacing.section)
         } else {
-            MasonryLayout(
+            AdaptiveMasonry(
                 columnCount: dynamicTypeSize.isAccessibilitySize ? 1 : 2,
                 spacing: 12,
-                layoutDirection: layoutDirection
+                layoutDirection: layoutDirection, minimumColumnWidth: 170
             ) {
                 ForEach(filteredEvents) { item in
                     eventButton(item)
@@ -159,17 +162,13 @@ struct TimelineView: View {
             selectedTimelineItemID = item.id
         }
         .accessibilityAction(named: item.completionStatus == .complete ? "Undo Complete" : "Mark Complete") {
-            withAnimation {
-                workspace.toggleTimelineItem(item)
-            }
+            toggleCompletion(item)
             captureCompletionChange(for: item)
         }
         .contextMenu {
             if item.status == .archived {
                 Button("Restore as Draft", systemImage: "arrow.uturn.backward") {
-                    withAnimation {
-                        workspace.setEventStatus(.draft, for: item)
-                    }
+                    setEventStatus(.draft, for: item)
                     PostHogSDK.shared.capture("timeline_event_restored")
                 }
             } else {
@@ -177,16 +176,12 @@ struct TimelineView: View {
                     item.completionStatus == .complete ? "Undo Complete" : "Mark Complete",
                     systemImage: item.completionStatus == .complete ? "arrow.uturn.backward" : "checkmark.circle"
                 ) {
-                    withAnimation {
-                        workspace.toggleTimelineItem(item)
-                    }
+                    toggleCompletion(item)
                     captureCompletionChange(for: item)
                 }
 
                 Button("Archive Event", systemImage: "archivebox") {
-                    withAnimation {
-                        workspace.setEventStatus(.archived, for: item)
-                    }
+                    setEventStatus(.archived, for: item)
                     PostHogSDK.shared.capture("timeline_event_archived")
                 }
             }
@@ -198,6 +193,22 @@ struct TimelineView: View {
             "timeline_event_completed",
             properties: ["is_complete": item.completionStatus != .complete]
         )
+    }
+
+    private func toggleCompletion(_ item: TimelineItem) {
+        let previous = workspace.timeline.first { $0.id == item.id }?.completionStatus
+        withAnimation { workspace.toggleTimelineItem(item) }
+        if workspace.timeline.first(where: { $0.id == item.id })?.completionStatus != previous {
+            AppHaptics.play(.success)
+        }
+    }
+
+    private func setEventStatus(_ status: EventStatus, for item: TimelineItem) {
+        let previous = workspace.timeline.first { $0.id == item.id }?.status
+        withAnimation { workspace.setEventStatus(status, for: item) }
+        if workspace.timeline.first(where: { $0.id == item.id })?.status != previous {
+            AppHaptics.play(.success)
+        }
     }
 }
 
@@ -555,6 +566,10 @@ private struct TimelineItemEditorView: View {
                     } else {
                         workspace.addTimelineItem(updatedItem)
                     }
+                    if workspace.canAddChildEvent(to: updatedItem.parentEventID ?? workspace.mainEventID),
+                       workspace.timeline.contains(where: { $0.id == updatedItem.id }) {
+                        AppHaptics.play(.success)
+                    }
                     dismiss()
                 }
                 .disabled(selectedParticipantIDs.isEmpty)
@@ -780,6 +795,7 @@ struct EventDateTimeEditorView: View {
     let save: (Date, Date?, Bool, String) -> Void
     /// Portable blueprint installs currently support a timed start only.
     let supportsExtendedSchedule: Bool
+    let allowsTimeZoneEditing: Bool
 
     init(
         startsAt: Date,
@@ -787,6 +803,7 @@ struct EventDateTimeEditorView: View {
         isAllDay: Bool,
         timeZoneIdentifier: String,
         supportsExtendedSchedule: Bool = true,
+        allowsTimeZoneEditing: Bool = true,
         save: @escaping (Date, Date?, Bool, String) -> Void
     ) {
         _startsAt = State(initialValue: startsAt)
@@ -795,6 +812,7 @@ struct EventDateTimeEditorView: View {
         _timeZoneIdentifier = State(initialValue: timeZoneIdentifier)
         self.save = save
         self.supportsExtendedSchedule = supportsExtendedSchedule
+        self.allowsTimeZoneEditing = allowsTimeZoneEditing
     }
 
     private var selectedTimeZone: TimeZone {
@@ -828,14 +846,16 @@ struct EventDateTimeEditorView: View {
                     }
                 }
 
-                Section {
-                    Picker("Time Zone", selection: $timeZoneIdentifier) {
-                        ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { identifier in
-                            Text(timeZoneLabel(for: identifier))
-                                .tag(identifier)
+                if allowsTimeZoneEditing {
+                    Section {
+                        Picker("Time Zone", selection: $timeZoneIdentifier) {
+                            ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { identifier in
+                                Text(timeZoneLabel(for: identifier))
+                                    .tag(identifier)
+                            }
                         }
+                        .pickerStyle(.navigationLink)
                     }
-                    .pickerStyle(.navigationLink)
                 }
             }
             .environment(\.timeZone, selectedTimeZone)
@@ -1086,6 +1106,7 @@ struct TimelineCollectionCard: View {
     let transitionNamespace: Namespace.ID
     var showsPlanningStatus = true
     var cardAspectRatio: CGFloat? = nil
+    var artworkBlurStart: CGFloat = 0.24
 
     private var scheduleSummary: String {
         guard item.hasScheduledDate else { return "Date not set" }
@@ -1108,7 +1129,7 @@ struct TimelineCollectionCard: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            TimelineArtwork(item: item, progressiveBlurRadius: 22)
+            TimelineArtwork(item: item, progressiveBlurRadius: 22, blurStart: artworkBlurStart)
 
             LinearGradient(
                 stops: [
@@ -1184,6 +1205,7 @@ struct TimelineEventCard: View {
     let transitionNamespace: Namespace.ID
     var showsPlanningStatus = true
     var cardAspectRatio: CGFloat? = nil
+    var artworkBlurStart: CGFloat = 0.24
     let open: () -> Void
 
     var body: some View {
@@ -1192,7 +1214,8 @@ struct TimelineEventCard: View {
                 item: item,
                 transitionNamespace: transitionNamespace,
                 showsPlanningStatus: showsPlanningStatus,
-                cardAspectRatio: cardAspectRatio
+                cardAspectRatio: cardAspectRatio,
+                artworkBlurStart: artworkBlurStart
             )
         }
         .buttonStyle(.plain)
@@ -1215,60 +1238,43 @@ struct EventStatusBadge: View {
 }
 
 struct EventResponseControl: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let selection: EventResponse?
     let select: (EventResponse) -> Void
 
     var body: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(spacing: 6) { controls }
-        } else {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 6) {
-                    controls
-                }
-                .frame(maxWidth: .infinity)
-
-                VStack(spacing: 6) {
-                    controls
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var controls: some View {
-        ForEach(EventResponse.allCases) { option in
-            Button {
-                select(option)
-            } label: {
-                HStack(spacing: 6) {
+        // Product rule: RSVP choices always share one horizontal row.
+        HStack(spacing: 6) {
+            ForEach(EventResponse.allCases) { option in
+                Button {
+                    if selection != option { AppHaptics.play(.selection) }
+                    select(option)
+                } label: {
                     Label(RSVPCopy.responseTitle(option), systemImage: option.symbol)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
                         .labelStyle(.titleAndIcon)
-                    if selection == option {
-                        Image(systemName: "checkmark").accessibilityHidden(true)
-                    }
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                        .contentShape(Rectangle())
                 }
-                .font(.subheadline.weight(.semibold))
-                .fixedSize(horizontal: false, vertical: true)
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
-                .contentShape(Rectangle())
+                .tint(selection == option ? AppTheme.ColorToken.accent : .secondary)
+                .foregroundStyle(selection == option ? AppTheme.ColorToken.accent : .primary)
+                .accessibilityValue(selection == option ? RSVPCopy.selected : RSVPCopy.notSelected)
+                .accessibilityAddTraits(selection == option ? .isSelected : [])
             }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .frame(maxWidth: .infinity)
-            .tint(selection == option ? AppTheme.ColorToken.accent : .secondary)
-            .foregroundStyle(selection == option ? AppTheme.ColorToken.accent : .primary)
-            .accessibilityValue(selection == option ? RSVPCopy.selected : RSVPCopy.notSelected)
-            .accessibilityAddTraits(selection == option ? .isSelected : [])
         }
+        .frame(maxWidth: .infinity)
     }
 }
 
 private struct TimelineArtwork: View {
     let item: TimelineItem
     var progressiveBlurRadius: CGFloat = 22
+    var blurStart: CGFloat = 0.24
 
     var body: some View {
         MediaArtwork(
@@ -1278,7 +1284,7 @@ private struct TimelineArtwork: View {
             accent: item.category.artworkAccent,
             ambientBlurRadius: progressiveBlurRadius == 0 ? 4 : 12,
             progressiveBlurRadius: progressiveBlurRadius == 0 ? 0 : 32,
-            blurStart: 0.24
+            blurStart: blurStart
         )
     }
 }
@@ -1318,9 +1324,7 @@ private struct TimelineEventDetailView: View {
 
                         if item.status == .archived {
                             Button("Restore as Draft", systemImage: "arrow.uturn.backward") {
-                                withAnimation {
-                                    workspace.setEventStatus(.draft, for: item)
-                                }
+                                setEventStatus(.draft, for: item)
                                 PostHogSDK.shared.capture("timeline_event_restored")
                             }
                         } else {
@@ -1328,9 +1332,7 @@ private struct TimelineEventDetailView: View {
                                 item.completionStatus == .complete ? "Undo Complete" : "Mark Complete",
                                 systemImage: item.completionStatus == .complete ? "arrow.uturn.backward" : "checkmark.circle"
                             ) {
-                                withAnimation {
-                                    workspace.toggleTimelineItem(item)
-                                }
+                                toggleCompletion(item)
                                 PostHogSDK.shared.capture(
                                     "timeline_event_completed",
                                     properties: ["is_complete": item.completionStatus != .complete]
@@ -1338,9 +1340,7 @@ private struct TimelineEventDetailView: View {
                             }
 
                             Button("Archive Event", systemImage: "archivebox") {
-                                withAnimation {
-                                    workspace.setEventStatus(.archived, for: item)
-                                }
+                                setEventStatus(.archived, for: item)
                                 PostHogSDK.shared.capture("timeline_event_archived")
                                 dismiss()
                             }
@@ -1363,6 +1363,9 @@ private struct TimelineEventDetailView: View {
             if let item {
                 Button("Delete Event", role: .destructive) {
                     workspace.deleteTimelineItem(item)
+                    if !workspace.timeline.contains(where: { $0.id == item.id }) {
+                        AppHaptics.play(.success)
+                    }
                     PostHogSDK.shared.capture("timeline_event_deleted")
                     dismiss()
                 }
@@ -1379,6 +1382,22 @@ private struct TimelineEventDetailView: View {
             }
         }
         .navigationTransition(.zoom(sourceID: itemID, in: transitionNamespace))
+    }
+
+    private func toggleCompletion(_ item: TimelineItem) {
+        let previous = workspace.timeline.first { $0.id == item.id }?.completionStatus
+        withAnimation { workspace.toggleTimelineItem(item) }
+        if workspace.timeline.first(where: { $0.id == item.id })?.completionStatus != previous {
+            AppHaptics.play(.success)
+        }
+    }
+
+    private func setEventStatus(_ status: EventStatus, for item: TimelineItem) {
+        let previous = workspace.timeline.first { $0.id == item.id }?.status
+        withAnimation { workspace.setEventStatus(status, for: item) }
+        if workspace.timeline.first(where: { $0.id == item.id })?.status != previous {
+            AppHaptics.play(.success)
+        }
     }
 }
 
@@ -1858,4 +1877,18 @@ private extension TimelineCategory {
         TimelineView()
             .environment(PlanningWorkspace.sample)
     }
+}
+
+#Preview("RSVP Control · Light") {
+    @Previewable @State var response: EventResponse? = .going
+    EventResponseControl(selection: response) { response = $0 }
+        .padding(24)
+        .preferredColorScheme(.light)
+}
+
+#Preview("RSVP Control · Dark") {
+    @Previewable @State var response: EventResponse? = .going
+    EventResponseControl(selection: response) { response = $0 }
+        .padding(24)
+        .preferredColorScheme(.dark)
 }

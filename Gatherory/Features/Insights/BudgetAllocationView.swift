@@ -211,8 +211,10 @@ struct BudgetAllocationView: View {
 
         return Button {
             guard isAvailable else { return }
+            guard selectedAccount != account else { return }
             selectedAccount = account
             feedbackMessage = nil
+            AppHaptics.play(.selection)
         } label: {
             HStack(spacing: AppTheme.Spacing.standard) {
                 Image(systemName: symbol(for: account))
@@ -319,6 +321,7 @@ struct BudgetAllocationView: View {
             return
         }
 
+        AppHaptics.play(.success)
         PostHogSDK.shared.capture(
             "budget_allocation_updated",
             properties: ["direction": transfer.direction]

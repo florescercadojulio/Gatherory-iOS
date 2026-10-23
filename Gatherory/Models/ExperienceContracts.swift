@@ -25,6 +25,8 @@ nonisolated struct InstalledExperienceConfiguration: Codable, Hashable, Sendable
 
 nonisolated struct BlueprintCatalogResponse: Decodable, Sendable {
     let entries: [BlueprintCatalogEntry]
+    var nextCursor: String? = nil
+    var availableCategories: [String]? = nil
 }
 
 nonisolated struct BlueprintCatalogEntry: Codable, Identifiable, Sendable {
@@ -36,8 +38,68 @@ nonisolated struct BlueprintCatalogEntry: Codable, Identifiable, Sendable {
     var discovery: BlueprintDiscoveryMetadata? = nil
     var description: String? = nil
     var creator: BlueprintCreatorMetadata? = nil
+    var viewerState: BlueprintViewerState? = nil
+    var discoveryContext: BlueprintDiscoveryContext? = nil
 
     var id: String { "\(catalogKey):\(revision)" }
+}
+
+extension BlueprintCatalogEntry {
+    /// Refreshes mutable catalog presentation metadata without changing the
+    /// pinned definition or accepting metadata from another source revision.
+    func refreshingDiscoveryMetadata(from latest: BlueprintCatalogEntry) -> Self {
+        guard catalogKey == latest.catalogKey,
+              revision == latest.revision,
+              contentHash == latest.contentHash else { return self }
+        return Self(catalogKey: catalogKey, revision: revision, contentHash: contentHash,
+                    definition: definition, discovery: latest.discovery,
+                    description: description, creator: latest.creator,
+                    viewerState: latest.viewerState, discoveryContext: latest.discoveryContext)
+    }
+}
+
+nonisolated struct BlueprintViewerState: Codable, Equatable, Sendable {
+    var liked = false
+    var bookmarked = false
+    var notInterested = false
+}
+
+nonisolated struct BlueprintDiscoveryContext: Codable, Equatable, Sendable {
+    let exposureId: String
+    let expiresAt: Date
+
+    private enum CodingKeys: String, CodingKey { case exposureId, expiresAt }
+
+    init(exposureId: String, expiresAt: Date) {
+        self.exposureId = exposureId
+        self.expiresAt = expiresAt
+    }
+
+    init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        exposureId = try values.decode(String.self, forKey: .exposureId)
+        let raw = try values.decode(String.self, forKey: .expiresAt)
+        guard let date = Self.fractionalDateFormatter().date(from: raw)
+                ?? ISO8601DateFormatter().date(from: raw) else {
+            throw DecodingError.dataCorruptedError(forKey: .expiresAt, in: values,
+                                                   debugDescription: "Invalid ISO date")
+        }
+        expiresAt = date
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(exposureId, forKey: .exposureId)
+        try values.encode(Self.fractionalDateFormatter().string(from: expiresAt), forKey: .expiresAt)
+    }
+
+    var isCurrent: Bool { expiresAt > Date() && !exposureId.isEmpty }
+
+    private static func fractionalDateFormatter() -> ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }
 }
 
 nonisolated struct BlueprintCreatorMetadata: Codable, Equatable, Sendable {
@@ -48,6 +110,15 @@ nonisolated struct BlueprintDiscoveryMetadata: Codable, Sendable {
     let categories: [String]
     let tags: [String]
     let summary: String
+    var coverImageURL: String? = nil
+    var coverImages: BlueprintTargetCoverImages? = nil
+}
+
+/// Revision-scoped public artwork for curated child events and ideas. These URLs
+/// live beside discovery metadata so they do not change the portable content hash.
+nonisolated struct BlueprintTargetCoverImages: Codable, Sendable {
+    var children: [String: String] = [:]
+    var ideas: [String: String] = [:]
 }
 
 nonisolated struct BlueprintCatalogChild: Codable, Equatable, Identifiable, Sendable {
@@ -56,7 +127,45 @@ nonisolated struct BlueprintCatalogChild: Codable, Equatable, Identifiable, Send
     let purpose: String
     let category: String
     let scheduleProposal: BlueprintScheduleProposal?
+    var coverAssetId: UUID? = nil
+    /// True when this value explicitly overrides the source cover, including an
+    /// explicit removal. An omitted value inherits the source revision's cover.
+    var coverAssetIdWasProvided = false
     var id: String { key }
+
+    private enum CodingKeys: String, CodingKey { case key, title, purpose, category, scheduleProposal, coverAssetId }
+
+    init(key: String, title: String, purpose: String, category: String, scheduleProposal: BlueprintScheduleProposal?,
+         coverAssetId: UUID? = nil, coverAssetIdWasProvided: Bool = false) {
+        self.key = key
+        self.title = title
+        self.purpose = purpose
+        self.category = category
+        self.scheduleProposal = scheduleProposal
+        self.coverAssetId = coverAssetId
+        self.coverAssetIdWasProvided = coverAssetIdWasProvided
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        key = try container.decode(String.self, forKey: .key)
+        title = try container.decode(String.self, forKey: .title)
+        purpose = try container.decode(String.self, forKey: .purpose)
+        category = try container.decode(String.self, forKey: .category)
+        scheduleProposal = try container.decodeIfPresent(BlueprintScheduleProposal.self, forKey: .scheduleProposal)
+        coverAssetIdWasProvided = container.contains(.coverAssetId)
+        coverAssetId = try container.decodeIfPresent(UUID.self, forKey: .coverAssetId)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(key, forKey: .key)
+        try container.encode(title, forKey: .title)
+        try container.encode(purpose, forKey: .purpose)
+        try container.encode(category, forKey: .category)
+        try container.encodeIfPresent(scheduleProposal, forKey: .scheduleProposal)
+        if coverAssetIdWasProvided { try container.encode(coverAssetId, forKey: .coverAssetId) }
+    }
 }
 
 nonisolated struct BlueprintScheduleProposal: Codable, Equatable, Sendable {
@@ -106,7 +215,47 @@ nonisolated struct BlueprintCatalogIdea: Codable, Equatable, Identifiable, Senda
     let notes: String?
     let target: BlueprintTarget
     let configuration: [String: ExperienceJSONValue]
+    var coverAssetId: UUID? = nil
+    var coverAssetIdWasProvided = false
     var id: String { key }
+
+    private enum CodingKeys: String, CodingKey { case key, title, category, notes, target, configuration, coverAssetId }
+
+    init(key: String, title: String, category: String, notes: String?, target: BlueprintTarget,
+         configuration: [String: ExperienceJSONValue], coverAssetId: UUID? = nil,
+         coverAssetIdWasProvided: Bool = false) {
+        self.key = key
+        self.title = title
+        self.category = category
+        self.notes = notes
+        self.target = target
+        self.configuration = configuration
+        self.coverAssetId = coverAssetId
+        self.coverAssetIdWasProvided = coverAssetIdWasProvided
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        key = try container.decode(String.self, forKey: .key)
+        title = try container.decode(String.self, forKey: .title)
+        category = try container.decode(String.self, forKey: .category)
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        target = try container.decode(BlueprintTarget.self, forKey: .target)
+        configuration = try container.decode([String: ExperienceJSONValue].self, forKey: .configuration)
+        coverAssetIdWasProvided = container.contains(.coverAssetId)
+        coverAssetId = try container.decodeIfPresent(UUID.self, forKey: .coverAssetId)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(key, forKey: .key)
+        try container.encode(title, forKey: .title)
+        try container.encode(category, forKey: .category)
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encode(target, forKey: .target)
+        try container.encode(configuration, forKey: .configuration)
+        if coverAssetIdWasProvided { try container.encode(coverAssetId, forKey: .coverAssetId) }
+    }
 }
 
 nonisolated struct BlueprintCatalogInstruction: Decodable, Identifiable, Sendable {

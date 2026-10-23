@@ -8,6 +8,7 @@ enum WorkspaceTab: Hashable {
 struct WorkspaceTabShell<Home: View, Ideas: View, Decide: View, Manage: View>: View {
     @Binding var selection: WorkspaceTab
     var showsManage: Bool
+    var showsDecide = true
     var showsIdeasEventFilter = false
     var showsManageEventFilter = false
     var customIdeasAccessory: AnyView? = nil
@@ -23,10 +24,19 @@ struct WorkspaceTabShell<Home: View, Ideas: View, Decide: View, Manage: View>: V
             || (showsManageEventFilter && selection == .manage)
     }
 
+    private func selectVisibleTab() {
+        if !showsDecide, selection == .decide {
+            selection = .home
+        }
+    }
+
     @ViewBuilder
     var body: some View {
         if #available(iOS 26.1, *) {
             tabContents
+                .onAppear(perform: selectVisibleTab)
+                .onChange(of: showsDecide) { _, _ in selectVisibleTab() }
+                .onChange(of: selection) { _, _ in selectVisibleTab() }
                 .tabViewBottomAccessory(isEnabled: showsEventAccessory) {
                     if selection == .ideas {
                         if let customIdeasAccessory {
@@ -42,6 +52,9 @@ struct WorkspaceTabShell<Home: View, Ideas: View, Decide: View, Manage: View>: V
                 .tabBarMinimizeBehavior(selection == .home ? .never : .onScrollDown)
         } else {
             tabContents
+                .onAppear(perform: selectVisibleTab)
+                .onChange(of: showsDecide) { _, _ in selectVisibleTab() }
+                .onChange(of: selection) { _, _ in selectVisibleTab() }
                 .tabViewStyle(.sidebarAdaptable)
                 .tabBarMinimizeBehavior(selection == .home ? .never : .onScrollDown)
         }
@@ -51,7 +64,9 @@ struct WorkspaceTabShell<Home: View, Ideas: View, Decide: View, Manage: View>: V
         TabView(selection: $selection) {
             Tab(AppCopy.Tab.home, systemImage: "house.fill", value: .home) { home() }
             Tab(AppCopy.Tab.ideas, systemImage: "sparkles.rectangle.stack.fill", value: .ideas) { ideas($ideasScope) }
-            Tab(AppCopy.Tab.decide, systemImage: "rectangle.on.rectangle.angled", value: .decide) { decide() }
+            if showsDecide {
+                Tab(AppCopy.Tab.decide, systemImage: "rectangle.on.rectangle.angled", value: .decide) { decide() }
+            }
             if showsManage {
                 Tab(AppCopy.Tab.manage, systemImage: "slider.horizontal.3", value: .manage) { manage($manageEvent) }
             }

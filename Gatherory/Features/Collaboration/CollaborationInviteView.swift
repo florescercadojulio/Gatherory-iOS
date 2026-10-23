@@ -413,6 +413,7 @@ private struct CollaborationInviteScreen: View {
                     Button {
                         UIPasteboard.general.url = inviteURL
                         didCopyLink = true
+                        AppHaptics.play(.success)
                     } label: {
                         Label(didCopyLink ? "Copied" : "Copy Link",
                               systemImage: didCopyLink ? "checkmark" : "link")
@@ -452,6 +453,7 @@ private struct CollaborationInviteScreen: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
                 .disabled(isGenerating || (invitedRole == .collaborator && !workspace.isCollaboratorLinkEnabled))
             }
 
@@ -759,6 +761,7 @@ private struct CollaborationInviteScreen: View {
                   isCurrentInvitationPrincipal(accountID: accountID, generation: generation,
                       workspaceID: workspaceID, reference: reference) else { return }
             clearInvitation()
+            AppHaptics.play(.success)
             PostHogSDK.shared.capture("invitation_link_revoked")
         } catch {
             guard !Task.isCancelled, shareLinkRequestID == requestID,
@@ -893,6 +896,7 @@ private struct EmailInvitationView: View {
                     Button {
                         UIPasteboard.general.url = invitation.url
                         didCopyLink = true
+                        AppHaptics.play(.success)
                     } label: {
                         Label(didCopyLink ? "Copied" : "Copy Link", systemImage: didCopyLink ? "checkmark" : "link")
                     }
@@ -964,6 +968,7 @@ private struct EmailInvitationView: View {
                   canManageInvitations else { return }
             invitation = generated
             invitationAccountID = accountID
+            AppHaptics.play(.success)
             PostHogSDK.shared.capture(
                 "email_invitation_link_created",
                 properties: ["role": String(describing: role)]

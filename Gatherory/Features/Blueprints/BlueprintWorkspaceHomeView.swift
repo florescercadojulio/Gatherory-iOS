@@ -6,6 +6,7 @@ struct BlueprintWorkspaceHomeView: View {
     let category: BlueprintBrowseCategory
     let usesSavedPreview: Bool
     let onSelectEvent: (BlueprintPreviewEventID) -> Void
+    var mainEventSchedule: String? = nil
     var onEditEvent: ((BlueprintPreviewEventID) -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -14,18 +15,20 @@ struct BlueprintWorkspaceHomeView: View {
     @State private var selectedEvent: BlueprintPreviewEventID?
     @State private var scrollTargetID: BlueprintPreviewEventID?
     @State private var railTracking = BlueprintPreviewRailTracking()
+    @State private var isUserScrolling = false
 
-    private var heroHeight: CGFloat { dynamicTypeSize.isAccessibilitySize ? 720 : 640 }
     private var railItems: [BlueprintPreviewEventRailItem] { BlueprintPreviewEventRailItem.items(from: content) }
     private var railSelection: BlueprintPreviewEventID { railTracking.selection(fallback: .main) }
     private var previewedEventIndex: Int? { railTracking.scrubbedID.flatMap { content.eventIDs.firstIndex(of: $0) } }
 
     init(content: BlueprintPreviewContent, category: BlueprintBrowseCategory, usesSavedPreview: Bool,
+         mainEventSchedule: String? = nil,
          onEditEvent: ((BlueprintPreviewEventID) -> Void)? = nil,
          onSelectEvent: @escaping (BlueprintPreviewEventID) -> Void) {
         self.content = content
         self.category = category
         self.usesSavedPreview = usesSavedPreview
+        self.mainEventSchedule = mainEventSchedule
         self.onEditEvent = onEditEvent
         self.onSelectEvent = onSelectEvent
     }
@@ -41,7 +44,7 @@ struct BlueprintWorkspaceHomeView: View {
                     }
                     ForEach(content.eventIDs) { id in
                         if let event = content.event(for: id) {
-                            eventCard(event, id: id)
+                            eventCard(event, id: id, viewportHeight: viewport.size.height)
                                 .id(id)
                         }
                     }
@@ -55,6 +58,7 @@ struct BlueprintWorkspaceHomeView: View {
             .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
             .scrollPosition(id: $scrollTargetID, anchor: .center)
             .onScrollPhaseChange { _, phase in
+                isUserScrolling = phase == .tracking || phase == .interacting || phase == .decelerating
                 if phase == .tracking || phase == .interacting {
                     railTracking.beginDirectScroll()
                 }
@@ -85,7 +89,9 @@ struct BlueprintWorkspaceHomeView: View {
             }
         }
         .coordinateSpace(name: scrollSpace)
-        .sensoryFeedback(.selection, trigger: railSelection)
+        .appHaptic(.selection, trigger: railSelection) { _, _ in
+            isUserScrolling || railTracking.scrubbedID != nil || railTracking.requestedID != nil
+        }
         .onChange(of: content.eventIDs) { _, ids in
             if !ids.contains(railSelection) {
                 railTracking = BlueprintPreviewRailTracking()
@@ -103,10 +109,10 @@ struct BlueprintWorkspaceHomeView: View {
                     browseCategory: category
                 )
                 if reduceMotion {
-                    BlueprintWorkspaceEventDetail(event: event, artwork: artwork)
+                    BlueprintWorkspaceEventDetail(event: event, artwork: artwork, scheduledDate: id == .main ? mainEventSchedule : nil)
                         .toolbar { eventEditToolbar(id: id) }
                 } else {
-                    BlueprintWorkspaceEventDetail(event: event, artwork: artwork)
+                    BlueprintWorkspaceEventDetail(event: event, artwork: artwork, scheduledDate: id == .main ? mainEventSchedule : nil)
                         .toolbar { eventEditToolbar(id: id) }
                         .navigationTransition(.zoom(sourceID: id, in: eventTransition))
                 }
@@ -114,7 +120,10 @@ struct BlueprintWorkspaceHomeView: View {
         }
     }
 
-    private func eventCard(_ event: BlueprintPreviewEventContent, id: BlueprintPreviewEventID) -> some View {
+    private func eventCard(_ event: BlueprintPreviewEventContent, id: BlueprintPreviewEventID,
+                           viewportHeight: CGFloat) -> some View {
+        let heroHeight = LayoutDimensions.heroHeight(availableHeight: viewportHeight,
+                                                     isAccessibilitySize: dynamicTypeSize.isAccessibilitySize)
         let artwork = BlueprintPreviewEventArtwork.resolve(
             id: id,
             rawCategory: event.category,
@@ -126,13 +135,15 @@ struct BlueprintWorkspaceHomeView: View {
                 selectedEvent = id
             } label: {
                 WorkspaceEventHero(title: event.title) {
-                    MediaArtwork(
-                        imageData: nil,
-                        symbol: artwork.symbol,
-                        colors: artwork.colors,
-                        accent: artwork.accent,
-                        progressiveBlurRadius: 0
-                    )
+                    BlueprintCoverArtwork(assetID: event.coverAssetID, publicImageURL: event.publicCoverImageURL) {
+                        MediaArtwork(
+                            imageData: nil,
+                            symbol: artwork.symbol,
+                            colors: artwork.colors,
+                            accent: artwork.accent,
+                            progressiveBlurRadius: 0
+                        )
+                    }
                     .frame(width: LayoutDimensions.nonnegative(proxy.size.width), height: heroHeight)
                     .clipped()
                 } people: {
@@ -142,6 +153,11 @@ struct BlueprintWorkspaceHomeView: View {
                        let creatorName = content.creatorName,
                        !creatorName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text(BlueprintCopy.creatorByline(creatorName))
+                            .font(.subheadline.weight(.medium))
+                            .multilineTextAlignment(.center)
+                    }
+                    if id == .main, let mainEventSchedule {
+                        Text(mainEventSchedule)
                             .font(.subheadline.weight(.medium))
                             .multilineTextAlignment(.center)
                     }
@@ -170,6 +186,18 @@ struct BlueprintWorkspaceHomeView: View {
                     .stroke(.white.opacity(0.20), lineWidth: 0.5)
             }
             .accessibilityHint("Opens event details")
+            .overlay(alignment: .topTrailing) {
+                if let onEditEvent {
+                    Button(AppCopy.Common.edit, systemImage: "pencil") { onEditEvent(id) }
+                        .font(.subheadline.weight(.semibold))
+                        .labelStyle(.titleAndIcon)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .glassEffect(.regular.interactive(), in: Capsule())
+                        .padding(12)
+                        .accessibilityLabel(BlueprintCopy.editEvent(event.title))
+                }
+            }
             .contextMenu {
                 if let onEditEvent {
                     Button(AppCopy.Common.edit, systemImage: "pencil") { onEditEvent(id) }
@@ -189,7 +217,7 @@ struct BlueprintWorkspaceHomeView: View {
         if let onEditEvent {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(AppCopy.Common.edit, systemImage: "pencil") { onEditEvent(id) }
-                    .labelStyle(.iconOnly)
+                    .labelStyle(.titleAndIcon)
             }
         }
     }

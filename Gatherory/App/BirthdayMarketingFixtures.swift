@@ -56,7 +56,8 @@ enum BirthdayMarketingFixtures {
             && seedsDevelopmentData && skipsAuthentication
     }
 
-    static func makeWorkspace() -> PlanningWorkspace {
+    static func makeWorkspace(locale: Locale = .current) -> PlanningWorkspace {
+        let isSpanish = locale.language.languageCode?.identifier == "es"
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "America/Detroit")!
         let date = calendar.date(from: DateComponents(year: 2026, month: 11, day: 14, hour: 18, minute: 30))!
@@ -106,33 +107,46 @@ enum BirthdayMarketingFixtures {
         let eventCoverImage = imageData(named: "MarketingBirthdayCover")
         let submittedAt = calendar.date(byAdding: .day, value: -14, to: date)!
         let ideas = [
-            PlanningIdea(title: "Candlelit birthday table",
-                note: "A long table, little candles, and everyone’s favorite people. Keep it warm and relaxed.",
+            PlanningIdea(title: isSpanish ? "Mesa de cumpleaños a la luz de las velas" : "Candlelit birthday table",
+                note: isSpanish
+                    ? "Una mesa larga, velas pequeñas y la gente favorita de Maya. Un ambiente cálido y relajado."
+                    : "A long table, little candles, and everyone’s favorite people. Keep it warm and relaxed.",
                 category: .decor, submittedBy: "Riley Kim", submittedByUserID: riley.userID,
                 estimatedCost: 45, submittedAt: submittedAt.addingTimeInterval(300),
                 imageData: imageData(named: "MarketingBirthdayTable")),
-            PlanningIdea(title: "Family-style pasta dinner",
-                note: "Big bowls to share, a seasonal salad, and a vegetarian option for the table.",
+            PlanningIdea(title: isSpanish ? "Pasta para compartir" : "Family-style pasta dinner",
+                note: isSpanish
+                    ? "Fuentes para compartir, una ensalada de temporada y una opción vegetariana."
+                    : "Big bowls to share, a seasonal salad, and a vegetarian option for the table.",
                 category: .food, submittedBy: "Jordan Lee", submittedByUserID: jordan.userID,
                 estimatedCost: 180, status: .chosen, submittedAt: submittedAt.addingTimeInterval(240),
                 imageData: imageData(named: "MarketingBirthdayPasta")),
-            PlanningIdea(title: "Maya’s birthday playlist",
-                note: "Old favorites and songs that make us think of Maya. Add your picks before Saturday.",
+            PlanningIdea(title: isSpanish ? "Música para Maya" : "Maya’s birthday playlist",
+                note: isSpanish
+                    ? "Clásicos y canciones que nos recuerdan a Maya. Añade tus favoritas antes del sábado."
+                    : "Old favorites and songs that make us think of Maya. Add your picks before Saturday.",
                 category: .music, submittedBy: "Alex Morgan", submittedByUserID: alex.userID,
                 status: .chosen, submittedAt: submittedAt.addingTimeInterval(180),
-                imageData: imageData(named: "MarketingBirthdayPlaylist")),
-            PlanningIdea(title: "Chocolate birthday cake",
-                note: "Chocolate layers, fresh berries, and a few extra candles. Enough for twelve.",
+                imageData: imageData(named: "MarketingBirthdayPlaylist"),
+                configuration: .music(MusicIdeaConfiguration(tracks: sampleMusicTracks(isSpanish: isSpanish)))),
+            PlanningIdea(title: isSpanish ? "Pastel de chocolate" : "Chocolate birthday cake",
+                note: isSpanish
+                    ? "Capas de chocolate, frutos rojos y algunas velas extra. Alcanza para doce."
+                    : "Chocolate layers, fresh berries, and a few extra candles. Enough for twelve.",
                 category: .food, submittedBy: "Maya Chen", submittedByUserID: maya.userID,
                 estimatedCost: 65, submittedAt: submittedAt.addingTimeInterval(120),
                 imageData: imageData(named: "MarketingBirthdayCake")),
-            PlanningIdea(title: "Flowers from the market",
-                note: "A few colorful stems in small bud vases, so everyone can still see across the table.",
+            PlanningIdea(title: isSpanish ? "Flores del mercado" : "Flowers from the market",
+                note: isSpanish
+                    ? "Unas flores de colores en jarrones pequeños para que todos puedan verse en la mesa."
+                    : "A few colorful stems in small bud vases, so everyone can still see across the table.",
                 category: .flowers, submittedBy: "Riley Kim", submittedByUserID: riley.userID,
                 estimatedCost: 35, submittedAt: submittedAt.addingTimeInterval(60),
                 imageData: imageData(named: "MarketingBirthdayFlowers")),
-            PlanningIdea(title: "A photo of all of us",
-                note: "Set up a phone tripod before dessert so everyone makes it into the picture.",
+            PlanningIdea(title: isSpanish ? "Una foto de todos" : "A photo of all of us",
+                note: isSpanish
+                    ? "Prepara un trípode antes del postre para que todos salgan en la foto."
+                    : "Set up a phone tripod before dessert so everyone makes it into the picture.",
                 category: .photography, submittedBy: "Jordan Lee", submittedByUserID: jordan.userID,
                 estimatedCost: 0, submittedAt: submittedAt,
                 imageData: imageData(named: "MarketingBirthdayPhoto"))
@@ -140,43 +154,62 @@ enum BirthdayMarketingFixtures {
         func time(_ hour: Int, _ minute: Int) -> Date {
             calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date)!
         }
-        return PlanningWorkspace(mainEventID: eventID, title: "Maya’s Birthday Dinner",
+        return PlanningWorkspace(mainEventID: eventID,
+            title: isSpanish ? "Cena de cumple de Maya" : "Maya’s Birthday Dinner",
             mainEventStartsAt: date, mainEventEndsAt: time(22, 0),
             mainEventTimeZoneIdentifier: "America/Detroit", mainEventImageData: eventCoverImage,
-            venueName: "Alex’s place", location: "Detroit, Michigan", dressCode: "Come as you are",
-            eventMessage: "Good food, old friends, and a birthday worth celebrating. Dinner for twelve at Alex’s.",
+            venueName: isSpanish ? "Casa de Alex" : "Alex’s place",
+            location: isSpanish ? "Detroit, Míchigan" : "Detroit, Michigan",
+            dressCode: isSpanish ? "Ven como eres" : "Come as you are",
+            eventMessage: isSpanish
+                ? "Buena comida, viejos amigos y un cumpleaños para celebrar. Cena para doce en casa de Alex."
+                : "Good food, old friends, and a birthday worth celebrating. Dinner for twelve at Alex’s.",
             planningMode: .openToIdeas, members: members, ideas: ideas,
             timeline: [
-                TimelineItem(title: "Set the birthday table", category: .other, scheduledAt: time(17, 30),
-                    location: "Alex’s place", participantIDs: [alex.id, riley.id],
+                TimelineItem(title: isSpanish ? "Preparar la mesa de cumpleaños" : "Set the birthday table", category: .other, scheduledAt: time(17, 30),
+                    location: isSpanish ? "Casa de Alex" : "Alex’s place", participantIDs: [alex.id, riley.id],
                     imageData: imageData(named: "MarketingBirthdaySetup")),
-                TimelineItem(title: "Drinks & catch-ups", category: .other, purpose: .eventExperience,
-                    scheduledAt: time(18, 30), location: "Alex’s place", participantIDs: members.map(\.id),
+                TimelineItem(title: isSpanish ? "Bebidas y reencuentros" : "Drinks & catch-ups", category: .other, purpose: .eventExperience,
+                    scheduledAt: time(18, 30), location: isSpanish ? "Casa de Alex" : "Alex’s place", participantIDs: members.map(\.id),
                     imageData: imageData(named: "MarketingBirthdayDrinks")),
-                TimelineItem(title: "Dinner is served", category: .other, purpose: .eventExperience,
-                    scheduledAt: time(19, 0), location: "Alex’s place", participantIDs: members.map(\.id),
+                TimelineItem(title: isSpanish ? "Se sirve la cena" : "Dinner is served", category: .other, purpose: .eventExperience,
+                    scheduledAt: time(19, 0), location: isSpanish ? "Casa de Alex" : "Alex’s place", participantIDs: members.map(\.id),
                     imageData: imageData(named: "MarketingBirthdayServed")),
-                TimelineItem(title: "Cake, candles & a group photo", category: .other, purpose: .eventExperience,
-                    scheduledAt: time(20, 30), location: "Alex’s place", participantIDs: members.map(\.id),
+                TimelineItem(title: isSpanish ? "Pastel, velas y foto grupal" : "Cake, candles & a group photo", category: .other, purpose: .eventExperience,
+                    scheduledAt: time(20, 30), location: isSpanish ? "Casa de Alex" : "Alex’s place", participantIDs: members.map(\.id),
                     imageData: imageData(named: "MarketingBirthdayCandles"))
             ], eventExpenses: [
-                EventExpense(eventID: eventID, title: "Dinner groceries", amount: 180, category: .foodAndDrink, status: .paid),
-                EventExpense(eventID: eventID, title: "Birthday cake", amount: 65, category: .foodAndDrink, status: .committed),
-                EventExpense(eventID: eventID, title: "Drinks for the table", amount: 70, category: .foodAndDrink, status: .paid),
-                EventExpense(eventID: eventID, title: "Candles & flowers", amount: 80, category: .other, status: .estimated)
+                EventExpense(eventID: eventID, title: isSpanish ? "Compras para la cena" : "Dinner groceries", amount: 180, category: .foodAndDrink, status: .paid),
+                EventExpense(eventID: eventID, title: isSpanish ? "Pastel de cumpleaños" : "Birthday cake", amount: 65, category: .foodAndDrink, status: .committed),
+                EventExpense(eventID: eventID, title: isSpanish ? "Bebidas para la mesa" : "Drinks for the table", amount: 70, category: .foodAndDrink, status: .paid),
+                EventExpense(eventID: eventID, title: isSpanish ? "Velas y flores" : "Candles & flowers", amount: 80, category: .other, status: .estimated)
             ], workspaceBudgetCap: 600, currencyCode: "USD", notes: [
                 EventNote(eventID: eventID, authorUserID: maya.userID,
-                    body: "The playlist is ready, and I set the bud vases aside. See everyone Saturday!",
+                    body: isSpanish
+                        ? "La lista de reproducción está lista y aparté los jarrones. ¡Nos vemos el sábado!"
+                        : "The playlist is ready, and I set the bud vases aside. See everyone Saturday!",
                     sentAt: calendar.date(byAdding: .day, value: -2, to: date)!)
             ], todos: [
-                EventTodo(eventID: eventID, title: "Pick up the birthday cake", dueDate: "2026-11-14", assigneePersonID: jordan.id),
-                EventTodo(eventID: eventID, title: "Bring candles and bud vases", dueDate: "2026-11-14", assigneePersonID: alex.id),
-                EventTodo(eventID: eventID, title: "Check dietary preferences", dueDate: "2026-11-07", assigneePersonID: alex.id, isCompleted: true)
+                EventTodo(eventID: eventID, title: isSpanish ? "Recoger el pastel de cumpleaños" : "Pick up the birthday cake", dueDate: "2026-11-14", assigneePersonID: jordan.id),
+                EventTodo(eventID: eventID, title: isSpanish ? "Traer velas y jarrones" : "Bring candles and bud vases", dueDate: "2026-11-14", assigneePersonID: alex.id),
+                EventTodo(eventID: eventID, title: isSpanish ? "Revisar preferencias alimentarias" : "Check dietary preferences", dueDate: "2026-11-07", assigneePersonID: alex.id, isCompleted: true)
             ], ideaResponses: [
                 IdeaResponse(ideaID: ideas[0].id, userID: jordan.userID!, choice: .love),
                 IdeaResponse(ideaID: ideas[0].id, userID: maya.userID!, choice: .love),
                 IdeaResponse(ideaID: ideas[0].id, userID: riley.userID!, choice: .maybe)
             ], registry: [])
+    }
+
+    private static func sampleMusicTracks(isSpanish: Bool) -> [MusicTrack] {
+        let metadata = isSpanish
+            ? [("Aquí contigo", "Luna del Río"), ("Bajo las estrellas", "Sol y Mar"), ("Una noche más", "Los Jardines")]
+            : [("With You Tonight", "River Moon"), ("Beneath the Stars", "Sun and Sea"), ("One More Song", "The Gardens")]
+        return metadata.enumerated().map { index, track in
+            MusicTrack(providerID: MusicProviderID(rawValue: "local-fixture"),
+                catalogID: "birthday-evening-0\(index + 1)", title: track.0, artistName: track.1,
+                albumTitle: isSpanish ? "Una noche especial" : "A Special Evening",
+                artworkURL: nil, externalURL: nil, isrc: nil, duration: nil)
+        }
     }
 
     private static func imageData(named name: String) -> Data? {

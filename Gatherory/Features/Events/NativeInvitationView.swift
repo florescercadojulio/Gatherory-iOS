@@ -60,7 +60,7 @@ struct NativeInvitationView: View {
                             )
                         }
                     }
-                    .frame(maxWidth: 520, alignment: .leading)
+                    .adaptiveReadingWidth(520)
                     .padding(.horizontal, AppTheme.Spacing.spacious)
                     .padding(.bottom, AppTheme.Spacing.spacious)
                     .frame(minHeight: geometry.size.height, alignment: .bottom)
@@ -85,6 +85,7 @@ struct NativeInvitationView: View {
                         if preview == nil { invitations.dismiss() }
                         else { self.errorMessage = nil }
                     }
+                    .adaptiveReadingWidth(520)
                     .padding(AppTheme.Spacing.standard)
                 } else if isLoading && preview == nil {
                     ProgressView {
@@ -167,6 +168,7 @@ struct NativeInvitationView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(AppTheme.ColorToken.onAccent)
             .buttonBorderShape(.capsule)
             .controlSize(.large)
             .disabled(isLoading || isAccepting || authentication.isSigningOut)
@@ -187,7 +189,7 @@ struct NativeInvitationView: View {
                 .disabled(isLoading || isAccepting || authentication.isSigningOut)
             }
         }
-        .frame(maxWidth: 520)
+        .adaptiveReadingWidth(520)
         .padding(.horizontal, AppTheme.Spacing.spacious)
         .padding(.vertical, AppTheme.Spacing.standard)
         .frame(maxWidth: .infinity)
@@ -328,14 +330,18 @@ struct NativeInvitationView: View {
         defer { isAccepting = false }
         do {
             let acceptance: InvitationAcceptance
+            let didReceiveAcceptance: Bool
             if let accepted = joinProgress.acceptedResponse(for: profile.storageID, principalGeneration: principalGeneration) {
                 acceptance = accepted
+                didReceiveAcceptance = false
             } else {
                 acceptance = try await DeviceGuestInvitationClient(baseURL: baseURL, profile: profile).join(token: token)
+                didReceiveAcceptance = true
             }
             guard viewerIdentity == profile.storageID, authentication.principalGeneration == principalGeneration,
                   invitations.pendingToken == token,
                   !Task.isCancelled else { return }
+            if didReceiveAcceptance { AppHaptics.play(.success) }
             joinProgress.record(acceptance, accountID: profile.storageID, principalGeneration: principalGeneration)
             await guests.activate(localGuest: profile)
             await guests.refresh(force: true)
@@ -367,16 +373,20 @@ struct NativeInvitationView: View {
         var stage = "accept"
         do {
             let acceptance: InvitationAcceptance
+            let didReceiveAcceptance: Bool
             if let accepted = joinProgress.acceptedResponse(for: account.id, principalGeneration: principalGeneration) {
                 acceptance = accepted
+                didReceiveAcceptance = false
             } else {
                 acceptance = try await InvitationAPIClient(baseURL: baseURL).request("api/invitations/accept",
                     method: "POST", body: ["token": token.uuidString])
+                didReceiveAcceptance = true
             }
             guard authentication.currentUser?.id == account.id,
                   authentication.principalGeneration == principalGeneration,
                   invitations.pendingToken == token,
                   !Task.isCancelled else { return }
+            if didReceiveAcceptance { AppHaptics.play(.success) }
             joinProgress.record(acceptance, accountID: account.id, principalGeneration: principalGeneration)
             SyncDiagnostics.record("invitation_join_result", fields: [
                 "account_key": SyncDiagnostics.accountKey(account.id),

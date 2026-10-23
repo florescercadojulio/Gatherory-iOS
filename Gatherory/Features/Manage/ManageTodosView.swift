@@ -145,8 +145,8 @@ struct ManageTodosView: View {
             listFilter = .upcoming
         }
         .onChange(of: canEdit) { _, allowed in if !allowed { editor = nil } }
-        .sensoryFeedback(.success, trigger: successfulMutationHaptic)
-        .sensoryFeedback(.selection, trigger: selectionHaptic)
+        .appHaptic(.success, trigger: successfulMutationHaptic)
+        .appHaptic(.selection, trigger: selectionHaptic)
         .alert(TodoCopy.saveFailed, isPresented: $saveFailed) {
             Button(AppCopy.Common.close, role: .cancel) {}
         } message: { Text(TodoCopy.saveFailedHelp) }
@@ -292,6 +292,7 @@ struct ManageTodosView: View {
             return true
         } catch {
             workspace.todos = previous
+            AppHaptics.play(.error)
             return false
         }
     }
@@ -362,7 +363,7 @@ private struct TodoEditorView: View {
                         .focused($isFocused)
                         .textInputAutocapitalization(.sentences)
                     if normalizedTitle.unicodeScalars.count > 200 {
-                        Text(TodoCopy.invalidTitle).font(.footnote).foregroundStyle(.red)
+                        Text(TodoCopy.invalidTitle).font(.footnote).foregroundStyle(AppTheme.ColorToken.destructive)
                     }
                 }
                 .listRowBackground(AppTheme.ColorToken.surface)
@@ -405,7 +406,7 @@ private struct TodoEditorView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     if !validWebsiteURL {
-                        Text(TodoCopy.invalidWebsite).font(.footnote).foregroundStyle(.red)
+                        Text(TodoCopy.invalidWebsite).font(.footnote).foregroundStyle(AppTheme.ColorToken.destructive)
                     }
                     if let url = safeWebsiteURL(websiteURL) {
                         Link(TodoCopy.openWebsite, destination: url)

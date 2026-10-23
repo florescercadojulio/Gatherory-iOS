@@ -116,6 +116,7 @@ struct EventInvitationQRCodeSheet: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
                 .privacySensitive()
             } else {
                 ContentUnavailableView("QR Code Unavailable", systemImage: "qrcode")

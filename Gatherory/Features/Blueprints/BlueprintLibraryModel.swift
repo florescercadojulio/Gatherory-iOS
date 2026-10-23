@@ -293,13 +293,14 @@ final class BlueprintLibraryModel {
     @ObservationIgnored private var isInvalidated = false
 
     init(ownerID: String, cache: BlueprintLibraryCache = BlueprintLibraryCache(),
-         visibility: BlueprintLibraryVisibilityStore? = nil) {
+         visibility: BlueprintLibraryVisibilityStore? = nil, loadsCachedInstallations: Bool = true) {
         // Default arguments are evaluated outside this initializer's actor.
         // Create the actor-isolated store here, on the model's main actor.
         let visibility = visibility ?? BlueprintLibraryVisibilityStore()
         self.ownerID = ownerID
         self.cache = cache
         self.visibility = visibility
+        guard loadsCachedInstallations else { return }
         guard !ownerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             cacheFailed = true
             return

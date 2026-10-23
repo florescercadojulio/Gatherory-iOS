@@ -26,6 +26,54 @@ enum CloudSyncFailure: LocalizedError {
     }
 }
 
+@MainActor
+extension PostgresSyncTransport: BlueprintActionsTransport {
+    func update(_ mutation: BlueprintPreferenceMutation) async throws -> BlueprintPreferenceAcknowledgement {
+        var request = try authenticatedRequest(path: ["api", "blueprints", "preferences"])
+        request.httpMethod = "PATCH"
+        request.httpBody = try encoder.encode(mutation)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let result: BlueprintPreferenceAcknowledgement = try await perform(request)
+        return result
+    }
+
+    func preferences(cursor: String?) async throws -> BlueprintPreferencesPage {
+        var components = URLComponents(url: endpointURL(path: ["api", "blueprints", "preferences"]),
+                                       resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "limit", value: "100"),
+                                  URLQueryItem(name: "cursor", value: cursor)].filter { $0.value != nil }
+        guard let url = components?.url else { throw CloudSyncFailure.invalidResponse }
+        var request = try authenticatedRequest(url: url)
+        request.httpMethod = "GET"
+        return try await perform(request)
+    }
+
+    func measurementSettings() async throws -> BlueprintMeasurementSettings {
+        var request = try authenticatedRequest(path: ["api", "blueprints", "measurement"])
+        request.httpMethod = "GET"
+        return try await perform(request)
+    }
+
+    func setMeasurementSettings(requestID: UUID, enabled: Bool) async throws -> BlueprintMeasurementSettings {
+        struct Input: Encodable { let requestId: UUID; let enabled: Bool }
+        var request = try authenticatedRequest(path: ["api", "blueprints", "measurement"])
+        request.httpMethod = "PATCH"
+        request.httpBody = try encoder.encode(Input(requestId: requestID, enabled: enabled))
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        return try await perform(request)
+    }
+
+    func record(_ signal: BlueprintMeasurementSignal) async throws {
+        var request = try authenticatedRequest(path: ["api", "blueprints", "measurement", "signals"])
+        request.httpMethod = "POST"
+        request.httpBody = try encoder.encode(signal)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let _: EmptyResponse = try await perform(request)
+    }
+}
+
+private struct EmptyResponse: Decodable {}
+
 struct PostgresSyncTransport: WorkspaceSnapshotTransport {
     private let baseURL: URL
     private let urlSession: URLSession
@@ -107,6 +155,37 @@ struct PostgresSyncTransport: WorkspaceSnapshotTransport {
     func blueprintCatalog() async throws -> BlueprintCatalogResponse {
         var request = try authenticatedRequest(path: ["api", "blueprints", "catalog"])
         request.httpMethod = "GET"
+        return try await perform(request)
+    }
+
+    func blueprintCatalogPage(
+        cursor: String? = nil,
+        limit: Int = 20,
+        category: String? = nil,
+        query: String? = nil,
+        discoveryContext: BlueprintDiscoveryRequestContext? = nil
+    ) async throws -> BlueprintCatalogResponse {
+        var components = URLComponents(
+            url: endpointURL(path: ["api", "blueprints", "catalog"]),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "cursor", value: cursor),
+            URLQueryItem(name: "category", value: category),
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "ranking", value: "baseline_v1")
+        ].filter { $0.value != nil }
+        guard let url = components?.url else { throw CloudSyncFailure.invalidResponse }
+        var request = try authenticatedRequest(url: url)
+        request.httpMethod = "GET"
+        if query?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
+           let discoveryContext,
+           discoveryContext.startedAt <= Date().addingTimeInterval(60),
+           let value = try? discoveryContext.encodedHeaderValue(),
+           value.utf8.count <= BlueprintDiscoveryContextPolicy.headerByteLimit {
+            request.setValue(value, forHTTPHeaderField: "X-Gatherory-Discovery-Context")
+        }
         return try await perform(request)
     }
 
@@ -377,12 +456,29 @@ extension PostgresSyncTransport: BlueprintSavedCopyTransport {
     private struct SnapshotCopyRequest: Encodable {
         let requestId: String
         let content: BlueprintDraftContent
+        let source: BlueprintCopySource?
     }
 
-    func copyBlueprintSnapshot(requestID: UUID, content: BlueprintDraftContent) async throws -> BlueprintPersonalRecord {
+    func copyBlueprintSnapshot(
+        requestID: UUID, content: BlueprintDraftContent
+    ) async throws -> BlueprintPersonalRecord {
+        try await copyBlueprintSnapshot(requestID: requestID, content: content, source: nil)
+    }
+
+    func copyBlueprintSnapshot(
+        requestID: UUID, content: BlueprintDraftContent, source: BlueprintCopySource
+    ) async throws -> BlueprintPersonalRecord {
+        try await copyBlueprintSnapshot(requestID: requestID, content: content, source: Optional(source))
+    }
+
+    private func copyBlueprintSnapshot(
+        requestID: UUID, content: BlueprintDraftContent, source: BlueprintCopySource?
+    ) async throws -> BlueprintPersonalRecord {
         var request = try authenticatedRequest(path: ["api", "blueprints", "copies"])
         request.httpMethod = "POST"
-        request.httpBody = try encoder.encode(SnapshotCopyRequest(requestId: requestID.uuidString.lowercased(), content: content))
+        request.httpBody = try encoder.encode(SnapshotCopyRequest(
+            requestId: requestID.uuidString.lowercased(), content: content, source: source
+        ))
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         guard let data = try await performData(request, operation: "blueprints/copies") else { throw CloudSyncFailure.invalidResponse }
         return try decoder.decode(BlueprintPersonalRecord.self, from: data)

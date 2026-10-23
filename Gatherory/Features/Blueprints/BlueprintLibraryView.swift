@@ -27,11 +27,11 @@ private struct BlueprintLibraryDraftRoute: Identifiable {
 
 /// Personal template activity. Draft and history files never enter workspace sync.
 struct BlueprintLibraryView: View {
-    private typealias Collection = BlueprintLibraryCollection
-
     let ownerID: String
+    let actionStore: BlueprintActionStore?
+    let onExplore: () -> Void
+    let onCreate: () -> Void
     var isActive = true
-    @Environment(WorkspaceLibrary.self) private var library
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(\.currentUserAccount) private var account
     @Environment(\.scenePhase) private var scenePhase
@@ -42,16 +42,15 @@ struct BlueprintLibraryView: View {
     @State private var recovery = BlueprintSetupRecovery(drafts: [], hasPendingInstallation: false, loadFailed: false)
     @State private var setupRoute: BlueprintLibrarySetupRoute?
     @State private var draftRoute: BlueprintLibraryDraftRoute?
-    @State private var selectedCollection: Collection = .installedTemplates
-    private let collectionPreferenceStore = BlueprintLibraryCollectionPreferenceStore()
-    @State private var manuallySelectedCollection = false
+    @State private var selectedPrimaryCollection: BlueprintLibraryPrimaryCollection = .yours
+    private let primaryCollectionPreferenceStore = BlueprintLibraryPrimaryCollectionPreferenceStore()
     @State private var wasActive = false
-    @State private var selectionLoadGeneration = UUID()
     @State private var deletion: BlueprintUsedTemplate?
     @State private var draftDeletion: BlueprintSetupDraft?
     @State private var personalDeletion: BlueprintPersonalRecord?
     @State private var personalRecords: [BlueprintPersonalRecord] = []
     @State private var personalLoading = true
+    @State private var hasResolvedPersonalRecords = false
     @State private var personalLoadFailed = false
     @State private var personalCacheFailed = false
     @State private var publishCandidate: BlueprintPersonalRecord?
@@ -60,21 +59,89 @@ struct BlueprintLibraryView: View {
     @State private var visibilityGeneration = UUID()
     @State private var creatorNameCandidate: BlueprintPersonalRecord?
     @State private var actionFailed = false
+#if DEBUG
+    private let visualFixture: BlueprintLibraryVisualFixture.State?
+    private let previewActionsFixture: BlueprintPreviewActionsVisualFixture.State?
+#endif
+
+    private var fixtureIsEnabled: Bool {
+#if DEBUG
+        visualFixture != nil || previewActionsFixture != nil
+#else
+        false
+#endif
+    }
+
+    private var sourceInstallations: [BlueprintUsedTemplate] {
+#if DEBUG
+        if previewActionsFixture != nil { return [] }
+        if let visualFixture { return visualFixture.installations }
+#endif
+        return model.installations
+    }
 
     private var visibleInstallations: [BlueprintUsedTemplate] {
-        let ownedCatalogKeys = Set(personalRecords.map { $0.catalogEntry.catalogKey })
-        return model.installations.filter { !ownedCatalogKeys.contains($0.catalogKey) }
+        let waitsForInitialOwnership = !hasResolvedPersonalRecords && personalLoading && personalRecords.isEmpty
+        guard !waitsForInitialOwnership else { return [] }
+        return sourceInstallations
     }
 
     private var visibleRecoveryDrafts: [BlueprintSetupDraft] {
-        let ownedCatalogKeys = Set(personalRecords.map { $0.catalogEntry.catalogKey })
-        return recovery.drafts.filter { !ownedCatalogKeys.contains($0.entry.catalogKey) }
+        BlueprintLibraryProjection.visibleRecoveryDrafts(
+            drafts: recovery.drafts, installations: sourceInstallations, ownerID: ownerID
+        )
     }
 
-    init(ownerID: String, isActive: Bool = true) {
+    init(ownerID: String, isActive: Bool = true, actionStore: BlueprintActionStore? = nil,
+         onExplore: @escaping () -> Void = {}, onCreate: @escaping () -> Void = {}) {
         self.ownerID = ownerID
         self.isActive = isActive
+        self.actionStore = actionStore
+        self.onExplore = onExplore
+        self.onCreate = onCreate
+        _selectedPrimaryCollection = State(initialValue:
+            primaryCollectionPreferenceStore.collection(ownerID: ownerID) ?? .yours
+        )
+#if DEBUG
+        let fixture = BlueprintLibraryVisualFixture.load(ownerID: ownerID)
+        let actionsFixture = BlueprintPreviewActionsVisualFixture.load(ownerID: ownerID)
+        visualFixture = fixture
+        previewActionsFixture = actionsFixture
+        _model = State(initialValue: BlueprintLibraryModel(ownerID: ownerID,
+            loadsCachedInstallations: fixture == nil && actionsFixture == nil))
+        if let actionsFixture {
+            _selectedPrimaryCollection = State(initialValue: .yours)
+            _personalRecords = State(initialValue: actionsFixture.personalSource.map { [$0] } ?? [])
+            _recovery = State(initialValue: BlueprintSetupRecovery(
+                drafts: actionsFixture.personalSource == nil ? actionsFixture.workingDraft.map { [$0] } ?? [] : [],
+                hasPendingInstallation: false, loadFailed: false))
+            _personalLoading = State(initialValue: false)
+            _hasResolvedPersonalRecords = State(initialValue: true)
+            return
+        }
+        if let fixture {
+            _selectedPrimaryCollection = State(initialValue: .yours)
+            _personalRecords = State(initialValue: fixture.personalRecords)
+            _recovery = State(initialValue: fixture.recovery)
+            _personalLoading = State(initialValue: false)
+            _hasResolvedPersonalRecords = State(initialValue: true)
+            return
+        }
+#else
         _model = State(initialValue: BlueprintLibraryModel(ownerID: ownerID))
+#endif
+        if ownerID.isEmpty {
+            _personalRecords = State(initialValue: [])
+            _personalCacheFailed = State(initialValue: false)
+        } else {
+            do {
+                _personalRecords = State(initialValue: try BlueprintPersonalLibraryStore().load(ownerID: ownerID))
+                _personalCacheFailed = State(initialValue: false)
+            } catch {
+                _personalRecords = State(initialValue: [])
+                _personalCacheFailed = State(initialValue: true)
+            }
+        }
     }
 
     var body: some View {
@@ -83,28 +150,45 @@ struct BlueprintLibraryView: View {
                 ContentUnavailableView(BlueprintCopy.libraryTitle, systemImage: "square.stack.3d.up")
             } else {
                 GeometryReader { viewport in
+                let viewportWidth = LayoutDimensions.nonnegative(viewport.size.width)
+                let horizontalInset = LayoutDimensions.nonnegative(AppTheme.Layout.screenHorizontal)
+                let contentWidth = min(800, max(viewportWidth - 2 * horizontalInset, 0))
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.section) {
+                        Picker(BlueprintCopy.libraryCollectionPickerLabel, selection: $selectedPrimaryCollection) {
+                            Text(BlueprintCopy.libraryYours).tag(BlueprintLibraryPrimaryCollection.yours)
+                            Text(BlueprintCopy.librarySaved).tag(BlueprintLibraryPrimaryCollection.saved)
+                            Text(BlueprintCopy.libraryLiked).tag(BlueprintLibraryPrimaryCollection.liked)
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel(BlueprintCopy.libraryCollectionPickerLabel)
+                        .accessibilityIdentifier("blueprint.library.collections")
+                        .onChange(of: selectedPrimaryCollection) { _, collection in
+                            primaryCollectionPreferenceStore.save(collection, ownerID: ownerID)
+                            if collection == .yours { Task { await reload() } }
+                        }
+
+                        if selectedPrimaryCollection == .saved {
+                            BlueprintPublicCollectionView(kind: .saved, actionStore: actionStore, onExplore: onExplore)
+                        } else if selectedPrimaryCollection == .liked {
+                            BlueprintPublicCollectionView(kind: .liked, actionStore: actionStore, onExplore: onExplore)
+                        } else {
                         if recovery.hasPendingInstallation {
                             VStack(alignment: .leading, spacing: 12) {
                                 Label(BlueprintCopy.pendingInstall, systemImage: "arrow.clockwise")
                                     .font(.headline)
                                 Text(BlueprintCopy.finishPreviousInstall)
                                     .font(.subheadline).foregroundStyle(.secondary)
-                                Button(BlueprintCopy.retryInstall, systemImage: "arrow.clockwise") {
+                                Button(BlueprintCopy.libraryContinueSetup, systemImage: "arrow.clockwise") {
                                     presentSetup(catalogKey: nil, shareToken: nil)
                                 }
                                 .buttonStyle(.bordered)
+                                .accessibilityIdentifier("blueprint.library.pending.continue")
                             }
                             .librarySurface()
                         }
 
-                        switch selectedCollection {
-                        case .installedTemplates:
-                            usedContent
-                        case .inProgress:
-                            draftsContent
-                        }
+                        yoursContent
 
                         if recovery.loadFailed || model.cacheFailed || personalCacheFailed {
                             VStack(alignment: .leading, spacing: 8) {
@@ -113,24 +197,25 @@ struct BlueprintLibraryView: View {
                             }
                             .font(.footnote).librarySurface()
                         }
-                        if selectedCollection == .installedTemplates && (model.refreshFailed || personalLoadFailed) {
+                        if model.refreshFailed || personalLoadFailed {
                             VStack(alignment: .leading, spacing: 8) {
                                 Label(BlueprintCopy.libraryRefreshFailed, systemImage: "wifi.exclamationmark")
                                 Button(AppCopy.Common.retry) { Task { await reload() } }
                             }
                             .font(.footnote).librarySurface()
                         }
+                        }
                     }
                     .padding(.horizontal, AppTheme.Layout.screenHorizontal)
                     .padding(.top, AppTheme.Layout.screenTop)
                     .padding(.bottom, AppTheme.Layout.screenBottom)
-                    .frame(maxWidth: 800)
+                    .frame(width: contentWidth + 2 * horizontalInset)
                     .frame(maxWidth: .infinity)
-                    .frame(minHeight: centersEmptyState ? LayoutDimensions.nonnegative(viewport.size.height) : nil)
                 }
                 .scrollIndicators(.hidden)
+                .accessibilityIdentifier("blueprint.library.scroll")
                 .appSoftScrollEdges()
-                .refreshable { await reload() }
+                .refreshable { await refreshVisibleCollection() }
                 }
             }
         }
@@ -175,40 +260,23 @@ struct BlueprintLibraryView: View {
         .alert("Unable to update blueprint", isPresented: $actionFailed) {
             Button(AppCopy.Common.cancel, role: .cancel) {}
         }
-        .navigationTitle(title(for: selectedCollection))
-        .toolbarTitleMenu {
-            ForEach(Collection.allCases) { collection in
-                Button {
-                    selectCollection(collection)
-                } label: {
-                    if selectedCollection == collection {
-                        Label(title(for: collection), systemImage: "checkmark")
-                    } else {
-                        Text(title(for: collection))
-                    }
-                }
-            }
-        }
+        .navigationTitle(BlueprintCopy.libraryTitle)
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                ToolbarGlassActionGroup {
-                    AccountToolbarButton(avatarSize: 28)
-                        .frame(width: 44, height: 44)
-                }
+            AdaptiveToolbarActions {
+                AccountToolbarButton(avatarSize: 28, blueprintActionStore: actionStore)
+                    .frame(width: 44, height: 44)
             }
-                .sharedBackgroundVisibility(.hidden)
         }
         .task(id: "\(isActive)|\(String(describing: cloudSync.accountOnboardingState))") {
             if isActive {
                 if !wasActive {
                     wasActive = true
-                    manuallySelectedCollection = false
                 }
+                if !fixtureIsEnabled { await actionStore?.loadPreferences() }
                 await reload()
             } else {
                 wasActive = false
-                manuallySelectedCollection = false
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -223,6 +291,7 @@ struct BlueprintLibraryView: View {
             if activeID != ownerID {
                 model.invalidate()
                 personalRecords = []
+                hasResolvedPersonalRecords = false
                 personalLoading = true
                 personalLoadFailed = false
                 personalCacheFailed = false
@@ -257,8 +326,10 @@ struct BlueprintLibraryView: View {
             if account?.id == route.ownerID {
                 BlueprintPreviewView(
                     entry: route.draft.entry,
+                    presentationContext: .personal,
                     sharedToken: route.draft.shareToken,
                     usesSavedPreview: route.draft.shareToken != nil,
+                    allowsRepeatInstallation: true,
                     installedSource: route.isInstalled ? route.draft : nil,
                     installedTemplateID: route.installationID,
                     personalSource: route.personalSource
@@ -267,78 +338,93 @@ struct BlueprintLibraryView: View {
         }
     }
 
-    private var draftsContent: some View {
+    private var yoursContent: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            if visibleRecoveryDrafts.isEmpty {
-                BlueprintLibraryEmptyState(collection: .inProgress) {
-                    selectCollection(.installedTemplates)
-                }
+            if (model.loading || personalLoading) && visibleInstallations.isEmpty
+                && personalRecords.isEmpty && visibleRecoveryDrafts.isEmpty {
+                ProgressView().frame(maxWidth: .infinity)
+            } else if visibleInstallations.isEmpty && personalRecords.isEmpty && visibleRecoveryDrafts.isEmpty
+                        && !personalLoading && !model.loading && !recovery.hasPendingInstallation {
+                yoursEmptyState
             } else {
-                MasonryLayout(
+                AdaptiveMasonry(
                     columnCount: dynamicTypeSize.isAccessibilitySize ? 1 : 2,
                     spacing: 12,
-                    layoutDirection: layoutDirection
+                    layoutDirection: layoutDirection, minimumColumnWidth: 170
                 ) {
-                    ForEach(Array(visibleRecoveryDrafts.enumerated()), id: \.offset) { _, draft in
+                    ForEach(visibleRecoveryDrafts, id: \.requestID) { draft in
                         Button {
                             guard draft.ownerUserID == ownerID else { return }
                             presentDraft(draft)
                         } label: {
+                            let preview = BlueprintPreviewContent(
+                                entry: draft.entry,
+                                customizations: draft.customizations,
+                                eventName: draft.eventName
+                            )
                             BlueprintLibraryTile(
                                 category: draft.entry.browseCategories.first ?? .events,
                                 title: draft.eventName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                     ? draft.entry.definition.blueprint.name : draft.eventName,
-                                subtitle: draft.entry.definition.blueprint.name
+                                subtitle: draft.entry.definition.blueprint.name,
+                                detail: BlueprintLibraryProjection.hasSetupProgress(draft)
+                                    ? BlueprintCopy.libraryContinueSetup : nil,
+                                coverAssetID: preview?.coverAssetID,
+                                publicCoverImageURL: preview?.publicCoverImageURL,
+                                coverSource: BlueprintCoverSource(
+                                    catalogKey: draft.entry.catalogKey,
+                                    revision: draft.entry.revision,
+                                    shareToken: draft.shareToken
+                                )
                             )
                         }
                         .buttonStyle(.plain)
                         .disabled(recovery.hasPendingInstallation)
-                        .accessibilityHint(BlueprintCopy.resumeSetup)
+                        .accessibilityIdentifier(recoveryCardIdentifier(draft))
                         .contextMenu {
-                            Button("Create Workspace", systemImage: "plus.square") { createWorkspace(from: draft) }
+                            if BlueprintLibraryProjection.hasSetupProgress(draft) {
+                                Button(BlueprintCopy.libraryContinueSetup, systemImage: "arrow.right") {
+                                    presentSetup(catalogKey: draft.entry.catalogKey, shareToken: draft.shareToken)
+                                }
+                                .disabled(recovery.hasPendingInstallation)
+                            }
+                            Button(BlueprintCopy.createEvents, systemImage: "plus.square") { createWorkspace(from: draft) }
+                                .disabled(recovery.hasPendingInstallation)
                             Button("Delete Blueprint", systemImage: "trash", role: .destructive) {
                                 draftDeletion = draft
                             }
                         }
                     }
-                }
-                .frame(maxWidth: 800)
-                .frame(maxWidth: .infinity)
-            }
-        }
-    }
-
-    private var usedContent: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-            if (model.loading || personalLoading) && visibleInstallations.isEmpty && personalRecords.isEmpty {
-                ProgressView().frame(maxWidth: .infinity)
-            } else if visibleInstallations.isEmpty && personalRecords.isEmpty && !personalLoading {
-                BlueprintLibraryEmptyState(collection: .installedTemplates) {
-                    selectCollection(.inProgress)
-                }
-            } else {
-                MasonryLayout(
-                    columnCount: dynamicTypeSize.isAccessibilitySize ? 1 : 2,
-                    spacing: 12,
-                    layoutDirection: layoutDirection
-                ) {
                     ForEach(visibleInstallations) { installation in
-                        let workspace = library.workspaces.first { $0.mainEventID == installation.scopeID }
+                        let source = try? installation.previewSource(ownerID: ownerID)
+                        let experienceType = source?.entry.definition.experienceDefaults.type
                         let category = BlueprintLibraryCategoryFilter.usedTemplateCategory(
-                            experienceType: workspace?.experienceConfiguration?.experienceType
+                            experienceType: experienceType
                         )
                         Button {
                             openBlueprint(installation)
                         } label: {
+                            let preview = source.flatMap {
+                                BlueprintPreviewContent(entry: $0.entry, customizations: $0.customizations,
+                                                        eventName: $0.eventName)
+                            }
                             BlueprintLibraryTile(
                                 category: category,
                                 title: installation.templateName,
-                                subtitle: BlueprintCopy.libraryUsedFor(installation.eventName)
+                                subtitle: BlueprintCopy.libraryUsedFor(installation.eventName),
+                                coverAssetID: preview?.coverAssetID,
+                                publicCoverImageURL: preview?.publicCoverImageURL,
+                                coverSource: source.map {
+                                    BlueprintCoverSource(catalogKey: $0.entry.catalogKey,
+                                                         revision: $0.entry.revision,
+                                                         shareToken: $0.shareToken)
+                                }
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("blueprint.library.card.used.\(installation.id.uuidString)")
                         .contextMenu {
-                            Button("Create Workspace", systemImage: "plus.square") {
+                            Button(BlueprintCopy.createEvents, systemImage: "plus.square") {
                                 createWorkspace(from: installation)
                             }
                             .disabled(recovery.hasPendingInstallation)
@@ -350,20 +436,28 @@ struct BlueprintLibraryView: View {
                     }
                     ForEach(personalRecords) { record in
                         Button { openPersonalBlueprint(record) } label: {
+                            let entry = record.catalogEntry
+                            let preview = BlueprintPreviewContent(entry: entry)
                             BlueprintLibraryTile(
                                 category: BlueprintLibraryCategoryFilter.usedTemplateCategory(
-                                    experienceType: record.catalogEntry.definition.experienceDefaults.type
+                                    experienceType: entry.definition.experienceDefaults.type
                                 ),
-                                title: record.catalogEntry.definition.blueprint.name,
+                                title: entry.definition.blueprint.name,
                                 subtitle: String(localized: "Your Blueprint"),
+                                coverAssetID: preview?.coverAssetID,
+                                publicCoverImageURL: preview?.publicCoverImageURL,
+                                coverSource: BlueprintCoverSource(catalogKey: entry.catalogKey,
+                                                                  revision: entry.revision),
                                 creatorName: record.creatorName ?? record.catalogEntry.creator?.displayName,
-                                activeShareLinkCount: personalLoading || personalLoadFailed ? nil : record.activeShareLinkCount,
-                                listedRevision: personalLoading || personalLoadFailed ? nil : record.listedRevision
+                                activeShareLinkCount: record.activeShareLinkCount,
+                                listedRevision: record.listedRevision,
+                                showsSharingStatus: true
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("blueprint.library.card.personal.\(record.id.uuidString)")
                         .contextMenu {
-                            Button("Create Workspace", systemImage: "plus.square") {
+                            Button(BlueprintCopy.createEvents, systemImage: "plus.square") {
                                 createWorkspace(from: record)
                             }
                             .disabled(recovery.hasPendingInstallation)
@@ -401,8 +495,18 @@ struct BlueprintLibraryView: View {
         draftRoute = BlueprintLibraryDraftRoute(ownerID: ownerID, draft: draft)
     }
 
+    private func recoveryCardIdentifier(_ draft: BlueprintSetupDraft) -> String {
+#if DEBUG
+        if previewActionsFixture?.workingDraft?.requestID == draft.requestID {
+            return "blueprint.library.fixture.working"
+        }
+#endif
+        return "blueprint.library.card.recovery.\(draft.requestID.uuidString)"
+    }
+
     private func openBlueprint(_ installation: BlueprintUsedTemplate) {
         guard account?.id == ownerID else { return }
+        guard !fixtureIsEnabled else { return }
         do {
             if let source = try installation.previewSource(ownerID: ownerID) {
                 presentationActive.wrappedValue = true
@@ -434,7 +538,7 @@ struct BlueprintLibraryView: View {
 
     private func deleteSelectedBlueprint() {
         defer { deletion = nil; draftDeletion = nil; personalDeletion = nil }
-        guard account?.id == ownerID else { return }
+        guard account?.id == ownerID, !fixtureIsEnabled else { return }
         if let deletion { model.removeFromLibrary(deletion) }
         if let record = personalDeletion {
             Task { await deletePersonalBlueprint(record) }
@@ -480,6 +584,7 @@ struct BlueprintLibraryView: View {
 
     @MainActor
     private func publishToSearch(_ record: BlueprintPersonalRecord, creatorName: String? = nil) async {
+        guard !fixtureIsEnabled else { return }
         let expectedCreatorName = record.creatorName.flatMap(BlueprintCreatorNameValidation.normalized)
             ?? creatorName.flatMap(BlueprintCreatorNameValidation.normalized)
         publishCandidate = nil
@@ -540,6 +645,7 @@ struct BlueprintLibraryView: View {
 
     @MainActor
     private func removeFromSearch(_ record: BlueprintPersonalRecord) async {
+        guard !fixtureIsEnabled else { return }
         unlistCandidate = nil
         guard account?.id == ownerID, !personalLoading, !personalLoadFailed,
               personalVisibilityMutationTokens[record.id] == nil,
@@ -603,6 +709,7 @@ struct BlueprintLibraryView: View {
     }
 
     private func createWorkspace(from record: BlueprintPersonalRecord) {
+        guard !fixtureIsEnabled else { return }
         guard account?.id == ownerID, !recovery.hasPendingInstallation else { return }
         do {
             guard try BlueprintInstallationIntentStore().pending(ownerUserID: ownerID).isEmpty else { return }
@@ -630,6 +737,7 @@ struct BlueprintLibraryView: View {
     }
 
     private func createWorkspace(from installation: BlueprintUsedTemplate) {
+        guard !fixtureIsEnabled else { return }
         guard account?.id == ownerID, !recovery.hasPendingInstallation else { return }
         do {
             guard try BlueprintInstallationIntentStore().pending(ownerUserID: ownerID).isEmpty else { return }
@@ -642,6 +750,7 @@ struct BlueprintLibraryView: View {
     }
 
     private func createWorkspace(from draft: BlueprintSetupDraft) {
+        guard !fixtureIsEnabled else { return }
         guard account?.id == ownerID, draft.ownerUserID == ownerID, !recovery.hasPendingInstallation else { return }
         do {
             guard try BlueprintInstallationIntentStore().pending(ownerUserID: ownerID).isEmpty else { return }
@@ -684,40 +793,45 @@ struct BlueprintLibraryView: View {
         } catch { if account?.id == ownerID { actionFailed = true } }
     }
 
-    private func title(for collection: Collection) -> String {
-        switch collection {
-        case .installedTemplates:
-            BlueprintCopy.libraryTitle
-        case .inProgress:
-            BlueprintCopy.libraryDrafts
+    private var yoursEmptyState: some View {
+        ContentUnavailableView {
+            Label(BlueprintCopy.libraryYoursEmptyTitle, systemImage: "square.stack.3d.up")
+        } description: {
+            Text(BlueprintCopy.libraryYoursEmptyMessage)
+        } actions: {
+            VStack(spacing: AppTheme.Spacing.compact) {
+                Button(BlueprintCopy.createTemplateTitle, action: onCreate)
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("blueprint.library.create")
+                Button(BlueprintCopy.exploreBlueprints, action: onExplore)
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("blueprint.library.explore")
+            }
+            .controlSize(.large)
         }
-    }
-
-    private func selectCollection(_ collection: Collection) {
-        selectedCollection = collection
-        manuallySelectedCollection = true
-        collectionPreferenceStore.save(collection, ownerID: ownerID)
-    }
-
-    private var centersEmptyState: Bool {
-        let empty = selectedCollection == .inProgress
-            ? visibleRecoveryDrafts.isEmpty : visibleInstallations.isEmpty && personalRecords.isEmpty && !model.loading && !personalLoading
-        return empty && !recovery.hasPendingInstallation && !recovery.loadFailed
-            && !model.cacheFailed && !model.refreshFailed
+        .frame(maxWidth: .infinity)
     }
 
     private func presentSetup(catalogKey: String?, shareToken: String?) {
-        guard !ownerID.isEmpty, account?.id == ownerID else { return }
+        guard !ownerID.isEmpty, account?.id == ownerID, !fixtureIsEnabled else { return }
         presentationActive.wrappedValue = true
         setupRoute = BlueprintLibrarySetupRoute(ownerID: ownerID, catalogKey: catalogKey, shareToken: shareToken)
     }
 
     private func reload() async {
         guard isActive, !ownerID.isEmpty, account?.id == ownerID else { return }
-        let loadGeneration = UUID()
-        selectionLoadGeneration = loadGeneration
-        let manualSelectionAtStart = manuallySelectedCollection
-        let preferredCollection = collectionPreferenceStore.collection(ownerID: ownerID)
+#if DEBUG
+        if let fixture = previewActionsFixture {
+            personalRecords = fixture.personalSource.map { [$0] } ?? []
+            recovery = BlueprintSetupRecovery(
+                drafts: fixture.personalSource == nil ? fixture.workingDraft.map { [$0] } ?? [] : [],
+                hasPendingInstallation: false, loadFailed: false)
+            personalLoading = false
+            hasResolvedPersonalRecords = true
+            return
+        }
+#endif
+        guard !fixtureIsEnabled else { return }
         recovery = BlueprintSetupRecovery.load(
             ownerID: ownerID,
             readDrafts: { try BlueprintSetupDraftStore().all(ownerUserID: $0) },
@@ -731,19 +845,14 @@ struct BlueprintLibraryView: View {
             return try await coordinator.usedTemplates()
         }
         await refreshPersonalRecords()
-        guard isActive, account?.id == ownerID,
-              selectionLoadGeneration == loadGeneration,
-              manuallySelectedCollection == manualSelectionAtStart,
-              !manualSelectionAtStart
-        else { return }
+    }
 
-        let resolved = BlueprintLibraryCollectionSelection.resolve(
-            preferred: preferredCollection,
-            hasInstalledTemplates: !visibleInstallations.isEmpty || !personalRecords.isEmpty,
-            hasInProgressContent: !visibleRecoveryDrafts.isEmpty || recovery.hasPendingInstallation
-        )
-        selectedCollection = resolved
-        collectionPreferenceStore.save(resolved, ownerID: ownerID)
+    private func refreshVisibleCollection() async {
+        if selectedPrimaryCollection == .yours {
+            await reload()
+        } else {
+            await actionStore?.loadPreferences()
+        }
     }
 
     private func loadPersonalCache() {
@@ -752,7 +861,6 @@ struct BlueprintLibraryView: View {
             personalRecords = try BlueprintPersonalLibraryStore().load(ownerID: ownerID)
             personalCacheFailed = false
         } catch {
-            personalRecords = []
             personalCacheFailed = true
         }
         personalLoading = true
@@ -760,6 +868,12 @@ struct BlueprintLibraryView: View {
 
     @MainActor
     private func refreshPersonalRecords() async {
+        // Avoid painting receipt cards that an initial ownership response will
+        // immediately replace with personal blueprint cards. Later refreshes
+        // retain the existing collection instead of returning to a spinner.
+        defer {
+            if account?.id == ownerID { hasResolvedPersonalRecords = true }
+        }
         guard account?.id == ownerID, let baseURL = AppRuntimeConfiguration.authenticationBaseURL else {
             personalLoadFailed = true
             personalLoading = false
@@ -800,19 +914,29 @@ private struct BlueprintLibraryTile: View {
     let title: String
     let subtitle: String
     var detail: String? = nil
+    var coverAssetID: UUID? = nil
+    var publicCoverImageURL: String? = nil
+    var coverSource: BlueprintCoverSource? = nil
     var creatorName: String? = nil
     var activeShareLinkCount: Int? = nil
     var listedRevision: Int? = nil
+    var showsSharingStatus = false
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            ProgressiveArtwork(
-                symbol: category.symbol,
-                colors: category.artworkCategory.artworkColors,
-                accent: category.artworkCategory.artworkAccent,
-                ambientBlurRadius: 12,
-                progressiveBlurRadius: 0
-            )
+            BlueprintCoverArtwork(
+                assetID: coverAssetID,
+                publicImageURL: publicCoverImageURL,
+                source: coverSource
+            ) {
+                ProgressiveArtwork(
+                    symbol: category.symbol,
+                    colors: category.artworkCategory.artworkColors,
+                    accent: category.artworkCategory.artworkAccent,
+                    ambientBlurRadius: 12,
+                    progressiveBlurRadius: 0
+                )
+            }
             LinearGradient(
                 stops: [
                     .init(color: .clear, location: 0.22),
@@ -828,11 +952,20 @@ private struct BlueprintLibraryTile: View {
                 if let creatorName, !creatorName.isEmpty {
                     Text(BlueprintCopy.creatorByline(creatorName)).font(.caption).lineLimit(1)
                 }
-                if activeShareLinkCount != nil || listedRevision != nil {
-                    BlueprintSharingStatusBadges(
-                        activeShareLinkCount: activeShareLinkCount,
-                        listedRevision: listedRevision
-                    )
+                if showsSharingStatus {
+                    ZStack(alignment: .bottomLeading) {
+                        // Reserve the largest status footprint before counts arrive,
+                        // including the two-line layout at narrow text widths.
+                        BlueprintSharingStatusBadges(activeShareLinkCount: 1, listedRevision: 1)
+                            .hidden()
+                            .accessibilityHidden(true)
+                        BlueprintSharingStatusBadges(
+                            activeShareLinkCount: activeShareLinkCount,
+                            listedRevision: listedRevision
+                        )
+                        .opacity(activeShareLinkCount == nil && listedRevision == nil ? 0 : 1)
+                        .accessibilityHidden(activeShareLinkCount == nil && listedRevision == nil)
+                    }
                 }
                 if let detail { Text(detail).font(.caption).lineLimit(2) }
             }

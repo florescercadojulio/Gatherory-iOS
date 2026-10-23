@@ -60,7 +60,12 @@ import Observation
             if case .account = scope.principal { canSend = feed.canSend } else { canSend = false }
             allowedAudiences = canSend ? EventAnnouncementAudience.allCases.filter(feed.allowedAudiences.contains) : []
             canSend = canSend && !allowedAudiences.isEmpty
-            if !hasLoaded || !allowedAudiences.contains(audience) {
+            if allowedAudiences.isEmpty {
+                // Read access is authorized by the server feed and is separate
+                // from send permissions. Keep a caller-selected read audience
+                // (for example, a guest opening a Guests update) or show All.
+                audience = preferredAudience ?? .all
+            } else if !hasLoaded || !allowedAudiences.contains(audience) {
                 audience = preferredAudience.flatMap { allowedAudiences.contains($0) ? $0 : nil }
                     ?? (allowedAudiences.contains(.planning) ? .planning : allowedAudiences.first ?? .planning)
             }

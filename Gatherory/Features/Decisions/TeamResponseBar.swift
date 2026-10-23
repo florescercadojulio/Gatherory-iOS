@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Active ideas show proportional responses; closed ideas keep the same footprint
-/// with a blue status bar, without implying they are waiting for more responses.
+/// with a themed status bar, without implying they are waiting for more responses.
 struct TeamResponseBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasAppeared = false
@@ -28,10 +28,12 @@ struct TeamResponseBar: View {
 
     private var segments: [(count: Int, color: Color, symbol: String)] {
         if let status = closedIdeaStatus {
-            [(1, .blue, status.symbol)]
+            [(1, AppTheme.ColorToken.accent, status.symbol)]
         } else {
-            [(summary.love, .green, "heart.fill"), (summary.maybe, .yellow, "questionmark"),
-             (summary.pass, .red, "xmark"), (summary.unanswered, .gray, "ellipsis")].filter { $0.0 > 0 }
+            [(summary.love, AppTheme.ColorToken.success, "heart.fill"),
+             (summary.maybe, AppTheme.ColorToken.warning, "questionmark"),
+             (summary.pass, AppTheme.ColorToken.destructive, "xmark"),
+             (summary.unanswered, .gray, "ellipsis")].filter { $0.0 > 0 }
         }
     }
     var body: some View {

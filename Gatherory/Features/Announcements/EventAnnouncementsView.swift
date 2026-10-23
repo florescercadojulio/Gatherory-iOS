@@ -198,7 +198,7 @@ struct EventAnnouncementsView: View {
         .appClearNavigationBar()
         .appSoftScrollEdges()
         .toolbar(.hidden, for: .tabBar)
-        .sensoryFeedback(.success, trigger: sentCount)
+        .appHaptic(.success, trigger: sentCount)
         .task(id: scope) { await activate() }
         .onChange(of: scope) { _, _ in isMessageFocused = false }
     }
@@ -404,9 +404,16 @@ private struct EventAnnouncementComposer: View {
 
                 Button {
                     if isDevicePlanning {
-                        if saveDeviceUpdate() { onSent() } else { localSaveFailed = true }
+                        if saveDeviceUpdate() { onSent() }
+                        else {
+                            localSaveFailed = true
+                            AppHaptics.play(.error)
+                        }
                     } else {
-                        Task { if await controller.send() { onSent() } }
+                        Task {
+                            if await controller.send() { onSent() }
+                            else if controller.sendFailure != nil { AppHaptics.play(.error) }
+                        }
                     }
                 } label: {
                     Image(systemName: "arrow.up")

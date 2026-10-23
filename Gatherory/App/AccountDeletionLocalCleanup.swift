@@ -35,7 +35,8 @@ import Foundation
             { try BlueprintPersonalLibraryStore().removeAll(accountID: $0) },
             { try BlueprintLibraryVisibilityStore(defaults: defaults).removeAll(accountID: $0) },
             { try BlueprintLibraryCollectionPreferenceStore(defaults: defaults).removeAll(accountID: $0) },
-            { try BlueprintRecentHistory(defaults: defaults).removeAll(accountID: $0) }
+            { try BlueprintRecentHistory(defaults: defaults).removeAll(accountID: $0) },
+            { BlueprintDiscoveryContextStore.clear(accountID: $0, defaults: defaults) }
         ]
         for artifact in artifacts { attempt { try artifact(accountID) } }
         if canRemoveSessionCredential { attempt { try removeSessionCredential() } }

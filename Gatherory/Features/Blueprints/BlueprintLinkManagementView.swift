@@ -201,7 +201,7 @@ struct BlueprintLinkManagementView: View {
                         return
                     }
                     creatorNameCandidate = nil
-                    Task { await store.setDiscoverable(true, creatorName: name) }
+                    Task { await updateListing(store, templateID: candidate.templateID, enabled: true, creatorName: name) }
                 },
                 onCancel: { creatorNameCandidate = nil }
             )
@@ -307,7 +307,23 @@ struct BlueprintLinkManagementView: View {
             } else {
                 guard store.templates.first(where: { $0.id == templateID })?.listedRevision == confirmedRevision else { return }
             }
-            await store.setDiscoverable(shouldPublish)
+            await updateListing(store, templateID: templateID, enabled: shouldPublish)
+        }
+    }
+
+    private func updateListing(
+        _ store: BlueprintLinkManagementStore,
+        templateID: UUID,
+        enabled: Bool,
+        creatorName: String? = nil
+    ) async {
+        let previousRevision = store.templates.first(where: { $0.id == templateID })?.listedRevision
+        await store.setDiscoverable(enabled, creatorName: creatorName)
+        guard store.selectedTemplateID == templateID,
+              let updated = store.templates.first(where: { $0.id == templateID }) else { return }
+        let expectedRevision = enabled ? updated.publishedRevision : nil
+        if previousRevision != updated.listedRevision, updated.listedRevision == expectedRevision {
+            AppHaptics.play(.success)
         }
     }
 
@@ -344,6 +360,7 @@ struct BlueprintLinkManagementView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .buttonStyle(.borderedProminent)
+                            .foregroundStyle(AppTheme.ColorToken.onAccent)
                             .disabled(store.isLoading || store.isMutating || !hasManagePermission)
 
                         }
@@ -470,6 +487,7 @@ struct BlueprintLinkManagementView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
                 .disabled(!store.canCreate || !hasManagePermission)
             }
         }
@@ -564,12 +582,21 @@ struct BlueprintLinkManagementView: View {
 
     private func createLink(_ store: BlueprintLinkManagementStore) async {
         guard hasManagePermission, accountID == store.accountID else { return }
+        let existingLinkIDs = Set(store.links.map(\.id))
         await store.create()
+        if store.links.contains(where: { !existingLinkIDs.contains($0.id) && $0.revokedAt == nil }),
+           store.createdURL != nil {
+            AppHaptics.play(.success)
+        }
     }
 
     private func revoke(_ linkID: UUID) async {
         guard hasManagePermission, let store, accountID == store.accountID else { return }
+        let wasActive = store.links.contains { $0.id == linkID && $0.revokedAt == nil }
         await store.revoke(linkID: linkID)
+        if wasActive, store.links.contains(where: { $0.id == linkID && $0.revokedAt != nil }) {
+            AppHaptics.play(.success)
+        }
     }
 
 }

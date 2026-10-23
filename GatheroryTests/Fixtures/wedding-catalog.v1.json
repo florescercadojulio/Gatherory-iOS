@@ -2,11 +2,6 @@
   "entries": [
     {
       "catalogKey": "wedding",
-      "discovery": {
-        "categories": ["weddings"],
-        "tags": ["wedding", "ceremony", "reception", "celebration"],
-        "summary": "Plan your wedding, from the first venue visit to the celebration."
-      },
       "revision": 1,
       "contentHash": "24518a2d4795d62a7d0ed5d349cd0bb7ed7a2883a7dec7bf9c522a8e5119878a",
       "definition": {
@@ -195,6 +190,34 @@
             }
           }
         ]
+      },
+      "discovery": {
+        "categories": [
+          "weddings"
+        ],
+        "tags": [
+          "wedding",
+          "ceremony",
+          "reception",
+          "celebration"
+        ],
+        "summary": "Plan your wedding, from the first venue visit to the celebration.",
+        "coverImageURL": "https://cdn.gatherory.com/explore/covers/garden-wedding/d168d90dbd69f719b04301fe1c173a01aa57102ac86737dc4ceb8bc6ce9e3750/card.jpg",
+        "coverImages": {
+          "children": {
+            "venue_visit": "https://cdn.gatherory.com/explore/covers/venue-garden/ca327ac86a493e2bf5176013c75d93e22264cf0c7c7c943fda399efcb6ec2764/card.jpg",
+            "rehearsal": "https://cdn.gatherory.com/explore/covers/gathering/40a163134276f57809efcb635947c0d6590e63066f3f208a3411e46528033468/card.jpg",
+            "ceremony": "https://cdn.gatherory.com/explore/covers/garden-wedding/d168d90dbd69f719b04301fe1c173a01aa57102ac86737dc4ceb8bc6ce9e3750/card.jpg",
+            "reception": "https://cdn.gatherory.com/explore/covers/gathering/40a163134276f57809efcb635947c0d6590e63066f3f208a3411e46528033468/card.jpg"
+          },
+          "ideas": {
+            "venue": "https://cdn.gatherory.com/explore/covers/venue-garden/ca327ac86a493e2bf5176013c75d93e22264cf0c7c7c943fda399efcb6ec2764/card.jpg",
+            "attire": "https://cdn.gatherory.com/explore/covers/attire-garden/f880923aea2c1427069691761a0550c6cf8a9b8011474beedff314c4b29a3bfa/card.jpg",
+            "food": "https://cdn.gatherory.com/explore/covers/food/38c1dde60af39956b5f26a753086e4f1ca2d5b70e50f0fc077385eeab25428ed/card.jpg",
+            "flowers": "https://cdn.gatherory.com/explore/covers/flowers/d36598aa3a91ec2ed0f5cadde1c8009b7f9e1a0f055ce8363d278a8cccb19afa/card.jpg",
+            "photography": "https://cdn.gatherory.com/explore/covers/photography/27ec09e82a6beb313a4e7c9230b8ce95e7b7562315f2a570c137609ed9d0102b/card.jpg"
+          }
+        }
       }
     }
   ]

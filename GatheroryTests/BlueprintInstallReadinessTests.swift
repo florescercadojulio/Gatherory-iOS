@@ -3,6 +3,16 @@ import Testing
 @testable import Gatherory
 
 struct BlueprintInstallReadinessTests {
+    @Test("Creation requires a trimmed event name within the portable Unicode scalar limit")
+    func validatesEditableEventName() {
+        #expect(!BlueprintInstallReadiness.isValidEventName(" \n\t"))
+        #expect(BlueprintInstallReadiness.isValidEventName("  Garden celebration\n"))
+        #expect(BlueprintInstallReadiness.isValidEventName(String(repeating: "a", count: 120)))
+        #expect(!BlueprintInstallReadiness.isValidEventName(String(repeating: "a", count: 121)))
+        #expect(BlueprintInstallReadiness.isValidEventName(String(repeating: "e\u{301}", count: 60)))
+        #expect(!BlueprintInstallReadiness.isValidEventName(String(repeating: "e\u{301}", count: 61)))
+    }
+
     @MainActor
     @Test("Confirmed dates remain available for editing and only selected dates affect readiness")
     func confirmedDatesStayEditable() {

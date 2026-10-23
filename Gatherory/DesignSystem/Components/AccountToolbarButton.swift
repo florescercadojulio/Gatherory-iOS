@@ -14,12 +14,16 @@ extension EnvironmentValues {
 struct AccountToolbarButton: View {
     var monochrome = false
     var avatarSize: CGFloat = 28
+    var blueprintActionStore: BlueprintActionStore? = nil
+    var onPresentationChange: ((Bool) -> Void)? = nil
+    var onDismiss: (() -> Void)? = nil
     @Environment(\.currentUserAccount) private var currentUserAccount
     @State private var isPresentingAccount = false
 
     var body: some View {
         Button {
             isPresentingAccount = true
+            onPresentationChange?(true)
         } label: {
             UserAvatarView(
                 account: currentUserAccount,
@@ -29,9 +33,12 @@ struct AccountToolbarButton: View {
         }
         .tint(monochrome ? Color.primary : AppTheme.ColorToken.accent)
         .accessibilityLabel("Account and settings")
-        .sheet(isPresented: $isPresentingAccount) {
+        .sheet(isPresented: $isPresentingAccount, onDismiss: {
+            onPresentationChange?(false)
+            onDismiss?()
+        }) {
             NavigationStack {
-                AccountView()
+                AccountView(sharedBlueprintActions: blueprintActionStore)
             }
         }
     }
@@ -46,6 +53,26 @@ struct ToolbarGlassActionGroup<Content: View>: View {
         HStack(spacing: 6, content: content)
             .frame(minHeight: 44)
             .glassEffect(.regular.interactive(), in: Capsule())
+    }
+}
+
+/// Expose each action to the native toolbar on resizable iPhones so the system
+/// can place it along either axis and manage overflow. Older systems retain
+/// the existing compact glass capsule.
+struct AdaptiveToolbarActions<Content: View>: ToolbarContent {
+    @ViewBuilder var content: () -> Content
+
+    @ToolbarContentBuilder
+    var body: some ToolbarContent {
+        if #available(iOS 27.1, *) {
+            ToolbarItemGroup(placement: .topBarTrailing, content: content)
+                .axisBehavior(.verticalPreferred)
+        } else {
+            ToolbarItem(placement: .topBarTrailing) {
+                ToolbarGlassActionGroup(content: content)
+            }
+            .sharedBackgroundVisibility(.hidden)
+        }
     }
 }
 

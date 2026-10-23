@@ -70,6 +70,7 @@ struct EventJoinRequestsView: View {
                             Task {
                                 guard canReview, let accountID = authentication.currentUser?.id else { return }
                                 if await store.review(request, eventID: eventID, accountID: accountID, action: action) {
+                                    AppHaptics.play(.success)
                                     await cloudSync.refreshCollaboration()
                                 }
                             }
@@ -107,7 +108,9 @@ struct EventJoinRequestRow: View {
                 Button("Decline", role: .destructive) { review(.decline) }.buttonStyle(.borderless)
                 Spacer()
                 if isReviewing { ProgressView() }
-                Button("Approve") { review(.approve) }.buttonStyle(.borderedProminent)
+                Button("Approve") { review(.approve) }
+                    .buttonStyle(.borderedProminent)
+                    .foregroundStyle(AppTheme.ColorToken.onAccent)
             }
             .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
             .disabled(isDisabled)
@@ -126,7 +129,7 @@ struct JoinRequestCountBadge: View {
             .padding(.horizontal, 5)
             .frame(minWidth: 18, minHeight: 18)
             .foregroundStyle(.white)
-            .background(.red, in: Capsule())
+            .background(AppTheme.ColorToken.informational, in: Capsule())
             .accessibilityHidden(true)
     }
 }

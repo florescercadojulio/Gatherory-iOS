@@ -4,6 +4,82 @@ import Testing
 
 @MainActor
 struct BlueprintPreviewContentTests {
+    @Test("Explore cover URL carries into the main preview only after validation")
+    func publicCoverContinuity() throws {
+        let entry = try fixtureWithPublicCover("https://cdn.gatherory.com/explore/covers/wedding/\(String(repeating: "a", count: 64))/card.jpg")
+        let decodedEntry = try JSONDecoder().decode(BlueprintCatalogEntry.self, from: JSONEncoder().encode(entry))
+        let content = try #require(BlueprintPreviewContent(entry: decodedEntry))
+        #expect(content.publicCoverImageURL == entry.discovery?.coverImageURL)
+        #expect(content.event()?.publicCoverImageURL == entry.discovery?.coverImageURL)
+
+        let malformed = try fixtureWithPublicCover("https://example.com/cover.jpg")
+        #expect(try #require(BlueprintPreviewContent(entry: malformed)).publicCoverImageURL == nil)
+    }
+
+    @Test("Revision metadata supplies validated covers to child and idea previews")
+    func targetCoverContinuity() throws {
+        let childURL = "https://cdn.gatherory.com/explore/covers/wedding/\(String(repeating: "d", count: 64))/card.jpg"
+        let ideaURL = "https://cdn.gatherory.com/explore/covers/wedding/\(String(repeating: "e", count: 64))/card.jpg"
+        var entry = try fixture()
+        var discovery = try #require(entry.discovery)
+        discovery.coverImages = BlueprintTargetCoverImages(
+            children: ["ceremony": childURL, "missing": "https://example.com/no.jpg"],
+            ideas: ["flowers": ideaURL]
+        )
+        entry.discovery = discovery
+
+        let decodedEntry = try JSONDecoder().decode(BlueprintCatalogEntry.self, from: JSONEncoder().encode(entry))
+        let content = try #require(BlueprintPreviewContent(entry: decodedEntry))
+        #expect(content.publicChildCoverImageURLs == ["ceremony": childURL])
+        #expect(content.publicIdeaCoverImageURLs == ["flowers": ideaURL])
+        #expect(content.event(for: "ceremony")?.publicCoverImageURL == childURL)
+        #expect(content.event()?.publicIdeaCoverImageURLs["flowers"] == ideaURL)
+
+        var childOverride = BlueprintCatalogChild(key: "ceremony", title: "Ceremony", purpose: "part_of_event",
+                                                  category: "ceremony", scheduleProposal: nil,
+                                                  coverAssetIdWasProvided: true)
+        var ideaOverride = BlueprintCatalogIdea(key: "flowers", title: "Flowers", category: "flowers", notes: nil,
+                                                target: .main, configuration: ["version": .integer(1)],
+                                                coverAssetIdWasProvided: true)
+        let titleOnlyCustomization = BlueprintCustomization(
+            children: [BlueprintCatalogChild(key: "ceremony", title: "Updated ceremony", purpose: "part_of_event",
+                                             category: "ceremony", scheduleProposal: nil)],
+            ideas: [BlueprintCatalogIdea(key: "flowers", title: "Updated flowers", category: "flowers", notes: "Notes",
+                                         target: .main, configuration: ["version": .integer(1)])]
+        )
+        let titleOnly = try #require(BlueprintPreviewContent(entry: entry, customizations: titleOnlyCustomization))
+        #expect(titleOnly.publicChildCoverImageURLs["ceremony"] == childURL)
+        #expect(titleOnly.publicIdeaCoverImageURLs["flowers"] == ideaURL)
+
+        var customization = BlueprintCustomization(children: [childOverride], ideas: [ideaOverride])
+        let removed = try #require(BlueprintPreviewContent(entry: entry, customizations: customization))
+        #expect(removed.publicChildCoverImageURLs["ceremony"] == nil)
+        #expect(removed.publicIdeaCoverImageURLs["flowers"] == nil)
+        childOverride.coverAssetId = UUID()
+        ideaOverride.coverAssetId = UUID()
+        customization = BlueprintCustomization(children: [childOverride], ideas: [ideaOverride])
+        let replaced = try #require(BlueprintPreviewContent(entry: entry, customizations: customization))
+        #expect(replaced.publicChildCoverImageURLs["ceremony"] == childURL)
+        #expect(replaced.publicIdeaCoverImageURLs["flowers"] == ideaURL)
+    }
+
+    @Test("Explicit main cover removal suppresses the Explore fallback")
+    func explicitCoverRemovalSuppressesFallback() throws {
+        let entry = try fixtureWithPublicCover("https://cdn.gatherory.com/explore/covers/wedding/\(String(repeating: "b", count: 64))/card.jpg")
+        var customizations = BlueprintCustomization()
+        customizations.overridesCover = true
+        customizations.coverAssetId = nil
+
+        let content = try #require(BlueprintPreviewContent(entry: entry, customizations: customizations))
+        #expect(content.coverAssetID == nil)
+        #expect(content.publicCoverImageURL == nil)
+        #expect(content.event()?.publicCoverImageURL == nil)
+        #expect(BlueprintCoverField.shouldOfferRemoval(assetID: nil, hasPendingImage: false,
+                                                        publicImageURL: entry.discovery?.coverImageURL))
+        #expect(!BlueprintCoverField.shouldOfferRemoval(assetID: nil, hasPendingImage: false,
+                                                         publicImageURL: nil))
+    }
+
     @Test("Preview reads actual authored content without changing the catalog or choosing dates")
     func authoredContent() throws {
         let entry = try fixture()
@@ -260,6 +336,14 @@ struct BlueprintPreviewContentTests {
         entries[0]["definition"] = document
         root["entries"] = entries
         return try JSONDecoder().decode(BlueprintCatalogResponse.self, from: JSONSerialization.data(withJSONObject: root)).entries[0]
+    }
+
+    private func fixtureWithPublicCover(_ imageURL: String) throws -> BlueprintCatalogEntry {
+        var entry = try fixture()
+        var discovery = try #require(entry.discovery)
+        discovery.coverImageURL = imageURL
+        entry.discovery = discovery
+        return entry
     }
 }
 

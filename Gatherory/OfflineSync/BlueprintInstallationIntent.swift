@@ -9,9 +9,46 @@ struct BlueprintInstallationIntent: Codable, Equatable, Sendable {
     let createdAt: Date
 }
 
+extension BlueprintInstallationCoordinator: BlueprintActionsTransport {
+    func update(_ mutation: BlueprintPreferenceMutation) async throws -> BlueprintPreferenceAcknowledgement {
+        try requireBoundAccount()
+        let result = try await transport.update(mutation)
+        try requireBoundAccount()
+        return result
+    }
+
+    func preferences(cursor: String?) async throws -> BlueprintPreferencesPage {
+        try requireBoundAccount()
+        let result = try await transport.preferences(cursor: cursor)
+        try requireBoundAccount()
+        return result
+    }
+
+    func measurementSettings() async throws -> BlueprintMeasurementSettings {
+        try requireBoundAccount()
+        let result = try await transport.measurementSettings()
+        try requireBoundAccount()
+        return result
+    }
+
+    func setMeasurementSettings(requestID: UUID, enabled: Bool) async throws -> BlueprintMeasurementSettings {
+        try requireBoundAccount()
+        let result = try await transport.setMeasurementSettings(requestID: requestID, enabled: enabled)
+        try requireBoundAccount()
+        return result
+    }
+
+    func record(_ signal: BlueprintMeasurementSignal) async throws {
+        try requireBoundAccount()
+        try await transport.record(signal)
+        try requireBoundAccount()
+    }
+}
+
 enum BlueprintInstallationIntentFailure: Error, Equatable {
     case requestIDAlreadyUsed
     case emptyOwner
+    case intentNotPending
 }
 
 /// Durable local retry state, isolated by canonical Better Auth user ID.
@@ -70,6 +107,14 @@ final class BlueprintInstallationIntentStore {
             guard intent.ownerUserID == ownerUserID else { return nil }
             return intent
         }
+    }
+
+    func pending(ownerUserID: String, requestID: UUID) throws -> BlueprintInstallationIntent? {
+        let url = intentURL(ownerUserID: ownerUserID, requestID: requestID)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let intent = try decoder.decode(BlueprintInstallationIntent.self, from: Data(contentsOf: url))
+        guard intent.ownerUserID == ownerUserID, intent.requestID == requestID else { return nil }
+        return intent
     }
 
     func complete(ownerUserID: String, requestID: UUID) throws {
@@ -159,6 +204,25 @@ final class BlueprintInstallationCoordinator {
         return response
     }
 
+    func catalogPage(
+        cursor: String? = nil,
+        limit: Int = 20,
+        category: String? = nil,
+        query: String? = nil,
+        discoveryContext: BlueprintDiscoveryRequestContext? = nil
+    ) async throws -> BlueprintCatalogResponse {
+        try requireBoundAccount()
+        let response = try await transport.blueprintCatalogPage(
+            cursor: cursor,
+            limit: limit,
+            category: category,
+            query: query,
+            discoveryContext: discoveryContext
+        )
+        try requireBoundAccount()
+        return response
+    }
+
     func prepareDraftCopy(_ draft: BlueprintSetupDraft) async throws -> BlueprintSetupDraft {
         try requireBoundAccount()
         let generation = boundAccountGeneration
@@ -228,6 +292,8 @@ final class BlueprintInstallationCoordinator {
     }
 
     func install(_ input: BlueprintInstallInput, ownerUserID: String) async throws -> PlanningWorkspace {
+        try requireBoundAccount()
+        guard ownerUserID == boundOwnerUserID else { throw CancellationError() }
         let body = try encoder.encode(input)
         let intent = try intents.prepare(
             ownerUserID: ownerUserID,
@@ -237,12 +303,15 @@ final class BlueprintInstallationCoordinator {
         return try await resume(intent)
     }
 
-    /// Retries the exact persisted request, recovers completed receipts after a
-    /// lost response, then imports through the same atomic bootstrap merger used
-    /// by normal account sync.
+    /// Retries the exact canonical persisted request, recovers completed
+    /// receipts after a lost response, then imports through the same atomic
+    /// bootstrap merger used by normal account sync.
     func resume(_ intent: BlueprintInstallationIntent) async throws -> PlanningWorkspace {
         try requireBoundAccount()
         guard intent.ownerUserID == boundOwnerUserID else { throw CancellationError() }
+        guard try intents.pending(ownerUserID: intent.ownerUserID, requestID: intent.requestID) == intent else {
+            throw BlueprintInstallationIntentFailure.intentNotPending
+        }
         let accountGeneration = boundAccountGeneration
         try requireActiveAccount(intent.ownerUserID, generation: accountGeneration)
         let status = try await transport.blueprintInstallationStatus(requestID: intent.requestID)
@@ -282,7 +351,6 @@ final class BlueprintInstallationCoordinator {
         guard let workspace = library.workspaces.first(where: { $0.mainEventID == result.scopeID }) else {
             throw BlueprintInstallationFailure.workspaceNotInBootstrap
         }
-        library.open(workspace)
         // Clear only the draft behind this exact request after durable import.
         // If cleanup fails, retain the install intent so retry recovers the same
         // receipt rather than offering another creation from the old draft.
@@ -300,6 +368,7 @@ final class BlueprintInstallationCoordinator {
             shareToken: source.shareToken
         )
         try intents.complete(ownerUserID: intent.ownerUserID, requestID: intent.requestID)
+        library.open(workspace)
         // This activity cache is recoverable from the server library endpoint.
         // Its failure must not turn a completed, imported installation into a
         // failed attempt or add work to the ordinary workspace outbox.
@@ -337,7 +406,7 @@ final class BlueprintInstallationCoordinator {
     }
 }
 
-enum BlueprintInstallationFailure: LocalizedError {
+enum BlueprintInstallationFailure: LocalizedError, Equatable {
     case workspaceNotInBootstrap
 
     var errorDescription: String? {

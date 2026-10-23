@@ -1,5 +1,7 @@
 import Foundation
+import SwiftUI
 import Testing
+import UIKit
 @testable import Gatherory
 
 @MainActor
@@ -18,9 +20,31 @@ struct BlueprintPreviewEventPresentationTests {
             )
             #expect(artwork.category == browseCategory.artworkCategory)
             #expect(artwork.symbol == browseCategory.symbol)
-            #expect(artwork.colors == browseCategory.artworkCategory.artworkColors)
-            #expect(artwork.accent == browseCategory.artworkCategory.artworkAccent)
+            let expectedColors = browseCategory.artworkCategory.artworkColors
+            #expect(artwork.colors.count == expectedColors.count)
+            for style in [UIUserInterfaceStyle.light, .dark] {
+                #expect(zip(artwork.colors, expectedColors).allSatisfy { pair in
+                    hasSameResolvedRGBA(pair.0, pair.1, style: style)
+                })
+                #expect(hasSameResolvedRGBA(artwork.accent, browseCategory.artworkCategory.artworkAccent,
+                                            style: style))
+            }
         }
+    }
+
+    private func hasSameResolvedRGBA(_ lhs: Color, _ rhs: Color, style: UIUserInterfaceStyle) -> Bool {
+        func components(_ color: Color) -> [CGFloat]? {
+            let traits = UITraitCollection(userInterfaceStyle: style)
+            let resolved = UIColor(color).resolvedColor(with: traits)
+            var red: CGFloat = 0
+            var green: CGFloat = 0
+            var blue: CGFloat = 0
+            var alpha: CGFloat = 0
+            guard resolved.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return nil }
+            return [red, green, blue, alpha]
+        }
+        guard let lhs = components(lhs), let rhs = components(rhs), lhs.count == rhs.count else { return false }
+        return zip(lhs, rhs).allSatisfy { abs($0 - $1) < 0.001 }
     }
 
     @Test("Child artwork resolves canonical and snake case categories without falling back")

@@ -16,7 +16,7 @@ struct SharedAlbumCollage: View {
     let open: (EventMoment) -> Void
 
     var body: some View {
-        let count = AlbumPresentation.columnCount(isPad: UIDevice.current.userInterfaceIdiom == .pad, availableWidth: availableWidth)
+        let count = AlbumPresentation.columnCount(availableWidth: availableWidth)
         let width = max((availableWidth - CGFloat(count - 1) * 12) / CGFloat(count), 0)
         HStack(alignment: .top, spacing: 12) {
             ForEach(columns.indices, id: \.self) { index in
@@ -80,7 +80,7 @@ struct SharedAlbumPhotoCard: View {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 24, weight: .semibold))
                             .symbolRenderingMode(.palette)
-                            .foregroundStyle(isSelected ? Color.accentColor : .white, .white)
+                            .foregroundStyle(isSelected ? AppTheme.ColorToken.accent : .white, .white)
                             .padding(10)
                             .background(.black.opacity(0.65), in: Circle())
                             .padding(8)
@@ -89,7 +89,7 @@ struct SharedAlbumPhotoCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 3)
+                        .strokeBorder(isSelected ? AppTheme.ColorToken.accent : .clear, lineWidth: 3)
                 }
                 .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }

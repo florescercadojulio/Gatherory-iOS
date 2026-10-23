@@ -3,6 +3,24 @@ import Foundation
 @MainActor
 protocol BlueprintSavedCopyTransport {
     func copyBlueprintSnapshot(requestID: UUID, content: BlueprintDraftContent) async throws -> BlueprintPersonalRecord
+    func copyBlueprintSnapshot(
+        requestID: UUID, content: BlueprintDraftContent, source: BlueprintCopySource
+    ) async throws -> BlueprintPersonalRecord
+}
+
+extension BlueprintSavedCopyTransport {
+    func copyBlueprintSnapshot(
+        requestID: UUID, content: BlueprintDraftContent, source: BlueprintCopySource
+    ) async throws -> BlueprintPersonalRecord {
+        try await copyBlueprintSnapshot(requestID: requestID, content: content)
+    }
+}
+
+struct BlueprintCopySource: Codable, Sendable {
+    let catalogKey: String
+    let revision: Int
+    let shareToken: String?
+    var discoveryExposureId: String? = nil
 }
 
 /// A saved portable snapshot is user content, not continuing access to its source.
@@ -34,7 +52,16 @@ struct BlueprintSavedCopyResolver {
         // Snapshot the full original portable document. Decisions, edited dates,
         // and overlays remain local and do not change the idempotent copy body.
         let content = try BlueprintDraftContent.snapshot(of: saved.entry)
-        let response = try await transport.copyBlueprintSnapshot(requestID: copyID, content: content)
+        let response = try await transport.copyBlueprintSnapshot(
+            requestID: copyID,
+            content: content,
+            source: BlueprintCopySource(
+                catalogKey: saved.entry.catalogKey,
+                revision: saved.entry.revision,
+                shareToken: saved.shareToken,
+                discoveryExposureId: saved.entry.discoveryContext.flatMap { $0.expiresAt > Date() ? $0.exposureId : nil }
+            )
+        )
         try Task.checkCancellation()
         guard currentOwnerID() == ownerID else { throw Failure.ownerChanged }
         guard try !hasPendingInstallation() else { throw Failure.installationPending }
@@ -44,11 +71,122 @@ struct BlueprintSavedCopyResolver {
               latest.entry.revision == saved.entry.revision else { throw Failure.draftChanged }
         guard response.listedRevision == nil, response.publishedRevision == response.catalogEntry.revision,
               response.catalogEntry.catalogKey != saved.entry.catalogKey,
-              try BlueprintDraftContent.snapshot(of: response.catalogEntry) == content else { throw Failure.invalidCopy }
+              try copiedSnapshotMatches(
+                content,
+                sourceEntry: saved.entry,
+                entry: response.catalogEntry
+              ) else { throw Failure.invalidCopy }
+        latest.customizations = remapCoverOverrides(
+            latest.customizations,
+            from: saved.entry,
+            to: response.catalogEntry
+        )
         latest.copyEntry = response.catalogEntry
         try store.save(latest)
         return latest
     }
+}
+
+private func remapCoverOverrides(
+    _ customizations: BlueprintCustomization?,
+    from source: BlueprintCatalogEntry,
+    to copied: BlueprintCatalogEntry
+) -> BlueprintCustomization? {
+    guard var value = customizations else { return nil }
+    var mapping: [UUID: UUID] = [:]
+    if let oldID = source.definition.presentation?.coverAssetID,
+       let newID = copied.definition.presentation?.coverAssetID {
+        mapping[oldID] = newID
+    }
+    let sourceTree = source.definition.modules.first { $0.type == "experience_tree" }?
+        .decodeConfiguration(BlueprintExperienceTreeConfig.self)?.children ?? []
+    let copiedTree = copied.definition.modules.first { $0.type == "experience_tree" }?
+        .decodeConfiguration(BlueprintExperienceTreeConfig.self)?.children ?? []
+    let copiedChildren = Dictionary(uniqueKeysWithValues: copiedTree.map { ($0.key, $0) })
+    for child in sourceTree {
+        if let oldID = child.coverAssetId, let newID = copiedChildren[child.key]?.coverAssetId {
+            mapping[oldID] = newID
+        }
+    }
+    let sourceIdeas = source.definition.modules.first { $0.type == "ideas" }?
+        .decodeConfiguration(BlueprintIdeasConfig.self)?.ideas ?? []
+    let copiedIdeas = copied.definition.modules.first { $0.type == "ideas" }?
+        .decodeConfiguration(BlueprintIdeasConfig.self)?.ideas ?? []
+    let copiedIdeasByKey = Dictionary(uniqueKeysWithValues: copiedIdeas.map { ($0.key, $0) })
+    for idea in sourceIdeas {
+        if let oldID = idea.coverAssetId, let newID = copiedIdeasByKey[idea.key]?.coverAssetId {
+            mapping[oldID] = newID
+        }
+    }
+    if value.overridesCover, let coverAssetId = value.coverAssetId {
+        value.coverAssetId = mapping[coverAssetId] ?? coverAssetId
+    }
+    value.children = value.children.map { child in
+        var child = child
+        if let id = child.coverAssetId { child.coverAssetId = mapping[id] ?? id }
+        return child
+    }
+    value.ideas = value.ideas.map { idea in
+        var idea = idea
+        if let id = idea.coverAssetId { idea.coverAssetId = mapping[id] ?? id }
+        return idea
+    }
+    return value
+}
+
+func copiedSnapshotMatches(
+    _ source: BlueprintDraftContent,
+    sourceEntry: BlueprintCatalogEntry,
+    entry: BlueprintCatalogEntry
+) throws -> Bool {
+    let copied = try BlueprintDraftContent.snapshot(of: entry)
+    var expected = source
+    guard source.children.count == copied.children.count, source.ideas.count == copied.ideas.count else { return false }
+    expected.coverAssetId = copied.coverAssetId
+    expected.children = zip(source.children, copied.children).map { original, current in
+        var value = original
+        value.coverAssetId = current.coverAssetId
+        value.coverAssetIdWasProvided = current.coverAssetIdWasProvided
+        return value
+    }
+    expected.ideas = zip(source.ideas, copied.ideas).map { original, current in
+        var value = original
+        value.coverAssetId = current.coverAssetId
+        value.coverAssetIdWasProvided = current.coverAssetIdWasProvided
+        return value
+    }
+    guard expected == copied else { return false }
+
+    let allowsCuratedMainCoverImport = sourceEntry.definition.presentation?.coverAssetID == nil
+        && BlueprintPublicCoverURL.validated(sourceEntry.discovery?.coverImageURL) != nil
+    var copiedCoverBySource: [UUID: UUID] = [:]
+    let sourceChildren = Dictionary(uniqueKeysWithValues: sourceEntry.definition.modules
+        .first(where: { $0.type == "experience_tree" })?
+        .decodeConfiguration(BlueprintExperienceTreeConfig.self)?.children.map { ($0.key, $0) } ?? [])
+    let sourceIdeas = Dictionary(uniqueKeysWithValues: sourceEntry.definition.modules
+        .first(where: { $0.type == "ideas" })?
+        .decodeConfiguration(BlueprintIdeasConfig.self)?.ideas.map { ($0.key, $0) } ?? [])
+    let copyPairs: [(UUID?, UUID?, Bool)] = [
+        (source.coverAssetId, copied.coverAssetId, allowsCuratedMainCoverImport)
+    ] + zip(source.children, copied.children).map { original, current in
+        let allowsImport = sourceChildren[original.key]?.coverAssetId == nil
+            && BlueprintPublicCoverURL.validated(sourceEntry.discovery?.coverImages?.children[original.key]) != nil
+        return (original.coverAssetId, current.coverAssetId, allowsImport)
+    } + zip(source.ideas, copied.ideas).map { original, current in
+        let allowsImport = sourceIdeas[original.key]?.coverAssetId == nil
+            && BlueprintPublicCoverURL.validated(sourceEntry.discovery?.coverImages?.ideas[original.key]) != nil
+        return (original.coverAssetId, current.coverAssetId, allowsImport)
+    }
+    for (oldID, newID, allowsImport) in copyPairs {
+        guard let oldID else {
+            if newID != nil && !allowsImport { return false }
+            continue
+        }
+        guard let newID, oldID != newID else { return false }
+        if let existing = copiedCoverBySource[oldID], existing != newID { return false }
+        copiedCoverBySource[oldID] = newID
+    }
+    return true
 }
 
 extension BlueprintDraftContent {
@@ -81,6 +219,7 @@ extension BlueprintDraftContent {
         }.map { BlueprintDraftInstruction(key: $0.key, title: $0.title, body: $0.body, audience: $0.audience, target: $0.target) }
         return Self(name: entry.definition.blueprint.name, description: entry.description ?? entry.discovery?.summary ?? "",
                     experienceType: entry.definition.experienceDefaults.type, children: effective.tree.children,
-                    ideas: effective.ideas.ideas, instructions: instructions, todos: todos)
+                    ideas: effective.ideas.ideas, instructions: instructions, todos: todos,
+                    coverAssetId: entry.definition.presentation?.coverAssetID)
     }
 }

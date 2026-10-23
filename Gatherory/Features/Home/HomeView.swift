@@ -11,6 +11,7 @@ struct HomeView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isSavingBlueprint = false
+    @State private var viewportHeight: CGFloat = 0
     @State private var isPresentingInvitationSharing = false
     @State private var csvExportRequest: EventCSVExportRequest?
     @State private var editorTarget: HomeEventEditorTarget?
@@ -47,7 +48,8 @@ struct HomeView: View {
     }
 
     private var eventHeroHeight: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 720 : 640
+        LayoutDimensions.heroHeight(availableHeight: viewportHeight,
+                                    isAccessibilitySize: dynamicTypeSize.isAccessibilitySize)
     }
 
     private var mainEventTimingLabel: String {
@@ -56,11 +58,11 @@ struct HomeView: View {
         }
         return switch workspace.currentMainEventStatus {
         case .draft:
-            "\(daysRemaining) days away"
+            AppCopy.Home.daysAway(daysRemaining)
         case .ongoing:
-            "Happening now"
+            String(localized: "Happening now")
         case .finished:
-            "Past event"
+            String(localized: "Past event")
         case .cancelled:
             AppCopy.Lifecycle.cancelled
         }
@@ -81,6 +83,7 @@ struct HomeView: View {
                                     editorTarget = .main
                                 }
                                 .buttonStyle(.borderedProminent)
+                                .foregroundStyle(AppTheme.ColorToken.onAccent)
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -113,6 +116,7 @@ struct HomeView: View {
             .padding(.bottom, AppTheme.Layout.screenBottom)
         }
         .scrollIndicators(.hidden)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
         .refreshable {
             await cloudSync.synchronize(trigger: .manual)
         }
@@ -205,44 +209,41 @@ struct HomeView: View {
                 }
             }
 
-            ToolbarItem(placement: .topBarTrailing) {
-                ToolbarGlassActionGroup {
-                    if workspace.isMainEventDeleted, workspace.showsPlanningInterface {
-                        Button("Create event", systemImage: "plus") {
-                            editorTarget = .main
-                        }
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(.primary)
-                        .tint(.primary)
-                        .frame(width: 44, height: 44)
-                    } else if workspace.showsPlanningInterface {
-                        NavigationLink {
-                            EventAnnouncementsView(eventID: workspace.selectedEventID)
-                        } label: {
-                            Label(AnnouncementCopy.title, systemImage: "megaphone")
-                        }
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(.primary)
-                        .tint(.primary)
-                        .frame(width: 44, height: 44)
-
-                        if workspace.isMainEventContext {
-                            Button("Add event", systemImage: "calendar.badge.plus") {
-                                addEventIdeaDetent = .large
-                                isAddingEventIdea = true
-                            }
-                            .labelStyle(.iconOnly)
-                            .foregroundStyle(.primary)
-                            .tint(.primary)
-                            .frame(width: 44, height: 44)
-                        }
+            AdaptiveToolbarActions {
+                if workspace.isMainEventDeleted, workspace.showsPlanningInterface {
+                    Button("Create event", systemImage: "plus") {
+                        editorTarget = .main
                     }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.primary)
+                    .tint(.primary)
+                    .frame(width: 44, height: 44)
+                } else if workspace.showsPlanningInterface {
+                    NavigationLink {
+                        EventAnnouncementsView(eventID: workspace.selectedEventID)
+                    } label: {
+                        Label(AnnouncementCopy.title, systemImage: "megaphone")
+                    }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.primary)
+                    .tint(.primary)
+                    .frame(width: 44, height: 44)
 
-                    AccountToolbarButton(monochrome: true, avatarSize: 28)
+                    if workspace.isMainEventContext {
+                        Button("Add event", systemImage: "calendar.badge.plus") {
+                            addEventIdeaDetent = .large
+                            isAddingEventIdea = true
+                        }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.primary)
+                        .tint(.primary)
                         .frame(width: 44, height: 44)
+                    }
                 }
+
+                AccountToolbarButton(monochrome: true, avatarSize: 28)
+                    .frame(width: 44, height: 44)
             }
-            .sharedBackgroundVisibility(.hidden)
         }
         .navigationDestination(item: $openedEventReference) { reference in
             EventInvitationScreen(reference: reference)
@@ -334,8 +335,8 @@ struct HomeView: View {
         .onChange(of: homeReselectionTrigger) { _, _ in
             handleHomeReselection()
         }
-        .sensoryFeedback(.selection, trigger: scrubbedEventIndex)
-        .sensoryFeedback(.success, trigger: pullToCreateHaptic)
+        .appHaptic(.selection, trigger: scrubbedEventIndex) { _, index in index != nil }
+        .appHaptic(.impact, trigger: pullToCreateHaptic)
         .onDisappear {
             homeReselectionTask?.cancel()
             eventSwitcherFadeTask?.cancel()
@@ -520,10 +521,10 @@ struct HomeView: View {
 
     private func eventPeopleLabel(confirmedCount: Int, totalCount: Int) -> String {
         if confirmedCount > 0 {
-            return confirmedCount == 1 ? "1 person going" : "\(confirmedCount) people going"
+            return AppCopy.Home.peopleGoing(confirmedCount)
         }
 
-        return totalCount == 1 ? "1 person invited" : "\(totalCount) people invited"
+        return AppCopy.Home.peopleInvited(totalCount)
     }
 
     private var eventContextSwitcher: some View {
@@ -737,7 +738,7 @@ struct HomeView: View {
     }
 
     private func title(for reference: EventReference) -> String {
-        reference == .main ? workspace.title : timelineItem(for: reference)?.title ?? "Event"
+        reference == .main ? workspace.title : timelineItem(for: reference)?.title ?? String(localized: "Event")
     }
 
     private func date(for reference: EventReference) -> Date {
@@ -750,8 +751,8 @@ struct HomeView: View {
 
     private func secondaryLabel(for reference: EventReference) -> String {
         if reference == .main { return mainEventTimingLabel }
-        guard let item = timelineItem(for: reference) else { return "Subevent" }
-        return item.purpose == .planning ? "Planning & Scouting" : "Part of the Event"
+        guard let item = timelineItem(for: reference) else { return String(localized: "Subevent") }
+        return item.purpose.title
     }
 
     private func status(for reference: EventReference) -> (title: String, symbol: String) {

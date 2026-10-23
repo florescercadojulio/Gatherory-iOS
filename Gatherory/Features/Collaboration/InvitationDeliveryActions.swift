@@ -55,6 +55,7 @@ struct InvitationDeliveryActions: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
                 .accessibilityHint("Opens sharing options including AirDrop")
             }
 

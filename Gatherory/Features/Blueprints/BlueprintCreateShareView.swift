@@ -132,7 +132,7 @@ struct BlueprintCreateShareView: View {
             Button(BlueprintCopy.revoke, role: .destructive) {
                 guard let linkID = pendingRevokeID, let store else { return }
                 pendingRevokeID = nil
-                Task { await store.revokeCreatedLink(linkID) }
+                Task { await revokeCreatedLink(store, linkID: linkID) }
             }
             Button("Cancel", role: .cancel) { pendingRevokeID = nil }
         } message: {
@@ -154,7 +154,7 @@ struct BlueprintCreateShareView: View {
                     guard let store,
                           store.created?.templateId == pendingSearchChange.templateID,
                           store.created?.revision == pendingSearchChange.revision else { return }
-                    Task { await store.setDiscoverable(pendingSearchChange.shouldPublish) }
+                    Task { await updateSearchListing(store, enabled: pendingSearchChange.shouldPublish) }
                 }
             }
             Button("Cancel", role: .cancel) { pendingSearchChange = nil }
@@ -175,7 +175,7 @@ struct BlueprintCreateShareView: View {
                         return
                     }
                     pendingCreatorNameChange = nil
-                    Task { await store.setDiscoverable(true, creatorName: name) }
+                    Task { await updateSearchListing(store, enabled: true, creatorName: name) }
                 },
                 onCancel: { pendingCreatorNameChange = nil }
             )
@@ -202,8 +202,8 @@ struct BlueprintCreateShareView: View {
                 }
                 self.pendingReplacement = nil
                 Task {
-                    if pendingReplacement.hasLiveURL { await store.replaceShareLink() }
-                    else { await store.createAndShare() }
+                    if pendingReplacement.hasLiveURL { await replaceShareLink(store) }
+                    else { await createAndShare(store) }
                 }
             }
             Button("Cancel", role: .cancel) { pendingReplacement = nil }
@@ -378,6 +378,46 @@ struct BlueprintCreateShareView: View {
         }
     }
 
+    private func createAndShare(_ store: BlueprintCreateShareStore) async {
+        let previousRevision = store.created?.revision
+        let previousActiveLinks = Set(store.createdLinks.filter { $0.revokedAt == nil }.map(\.id))
+        await store.createAndShare()
+        let savedRevision = store.created?.revision
+        let createdLink = store.createdLinks.contains { !previousActiveLinks.contains($0.id) && $0.revokedAt == nil }
+        if (savedRevision != nil && savedRevision != previousRevision) || createdLink {
+            AppHaptics.play(.success)
+        }
+    }
+
+    private func replaceShareLink(_ store: BlueprintCreateShareStore) async {
+        let previousActiveLinks = Set(store.createdLinks.filter { $0.revokedAt == nil }.map(\.id))
+        await store.replaceShareLink()
+        if store.createdLinks.contains(where: { !previousActiveLinks.contains($0.id) && $0.revokedAt == nil }) {
+            AppHaptics.play(.success)
+        }
+    }
+
+    private func revokeCreatedLink(_ store: BlueprintCreateShareStore, linkID: UUID) async {
+        let wasActive = store.createdLinks.contains { $0.id == linkID && $0.revokedAt == nil }
+        await store.revokeCreatedLink(linkID)
+        if wasActive, store.createdLinks.contains(where: { $0.id == linkID && $0.revokedAt != nil }) {
+            AppHaptics.play(.success)
+        }
+    }
+
+    private func updateSearchListing(
+        _ store: BlueprintCreateShareStore,
+        enabled: Bool,
+        creatorName: String? = nil
+    ) async {
+        let previousRevision = store.listedRevision
+        await store.setDiscoverable(enabled, creatorName: creatorName)
+        let expectedRevision = enabled ? store.created?.revision : nil
+        if previousRevision != store.listedRevision, store.listedRevision == expectedRevision {
+            AppHaptics.play(.success)
+        }
+    }
+
     private func reviewView(_ store: BlueprintCreateShareStore) -> some View {
         Group {
             if let createdURL = store.createdURL, store.created != nil {
@@ -437,7 +477,7 @@ struct BlueprintCreateShareView: View {
                         sharingActionsMenu(store)
                     }
                 } else if store.created != nil, !createsShareLink, store.errorMessage != nil {
-                    Button(BlueprintCopy.retry) { Task { await store.createAndShare() } }
+                    Button(BlueprintCopy.retry) { Task { await createAndShare(store) } }
                         .disabled(store.isBusy || !canManageSource)
                 }
             }
@@ -456,7 +496,7 @@ struct BlueprintCreateShareView: View {
                 .background(.bar)
             } else if store.created == nil, store.reviewed != nil {
                 Button {
-                    Task { await store.createAndShare() }
+                    Task { await createAndShare(store) }
                 } label: {
                     Text(createsShareLink ? BlueprintCopy.createShareLink : BlueprintCopy.saveBlueprint)
                         .multilineTextAlignment(.center)
@@ -464,6 +504,7 @@ struct BlueprintCreateShareView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
                 .padding(.horizontal)
                 .padding(.vertical, 8)
                 .background(.bar)
@@ -474,12 +515,13 @@ struct BlueprintCreateShareView: View {
                       !store.requiresLinkRefresh,
                       !store.createdLinks.contains(where: { $0.revokedAt == nil }) {
                 Button {
-                    Task { await store.createAndShare() }
+                    Task { await createAndShare(store) }
                 } label: {
                     Text(BlueprintCopy.createShareLink)
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
                 .padding(.horizontal)
                 .padding(.vertical, 8)
                 .background(.bar)

@@ -21,9 +21,12 @@ struct BlueprintPreviewSession {
     private let defaultEventName: String
     private let initialDateContext: BlueprintSetupDateContext
     private let sourceDraft: BlueprintSetupDraft?
+    private let initialIdeaKeys: Set<String>
+    private let initialChildKeys: Set<String>
     private(set) var customizations: BlueprintCustomization
     private var editedMainEvent: MainEventValues?
     private var confirmsMainDate = false
+    private var editedCover = false
     private var editedChildren: Set<String> = []
     private var editedIdeas: Set<String> = []
 
@@ -44,7 +47,7 @@ struct BlueprintPreviewSession {
         self.sourceDraft = source
         let baseline = saved ?? source
         let activeEntry = baseline?.entry ?? entry
-        self.entry = activeEntry
+        self.entry = activeEntry.refreshingDiscoveryMetadata(from: entry)
         self.draft = saved
         self.defaultEventName = source?.eventName ?? defaultEventName
         self.initialDateContext = dateContext ?? source.map {
@@ -52,6 +55,9 @@ struct BlueprintPreviewSession {
                                       timeZone: TimeZone(identifier: $0.timeZoneIdentifier) ?? .autoupdatingCurrent)
         } ?? BlueprintSetupDateContext()
         self.customizations = baseline?.customizations ?? BlueprintCustomization()
+        let initialContent = BlueprintPreviewContent(entry: activeEntry, customizations: baseline?.customizations)
+        self.initialIdeaKeys = Set(initialContent?.ideas.map(\.key) ?? [])
+        self.initialChildKeys = Set(initialContent?.children.map(\.key) ?? [])
         let keys = Set((try? BlueprintCustomization().applying(to: activeEntry).ideas.ideas.map(\.key)) ?? [])
             .union(baseline?.customizations?.ideas.map(\.key) ?? [])
         self.responses = (baseline?.previewDecisions ?? [:]).filter { keys.contains($0.key) }
@@ -69,6 +75,13 @@ struct BlueprintPreviewSession {
             startsAt: draft?.startsAt ?? initialDateContext.startsAt,
             timeZoneIdentifier: draft?.timeZoneIdentifier ?? initialDateContext.timeZoneIdentifier
         )
+    }
+
+    /// Only show an actual date after the user explicitly confirms one.
+    var confirmedMainEventValues: MainEventValues? {
+        let savedConfirmation = draft?.mainDateConfirmed ?? sourceDraft?.mainDateConfirmed ?? false
+        guard confirmsMainDate || savedConfirmation else { return nil }
+        return mainEventValues
     }
 
     var content: BlueprintPreviewContent? {
@@ -90,6 +103,12 @@ struct BlueprintPreviewSession {
               TimeZone(identifier: values.timeZoneIdentifier) != nil else { throw SaveError.invalidMainEvent }
         editedMainEvent = values
         confirmsMainDate = confirmsDate || confirmsMainDate
+    }
+
+    mutating func editCoverAssetID(_ id: UUID?) {
+        customizations.coverAssetId = id
+        customizations.overridesCover = true
+        editedCover = true
     }
 
     mutating func editChild(_ child: BlueprintCatalogChild) throws {
@@ -118,6 +137,7 @@ struct BlueprintPreviewSession {
     private mutating func resetContentChanges() {
         editedMainEvent = nil
         confirmsMainDate = false
+        editedCover = false
         editedChildren.removeAll()
         editedIdeas.removeAll()
     }
@@ -134,12 +154,29 @@ struct BlueprintPreviewSession {
             eventName: defaultEventName,
             startsAt: initialDateContext.startsAt,
             timeZoneIdentifier: initialDateContext.timeZoneIdentifier,
-            selectedChildren: Set(content?.children.map(\.key) ?? []), selectedIdeas: [], confirmedDates: [:], shareToken: shareToken
+            selectedChildren: Set(content?.children.map(\.key) ?? []), selectedIdeas: [],
+            confirmedDates: sourceDraft?.confirmedDates ?? [:], shareToken: shareToken,
+            mainDateConfirmed: sourceDraft?.mainDateConfirmed
         )
-        let plan = content?.homeContent(responses: responses)
-        saved.selectedIdeas = Set(plan?.ideas.map(\.key) ?? [])
-        saved.selectedChildren = Set(plan?.children.map(\.key) ?? [])
+        saved.entry = saved.entry.refreshingDiscoveryMetadata(from: entry)
+        let availableIdeaKeys = Set(content?.ideas.map(\.key) ?? [])
+        let availableChildKeys = Set(content?.children.map(\.key) ?? [])
+        if let selectionSource = draft ?? sourceDraft {
+            saved.selectedIdeas = selectionSource.selectedIdeas
+                .intersection(availableIdeaKeys)
+                .union(editedIdeas.subtracting(initialIdeaKeys))
+            saved.selectedChildren = selectionSource.selectedChildren
+                .intersection(availableChildKeys)
+                .union(editedChildren.subtracting(initialChildKeys))
+        } else {
+            saved.selectedIdeas = availableIdeaKeys
+            saved.selectedChildren = availableChildKeys
+        }
         var merged = existing?.customizations ?? sourceDraft?.customizations ?? BlueprintCustomization()
+        if editedCover {
+            merged.coverAssetId = customizations.coverAssetId
+            merged.overridesCover = true
+        }
         for child in customizations.children where editedChildren.contains(child.key) { try merged.upsert(child) }
         for idea in customizations.ideas where editedIdeas.contains(idea.key) { try merged.upsert(idea) }
         _ = try merged.applying(to: entry)

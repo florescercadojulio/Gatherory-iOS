@@ -106,6 +106,7 @@ struct OnboardingView: View {
             }
             .font(.headline)
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(AppTheme.ColorToken.onAccent)
             .controlSize(.large)
             .frame(maxWidth: 560)
             .padding(.horizontal, AppTheme.Spacing.spacious)
@@ -156,6 +157,7 @@ struct OnboardingView: View {
                         }
                         .font(.headline)
                         .buttonStyle(.borderedProminent)
+                        .foregroundStyle(AppTheme.ColorToken.onAccent)
                         .controlSize(.large)
 
                         Button(AppCopy.Common.notNow) {

@@ -1,6 +1,9 @@
 import Foundation
 
 enum BlueprintCopy {
+    static func editEvent(_ name: String) -> String {
+        String.localizedStringWithFormat(String(localized: "blueprint.preview.editEvent", defaultValue: "Edit %@"), name)
+    }
     static var includeTodos: String { String(localized: "blueprint.includeTodos", defaultValue: "Include To-dos") }
     static var todoCopyExplanation: String { String(localized: "blueprint.todoCopyExplanation", defaultValue: "Copies start unfinished. Dates and people aren't included.") }
     static var creatorNameLabel: String { String(localized: "blueprint.creator.name", defaultValue: "Creator name") }
@@ -33,11 +36,19 @@ enum BlueprintCopy {
     static var saveBlueprint: String { String(localized: "blueprint.saveToLibrary", defaultValue: "Save Blueprint") }
     static var blueprintSavedExplanation: String { String(localized: "blueprint.savedToLibrary", defaultValue: "Saved in Blueprints. Your event remains independent.") }
     static var previewInstall: String { String(localized: "blueprint.preview.install", defaultValue: "Use Blueprint") }
+    static var use: String { String(localized: "blueprint.preview.use", defaultValue: "Use") }
     static var confirmInstallTitle: String { String(localized: "blueprint.preview.confirmInstall", defaultValue: "Use This Blueprint?") }
     static var confirmInstallMessage: String { String(localized: "blueprint.preview.confirmInstallMessage", defaultValue: "Continue with these choices? You’ll choose dates before creating your event.") }
     static var previewNoIdeas: String { String(localized: "blueprint.preview.noIdeas", defaultValue: "There are no ideas to decide on in this preview.") }
     static var previewChoicesExplanation: String { String(localized: "blueprint.preview.choicesExplanation", defaultValue: "Choose the ideas you like. Save Draft to continue later.") }
     static var saveDraft: String { String(localized: "blueprint.preview.saveDraft", defaultValue: "Save Draft") }
+    static var previewSaving: String { String(localized: "blueprint.preview.saving", defaultValue: "Saving Changes…") }
+    static var previewSaved: String { String(localized: "blueprint.preview.saved", defaultValue: "Changes Saved") }
+    static var previewSaveChanges: String { String(localized: "blueprint.preview.saveChanges", defaultValue: "Save Changes") }
+    static var confirmMainDateToContinue: String { String(localized: "blueprint.setup.confirmMainDate", defaultValue: "Confirm the main event date to continue.") }
+    static var confirmEventDatesToContinue: String { String(localized: "blueprint.setup.confirmEventDates", defaultValue: "Confirm the remaining event dates to continue.") }
+    static var editDateHint: String { String(localized: "blueprint.setup.editDateHint", defaultValue: "Tap a date to edit it.") }
+
     static var previewUnsavedTitle: String { String(localized: "blueprint.preview.unsaved", defaultValue: "Save your blueprint choices?") }
     static var discardPreviewChanges: String { String(localized: "blueprint.preview.discard", defaultValue: "Discard Changes") }
     static var previewSaveBeforeCustomize: String { String(localized: "blueprint.preview.saveBeforeCustomize", defaultValue: "Save your choices before customizing?") }
@@ -71,6 +82,45 @@ enum BlueprintCopy {
     }
     static var savedPreviewExplanation: String { String(localized: "blueprint.savedPreviewExplanation", defaultValue: "Showing your saved copy. Connect to create an event.") }
     static var previewTitle: String { String(localized: "blueprint.previewTitle", defaultValue: "Blueprint Preview") }
+    static var like: String { String(localized: "blueprint.action.like", defaultValue: "Like Blueprint") }
+    static var unlike: String { String(localized: "blueprint.action.unlike", defaultValue: "Unlike Blueprint") }
+    static var saveBookmark: String { String(localized: "blueprint.action.bookmark", defaultValue: "Save Blueprint") }
+    static var removeBookmark: String { String(localized: "blueprint.action.removeBookmark", defaultValue: "Remove Bookmark") }
+    static var notInterested: String { String(localized: "blueprint.action.notInterested", defaultValue: "Not interested") }
+    static var undoNotInterested: String { String(localized: "blueprint.action.undoNotInterested", defaultValue: "Show in recommendations") }
+    static var blueprintActions: String { String(localized: "blueprint.action.menu", defaultValue: "Blueprint actions") }
+    static var saved: String { String(localized: "blueprint.action.saved", defaultValue: "Saved") }
+    static var libraryYours: String { String(localized: "blueprint.library.yours", defaultValue: "Yours") }
+    static var libraryContinueSetup: String { String(localized: "blueprint.library.continueSetup", defaultValue: "Continue setup") }
+    static var libraryChooseEventTitle: String { String(localized: "blueprint.library.chooseEventTitle", defaultValue: "Choose an event") }
+    static var libraryChooseEventMessage: String { String(localized: "blueprint.library.chooseEventMessage", defaultValue: "Choose an event you manage to create a blueprint from its plan.") }
+    static var libraryNoSourceEventsTitle: String { String(localized: "blueprint.library.noSourceEventsTitle", defaultValue: "Start with an event") }
+    static var libraryNoSourceEventsMessage: String { String(localized: "blueprint.library.noSourceEventsMessage", defaultValue: "Create an event first, then turn its plan into a blueprint.") }
+    static var libraryViewEvents: String { String(localized: "blueprint.library.viewEvents", defaultValue: "View events") }
+    static var libraryYoursEmptyTitle: String { String(localized: "blueprint.library.yoursEmptyTitle", defaultValue: "Your blueprints") }
+    static var libraryYoursEmptyMessage: String { String(localized: "blueprint.library.yoursEmptyMessage", defaultValue: "Create a blueprint from an event, or explore one to make your own.") }
+    static var librarySaved: String { String(localized: "blueprint.library.saved", defaultValue: "Saved") }
+    static var libraryLiked: String { String(localized: "blueprint.library.liked", defaultValue: "Liked") }
+    static var librarySavedEmptyTitle: String { String(localized: "blueprint.library.savedEmptyTitle", defaultValue: "No saved Blueprints yet") }
+    static var librarySavedEmptyMessage: String { String(localized: "blueprint.library.savedEmptyMessage", defaultValue: "Save Blueprints you want to come back to.") }
+    static var libraryLikedEmptyTitle: String { String(localized: "blueprint.library.likedEmptyTitle", defaultValue: "No liked Blueprints yet") }
+    static var libraryLikedEmptyMessage: String { String(localized: "blueprint.library.likedEmptyMessage", defaultValue: "Like Blueprints to keep them in one place.") }
+    static var exploreBlueprints: String { String(localized: "blueprint.library.exploreBlueprints", defaultValue: "Explore Blueprints") }
+    static var libraryCollectionPickerLabel: String { String(localized: "blueprint.library.collectionPickerLabel", defaultValue: "Blueprint collection") }
+    static var libraryScopePickerLabel: String { String(localized: "blueprint.library.scopePickerLabel", defaultValue: "Your Blueprint collection") }
+    static var savedBlueprints: String { String(localized: "blueprint.action.savedBlueprints", defaultValue: "Saved Blueprints") }
+    static var savedListTitle: String { String(localized: "blueprint.action.savedListTitle", defaultValue: "Saved list") }
+    static var hidden: String { String(localized: "blueprint.action.hidden", defaultValue: "Hidden") }
+    static var savedUnavailable: String { String(localized: "blueprint.action.savedUnavailable", defaultValue: "Saved Blueprint unavailable") }
+    static var savedUnavailableExplanation: String { String(localized: "blueprint.action.savedUnavailableExplanation", defaultValue: "This Blueprint is no longer available. You can remove the saved reference.") }
+    static var hiddenTitle: String { String(localized: "blueprint.action.hiddenTitle", defaultValue: "Hidden from recommendations") }
+    static var noSaved: String { String(localized: "blueprint.action.noSaved", defaultValue: "No saved Blueprints") }
+    static var noHidden: String { String(localized: "blueprint.action.noHidden", defaultValue: "No hidden Blueprints") }
+    static var savedOpenUnavailable: String { String(localized: "blueprint.action.savedOpenUnavailable", defaultValue: "Blueprint unavailable") }
+    static var improveRecommendations: String { String(localized: "blueprint.action.improveRecommendations", defaultValue: "Improve Blueprint recommendations") }
+    static var measurementExplanation: String { String(localized: "blueprint.action.measurementExplanation", defaultValue: "Share organic Blueprint views, opens, and public source usage to improve recommendations. Private content is never included.") }
+    static var likeRecommendationExplanation: String { String(localized: "blueprint.action.likeRecommendationExplanation", defaultValue: "Likes tailor your Blueprint recommendations. You can undo a Like at any time.") }
+    static var actionUpdateFailed: String { String(localized: "blueprint.action.updateFailed", defaultValue: "Couldn’t update this Blueprint") }
     static var previewExplanation: String { String(localized: "blueprint.previewExplanation", defaultValue: "Choose what you want to use. Your event will be a separate copy.") }
     static var previewDatesExplanation: String { String(localized: "blueprint.previewDatesExplanation", defaultValue: "Choose dates when you create your event.") }
     static var sharedLinkUnavailable: String { String(localized: "blueprint.sharedLinkUnavailable", defaultValue: "This link is no longer available. Ask the sender for a new one.") }
@@ -195,12 +245,31 @@ enum BlueprintCopy {
         String(localized: "blueprint.description", defaultValue: "Start with a plan you can shape over time.")
     }
     static var mainEvent: String { String(localized: "blueprint.mainEvent", defaultValue: "Main event") }
+    static var includedEvents: String { String(localized: "blueprint.includedEvents", defaultValue: "Included events") }
+    static var previewEvents: String { String(localized: "blueprint.preview.events", defaultValue: "Events") }
+    static var previewEditingOn: String { String(localized: "blueprint.preview.editingOn", defaultValue: "On") }
+    static var previewEditingOff: String { String(localized: "blueprint.preview.editingOff", defaultValue: "Off") }
+    static var planNotIncluded: String { String(localized: "blueprint.preview.planNotIncluded", defaultValue: "Not in your plan") }
+    static var noIncludedEvents: String { String(localized: "blueprint.preview.noEvents", defaultValue: "Add an event to build out your plan.") }
+    static var noPreviewIdeas: String { String(localized: "blueprint.preview.emptyIdeas", defaultValue: "Add ideas to help decide what to include.") }
+    static var addSubEvent: String { String(localized: "blueprint.preview.addSubEvent", defaultValue: "Add Sub-event") }
+    static var addIdea: String { String(localized: "blueprint.preview.addIdea", defaultValue: "Add Idea") }
+    static func editIdea(_ name: String) -> String {
+        String.localizedStringWithFormat(String(localized: "blueprint.preview.editIdea", defaultValue: "Edit %@"), name)
+    }
+    static var mainEventDetails: String { String(localized: "blueprint.mainEventDetails", defaultValue: "Main event details") }
+    static var viewEventDetails: String { String(localized: "blueprint.viewEventDetails", defaultValue: "View event details") }
+    static func publicItemCount(_ count: Int) -> String {
+        String.localizedStringWithFormat(String(localized: "blueprint.publicItemCount", defaultValue: "%lld items"), count)
+    }
     static var children: String { String(localized: "blueprint.children", defaultValue: "Events to Include") }
     static var ideas: String { String(localized: "blueprint.ideas", defaultValue: "Starter ideas") }
     static var review: String { String(localized: "blueprint.review", defaultValue: "Your Plan") }
     static var reviewing: String { String(localized: "blueprint.reviewing", defaultValue: "Getting blueprint ready…") }
-    static var install: String { String(localized: "blueprint.install", defaultValue: "Create Event") }
-    static var installing: String { String(localized: "blueprint.installing", defaultValue: "Creating…") }
+    static var install: String { String(localized: "blueprint.install", defaultValue: "Create Events") }
+    static var installing: String { String(localized: "blueprint.installing", defaultValue: "Creating Events…") }
+    static var createEvents: String { String(localized: "blueprint.createEvents", defaultValue: "Create Events") }
+    static var retryCreateEvents: String { String(localized: "blueprint.retryCreateEvents", defaultValue: "Retry Creating Events") }
     static var omitted: String { String(localized: "blueprint.omitted", defaultValue: "Not included") }
     static var childDateRequired: String {
         String(localized: "blueprint.childDateRequired", defaultValue: "Choose a date and time to include this event.")
@@ -229,7 +298,7 @@ enum BlueprintCopy {
         String(localized: "blueprint.workspaceNotInBootstrap", defaultValue: "Your event hasn’t finished loading. Try again.")
     }
     static var signInRequired: String { String(localized: "blueprint.signInRequired", defaultValue: "Sign in to use blueprints.") }
-    static var retryInstall: String { String(localized: "blueprint.retryInstall", defaultValue: "Continue Creating Event") }
+    static var retryInstall: String { String(localized: "blueprint.retryInstall", defaultValue: "Retry Creating Events") }
     static var retrySameRequest: String {
         String(localized: "blueprint.retrySameRequest", defaultValue: "Try Again")
     }
@@ -238,7 +307,7 @@ enum BlueprintCopy {
         String(localized: "blueprint.finishPreviousInstall", defaultValue: "Finish this event before starting another.")
     }
     static var nothingCreatedYet: String {
-        String(localized: "blueprint.nothingCreatedYet", defaultValue: "Your event is created only when you choose Create Event.")
+        String(localized: "blueprint.nothingCreatedYet", defaultValue: "Your events are created only when you choose Create Events.")
     }
     static var omissionReason: String { String(localized: "blueprint.omissionReason", defaultValue: "Reason") }
 }

@@ -76,6 +76,27 @@ struct AccountDeletionLocalCleanupTests {
         try fixture.persistence.saveChanges(in: fixture.library)
     }
 
+    @Test("Account deletion clears only that account's local discovery history")
+    func deletionPreservesOtherAccountDiscoveryHistory() async throws {
+        let fixture = try await makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let now = Date.now
+        let deletedHistory = BlueprintDiscoveryContextStore(accountID: fixture.accountA, defaults: fixture.defaults)
+        deletedHistory.recordSeen(catalogKey: "deleted-seen", at: now,
+                                 accountID: fixture.accountA, generation: deletedHistory.callbackGeneration)
+        let retainedHistory = BlueprintDiscoveryContextStore(accountID: fixture.accountB, defaults: fixture.defaults)
+        retainedHistory.recordSeen(catalogKey: "retained-seen", at: now,
+                                   accountID: fixture.accountB, generation: retainedHistory.callbackGeneration)
+
+        try await fixture.cleanup(removeSessionCredential: {}, artifacts: nil)
+            .remove(accountID: fixture.accountA, canRemoveSessionCredential: false)
+
+        #expect(fixture.defaults.data(forKey: "blueprint.discovery.seen.v1.\(fixture.accountA)") == nil)
+        #expect(fixture.defaults.data(forKey: "blueprint.discovery.seen.v1.\(fixture.accountB)") != nil)
+        let reloaded = BlueprintDiscoveryContextStore(accountID: fixture.accountB, defaults: fixture.defaults)
+        #expect(try #require(reloaded.beginOrResumeSession()).seen.map(\.catalogKey) == ["retained-seen"])
+    }
+
     private func assertDeletedAndRetained(_ fixture: Fixture, generation: UUID, pendingIDs: Set<UUID>) throws {
         let context = ModelContext(fixture.persistence.container)
         let records = try context.fetch(FetchDescriptor<WorkspaceRecord>())
@@ -168,7 +189,7 @@ struct AccountDeletionLocalCleanupTests {
         let hiddenB: UUID
 
         func cleanup(removeSessionCredential: @escaping () throws -> Void,
-            artifacts: [(String) throws -> Void]) -> AccountDeletionLocalCleanup {
+            artifacts: [(String) throws -> Void]?) -> AccountDeletionLocalCleanup {
             AccountDeletionLocalCleanup(library: library, persistence: persistence, cloudSync: sync,
                 guestInvitations: invitations, notifications: notifications, imageSafety: imageSafety,
                 defaults: defaults, removeSessionCredential: removeSessionCredential, artifactCleanupSteps: artifacts)
@@ -184,6 +205,7 @@ private final class LocalCleanupMemoryDefaults: UserDefaults, @unchecked Sendabl
     override func bool(forKey defaultName: String) -> Bool { values[defaultName] as? Bool ?? false }
     override func string(forKey defaultName: String) -> String? { values[defaultName] as? String }
     override func stringArray(forKey defaultName: String) -> [String]? { values[defaultName] as? [String] }
+    override func data(forKey defaultName: String) -> Data? { values[defaultName] as? Data }
 }
 
 @MainActor private final class LocalCleanupInstallationStore: NotificationInstallationStoring {

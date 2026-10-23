@@ -1,45 +1,5 @@
 import SwiftUI
 
-/// Row-local anchor prevents presenting from an offscreen navigation/form root.
-/// Scrolling the calendar leaves the explicit confirmation controls reachable.
-private struct BlueprintDatePopup: ViewModifier {
-    @Binding var isPresented: Bool
-    @Binding var date: Date
-    let title: String
-    let timeZone: TimeZone
-    let onConfirm: () -> Void
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
-
-    func body(content: Content) -> some View {
-        content.popover(isPresented: $isPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
-            VStack(spacing: 12) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(title).font(.headline)
-                        DatePicker(BlueprintCopy.dateTime, selection: $date)
-                            .datePickerStyle(.graphical)
-                            .environment(\.timeZone, timeZone)
-                    }
-                }
-                .scrollBounceBehavior(.basedOnSize)
-                HStack {
-                    Button(AppCopy.Common.cancel) { isPresented = false }
-                    Spacer()
-                    Button(BlueprintCopy.confirmDate) {
-                        onConfirm()
-                        isPresented = false
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            }
-            .padding(16)
-            .frame(idealWidth: 340, idealHeight: verticalSizeClass == .compact ? 220 : 460,
-                   maxHeight: verticalSizeClass == .compact ? 260 : 500)
-            .presentationCompactAdaptation(.popover)
-        }
-    }
-}
-
 struct BlueprintSetupView: View {
     // nil opens recovery only; it must never silently choose a different starter.
     let catalogKey: String?
@@ -54,6 +14,7 @@ struct BlueprintSetupView: View {
     @Environment(\.currentUserAccount) private var account
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @FocusState private var isEventNameFocused: Bool
 
     @State private var coordinator: BlueprintInstallationCoordinator?
     @State private var catalogEntry: BlueprintCatalogEntry?
@@ -73,6 +34,7 @@ struct BlueprintSetupView: View {
     @State private var dateSheetChild: BlueprintCatalogChild?
     @State private var showsMainDate = false
     @State private var dateDraft = Date.now
+    @State private var dateEditorCapture: DateEditorCapture?
     @State private var requestForReview: BlueprintInstallInput?
     @State private var reviewedPlan: BlueprintExpandedPlan?
     @State private var showReview = false
@@ -84,36 +46,64 @@ struct BlueprintSetupView: View {
     @State private var setupGeneration = UUID()
     @State private var confirmsStartOver = false
     @State private var mainDateConfirmed = false
+    @State private var lastPersistedEventName = ""
     @State private var customizations = BlueprintCustomization()
     @State private var previewDecisions: [String: DecisionChoice] = [:]
-    @State private var contentEditor: ContentEditor?
 
-    private let draftStore = BlueprintSetupDraftStore()
+    private let draftStore: BlueprintSetupDraftStore
+#if DEBUG
+    private let installationCoordinatorFactory: (() -> BlueprintInstallationCoordinator?)?
+#endif
 
-    init(catalogKey: String?, sharedToken: String? = nil, returnsToPreview: Bool = false,
-         installationOwnerID: String? = nil,
-         onInstallationCompleted: (() -> Void)? = nil, onClose: (() -> Void)? = nil) {
+    private init(catalogKey: String?, sharedToken: String?, returnsToPreview: Bool,
+                 installationOwnerID: String?, onInstallationCompleted: (() -> Void)?,
+                 onClose: (() -> Void)?, resolvedDraftStore: BlueprintSetupDraftStore?,
+                 installationCoordinatorFactory: (() -> BlueprintInstallationCoordinator?)?) {
         self.catalogKey = catalogKey
         self.sharedToken = sharedToken
         self.returnsToPreview = returnsToPreview
         self.installationOwnerID = installationOwnerID
         self.onInstallationCompleted = onInstallationCompleted
         self.onClose = onClose
+#if DEBUG
+        let usesDateConfirmationFixture = ProcessInfo.processInfo.arguments.contains("-BlueprintSetupDateConfirmationFixture")
+        self.draftStore = usesDateConfirmationFixture ? (resolvedDraftStore ?? BlueprintSetupDraftStore()) : BlueprintSetupDraftStore()
+        self.installationCoordinatorFactory = usesDateConfirmationFixture ? installationCoordinatorFactory : nil
+#else
+        self.draftStore = BlueprintSetupDraftStore()
+#endif
     }
+
+    init(catalogKey: String?, sharedToken: String? = nil, returnsToPreview: Bool = false,
+         installationOwnerID: String? = nil,
+         onInstallationCompleted: (() -> Void)? = nil, onClose: (() -> Void)? = nil) {
+        self.init(catalogKey: catalogKey, sharedToken: sharedToken, returnsToPreview: returnsToPreview,
+                  installationOwnerID: installationOwnerID, onInstallationCompleted: onInstallationCompleted,
+                  onClose: onClose, resolvedDraftStore: nil, installationCoordinatorFactory: nil)
+    }
+
+#if DEBUG
+    init(catalogKey: String?, sharedToken: String? = nil, returnsToPreview: Bool = false,
+         installationOwnerID: String? = nil,
+         onInstallationCompleted: (() -> Void)? = nil, onClose: (() -> Void)? = nil,
+         setupDraftStore: BlueprintSetupDraftStore,
+         installationCoordinatorFactory: @escaping () -> BlueprintInstallationCoordinator?) {
+        self.init(catalogKey: catalogKey, sharedToken: sharedToken, returnsToPreview: returnsToPreview,
+                  installationOwnerID: installationOwnerID, onInstallationCompleted: onInstallationCompleted,
+                  onClose: onClose, resolvedDraftStore: setupDraftStore,
+                  installationCoordinatorFactory: installationCoordinatorFactory)
+    }
+#endif
 
     private struct ScheduleRequest {
         let token: UUID
         let input: BlueprintScheduleInput
     }
 
-    private struct ContentEditor {
-        enum Item {
-            case idea(BlueprintCatalogIdea?)
-            case child(BlueprintCatalogChild?)
-        }
-        let item: Item
+    private struct DateEditorCapture: Equatable {
         let ownerID: String
-        let generation: UUID
+        let requestID: UUID
+        let setupGeneration: UUID
     }
 
     private var trimmedEventName: String {
@@ -139,15 +129,36 @@ struct BlueprintSetupView: View {
         installationOwnerID != nil && installationOwnerID == account?.id
             && draftOwnerUserID == installationOwnerID && !loading && !busy
             && !installAttemptStarted && pendingIntents.isEmpty && dateSheetChild == nil && !showsMainDate
-            && catalogEntry != nil && draftSaveError == nil && errorMessage == nil
+            && catalogEntry != nil && draftSaveError == nil
+            && BlueprintInstallReadiness.isValidEventName(eventName)
             && BlueprintInstallReadiness.isReady(mainDateConfirmed: mainDateConfirmed,
                                                 selected: selectedChildren, confirmed: scheduleDraft.confirmedDates)
+    }
+
+    private var showsSetupAction: Bool {
+        !loading && catalogEntry != nil && tree != nil && ideas != nil
+            && pendingIntents.isEmpty && !installAttemptStarted
+    }
+
+    private var setupActionEnabled: Bool {
+        if installationOwnerID != nil { return readyForDirectInstallation }
+        return !busy && mainDateConfirmed && BlueprintInstallReadiness.isValidEventName(eventName)
+            && selectedChildrenHaveDates && draftSaveError == nil
+    }
+
+    private var setupGuidance: String? {
+        if !mainDateConfirmed { return BlueprintCopy.confirmMainDateToContinue }
+        if !selectedChildrenHaveDates { return BlueprintCopy.confirmEventDatesToContinue }
+        return nil
     }
 
     var body: some View {
         Form {
             if !pendingIntents.isEmpty {
                 Section {
+                    if busy {
+                        ProgressView(BlueprintCopy.installing)
+                    }
                     ForEach(pendingIntents, id: \.requestID) { intent in
                         Button {
                             Task { await resume(intent) }
@@ -155,6 +166,7 @@ struct BlueprintSetupView: View {
                             Label(BlueprintCopy.retryInstall, systemImage: "arrow.clockwise")
                         }
                         .disabled(busy || account?.id != intent.ownerUserID)
+                        .accessibilityIdentifier("blueprint.setup.retryInstallation")
                     }
                     Text(BlueprintCopy.pendingInstall)
                         .font(.footnote)
@@ -163,28 +175,33 @@ struct BlueprintSetupView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     if let errorMessage {
-                        Text(errorMessage).font(.footnote).foregroundStyle(.red)
+                        Text(errorMessage).font(.footnote).foregroundStyle(AppTheme.ColorToken.destructive)
                     }
                 }
             } else if installAttemptStarted {
                 Section {
-                    Text(BlueprintCopy.finishPreviousInstall)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    if let errorMessage { Text(errorMessage).font(.footnote).foregroundStyle(.red) }
-                    if let input = requestForReview {
-                        Button(BlueprintCopy.retrySameRequest, systemImage: "arrow.clockwise") {
-                            Task { await install(input) }
+                    if busy {
+                        ProgressView(BlueprintCopy.installing)
+                            .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
+                    } else {
+                        Text(BlueprintCopy.finishPreviousInstall)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        if let errorMessage { Text(errorMessage).font(.footnote).foregroundStyle(AppTheme.ColorToken.destructive) }
+                        if let input = requestForReview {
+                            Button(installationOwnerID != nil ? BlueprintCopy.retryCreateEvents : BlueprintCopy.retrySameRequest,
+                                   systemImage: "arrow.clockwise") {
+                                Task { await install(input) }
+                            }
                         }
-                        .disabled(busy)
                     }
                 }
             } else if loading {
                 Section { ProgressView() }
-            } else if let tree, let ideas {
+            } else if let tree, ideas != nil {
                 if let draftSaveError {
                     Section {
-                        Text(draftSaveError).foregroundStyle(.red)
+                        Text(draftSaveError).foregroundStyle(AppTheme.ColorToken.destructive)
                         Button(AppCopy.Common.retry) { persistDraft() }
                     }
                 }
@@ -192,13 +209,10 @@ struct BlueprintSetupView: View {
                     missingDateSections(tree: tree)
                 } else {
                 Section {
-                    TextField(BlueprintCopy.eventName, text: $eventName)
-                        .textInputAutocapitalization(.words)
+                    eventNameField
                     mainDateRow
                 } header: {
                     Text(BlueprintCopy.mainEvent)
-                } footer: {
-                    Text(catalogEntry?.discovery?.summary ?? BlueprintCopy.description)
                 }
 
                 Section(BlueprintCopy.children) {
@@ -212,10 +226,6 @@ struct BlueprintSetupView: View {
                     ForEach(tree.children) { child in
                         VStack(alignment: .leading, spacing: 8) {
                             Toggle(child.title, isOn: childSelection(child))
-                            Button(AppCopy.Common.edit, systemImage: "pencil") {
-                                openEditor(.child(child))
-                            }
-                            .font(.subheadline)
                             if selectedChildren.contains(child.key) {
                                 if let date = scheduleDraft.confirmedDates[child.key] {
                                     Text(BlueprintCopy.confirmedDate)
@@ -226,12 +236,14 @@ struct BlueprintSetupView: View {
                                         Label(formattedChildDate(date), systemImage: "calendar")
                                     }
                                     .font(.subheadline)
+                                    .accessibilityIdentifier("blueprint.setup.childDate.\(child.key)")
                                 } else {
                                     suggestionChoices(for: child)
                                     Button(BlueprintCopy.chooseDate, systemImage: "calendar.badge.plus") {
                                         openManualDatePicker(for: child)
                                     }
                                     .font(.subheadline)
+                                    .accessibilityIdentifier("blueprint.setup.childDate.\(child.key)")
                                     Text(BlueprintCopy.childDateRequired)
                                         .font(.footnote)
                                         .foregroundStyle(.secondary)
@@ -239,48 +251,7 @@ struct BlueprintSetupView: View {
                             }
                         }
                         .padding(.vertical, 2)
-                        .modifier(datePopup(for: child))
                     }
-                    Button("Add Sub-event", systemImage: "plus") { openEditor(.child(nil)) }
-                        .disabled(tree.children.count >= 50)
-                }
-
-                Section(BlueprintCopy.ideas) {
-                    ForEach(ideas.ideas) { idea in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Toggle(isOn: ideaSelection(idea)) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(idea.title)
-                                    if let notes = idea.notes, !notes.isEmpty {
-                                        Text(notes).font(.footnote).foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                            Text(targetTitle(idea.target))
-                                .font(.caption).foregroundStyle(.secondary)
-                            Button(AppCopy.Common.edit, systemImage: "pencil") {
-                                openEditor(.idea(idea))
-                            }
-                            .font(.subheadline)
-                        }
-                    }
-                    Button("Add Idea", systemImage: "plus") { openEditor(.idea(nil)) }
-                        .disabled(ideas.ideas.count >= 100)
-                }
-
-                Section {
-                    Button {
-                        Task { await requestPlanReview() }
-                    } label: {
-                        if busy {
-                            ProgressView { Text(BlueprintCopy.reviewing) }
-                        } else {
-                            Text(AppCopy.Common.continueAction)
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .disabled(busy || !mainDateConfirmed || trimmedEventName.isEmpty || trimmedEventName.unicodeScalars.count > 120 || !selectedChildrenHaveDates || draftSaveError != nil)
-                    .buttonStyle(.borderedProminent)
                 }
                 }
             } else {
@@ -292,16 +263,37 @@ struct BlueprintSetupView: View {
                 }
             }
 
-            if let errorMessage, !loading, catalogEntry != nil {
-                Section { Text(errorMessage).foregroundStyle(.red) }
+            if let errorMessage, !loading, catalogEntry != nil,
+               !showsSetupAction, !installAttemptStarted, pendingIntents.isEmpty {
+                Section { Text(errorMessage).foregroundStyle(AppTheme.ColorToken.destructive) }
+            }
+            if let setupGuidance, showsSetupAction, pendingIntents.isEmpty, !installAttemptStarted {
+                Section { Label(setupGuidance, systemImage: "info.circle").font(.footnote).foregroundStyle(.secondary) }
+            }
+            if let errorMessage, showsSetupAction, pendingIntents.isEmpty, !installAttemptStarted {
+                Section {
+                    Text(errorMessage).foregroundStyle(AppTheme.ColorToken.destructive)
+                    Button(installationOwnerID == nil ? BlueprintCopy.retrySameRequest : BlueprintCopy.retryCreateEvents,
+                           systemImage: "arrow.clockwise") {
+                        Task { await requestPlanReview() }
+                    }
+                    .disabled(busy || !setupActionEnabled)
+                }
             }
         }
         .formStyle(.grouped)
+        .listSectionSpacing(.custom(20))
+        .scrollDismissesKeyboard(.interactively)
         .disabled(busy)
         .interactiveDismissDisabled(busy)
-        .navigationTitle(catalogEntry?.definition.blueprint.name ?? BlueprintCopy.starter)
+        .navigationTitle(installationOwnerID != nil ? BlueprintCopy.createEvents
+            : catalogEntry?.definition.blueprint.name ?? BlueprintCopy.starter)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(AppCopy.Common.done) { isEventNameFocused = false }
+            }
             ToolbarItem(placement: .cancellationAction) {
                 Button(AppCopy.Common.close) { closeSetup() }
                     .disabled(busy)
@@ -314,6 +306,25 @@ struct BlueprintSetupView: View {
                     .disabled(busy)
                 }
             }
+            if showsSetupAction {
+                ToolbarItem(placement: .bottomBar) {
+                    Button {
+                        Task { await requestPlanReview() }
+                    } label: {
+                        HStack(spacing: AppTheme.Spacing.compact) {
+                            if busy { ProgressView() }
+                            Text(busy ? (installationOwnerID != nil ? BlueprintCopy.installing : BlueprintCopy.reviewing)
+                                : installationOwnerID == nil ? AppCopy.Common.continueAction
+                                : errorMessage == nil ? BlueprintCopy.createEvents : BlueprintCopy.retryCreateEvents)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(!setupActionEnabled || busy)
+                    .accessibilityIdentifier("blueprint.setup.primaryAction")
+                }
+            }
         }
         .confirmationDialog(BlueprintCopy.startOverConfirmation, isPresented: $confirmsStartOver, titleVisibility: .visible) {
             Button(BlueprintCopy.startOver, role: .destructive) { Task { await startOver() } }
@@ -323,26 +334,17 @@ struct BlueprintSetupView: View {
         .task(id: scheduleRequest?.token) {
             if let request = scheduleRequest { await fetchSuggestions(request) }
         }
+        .sheet(isPresented: $showsMainDate, onDismiss: { dateEditorCapture = nil }) {
+            mainDateEditor
+        }
+        .sheet(item: $dateSheetChild, onDismiss: { dateEditorCapture = nil }) { child in
+            childDateEditor(for: child)
+        }
         .onChange(of: eventName) { _, _ in invalidateReview(); persistDraft() }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { persistDraft() }
         }
         .onDisappear { persistDraft() }
-        .navigationDestination(isPresented: Binding(
-            get: { contentEditor != nil },
-            set: { if !$0 { contentEditor = nil } }
-        )) {
-            if let editor = contentEditor {
-                switch editor.item {
-                case .idea(let idea):
-                    BlueprintIdeaDraftEditor(idea: idea, children: tree?.children ?? []) {
-                        saveIdea($0, editor: editor)
-                    }
-                case .child(let child):
-                    BlueprintChildDraftEditor(child: child) { saveChild($0, editor: editor) }
-                }
-            }
-        }
         .navigationDestination(isPresented: $showReview) {
             if let plan = reviewedPlan, let input = requestForReview {
                 BlueprintPlanReviewView(
@@ -358,52 +360,36 @@ struct BlueprintSetupView: View {
         }
     }
 
-    private func targetTitle(_ target: BlueprintTarget) -> String {
-        switch target {
-        case .main: trimmedEventName.isEmpty ? BlueprintCopy.mainEvent : trimmedEventName
-        case .child(let key): tree?.children.first { $0.key == key }?.title ?? BlueprintCopy.children
-        }
-    }
-
     @ViewBuilder
     private func missingDateSections(tree: BlueprintExperienceTreeConfig) -> some View {
-        Section(BlueprintCopy.mainEvent) {
+        Section {
+            eventNameField
             mainDateRow
+        } header: {
+            Text(BlueprintCopy.mainEvent)
         }
         if !selectedChildren.isEmpty {
             Section {
-                if scheduleDraft.refreshFailed {
-                    Text(BlueprintCopy.datesUnavailable).font(.footnote).foregroundStyle(.secondary)
-                    Button(AppCopy.Common.retry) { refreshSuggestions() }
-                }
                 ForEach(tree.children.filter { selectedChildren.contains($0.key) }) { child in
                     dateConfirmationRow(child)
                 }
             } header: {
                 HStack {
-                    Text(BlueprintCopy.dateTime)
+                    Text(BlueprintCopy.children)
                     Spacer()
-                    ProgressView().opacity(scheduleDraft.isRefreshing ? 1 : 0)
-                        .accessibilityHidden(!scheduleDraft.isRefreshing)
+                    if scheduleDraft.isRefreshing {
+                        ProgressView()
+                            .accessibilityLabel(BlueprintCopy.loadingDates)
+                    }
                 }
             } footer: {
-                Text(String(localized: "blueprint.dates.rowHint", defaultValue: "Tap to edit. Swipe to confirm."))
-            }
-        }
-        Section {
-            Button { Task { await requestPlanReview() } } label: {
-                HStack {
-                    Text("Create Workspace")
-                    Spacer()
-                    ProgressView().opacity(busy ? 1 : 0).accessibilityHidden(!busy)
+                if scheduleDraft.refreshFailed {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                        Text(BlueprintCopy.datesUnavailable)
+                        Button(AppCopy.Common.retry) { refreshSuggestions() }
+                            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                    }
                 }
-            }
-            .disabled(!readyForDirectInstallation)
-        }
-        if errorMessage != nil {
-            Section {
-                Button(AppCopy.Common.retry) { Task { await requestPlanReview() } }
-                    .disabled(!mainDateConfirmed || !selectedChildrenHaveDates)
             }
         }
     }
@@ -416,31 +402,27 @@ struct BlueprintSetupView: View {
         let token = scheduleDraft.refreshToken
         let canConfirm = mainDateConfirmed && confirmed == nil && candidate != nil && !scheduleDraft.isRefreshing && !scheduleDraft.refreshFailed
         return VStack(alignment: .leading, spacing: 8) {
-            Button { openManualDatePicker(for: child) } label: {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(child.title).font(.headline)
-                        if let date = confirmed ?? candidate {
-                            Text(formattedChildDate(date)).font(.subheadline).foregroundStyle(.secondary)
-                                .lineLimit(2, reservesSpace: true)
-                        } else {
-                            Text(BlueprintCopy.chooseDate).font(.subheadline).foregroundStyle(.secondary)
-                                .lineLimit(2, reservesSpace: true)
-                        }
-                    }
-                    Spacer(minLength: 8)
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                        .opacity(confirmed != nil ? 1 : 0)
-                        .accessibilityHidden(confirmed == nil)
-                        .accessibilityLabel(BlueprintCopy.confirmedDate)
-                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
-                }
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
+            BlueprintSetupDateRow(
+                title: child.title,
+                dateLabel: (confirmed ?? candidate).map { formattedChildDate($0) } ?? BlueprintCopy.chooseDate,
+                isConfirmed: confirmed != nil
+            ) {
+                openManualDatePicker(for: child)
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(BlueprintCopy.chooseDate)
+            .accessibilityIdentifier("blueprint.setup.childDate.\(child.key)")
             if confirmed == nil && suggestion?.status == "ambiguous" { suggestionChoices(for: child) }
+            if canConfirm {
+                Button(BlueprintCopy.confirmDate, systemImage: "checkmark") {
+                    if scheduleDraft.confirmSuggestion(key: child.key, candidateIndex: 0, token: token) {
+                        invalidateReview()
+                        persistDraft()
+                    }
+                }
+                .font(.subheadline.weight(.semibold))
+                .buttonStyle(.borderless)
+                .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                .accessibilityIdentifier("blueprint.setup.childDate.\(child.key).confirm")
+            }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(AppCopy.Common.edit, systemImage: "pencil") { openManualDatePicker(for: child) }
@@ -450,7 +432,7 @@ struct BlueprintSetupView: View {
                         invalidateReview()
                         persistDraft()
                     }
-                }.tint(.green)
+                }.tint(AppTheme.ColorToken.success)
             }
         }
         .contextMenu {
@@ -464,109 +446,133 @@ struct BlueprintSetupView: View {
                 }
             }
         }
-        .modifier(datePopup(for: child))
     }
 
     private var mainDateRow: some View {
-        Button {
-            dateDraft = startsAt
-            dateSheetChild = nil
-            showsMainDate = true
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(BlueprintCopy.dateTime).font(.headline)
-                    Text(formattedChildDate(startsAt)).font(.subheadline).foregroundStyle(.secondary)
-                        .lineLimit(2, reservesSpace: true)
-                    Text(mainDateConfirmed ? BlueprintCopy.confirmedDate : BlueprintCopy.confirmDate)
-                        .font(.caption).foregroundStyle(.secondary)
+        Button(action: openMainDateEditor) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                HStack(spacing: AppTheme.Spacing.compact) {
+                    EventScheduleRow(startsAt: startsAt, endsAt: nil, isAllDay: false,
+                                     timeZoneIdentifier: timeZoneIdentifier)
+                    if mainDateConfirmed {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(AppTheme.ColorToken.success)
+                            .accessibilityHidden(true)
+                    }
                 }
-                Spacer()
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                    .opacity(mainDateConfirmed ? 1 : 0)
-                    .accessibilityHidden(!mainDateConfirmed)
-                    .accessibilityLabel(BlueprintCopy.confirmedDate)
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                if !mainDateConfirmed {
+                    Text(BlueprintCopy.confirmMainDateToContinue)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
             }
-            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .modifier(BlueprintDatePopup(isPresented: $showsMainDate, date: $dateDraft,
-            title: BlueprintCopy.mainEvent, timeZone: selectedTimeZone) {
-                guard !busy, !installAttemptStarted, pendingIntents.isEmpty,
-                      let ownerID = draftOwnerUserID, ownerID == account?.id else { return }
-                dateContext.startsAt = dateDraft
-                mainDateConfirmed = true
-                scheduleAnchorChanged()
-            })
+        .accessibilityIdentifier("blueprint.setup.mainDate")
+        .accessibilityValue(mainDateConfirmed ? BlueprintCopy.confirmedDate : BlueprintCopy.confirmDate)
     }
 
-    private func datePopup(for child: BlueprintCatalogChild) -> BlueprintDatePopup {
-        BlueprintDatePopup(isPresented: Binding(
-            get: { dateSheetChild?.key == child.key },
-            set: { if !$0 && dateSheetChild?.key == child.key { dateSheetChild = nil } }
-        ), date: $dateDraft, title: child.title, timeZone: selectedTimeZone) {
-            guard !busy, !installAttemptStarted, pendingIntents.isEmpty,
-                  let ownerID = draftOwnerUserID, ownerID == account?.id else { return }
-            scheduleDraft.confirm(key: child.key, date: dateDraft)
-            invalidateReview()
-            persistDraft()
+    private var eventNameField: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+            TextField(BlueprintCopy.eventName, text: $eventName)
+                .textInputAutocapitalization(.words)
+                .submitLabel(.done)
+                .focused($isEventNameFocused)
+                .onSubmit { isEventNameFocused = false }
+                .accessibilityIdentifier("blueprint.setup.eventName")
+            if trimmedEventName.unicodeScalars.count > 120 {
+                Text("Titles can be up to 120 characters.")
+                    .font(.footnote)
+                    .foregroundStyle(AppTheme.ColorToken.destructive)
+            }
         }
     }
 
-    private func openEditor(_ item: ContentEditor.Item) {
-        guard !busy, !installAttemptStarted, pendingIntents.isEmpty,
-              let ownerID = draftOwnerUserID, ownerID == account?.id else { return }
-        contentEditor = ContentEditor(item: item, ownerID: ownerID, generation: setupGeneration)
+    private var canOpenDateEditor: Bool {
+        !busy && !loading && !installAttemptStarted && pendingIntents.isEmpty
+            && draftOwnerUserID == account?.id
     }
 
-    private func canSaveContent(_ editor: ContentEditor) -> Bool {
-        !busy && !installAttemptStarted && pendingIntents.isEmpty
-            && editor.ownerID == account?.id && editor.ownerID == draftOwnerUserID
-            && editor.generation == setupGeneration
+    private func openMainDateEditor() {
+        guard canOpenDateEditor, let ownerID = draftOwnerUserID else { return }
+        isEventNameFocused = false
+        dateSheetChild = nil
+        dateEditorCapture = DateEditorCapture(ownerID: ownerID, requestID: draftRequestID,
+                                              setupGeneration: setupGeneration)
+        showsMainDate = true
     }
 
-    private func saveChild(_ child: BlueprintCatalogChild, editor: ContentEditor) {
-        guard canSaveContent(editor), let entry = catalogEntry else { return }
-        var candidate = customizations
-        do {
-            try candidate.upsert(child)
-            let effective = try candidate.applying(to: entry)
-            let isNew = !(tree?.children.contains { $0.key == child.key } ?? false)
-            customizations = candidate
-            tree = effective.tree
-            ideas = effective.ideas
-            if isNew { selectedChildren.insert(child.key) }
-            // Content edits never confirm or replace a date. New children must
-            // use the existing explicit date-confirmation step before review.
+    private var mainDateEditor: some View {
+        let captureAtPresentation = dateEditorCapture
+        return EventDateTimeEditorView(
+            startsAt: startsAt,
+            endsAt: nil,
+            isAllDay: false,
+            timeZoneIdentifier: timeZoneIdentifier,
+            supportsExtendedSchedule: false
+        ) { updatedStart, _, _, updatedTimeZone in
+            guard let capture = captureAtPresentation, dateEditorIsCurrent(capture, mainDate: true) else {
+                errorMessage = BlueprintCopy.draftLoadFailed
+                return
+            }
+            dateContext.startsAt = updatedStart
+            _ = dateContext.selectTimeZone(updatedTimeZone)
+            mainDateConfirmed = true
+            scheduleAnchorChanged()
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func childDateEditor(for child: BlueprintCatalogChild) -> some View {
+        let captureAtPresentation = dateEditorCapture
+        return EventDateTimeEditorView(
+            startsAt: dateDraft,
+            endsAt: nil,
+            isAllDay: false,
+            timeZoneIdentifier: timeZoneIdentifier,
+            supportsExtendedSchedule: false,
+            allowsTimeZoneEditing: false
+        ) { updatedStart, _, _, updatedTimeZone in
+            guard let capture = captureAtPresentation,
+                  dateEditorIsCurrent(capture, childKey: child.key),
+                  updatedTimeZone == timeZoneIdentifier else {
+                errorMessage = BlueprintCopy.draftLoadFailed
+                return
+            }
+            scheduleDraft.confirm(key: child.key, date: updatedStart)
             invalidateReview()
             persistDraft()
-        } catch { errorMessage = BlueprintCopy.customizationInvalid }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
-    private func saveIdea(_ idea: BlueprintCatalogIdea, editor: ContentEditor) {
-        guard canSaveContent(editor), let entry = catalogEntry else { return }
-        var candidate = customizations
-        do {
-            try candidate.upsert(idea)
-            let effective = try candidate.applying(to: entry)
-            let isNew = !(ideas?.ideas.contains { $0.key == idea.key } ?? false)
-            customizations = candidate
-            previewDecisions.removeValue(forKey: idea.key)
-            tree = effective.tree
-            ideas = effective.ideas
-            if isNew { selectedIdeas.insert(idea.key) }
-            invalidateReview()
-            persistDraft()
-        } catch { errorMessage = BlueprintCopy.customizationInvalid }
+    private func dateEditorIsCurrent(_ capture: DateEditorCapture, mainDate: Bool) -> Bool {
+        dateEditorCapture == capture && showsMainDate && dateSheetChild == nil
+            && dateEditorIsCurrent(capture)
+    }
+
+    private func dateEditorIsCurrent(_ capture: DateEditorCapture, childKey: String) -> Bool {
+        dateEditorCapture == capture && dateSheetChild?.key == childKey && !showsMainDate
+            && dateEditorIsCurrent(capture)
+    }
+
+    private func dateEditorIsCurrent(_ capture: DateEditorCapture) -> Bool {
+        account?.id == capture.ownerID && draftOwnerUserID == capture.ownerID
+            && draftRequestID == capture.requestID && setupGeneration == capture.setupGeneration
+            && !busy && !loading && !installAttemptStarted && pendingIntents.isEmpty
     }
 
     private func openManualDatePicker(for child: BlueprintCatalogChild) {
-        // Capture once on opening. A suggestion arriving while the editor is
-        // open must not replace the person's in-progress changes.
+        guard canOpenDateEditor, let ownerID = draftOwnerUserID else { return }
+        isEventNameFocused = false
         dateDraft = scheduleDraft.initialManualDate(for: child.key, fallback: startsAt)
         showsMainDate = false
+        dateEditorCapture = DateEditorCapture(ownerID: ownerID, requestID: draftRequestID,
+                                              setupGeneration: setupGeneration)
         dateSheetChild = child
     }
 
@@ -580,19 +586,6 @@ struct BlueprintSetupView: View {
                     selectedChildren.remove(child.key)
                     scheduleDraft.remove(key: child.key)
                 }
-                invalidateReview()
-                persistDraft()
-            }
-        )
-    }
-
-    private func ideaSelection(_ idea: BlueprintCatalogIdea) -> Binding<Bool> {
-        Binding(
-            get: { selectedIdeas.contains(idea.key) },
-            set: { isSelected in
-                if isSelected { selectedIdeas.insert(idea.key) }
-                else { selectedIdeas.remove(idea.key) }
-                previewDecisions.removeValue(forKey: idea.key)
                 invalidateReview()
                 persistDraft()
             }
@@ -721,7 +714,17 @@ struct BlueprintSetupView: View {
         }
         if draftOwnerUserID != account.id { resetSetup() }
         let generation = setupGeneration
-        guard let coordinator = cloudSync.makeBlueprintInstallationCoordinator() else {
+        let coordinator: BlueprintInstallationCoordinator?
+#if DEBUG
+        if let installationCoordinatorFactory {
+            coordinator = installationCoordinatorFactory()
+        } else {
+            coordinator = cloudSync.makeBlueprintInstallationCoordinator()
+        }
+#else
+        coordinator = cloudSync.makeBlueprintInstallationCoordinator()
+#endif
+        guard let coordinator else {
             loading = false
             errorMessage = BlueprintCopy.loadFailed
             return
@@ -797,7 +800,7 @@ struct BlueprintSetupView: View {
 
     @MainActor
     private func requestPlanReview() async {
-        guard !busy, mainDateConfirmed,
+        guard !busy, mainDateConfirmed, BlueprintInstallReadiness.isValidEventName(eventName),
               installationOwnerID == nil || installationOwnerID == account?.id,
               let entry = catalogEntry, let coordinator, selectedChildrenHaveDates,
               draftOwnerUserID == account?.id, persistDraft() else { return }
@@ -852,7 +855,8 @@ struct BlueprintSetupView: View {
 
     @MainActor
     private func install(_ input: BlueprintInstallInput) async {
-        guard let coordinator, let ownerID = draftOwnerUserID, account?.id == ownerID else { return }
+        guard let coordinator, let ownerID = draftOwnerUserID,
+              account?.id == ownerID, input.requestID == draftRequestID else { return }
         let generation = setupGeneration
         installAttemptStarted = true
         busy = true
@@ -861,6 +865,7 @@ struct BlueprintSetupView: View {
             _ = try await coordinator.install(input)
             guard account?.id == ownerID, setupGeneration == generation else { return }
             draftCompleted = true
+            AppHaptics.play(.success)
             onInstallationCompleted?()
             closeSetup()
         } catch {
@@ -881,6 +886,7 @@ struct BlueprintSetupView: View {
             _ = try await coordinator.resume(intent)
             guard self.account?.id == account.id, setupGeneration == generation else { return }
             draftCompleted = true
+            AppHaptics.play(.success)
             onInstallationCompleted?()
             closeSetup()
         } catch {
@@ -899,13 +905,14 @@ struct BlueprintSetupView: View {
         ideas = nil
         customizations = BlueprintCustomization()
         previewDecisions = [:]
-        contentEditor = nil
         selectedChildren = []
         selectedIdeas = []
         scheduleDraft = BlueprintScheduleDraft()
         scheduleRequest = nil
         dateContext = BlueprintSetupDateContext()
         mainDateConfirmed = false
+        lastPersistedEventName = ""
+        dateEditorCapture = nil
         eventName = ""
         draftOwnerUserID = nil
         draftShareToken = nil
@@ -963,19 +970,11 @@ struct BlueprintSetupView: View {
         draftShareToken = saved.shareToken
         draftRequestID = saved.requestID
         eventName = saved.eventName
+        lastPersistedEventName = saved.eventName
         dateContext = BlueprintSetupDateContext(startsAt: saved.startsAt, timeZone: zone)
         mainDateConfirmed = saved.mainDateConfirmed == true
         selectedChildren = saved.selectedChildren
         selectedIdeas = saved.selectedIdeas
-        // Preview installation must also normalize older drafts whose stored
-        // selections predate the Love-only Home plan. Pending retries keep their
-        // already-frozen request rather than rebuilding an installation.
-        if installationOwnerID != nil {
-            let plan = BlueprintPreviewContent(entry: saved.entry, customizations: overlay)?
-                .homeContent(responses: previewDecisions)
-            selectedChildren = Set(plan?.children.map(\.key) ?? [])
-            selectedIdeas = Set(plan?.ideas.map(\.key) ?? [])
-        }
         scheduleDraft = BlueprintScheduleDraft(confirmedDates: saved.confirmedDates)
     }
 
@@ -997,6 +996,9 @@ struct BlueprintSetupView: View {
                 ? BlueprintCopy.defaultEventName(for: account?.displayName ?? "")
                 : entry.definition.blueprint.name
         }
+        if BlueprintInstallReadiness.isValidEventName(eventName) {
+            lastPersistedEventName = trimmedEventName
+        }
     }
 
     @discardableResult
@@ -1004,10 +1006,13 @@ struct BlueprintSetupView: View {
         guard !draftCompleted, !installAttemptStarted, pendingIntents.isEmpty,
               let ownerID = draftOwnerUserID, ownerID == account?.id,
               let entry = catalogEntry else { return false }
+        let nameToPersist = BlueprintInstallReadiness.isValidEventName(eventName)
+            ? trimmedEventName : lastPersistedEventName
+        guard BlueprintInstallReadiness.isValidEventName(nameToPersist) else { return false }
         do {
             var saved = BlueprintSetupDraft(
                 ownerUserID: ownerID, entry: entry, requestID: draftRequestID,
-                eventName: eventName, startsAt: startsAt, timeZoneIdentifier: timeZoneIdentifier,
+                eventName: nameToPersist, startsAt: startsAt, timeZoneIdentifier: timeZoneIdentifier,
                 selectedChildren: selectedChildren, selectedIdeas: selectedIdeas,
                 confirmedDates: scheduleDraft.confirmedDates,
                 shareToken: draftShareToken,
@@ -1022,6 +1027,9 @@ struct BlueprintSetupView: View {
                 saved.copyEntry = existing.copyEntry
             }
             try draftStore.save(saved)
+            if BlueprintInstallReadiness.isValidEventName(eventName) {
+                lastPersistedEventName = trimmedEventName
+            }
             draftSaveError = nil
             return true
         } catch {
@@ -1110,24 +1118,25 @@ private struct BlueprintPlanReviewView: View {
                 }
             }
 
-            Section {
-                if let pending = pendingIntents.first(where: { $0.requestID == requestID }) {
-                    Button(BlueprintCopy.retryInstall, systemImage: "arrow.clockwise") {
-                        onResume(pending)
-                    }
-                    .disabled(isInstalling)
-                } else {
-                    Button(action: onInstall) {
-                        if isInstalling { ProgressView { Text(BlueprintCopy.installing) } }
-                        else { Text("Create Workspace").frame(maxWidth: .infinity) }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isInstalling)
-                }
-                if let errorMessage { Text(errorMessage).font(.footnote).foregroundStyle(.red) }
-            }
         }
         .formStyle(.grouped)
+        .listSectionSpacing(.custom(20))
+        .safeAreaBar(edge: .bottom, spacing: 0) {
+            BlueprintSetupActionBar(
+                title: isInstalling ? BlueprintCopy.installing
+                    : pendingIntents.contains(where: { $0.requestID == requestID })
+                        ? BlueprintCopy.retryInstall : BlueprintCopy.install,
+                isWorking: isInstalling,
+                isEnabled: !isInstalling,
+                errorMessage: errorMessage
+            ) {
+                if let pending = pendingIntents.first(where: { $0.requestID == requestID }) {
+                    onResume(pending)
+                } else {
+                    onInstall()
+                }
+            }
+        }
         .navigationTitle(BlueprintCopy.review)
         .navigationBarTitleDisplayMode(.inline)
     }
