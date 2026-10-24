@@ -6,6 +6,7 @@ struct EventReadingHero<EyebrowStatus: View, TimingLocation: View, Response: Vie
     let title: String
     let height: CGFloat
     let topSpacer: CGFloat
+    var titleAction: AnyView?
     @ViewBuilder let eyebrowStatus: () -> EyebrowStatus
     @ViewBuilder let timingLocation: () -> TimingLocation
     @ViewBuilder let response: () -> Response
@@ -14,6 +15,7 @@ struct EventReadingHero<EyebrowStatus: View, TimingLocation: View, Response: Vie
         title: String,
         height: CGFloat,
         topSpacer: CGFloat,
+        titleAction: AnyView? = nil,
         @ViewBuilder eyebrowStatus: @escaping () -> EyebrowStatus,
         @ViewBuilder timingLocation: @escaping () -> TimingLocation,
         @ViewBuilder response: @escaping () -> Response
@@ -21,6 +23,7 @@ struct EventReadingHero<EyebrowStatus: View, TimingLocation: View, Response: Vie
         self.title = title
         self.height = height
         self.topSpacer = topSpacer
+        self.titleAction = titleAction
         self.eyebrowStatus = eyebrowStatus
         self.timingLocation = timingLocation
         self.response = response
@@ -33,16 +36,20 @@ struct EventReadingHero<EyebrowStatus: View, TimingLocation: View, Response: Vie
             VStack(spacing: AppTheme.Spacing.standard) {
                 eyebrowStatus()
 
-                Text(title)
-                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let titleAction {
+                    titleAction
+                } else {
+                    Text(title)
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 timingLocation()
                     .multilineTextAlignment(.center)
             }
             .shadow(color: .black.opacity(0.34), radius: 10, y: 4)
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: titleAction.map { _ in AccessibilityChildBehavior.contain } ?? .combine)
 
             response()
         }

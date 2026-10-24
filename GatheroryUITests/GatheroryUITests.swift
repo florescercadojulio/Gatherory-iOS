@@ -39,6 +39,146 @@ final class GatheroryUITests: XCTestCase {
     }
 
     @MainActor
+    func testNewWorkspaceDateStaysSelectedWhenDateEditorReopensInLightAndDarkMode() throws {
+        for appearance in ["Light", "Dark"] {
+            let app = fixtureApplication()
+            app.launchArguments += [
+                "-UseProductionOnboarding", "-AppleLanguages", "(en)",
+                "-AppleInterfaceStyle", appearance, "-appAppearance", appearance.lowercased()
+            ]
+            app.launch()
+
+            let addWorkspace = app.buttons["workspace.add"]
+            XCTAssertTrue(addWorkspace.waitForExistence(timeout: 8))
+            addWorkspace.tap()
+            app.buttons["workspace.startFromScratch"].tap()
+            XCTAssertTrue(app.navigationBars["New Event"].waitForExistence(timeout: 5))
+
+            let editDate = app.buttons["workspace.new.dateTime"]
+            XCTAssertTrue(editDate.waitForExistence(timeout: 5))
+            editDate.tap()
+            XCTAssertTrue(app.navigationBars["Date and Time"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["Time Zone"].exists,
+                           "A new event should use the device timezone automatically.")
+
+            var calendar = Calendar.autoupdatingCurrent
+            calendar.timeZone = .autoupdatingCurrent
+            let today = Date.now
+            let dayOfMonth = calendar.component(.day, from: today)
+            let selectedDate = calendar.date(byAdding: .day, value: dayOfMonth == 1 ? 1 : -1, to: today)!
+            let dateLabel = DateFormatter()
+            dateLabel.locale = Locale(identifier: "en_US")
+            dateLabel.timeZone = .autoupdatingCurrent
+            // Native calendar day cells omit the year; the compact control's
+            // saved value below verifies the complete date including its year.
+            dateLabel.setLocalizedDateFormatFromTemplate("EEEE MMMM d")
+
+            let datePicker = app.descendants(matching: .any)
+                .matching(identifier: "event.dateTime.starts.date")
+                .firstMatch
+            XCTAssertTrue(datePicker.waitForExistence(timeout: 5))
+            // The inner Date Picker becomes a non-button accessibility element
+            // while its calendar popup is open; its date value stays available.
+            let dateValue = datePicker.descendants(matching: .any)
+                .matching(NSPredicate(format: "label == %@", "Date Picker")).firstMatch
+            let dateButton = datePicker.buttons.firstMatch
+            XCTAssertTrue(dateButton.waitForExistence(timeout: 5))
+            let initialPickerValue = dateValue.value as? String ?? ""
+            let todayLabels = [DateFormatter.Style.short, .medium, .long, .full].map { style in
+                let formatter = DateFormatter()
+                formatter.locale = Locale(identifier: "en_US")
+                formatter.timeZone = .autoupdatingCurrent
+                formatter.dateStyle = style
+                formatter.timeStyle = .none
+                return formatter.string(from: today)
+            }
+            XCTAssertTrue(todayLabels.contains { initialPickerValue.contains($0) },
+                          "A new event date should default to today in the device timezone. Value: \(initialPickerValue)")
+            dateButton.tap()
+            let targetDay = app.buttons.matching(
+                NSPredicate(format: "label CONTAINS %@", dateLabel.string(from: selectedDate))
+            ).firstMatch
+            XCTAssertTrue(targetDay.waitForExistence(timeout: 5),
+                          "The native calendar should expose the selected day by its date label.")
+            targetDay.tap()
+
+            let savedPickerValue = dateValue.value as? String
+            XCTAssertNotNil(savedPickerValue, "The selected date should remain readable from the native date control.")
+            XCTAssertNotEqual(savedPickerValue, initialPickerValue,
+                              "Choosing a different calendar day should change the full date control value.")
+            let expectedDate = DateFormatter()
+            expectedDate.locale = Locale(identifier: "en_US")
+            expectedDate.timeZone = .autoupdatingCurrent
+            expectedDate.dateStyle = .medium
+            expectedDate.timeStyle = .none
+            XCTAssertEqual(savedPickerValue, expectedDate.string(from: selectedDate))
+            let done = app.navigationBars["Date and Time"].buttons["Done"]
+            done.tap()
+            // A compact calendar popup can consume the first outside tap.
+            if done.waitForNonExistence(timeout: 1) == false { done.tap() }
+            XCTAssertTrue(app.navigationBars["New Event"].waitForExistence(timeout: 5))
+            editDate.tap()
+            XCTAssertTrue(app.navigationBars["Date and Time"].waitForExistence(timeout: 5))
+            XCTAssertEqual(dateValue.value as? String, savedPickerValue,
+                           "Reopening the date editor should preserve the selected day.")
+            XCTAssertFalse(app.buttons["Time Zone"].exists)
+
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "New event date selection — \(appearance)"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testReadOnlyCollaboratorIdentityAndAccessStayReadableInLightAndDarkMode() throws {
+        for appearance in ["Light", "Dark"] {
+            let app = fixtureApplication()
+            app.launchArguments += [
+                "-UseProductionOnboarding", "-AppleLanguages", "(en)",
+                "-AppleInterfaceStyle", appearance, "-appAppearance", appearance.lowercased(),
+                "-ReadOnlyCollaboratorsUITest"
+            ]
+            app.launch()
+
+            let workspace = app.buttons
+                .matching(NSPredicate(format: "label CONTAINS %@", "Alex & Jordan"))
+                .firstMatch
+            XCTAssertTrue(workspace.waitForExistence(timeout: 8))
+            workspace.tap()
+
+            let manageTab = app.tabBars.buttons["Manage"]
+            XCTAssertTrue(manageTab.waitForExistence(timeout: 5))
+            manageTab.tap()
+
+            let collaboratorsCard = app.buttons
+                .matching(NSPredicate(format: "label CONTAINS %@", "Collaborators"))
+                .firstMatch
+            for _ in 0..<5 where !collaboratorsCard.isHittable { app.swipeUp() }
+            XCTAssertTrue(collaboratorsCard.isHittable)
+            collaboratorsCard.tap()
+            XCTAssertTrue(app.navigationBars["Collaborators"].waitForExistence(timeout: 5))
+
+            let alexRow = app.descendants(matching: .any).matching(
+                NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Alex (You)", "View only")
+            ).firstMatch
+            XCTAssertTrue(alexRow.waitForExistence(timeout: 5), "The read-only viewer's name and access should remain visible.")
+            XCTAssertFalse(alexRow.elementType == .button, "A read-only participant row must not be exposed as an edit button.")
+            XCTAssertTrue(alexRow.isHittable, "The read-only row should remain available to VoiceOver and touch exploration.")
+
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Read-only Collaborator — \(appearance)"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+
+            alexRow.tap()
+            XCTAssertFalse(app.navigationBars["Participant"].exists, "Tapping a read-only row must not open the edit sheet.")
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             fixtureApplication().launch()

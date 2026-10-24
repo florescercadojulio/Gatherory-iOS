@@ -4,16 +4,14 @@ import Testing
 
 @MainActor
 struct BlueprintSetupDateContextTests {
-    @Test("A new setup uses the device zone and calendar months across DST")
+    @Test("A new setup defaults to today in the device zone")
     func initialDateUsesDeviceZone() throws {
         let detroit = try #require(TimeZone(identifier: "America/Detroit"))
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = try #require(TimeZone(identifier: "Asia/Tokyo"))
         let now = try date("2026-10-31T03:30:00Z") // October 30, 23:30 in Detroit.
-        let context = BlueprintSetupDateContext(now: now, timeZone: detroit, calendar: calendar)
+        let context = BlueprintSetupDateContext(now: now, timeZone: detroit)
 
         #expect(context.timeZoneIdentifier == "America/Detroit")
-        #expect(context.startsAt == (try date("2027-05-01T03:30:00Z")))
+        #expect(context.startsAt == now)
     }
 
     @Test("Time-zone overrides and returning to device time preserve chosen instants")

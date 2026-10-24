@@ -639,14 +639,14 @@ matches the installation UUID plus private pin back to the original draft file;
 it never rewrites an existing installation intent or produces workspace outbox
 mutations. Shared-link reopening prefers an already-saved account/link snapshot.
 
-Blueprint setup captures the device clock and system time zone together when
-opened. It does not request GPS access just to determine local time. The explicit
-Use Device Time Zone action can restore the current system zone after a manual
-override, without changing the main or confirmed child instants. System-zone
-changes never silently overwrite an open draft. Time-zone picker options are
-cached and include the selected system alias even if it is absent from the known
-identifier list. Coordinate access remains an explicit, permission-gated action
-in the event location editor, with manual search available when denied.
+Blueprint setup defaults the main date to the current device time and captures
+the system time zone without requesting GPS access. New event and child-date
+editors use their existing event zone, defaulting to the current system zone
+when creating a new event. The event zone remains part of persisted schedule
+data, so existing event dates keep their original wall-clock interpretation.
+System-zone changes never silently overwrite an open draft. Coordinate access
+remains an explicit, permission-gated action in the event location editor, with
+manual search available when denied.
 
 Long-pressing a card in **Workspaces → Share Template** opens native content
 selection, name entry, review and **Create & Share**. The source is the card's

@@ -595,6 +595,130 @@ struct GatheroryTests {
         #expect(schedule.isAllDay)
     }
 
+    @Test("Timed schedules preserve their instants across daylight-saving changes")
+    func timedSchedulePreservesInstantsAcrossDST() throws {
+        let timeZone = try #require(TimeZone(identifier: "America/Detroit"))
+        let startsAt = try #require(ISO8601DateFormatter().date(from: "2026-03-08T06:30:00Z"))
+        let endsAt = try #require(ISO8601DateFormatter().date(from: "2026-03-08T07:30:00Z"))
+
+        let schedule = EventSchedule(
+            startsAt: startsAt,
+            endsAt: endsAt,
+            isAllDay: false,
+            timeZoneIdentifier: timeZone.identifier
+        ).normalized
+
+        #expect(schedule.startsAt == startsAt)
+        #expect(schedule.endsAt == endsAt)
+        #expect(schedule.timeZoneIdentifier == "America/Detroit")
+    }
+
+    @Test("Edited all-day main and child dates retain their local day and zone after reopening")
+    @MainActor
+    func editedSchedulesSurviveArchiveReopen() throws {
+        let account = UserAccount(
+            id: "date-editor-owner",
+            email: "dates@example.com",
+            displayName: "Date Editor",
+            role: .member,
+            authenticationProvider: .password,
+            createdAt: .now
+        )
+        let workspace = PlanningWorkspace.newWorkspace(
+            title: "Date persistence",
+            startsAt: .now,
+            eventLocation: nil,
+            imageData: nil,
+            owner: account
+        )
+        workspace.configureViewer(account)
+
+        let losAngeles = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let mainStartChoice = try #require(ISO8601DateFormatter().date(from: "2030-03-10T19:30:00Z"))
+        let mainEndChoice = try #require(ISO8601DateFormatter().date(from: "2030-03-11T18:00:00Z"))
+        let mainSchedule = EventSchedule(
+            startsAt: mainStartChoice,
+            endsAt: mainEndChoice,
+            isAllDay: true,
+            timeZoneIdentifier: losAngeles.identifier
+        ).normalized
+        workspace.updateMainEvent(
+            title: workspace.title,
+            status: workspace.mainEventStatus,
+            startsAt: mainSchedule.startsAt,
+            endsAt: mainSchedule.endsAt,
+            isAllDay: mainSchedule.isAllDay,
+            timeZoneIdentifier: mainSchedule.timeZoneIdentifier,
+            eventLocation: nil,
+            imageData: nil,
+            dressCode: workspace.dressCode,
+            message: workspace.eventMessage
+        )
+
+        let child = TimelineItem(
+            title: "Earlier child date",
+            category: .other,
+            scheduledAt: .now,
+            location: "",
+            participantIDs: workspace.mainEventParticipantIDs,
+            parentEventID: workspace.mainEventID
+        )
+        workspace.addTimelineItem(child)
+        var editedChild = try #require(workspace.timeline.first { $0.id == child.id })
+        let tokyo = try #require(TimeZone(identifier: "Asia/Tokyo"))
+        let childStartChoice = try #require(ISO8601DateFormatter().date(from: "2030-01-01T15:30:00Z"))
+        let childEndChoice = try #require(ISO8601DateFormatter().date(from: "2030-01-03T15:00:00Z"))
+        let childSchedule = EventSchedule(
+            startsAt: childStartChoice,
+            endsAt: childEndChoice,
+            isAllDay: true,
+            timeZoneIdentifier: tokyo.identifier
+        ).normalized
+        editedChild.scheduledAt = childSchedule.startsAt
+        editedChild.endsAt = childSchedule.endsAt
+        editedChild.isAllDay = childSchedule.isAllDay
+        editedChild.timeZoneIdentifier = childSchedule.timeZoneIdentifier
+        workspace.updateTimelineItem(editedChild)
+
+        let archive = WorkspaceArchiveV1(workspace: workspace)
+        let codec = WorkspaceArchiveCodec()
+        let reopened = try codec.decode(
+            WorkspaceArchiveV1.self,
+            from: codec.encode(archive)
+        ).makeWorkspace()
+
+        #expect(reopened.mainEventStartsAt == mainSchedule.startsAt)
+        #expect(reopened.mainEventEndsAt == mainSchedule.endsAt)
+        #expect(reopened.mainEventIsAllDay)
+        #expect(reopened.mainEventTimeZoneIdentifier == losAngeles.identifier)
+        let reopenedChild = try #require(reopened.timeline.first { $0.id == child.id })
+        #expect(reopenedChild.scheduledAt == childSchedule.startsAt)
+        #expect(reopenedChild.endsAt == childSchedule.endsAt)
+        #expect(reopenedChild.isAllDay)
+        #expect(reopenedChild.timeZoneIdentifier == tokyo.identifier)
+    }
+
+    @Test("Event date labels use the saved event zone when it differs from the device zone")
+    func scheduleDateLabelUsesEventTimeZone() throws {
+        let date = try #require(ISO8601DateFormatter().date(from: "2030-01-01T15:30:00Z"))
+        let locale = Locale(identifier: "en_US_POSIX")
+        let tokyoText = EventScheduleFormatter.string(
+            from: date,
+            includesTime: false,
+            timeZoneIdentifier: "Asia/Tokyo",
+            locale: locale
+        )
+        let losAngelesText = EventScheduleFormatter.string(
+            from: date,
+            includesTime: false,
+            timeZoneIdentifier: "America/Los_Angeles",
+            locale: locale
+        )
+
+        #expect(tokyoText == "Jan 2, 2030")
+        #expect(losAngelesText == "Jan 1, 2030")
+    }
+
     @Test("Event ideas preserve an optional full schedule")
     func eventIdeaScheduleMetadata() {
         let startsAt = Date(timeIntervalSinceReferenceDate: 900_000_000)

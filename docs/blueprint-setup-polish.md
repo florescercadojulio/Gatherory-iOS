@@ -97,9 +97,10 @@ No live installation or personal-blueprint write was performed during this pass.
 
 - Each Home event card has a labeled glass **Edit** action; opening a detail
   retains a labeled Edit toolbar action. Long press remains a shortcut.
-- The main event uses one native grouped editor for name, date/time zone, and
-  cover. Date editing uses the existing date sheet, with its selected time zone
-  reflected in the row. Only completing that sheet confirms a date; saving a
+- The main event uses one native grouped editor for name, date/time, and
+  cover. As of October 23, new dates start today and the date sheet uses the
+  stored event timezone automatically, without a timezone picker. The row and
+  cards format dates in that same zone. Only completing the sheet confirms a date; saving a
   name or cover leaves date confirmation unchanged. Confirmed main-event dates
   appear on the Home card and detail.
 - Add Sub-event is a separate plus action. The opaque editing overflow menu was

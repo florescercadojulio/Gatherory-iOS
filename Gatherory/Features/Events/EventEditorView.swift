@@ -107,7 +107,7 @@ struct EventEditorView: View {
         _purpose = State(initialValue: item?.purpose ?? .planning)
         _mainStatus = State(initialValue: .draft)
         _childStatus = State(initialValue: item?.status ?? .approved)
-        _startsAt = State(initialValue: item?.scheduledAt ?? Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now)
+        _startsAt = State(initialValue: item?.scheduledAt ?? .now)
         _hasScheduledDate = State(initialValue: item?.hasScheduledDate ?? true)
         _endsAt = State(initialValue: item?.endsAt)
         _isAllDay = State(initialValue: item?.isAllDay ?? false)
@@ -824,15 +824,15 @@ struct EventEditorView: View {
                 && workspace.timeline.contains(where: { $0.id == draftEventID && $0.title == resolvedTitle })
         if saveSucceeded {
             AppHaptics.play(.success)
+            PostHogSDK.shared.capture(
+                isCreating ? "event_created" : "event_updated",
+                properties: [
+                    "is_main_event": isMainEvent,
+                    "has_scheduled_date": hasScheduledDate,
+                    "uses_budget": usesBudget
+                ]
+            )
         }
-        PostHogSDK.shared.capture(
-            isCreating ? "event_created" : "event_updated",
-            properties: [
-                "is_main_event": isMainEvent,
-                "has_scheduled_date": hasScheduledDate,
-                "uses_budget": usesBudget
-            ]
-        )
         dismiss()
     }
 

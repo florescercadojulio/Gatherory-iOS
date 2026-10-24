@@ -1120,6 +1120,22 @@
         }
       }
     },
+    "Add location" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add location"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agregar ubicación"
+          }
+        }
+      }
+    },
     "Add Location" : {
       "localizations" : {
         "es" : {
@@ -5717,22 +5733,6 @@
         }
       }
     },
-    "blueprint.preview.use" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usar"
-          }
-        }
-      }
-    },
     "blueprint.preview.addIdea" : {
       "localizations" : {
         "en" : {
@@ -6216,6 +6216,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Guardar tus elecciones del plano?"
+          }
+        }
+      }
+    },
+    "blueprint.preview.use" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar"
           }
         }
       }
@@ -10950,6 +10966,54 @@
         }
       }
     },
+    "Edits the main event date and time." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edits the main event date and time."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edita la fecha y la hora del evento principal."
+          }
+        }
+      }
+    },
+    "Edits the main event location." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edits the main event location."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edita la ubicación del evento principal."
+          }
+        }
+      }
+    },
+    "Edits the main event title." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edits the main event title."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edita el título del evento principal."
+          }
+        }
+      }
+    },
     "Edits this cost" : {
       "localizations" : {
         "es" : {
@@ -15556,6 +15620,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Invita a personas al evento seleccionado"
+          }
+        }
+      }
+    },
+    "Invite people to this event" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invite people to this event"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invita a personas a este evento"
           }
         }
       }
@@ -21447,6 +21527,7 @@
       }
     },
     "Time Zone" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {

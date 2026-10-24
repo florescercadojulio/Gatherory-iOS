@@ -11,16 +11,17 @@ struct WorkspaceSettingsView: View {
             return String(localized: "Date to be decided")
         }
         if workspace.mainEventIsAllDay {
-            return workspace.mainEventStartsAt.formatted(date: .abbreviated, time: .omitted)
+            return EventScheduleFormatter.string(
+                from: workspace.mainEventStartsAt,
+                includesTime: false,
+                timeZoneIdentifier: workspace.mainEventTimeZoneIdentifier
+            )
         }
 
-        return workspace.mainEventStartsAt.formatted(
-            .dateTime
-                .month(.abbreviated)
-                .day()
-                .year()
-                .hour()
-                .minute()
+        return EventScheduleFormatter.string(
+            from: workspace.mainEventStartsAt,
+            includesTime: true,
+            timeZoneIdentifier: workspace.mainEventTimeZoneIdentifier
         )
     }
 

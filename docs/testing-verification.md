@@ -55,6 +55,27 @@ load live credentials as part of the ordinary local check.
 
 ## What the tests protect
 
+### Main invitation tap editing and sharing — October 23, 2026
+
+See [invitation cards](event-invitation-cards.md#main-event-sharing-and-tap-editing--october-23-2026)
+for native title/date/location edit sheets, sharing beside Back, permission
+boundaries and final results. `MainInvitationEditingTests` exercises the real
+field mutation command, including stale identities/fields and preservation of
+current unrelated event data. `MainInvitationEditingUITests` covers host
+save/cancel, read-only guests/collaborators, the information tiles and a pinned
+child share presentation with native Back. These use synthetic ephemeral
+fixtures and normal Light/Dark appearances.
+
+### Beta feedback follow-up — October 23, 2026
+
+New event/Blueprint dates default to today, the date editor automatically keeps
+the saved event timezone, and event labels use that same zone. Read-only
+collaborator identities render as content instead of disabled controls. See the
+[cross-project feedback handoff](../../../gatherory-web-app/docs/release/beta-feedback-2026-10-23.md)
+for the final checks, evidence paths and remaining acceptance work. Earlier
+timezone-picker descriptions below record superseded implementation passes.
+These changes require a new build after TestFlight build 5.
+
 ### TestFlight build 5 verification — October 23, 2026
 
 Version **1.0 (5)** was archived from native HEAD

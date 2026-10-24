@@ -13,6 +13,7 @@ struct EventLocationEditorView: View {
     @State private var isSearchPresented = false
     @State private var isResolvingSelection = false
     private let save: (EventLocation?) -> Void
+    private let accessibilityIdentifierPrefix: String
 
     private var hasSearchQuery: Bool {
         !searchModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -20,10 +21,12 @@ struct EventLocationEditorView: View {
 
     init(
         location: EventLocation?,
+        accessibilityIdentifierPrefix: String = "event.location",
         save: @escaping (EventLocation?) -> Void
     ) {
         _draft = State(initialValue: location)
         self.save = save
+        self.accessibilityIdentifierPrefix = accessibilityIdentifierPrefix
     }
 
     var body: some View {
@@ -75,6 +78,7 @@ struct EventLocationEditorView: View {
                         dismiss()
                     }
                     .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("\(accessibilityIdentifierPrefix).cancel")
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
@@ -83,6 +87,7 @@ struct EventLocationEditorView: View {
                         dismiss()
                     }
                     .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("\(accessibilityIdentifierPrefix).save")
                     .disabled(isResolvingSelection)
                     .keyboardShortcut(.defaultAction)
                 }
@@ -217,6 +222,7 @@ struct EventLocationEditorView: View {
                     .labelStyle(.iconOnly)
                     .foregroundStyle(.secondary)
                     .frame(minWidth: AppTheme.Layout.minimumTouchTarget, minHeight: AppTheme.Layout.minimumTouchTarget)
+                    .accessibilityIdentifier("\(accessibilityIdentifierPrefix).clear")
                 }
             }
         }

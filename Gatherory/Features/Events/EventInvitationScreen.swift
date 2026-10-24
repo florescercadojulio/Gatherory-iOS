@@ -10,6 +10,7 @@ import UIKit
 /// Only the root event can expose a child schedule; subevents and ideas are leaves.
 struct EventInvitationScreen: View {
     @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(AuthenticationSession.self) private var authentication: AuthenticationSession?
     @Environment(MusicPreviewPlayer.self) private var previewPlayer
     @Environment(ImageSafetyStore.self) private var imageSafety
     @Environment(\.currentUserAccount) private var account
@@ -26,6 +27,7 @@ struct EventInvitationScreen: View {
     @State private var reportedMoment: EventMoment?
     @State private var hideFailure: String?
     @State private var calendarDraft: CalendarEventDraft?
+    @State private var editingMainEventField: MainInvitationEditSnapshot?
     @Namespace private var childTransition
     @Namespace private var playlistTransition
 
@@ -237,18 +239,21 @@ struct EventInvitationScreen: View {
         .sheet(item: $calendarDraft) { draft in
             CalendarEventEditor(draft: draft).ignoresSafeArea()
         }
+        .sheet(item: $editingMainEventField) { snapshot in
+            mainEventEditor(for: snapshot)
+        }
         .onChange(of: account?.id) { oldID, newID in
             guard oldID != newID else { return }
             sharedAlbumRoute = nil
+        }
+        .onChange(of: isOpenEditCurrent) { _, isCurrent in
+            if !isCurrent { editingMainEventField = nil }
         }
         .alert(AppCopy.Safety.hide, isPresented: Binding(get: { hideFailure != nil }, set: { if !$0 { hideFailure = nil } })) {
             Button(AppCopy.Common.done) { hideFailure = nil }
         } message: { Text(hideFailure ?? "") }
         .task { await imageSafety.refresh() }
-        .task(id: weatherRequestID) {
-            guard let presentation, let startsAt = presentation.startsAt else { return }
-            await weather.load(on: startsAt, location: presentation.location)
-        }
+        .task(id: weatherRequestID) { await loadWeather() }
         .onChange(of: selectedMomentPhotos) { _, items in
             guard !items.isEmpty, workspace.canAddEventMoments(to: reference) else { return }
 
@@ -269,7 +274,20 @@ struct EventInvitationScreen: View {
         EventReadingHero(
             title: event.title,
             height: height,
-            topSpacer: dynamicTypeSize.isAccessibilitySize ? 150 : 260
+            topSpacer: dynamicTypeSize.isAccessibilitySize ? 150 : 260,
+            titleAction: canEditMainEvent ? AnyView(
+                Button { beginEditing(.title) } label: {
+                    Text(event.title)
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("invitation.edit.title")
+                .accessibilityHint("Edits the main event title.")
+            ) : nil
         ) {
             if event.isCancelled {
                 Label(AppCopy.Lifecycle.cancelled, systemImage: "calendar.badge.minus")
@@ -284,17 +302,30 @@ struct EventInvitationScreen: View {
             }
         } timingLocation: {
             VStack(spacing: 6) {
-                if let startsAt = event.startsAt {
-                    Text(startsAt, format: .dateTime.weekday(.wide).month(.wide).day().year())
-                        .font(.headline)
+                if canEditMainEvent {
+                    Button { beginEditing(.date) } label: {
+                        dateHeroLabel(event)
+                            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                            .contentShape(Rectangle())
+                    }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("invitation.edit.date")
+                        .accessibilityHint("Edits the main event date and time.")
                 } else {
-                    Text("Date to be decided")
-                        .font(.headline)
+                    dateHeroLabel(event)
                 }
 
-                if let location = event.location {
-                    Text(location.title)
-                        .font(.subheadline.weight(.semibold))
+                if canEditMainEvent {
+                    Button { beginEditing(.location) } label: {
+                        locationHeroLabel(event)
+                            .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                            .contentShape(Rectangle())
+                    }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("invitation.edit.location")
+                        .accessibilityHint("Edits the main event location.")
+                } else if let location = event.location {
+                    Text(location.title).font(.subheadline.weight(.semibold))
                 }
             }
         } response: {
@@ -320,6 +351,153 @@ struct EventInvitationScreen: View {
                 .appImageOverlayAppearance()
             }
         }
+    }
+
+    private var canEditMainEvent: Bool {
+        guard reference == .main, workspace.canManageMainEvent,
+              workspace.selectedEventReference == .main,
+              !workspace.isScopedEvent,
+              !workspace.isInvitationProjection,
+              let member = workspace.currentViewerMember(for: .main),
+              member.planningPermission != .viewOnly,
+              member.participantRole != .guest,
+              member.invitationStatus == .active,
+              let authentication,
+              !authentication.isSigningOut else { return false }
+        if let currentUser = authentication.currentUser {
+            guard account?.id == currentUser.id else { return false }
+            return workspace.hasAuthenticatedViewer(accountID: currentUser.id)
+        }
+        guard authentication.isGuestMode,
+              let profile = authentication.localGuestProfile,
+              workspace.isLocalGuestViewer,
+              workspace.localGuestProfileID == profile.id else { return false }
+        return true
+    }
+
+    private var isOpenEditCurrent: Bool {
+        guard let snapshot = editingMainEventField else { return true }
+        return MainInvitationEditCommand.isCurrent(
+            snapshot,
+            in: workspace,
+            accountID: account?.id,
+            localGuestProfileID: authentication?.isGuestMode == true ? authentication?.localGuestProfile?.id : nil,
+            principalGeneration: authentication?.principalGeneration,
+            reference: reference,
+            isCurrentPrincipal: canEditMainEvent
+        )
+    }
+
+    private func loadWeather() async {
+        guard let presentation, let startsAt = presentation.startsAt else { return }
+        await weather.load(on: startsAt, location: presentation.location)
+    }
+
+    private func dateHeroLabel(_ event: EventPresentation) -> some View {
+        Group {
+            if let startsAt = event.startsAt {
+                Text(EventScheduleFormatter.string(
+                    from: startsAt,
+                    includesTime: false,
+                    timeZoneIdentifier: event.timeZoneIdentifier,
+                    dateStyle: .full
+                ))
+            } else {
+                Text("Date to be decided")
+            }
+        }
+        .font(.headline)
+    }
+
+    private func locationHeroLabel(_ event: EventPresentation) -> some View {
+        Group {
+            if let location = event.location {
+                Text(location.title)
+            } else {
+                Label("Add location", systemImage: "mappin.and.ellipse")
+            }
+        }
+        .font(.subheadline.weight(.semibold))
+    }
+
+    private func beginEditing(_ field: MainInvitationEditField) {
+        guard canEditMainEvent,
+              let authentication,
+              let member = workspace.currentViewerMember(for: .main) else { return }
+        editingMainEventField = MainInvitationEditSnapshot(
+            field: field,
+            accountID: account?.id,
+            localGuestProfileID: authentication.isGuestMode ? authentication.localGuestProfile?.id : nil,
+            principalGeneration: authentication.principalGeneration,
+            mainEventID: workspace.mainEventID,
+            isScopedEvent: workspace.isScopedEvent,
+            member: member,
+            title: workspace.title,
+            startsAt: workspace.mainEventStartsAt,
+            endsAt: workspace.mainEventEndsAt,
+            isAllDay: workspace.mainEventIsAllDay,
+            timeZoneIdentifier: workspace.mainEventTimeZoneIdentifier,
+            location: workspace.mainEventLocation,
+            invitationDateIsUndecided: workspace.invitationDateIsUndecided
+        )
+    }
+
+    @ViewBuilder
+    private func mainEventEditor(for snapshot: MainInvitationEditSnapshot) -> some View {
+        switch snapshot.field {
+        case .title:
+            MainInvitationTitleEditor(title: snapshot.title) { updatedTitle in
+                commit(updatedTitle, for: snapshot)
+            }
+        case .date:
+            EventDateTimeEditorView(
+                startsAt: snapshot.startsAt,
+                endsAt: snapshot.endsAt,
+                isAllDay: snapshot.isAllDay,
+                timeZoneIdentifier: snapshot.timeZoneIdentifier,
+                accessibilityIdentifierPrefix: "invitation.edit.date"
+            ) { startsAt, endsAt, isAllDay, timeZoneIdentifier in
+                commit(
+                    MainInvitationDateValue(
+                        startsAt: startsAt,
+                        endsAt: endsAt,
+                        isAllDay: isAllDay,
+                        timeZoneIdentifier: timeZoneIdentifier
+                    ),
+                    for: snapshot
+                )
+            }
+        case .location:
+            EventLocationEditorView(location: snapshot.location, accessibilityIdentifierPrefix: "invitation.edit.location") { location in
+                commit(location, for: snapshot)
+            }
+        }
+    }
+
+    private func commit(_ title: String, for snapshot: MainInvitationEditSnapshot) {
+        performCommit(.title(title), for: snapshot)
+    }
+
+    private func commit(_ date: MainInvitationDateValue, for snapshot: MainInvitationEditSnapshot) {
+        performCommit(.date(date), for: snapshot)
+    }
+
+    private func commit(_ location: EventLocation?, for snapshot: MainInvitationEditSnapshot) {
+        performCommit(.location(location), for: snapshot)
+    }
+
+    private func performCommit(_ value: MainInvitationEditValue, for snapshot: MainInvitationEditSnapshot) {
+        let didCommit = MainInvitationEditCommand.commit(
+            value,
+            for: snapshot,
+            in: workspace,
+            accountID: account?.id,
+            localGuestProfileID: authentication?.isGuestMode == true ? authentication?.localGuestProfile?.id : nil,
+            principalGeneration: authentication?.principalGeneration,
+            reference: reference,
+            isCurrentPrincipal: canEditMainEvent
+        )
+        if !didCommit { editingMainEventField = nil }
     }
 
     @ViewBuilder
@@ -389,7 +567,20 @@ struct EventInvitationScreen: View {
                     }
                 }
 
-                EventInvitationLocationView(location: location)
+                EventInvitationLocationView(
+                    location: location,
+                    editAction: canEditMainEvent ? { beginEditing(.location) } : nil
+                )
+            } else if canEditMainEvent {
+                EventInvitationFeatureCard {
+                    Button { beginEditing(.location) } label: {
+                        Label("Add location", systemImage: "mappin.and.ellipse")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("invitation.edit.location.info")
+                }
             }
 
             momentsCard(event.moments)
@@ -545,7 +736,8 @@ struct EventInvitationScreen: View {
                     location: event.location?.formatted,
                     notes: event.note
                 )
-            }
+            },
+            editAction: canEditMainEvent ? { beginEditing(.date) } : nil
         )
     }
 
@@ -1209,43 +1401,57 @@ private struct EventInvitationScheduleCard: View {
     let purposeTitle: String?
     let purposeSymbol: String?
     let addToCalendar: (() -> Void)?
+    var editAction: (() -> Void)? = nil
 
     var body: some View {
         EventInvitationFeatureCard {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.compact) {
-                        categoryLabel
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                        Spacer(minLength: AppTheme.Spacing.compact)
-                        statusLabel
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
+                let scheduleContent = VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.compact) {
+                            categoryLabel
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                            Spacer(minLength: AppTheme.Spacing.compact)
+                            statusLabel
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            categoryLabel
+                            statusLabel
+                        }
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        categoryLabel
-                        statusLabel
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(dateText)
+                            .font(.title3.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let timeText {
+                            Label(timeText, systemImage: "clock")
+                                .font(.body)
+                                .foregroundStyle(.white.opacity(0.86))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if let purposeTitle, let purposeSymbol {
+                            Label(purposeTitle, systemImage: purposeSymbol)
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.68))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(dateText)
-                        .font(.title3.weight(.semibold))
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let timeText {
-                        Label(timeText, systemImage: "clock")
-                            .font(.body)
-                            .foregroundStyle(.white.opacity(0.86))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if let purposeTitle, let purposeSymbol {
-                        Label(purposeTitle, systemImage: purposeSymbol)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.68))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                if let editAction {
+                    Button(action: editAction) { scheduleContent }
+                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .accessibilityIdentifier("invitation.edit.date.info")
+                        .accessibilityHint("Edits the main event date and time.")
+                } else {
+                    scheduleContent
                 }
 
                 if let addToCalendar {
@@ -1799,6 +2005,7 @@ struct EventInvitationSection<Content: View>: View {
 
 private struct EventInvitationLocationView: View {
     let location: EventLocation
+    var editAction: (() -> Void)? = nil
 
     private var coordinate: CLLocationCoordinate2D? {
         guard let latitude = location.latitude, let longitude = location.longitude else { return nil }
@@ -1816,7 +2023,7 @@ private struct EventInvitationLocationView: View {
     var body: some View {
         EventInvitationFeatureCard(contentPadding: 0) {
             VStack(spacing: 0) {
-                VStack(spacing: AppTheme.Spacing.standard) {
+                let locationDetails = VStack(spacing: AppTheme.Spacing.standard) {
                     Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .font(.title3.bold())
 
@@ -1824,9 +2031,21 @@ private struct EventInvitationLocationView: View {
                         .font(.title3.weight(.medium))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-
                 }
-                .padding(AppTheme.Spacing.spacious)
+
+                if let editAction {
+                    Button(action: editAction) {
+                        locationDetails
+                            .padding(AppTheme.Spacing.spacious)
+                            .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("invitation.edit.location.info")
+                    .accessibilityHint("Edits the main event location.")
+                } else {
+                    locationDetails.padding(AppTheme.Spacing.spacious)
+                }
 
                 if let coordinate {
                     if let mapsURL {
@@ -1834,6 +2053,7 @@ private struct EventInvitationLocationView: View {
                             staticMap(coordinate: coordinate)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("invitation.location.maps")
                         .accessibilityLabel("Open \(location.title) in Maps")
                         .accessibilityHint("Opens directions in Apple Maps")
                     } else {

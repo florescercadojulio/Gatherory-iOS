@@ -2178,11 +2178,13 @@ extension PlanningWorkspace {
             latitude: 42.2778,
             longitude: -83.6967
         )
+        let isReadOnlyViewer = ReadOnlyCollaboratorsUITestFixtures.isEnabled
+        let isGuestViewer = MainInvitationEditingUITestFixtures.isGuestEnabled
         let alex = WorkspaceMember(
             name: "Alex",
-            participantRole: .host,
+            participantRole: isGuestViewer ? .guest : isReadOnlyViewer ? .collaborator : .host,
             initials: "A",
-            planningPermission: .manage
+            planningPermission: isReadOnlyViewer || isGuestViewer ? .viewOnly : .manage
         )
         let jordan = WorkspaceMember(
             name: "Jordan",

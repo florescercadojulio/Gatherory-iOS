@@ -314,9 +314,7 @@ private struct TimelineItemEditorView: View {
         _purpose = State(initialValue: item?.purpose ?? .planning)
         _status = State(initialValue: item?.status ?? .approved)
         _scheduledAt = State(
-            initialValue: item?.scheduledAt
-                ?? Calendar.current.date(byAdding: .day, value: 7, to: .now)
-                ?? .now
+            initialValue: item?.scheduledAt ?? .now
         )
         _endsAt = State(initialValue: item?.endsAt)
         _isAllDay = State(initialValue: item?.isAllDay ?? false)
@@ -795,7 +793,7 @@ struct EventDateTimeEditorView: View {
     let save: (Date, Date?, Bool, String) -> Void
     /// Portable blueprint installs currently support a timed start only.
     let supportsExtendedSchedule: Bool
-    let allowsTimeZoneEditing: Bool
+    let accessibilityIdentifierPrefix: String
 
     init(
         startsAt: Date,
@@ -803,7 +801,7 @@ struct EventDateTimeEditorView: View {
         isAllDay: Bool,
         timeZoneIdentifier: String,
         supportsExtendedSchedule: Bool = true,
-        allowsTimeZoneEditing: Bool = true,
+        accessibilityIdentifierPrefix: String = "event.dateTime",
         save: @escaping (Date, Date?, Bool, String) -> Void
     ) {
         _startsAt = State(initialValue: startsAt)
@@ -812,7 +810,7 @@ struct EventDateTimeEditorView: View {
         _timeZoneIdentifier = State(initialValue: timeZoneIdentifier)
         self.save = save
         self.supportsExtendedSchedule = supportsExtendedSchedule
-        self.allowsTimeZoneEditing = allowsTimeZoneEditing
+        self.accessibilityIdentifierPrefix = accessibilityIdentifierPrefix
     }
 
     private var selectedTimeZone: TimeZone {
@@ -823,7 +821,10 @@ struct EventDateTimeEditorView: View {
         NavigationStack {
             Form {
                 Section {
-                    if supportsExtendedSchedule { Toggle("All-day", isOn: $isAllDay) }
+                    if supportsExtendedSchedule {
+                        Toggle("All-day", isOn: $isAllDay)
+                            .accessibilityIdentifier("\(accessibilityIdentifierPrefix).allDay")
+                    }
 
                     datePickerRow(
                         title: "Starts",
@@ -845,18 +846,6 @@ struct EventDateTimeEditorView: View {
                         }
                     }
                 }
-
-                if allowsTimeZoneEditing {
-                    Section {
-                        Picker("Time Zone", selection: $timeZoneIdentifier) {
-                            ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { identifier in
-                                Text(timeZoneLabel(for: identifier))
-                                    .tag(identifier)
-                            }
-                        }
-                        .pickerStyle(.navigationLink)
-                    }
-                }
             }
             .environment(\.timeZone, selectedTimeZone)
             .navigationTitle("Date and Time")
@@ -867,6 +856,7 @@ struct EventDateTimeEditorView: View {
                         dismiss()
                     }
                     .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("\(accessibilityIdentifierPrefix).cancel")
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
@@ -881,6 +871,7 @@ struct EventDateTimeEditorView: View {
                         dismiss()
                     }
                     .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("\(accessibilityIdentifierPrefix).save")
                     .keyboardShortcut(.defaultAction)
                 }
             }
@@ -910,6 +901,7 @@ struct EventDateTimeEditorView: View {
                     selection: selection,
                     displayedComponents: .date
                 )
+                .accessibilityIdentifier("\(accessibilityIdentifierPrefix).\(title.lowercased()).date")
 
                 if !isAllDay {
                     DatePicker(
@@ -917,6 +909,7 @@ struct EventDateTimeEditorView: View {
                         selection: selection,
                         displayedComponents: .hourAndMinute
                     )
+                    .accessibilityIdentifier("\(accessibilityIdentifierPrefix).\(title.lowercased()).time")
                 }
             }
             .padding(.vertical, 4)
@@ -932,6 +925,7 @@ struct EventDateTimeEditorView: View {
                     displayedComponents: .date
                 )
                 .labelsHidden()
+                .accessibilityIdentifier("\(accessibilityIdentifierPrefix).\(title.lowercased()).date")
 
                 if !isAllDay {
                     DatePicker(
@@ -940,6 +934,7 @@ struct EventDateTimeEditorView: View {
                         displayedComponents: .hourAndMinute
                     )
                     .labelsHidden()
+                    .accessibilityIdentifier("\(accessibilityIdentifierPrefix).\(title.lowercased()).time")
                 }
             }
         }
@@ -947,7 +942,9 @@ struct EventDateTimeEditorView: View {
 
     private var defaultEndDate: Date {
         guard !isAllDay else { return startsAt }
-        return Calendar.current.date(byAdding: .hour, value: 1, to: startsAt) ?? startsAt
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.timeZone = selectedTimeZone
+        return calendar.date(byAdding: .hour, value: 1, to: startsAt) ?? startsAt
     }
 
     private var endDateBinding: Binding<Date> {
@@ -955,23 +952,6 @@ struct EventDateTimeEditorView: View {
             get: { endsAt ?? defaultEndDate },
             set: { endsAt = $0 }
         )
-    }
-
-    private func timeZoneLabel(for identifier: String) -> String {
-        guard let timeZone = TimeZone(identifier: identifier) else { return identifier }
-        let name = timeZone.localizedName(for: .generic, locale: .current) ?? identifier
-        return "\(name) (\(gmtOffset(for: timeZone)))"
-    }
-
-    private func gmtOffset(for timeZone: TimeZone) -> String {
-        let seconds = timeZone.secondsFromGMT(for: startsAt)
-        let sign = seconds < 0 ? "−" : "+"
-        let absoluteSeconds = abs(seconds)
-        let hours = absoluteSeconds / 3_600
-        let minutes = (absoluteSeconds % 3_600) / 60
-        return minutes == 0
-            ? "GMT\(sign)\(hours)"
-            : "GMT\(sign)\(hours):\(String(format: "%02d", minutes))"
     }
 
     private var normalizedSchedule: EventSchedule {
@@ -1025,16 +1005,18 @@ struct EventSchedule: Equatable {
     }
 }
 
-private enum EventScheduleFormatter {
+enum EventScheduleFormatter {
     static func string(
         from date: Date,
         includesTime: Bool,
-        timeZoneIdentifier: String
+        timeZoneIdentifier: String,
+        dateStyle: DateFormatter.Style = .medium,
+        locale: Locale = .autoupdatingCurrent
     ) -> String {
         let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
+        formatter.locale = locale
         formatter.timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .autoupdatingCurrent
-        formatter.dateStyle = .medium
+        formatter.dateStyle = dateStyle
         formatter.timeStyle = includesTime ? .short : .none
         return formatter.string(from: date)
     }
@@ -1110,9 +1092,10 @@ struct TimelineCollectionCard: View {
 
     private var scheduleSummary: String {
         guard item.hasScheduledDate else { return "Date not set" }
-        let start = item.scheduledAt.formatted(
-            date: .abbreviated,
-            time: item.isAllDay ? .omitted : .shortened
+        let start = EventScheduleFormatter.string(
+            from: item.scheduledAt,
+            includesTime: !item.isAllDay,
+            timeZoneIdentifier: item.timeZoneIdentifier
         )
         return item.isAllDay ? "\(start) · All-day" : start
     }

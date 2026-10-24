@@ -11,10 +11,8 @@ struct BlueprintSetupDateContext {
         timeZoneIdentifier = timeZone.identifier
     }
 
-    init(now: Date = .now, timeZone: TimeZone = .current, calendar: Calendar = .current) {
-        var calendar = calendar
-        calendar.timeZone = timeZone
-        startsAt = calendar.date(byAdding: .month, value: 6, to: now) ?? now
+    init(now: Date = .now, timeZone: TimeZone = .current) {
+        startsAt = now
         timeZoneIdentifier = timeZone.identifier
     }
 

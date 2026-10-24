@@ -23,7 +23,11 @@ struct ArchivedEventsView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(item.title).font(.headline)
                                     if item.hasScheduledDate {
-                                        Text(item.scheduledAt, format: .dateTime.month().day().year())
+                                        Text(EventScheduleFormatter.string(
+                                            from: item.scheduledAt,
+                                            includesTime: false,
+                                            timeZoneIdentifier: item.timeZoneIdentifier
+                                        ))
                                             .font(.subheadline).foregroundStyle(.secondary)
                                     }
                                 }

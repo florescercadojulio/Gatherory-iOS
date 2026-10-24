@@ -1,5 +1,14 @@
 # Gatherory App Store release and review handoff
 
+The [October 23 beta feedback follow-up](../../../gatherory-web-app/docs/release/beta-feedback-2026-10-23.md)
+changes date defaults/display and read-only collaborator contrast after build 5.
+It still needs a new native archive/upload; the browser beta gate needs a web
+deployment. The uploaded build described below does not contain these fixes.
+
+The subsequent [main invitation tap-editing and sharing follow-up](event-invitation-cards.md#main-event-sharing-and-tap-editing--october-23-2026)
+also belongs in the next native build. It adds focused main-event edit sheets
+and sharing beside native Back; it requires no server or schema change.
+
 ## TestFlight build 5 — October 23, 2026
 
 Version **1.0 (5)** was signed for Guide Systems LLC (`LW97NHT3JA`) and

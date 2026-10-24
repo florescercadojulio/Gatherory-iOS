@@ -1,5 +1,15 @@
 import SwiftUI
 
+private struct HomeInvitationShareRequest: Identifiable {
+    let reference: EventReference
+    let accountID: String?
+    let localGuestProfileID: UUID?
+    let principalGeneration: UInt64
+    let workspaceID: UUID
+
+    var id: String { "\(reference.id)-\(principalGeneration)" }
+}
+
 struct HomeView: View {
     var homeReselectionTrigger = 0
     var onExitWorkspace: (() -> Void)?
@@ -13,6 +23,7 @@ struct HomeView: View {
     @State private var isSavingBlueprint = false
     @State private var viewportHeight: CGFloat = 0
     @State private var isPresentingInvitationSharing = false
+    @State private var detailInvitationShareRequest: HomeInvitationShareRequest?
     @State private var csvExportRequest: EventCSVExportRequest?
     @State private var editorTarget: HomeEventEditorTarget?
     @State private var isAddingEventIdea = false
@@ -44,7 +55,11 @@ struct HomeView: View {
     private let pullToCreateRevealInset: CGFloat = 56
 
     private var daysRemaining: Int {
-        max(Calendar.current.dateComponents([.day], from: .now, to: workspace.mainEventStartsAt).day ?? 0, 0)
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.timeZone = TimeZone(identifier: workspace.mainEventTimeZoneIdentifier) ?? .autoupdatingCurrent
+        let today = calendar.startOfDay(for: .now)
+        let eventDay = calendar.startOfDay(for: workspace.mainEventStartsAt)
+        return max(calendar.dateComponents([.day], from: today, to: eventDay).day ?? 0, 0)
     }
 
     private var eventHeroHeight: CGFloat {
@@ -246,39 +261,7 @@ struct HomeView: View {
             }
         }
         .navigationDestination(item: $openedEventReference) { reference in
-            EventInvitationScreen(reference: reference)
-                .navigationTitle("Invitation")
-                .navigationBarTitleDisplayMode(.inline)
-                .appClearNavigationBar()
-                .appImageDetailAppearance()
-                .modifier(HomeEventRemovalConfirmation(
-                    request: $pendingDetailRemoval,
-                    isUnavailable: $isRemovalUnavailable,
-                    isActive: openedEventReference != nil,
-                    onConfirm: confirmRemoval
-                ))
-                .toolbar {
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        if reference == .main, workspace.showsPlanningInterface {
-                            NavigationLink {
-                                WorkspaceSettingsView()
-                            } label: {
-                                Label("Workspace Settings", systemImage: "gearshape")
-                                    .labelStyle(.iconOnly)
-                            }
-                        }
-
-                        if canEdit(reference) || workspace.eventRemovalAction(for: reference) != nil || workspace.canCancelEvent(reference) || canExport(.schedule, for: reference) || canExport(.guestList, for: reference) {
-                            Menu(AppCopy.EventRemoval.actions, systemImage: "ellipsis") {
-                                eventActions(for: reference)
-                            }
-                            .labelStyle(.iconOnly)
-                        }
-                    }
-                }
-                .navigationTransition(
-                    .zoom(sourceID: reference, in: invitationTransition)
-                )
+            invitationDetail(for: reference)
         }
         .sheet(isPresented: $isSavingBlueprint) {
             NavigationStack {
@@ -294,6 +277,15 @@ struct HomeView: View {
         .fullScreenCover(isPresented: $isPresentingInvitationSharing) {
             CollaborationInviteView()
                 .environment(workspace)
+        }
+        .onChange(of: authentication?.principalGeneration) { _, _ in
+            detailInvitationShareRequest = nil
+        }
+        .onChange(of: workspace.mainEventID) { _, _ in
+            detailInvitationShareRequest = nil
+        }
+        .onChange(of: isDetailInvitationShareRequestValid) { _, isValid in
+            if !isValid { detailInvitationShareRequest = nil }
         }
         .modifier(EventCSVExportPresentation(request: $csvExportRequest))
         .sheet(item: $editorTarget) { target in
@@ -343,6 +335,61 @@ struct HomeView: View {
         }
     }
 
+    private func invitationDetail(for reference: EventReference) -> some View {
+        EventInvitationScreen(reference: reference)
+            .navigationTitle("Invitation")
+            .navigationBarTitleDisplayMode(.inline)
+            .appClearNavigationBar()
+            .appImageDetailAppearance()
+            .modifier(HomeEventRemovalConfirmation(
+                request: $pendingDetailRemoval,
+                isUnavailable: $isRemovalUnavailable,
+                isActive: openedEventReference != nil,
+                onConfirm: confirmRemoval
+            ))
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if workspace.canManageInvitations(for: reference) {
+                        Button {
+                            presentDetailInvitationSharing(for: reference)
+                        } label: {
+                            Label("Share Invitation", systemImage: "square.and.arrow.up")
+                                .labelStyle(.iconOnly)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .accessibilityHint("Invite people to this event")
+                        .accessibilityIdentifier("invitation-share-invitation")
+                    }
+                }
+
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if reference == .main, workspace.showsPlanningInterface {
+                        NavigationLink {
+                            WorkspaceSettingsView()
+                        } label: {
+                            Label("Workspace Settings", systemImage: "gearshape")
+                                .labelStyle(.iconOnly)
+                        }
+                    }
+
+                    if canEdit(reference) || workspace.eventRemovalAction(for: reference) != nil || workspace.canCancelEvent(reference) || canExport(.schedule, for: reference) || canExport(.guestList, for: reference) {
+                        Menu(AppCopy.EventRemoval.actions, systemImage: "ellipsis") {
+                            eventActions(for: reference)
+                        }
+                        .labelStyle(.iconOnly)
+                    }
+                }
+            }
+            .fullScreenCover(item: $detailInvitationShareRequest) { request in
+                CollaborationInviteView(reference: request.reference)
+                    .environment(workspace)
+            }
+            .navigationTransition(
+                .zoom(sourceID: reference, in: invitationTransition)
+            )
+    }
+
     private func eventHero(for reference: EventReference) -> some View {
         let cardShape = RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous)
         return GeometryReader { proxy in
@@ -358,10 +405,12 @@ struct HomeView: View {
                         attendeeSummary(for: reference)
                     }
                 } metadata: {
-                    Text(
-                        date(for: reference),
-                        format: .dateTime.weekday(.wide).month(.wide).day().year()
-                    )
+                    Text(EventScheduleFormatter.string(
+                        from: date(for: reference),
+                        includesTime: false,
+                        timeZoneIdentifier: timeZoneIdentifier(for: reference),
+                        dateStyle: .full
+                    ))
                     .font(.headline)
                     .multilineTextAlignment(.center)
 
@@ -400,7 +449,7 @@ struct HomeView: View {
             .accessibilityHint("Opens event details")
             .accessibilityIdentifier(reference == .main ? "home.event.main" : "home.event.child")
             .accessibilityLabel(
-                "\(title(for: reference)), \(date(for: reference).formatted(date: .long, time: .omitted)), " +
+                "\(title(for: reference)), \(EventScheduleFormatter.string(from: date(for: reference), includesTime: false, timeZoneIdentifier: timeZoneIdentifier(for: reference), dateStyle: .long)), " +
                 (location(for: reference).map { "at \($0.formatted). " } ?? "") +
                 secondaryLabel(for: reference)
             )
@@ -535,7 +584,11 @@ struct HomeView: View {
             title: title(for:),
             annotation: { reference in
                 guard reference != .main || workspace.mainEventHasScheduledDate else { return nil }
-                return date(for: reference).formatted(.dateTime.month(.abbreviated).day().year())
+                return EventScheduleFormatter.string(
+                    from: date(for: reference),
+                    includesTime: false,
+                    timeZoneIdentifier: timeZoneIdentifier(for: reference)
+                )
             },
             onPreview: { reference in
                 guard let index = workspace.visibleEventContexts.firstIndex(of: reference) else { return }
@@ -743,6 +796,60 @@ struct HomeView: View {
 
     private func date(for reference: EventReference) -> Date {
         reference == .main ? workspace.mainEventStartsAt : timelineItem(for: reference)?.scheduledAt ?? workspace.mainEventStartsAt
+    }
+
+    private func timeZoneIdentifier(for reference: EventReference) -> String {
+        reference == .main
+            ? workspace.mainEventTimeZoneIdentifier
+            : timelineItem(for: reference)?.timeZoneIdentifier ?? workspace.mainEventTimeZoneIdentifier
+    }
+
+    private func presentDetailInvitationSharing(for reference: EventReference) {
+        guard openedEventReference == reference,
+              workspace.canManageInvitations(for: reference),
+              let authentication,
+              !authentication.isSigningOut else { return }
+
+        let accountID = authentication.currentUser?.id
+        let localGuestProfileID = authentication.localGuestProfile?.id
+        let isAuthenticatedHost: Bool
+        if let accountID {
+            isAuthenticatedHost = workspace.hasAuthenticatedViewer(accountID: accountID)
+        } else {
+            isAuthenticatedHost = false
+        }
+        let isLocalGuestHost = authentication.isGuestMode
+            && localGuestProfileID != nil
+            && localGuestProfileID == workspace.localGuestProfileID
+        guard isAuthenticatedHost || isLocalGuestHost else { return }
+
+        detailInvitationShareRequest = HomeInvitationShareRequest(
+            reference: reference,
+            accountID: accountID,
+            localGuestProfileID: isAuthenticatedHost ? nil : localGuestProfileID,
+            principalGeneration: authentication.principalGeneration,
+            workspaceID: workspace.mainEventID
+        )
+    }
+
+    private var isDetailInvitationShareRequestValid: Bool {
+        guard let request = detailInvitationShareRequest,
+              let authentication,
+              openedEventReference == request.reference else { return false }
+        let hasSameAuthenticatedPrincipal = request.accountID.map {
+            authentication.currentUser?.id == $0
+                && workspace.hasAuthenticatedViewer(accountID: $0)
+        } ?? false
+        let hasSameLocalGuestPrincipal = request.localGuestProfileID.map {
+            authentication.isGuestMode
+                && authentication.localGuestProfile?.id == $0
+                && workspace.localGuestProfileID == $0
+        } ?? false
+        return (hasSameAuthenticatedPrincipal || hasSameLocalGuestPrincipal)
+            && authentication.principalGeneration == request.principalGeneration
+            && !authentication.isSigningOut
+            && workspace.mainEventID == request.workspaceID
+            && workspace.canManageInvitations(for: request.reference)
     }
 
     private func location(for reference: EventReference) -> EventLocation? {

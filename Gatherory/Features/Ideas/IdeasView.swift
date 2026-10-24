@@ -1497,7 +1497,7 @@ struct IdeaEditorView: View {
     @State private var eventAudience: EventAudience = .inherited
     @State private var eventBudgetAmount = ""
     @State private var includesProposedDate = false
-    @State private var eventProposedDate = Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now
+    @State private var eventProposedDate = Date.now
     @State private var eventProposedEndDate: Date?
     @State private var eventIsAllDay = false
     @State private var eventTimeZoneIdentifier = TimeZone.autoupdatingCurrent.identifier

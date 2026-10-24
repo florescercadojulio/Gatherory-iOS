@@ -129,13 +129,16 @@ extension WorkspaceLibrary {
         let developmentAccount = DevelopmentAccountFixtures.planner
 
         for workspace in workspaces {
-            guard let hostIndex = workspace.members.firstIndex(where: {
-                $0.participantRole == .host
-            }) else { continue }
-            workspace.members[hostIndex].userID = developmentAccount.id
-            workspace.members[hostIndex].email = developmentAccount.email
-            workspace.members[hostIndex].profileImageAssetName = developmentAccount.profileImageAssetName
-            workspace.members[hostIndex].profileImageURL = developmentAccount.profileImageURL
+            MainInvitationEditingUITestFixtures.applyMapCoordinates(to: workspace)
+            let viewerIndex = (ReadOnlyCollaboratorsUITestFixtures.isEnabled || MainInvitationEditingUITestFixtures.isGuestEnabled)
+                && workspace.title.hasPrefix("Alex & Jordan")
+                ? workspace.members.firstIndex(where: { $0.name == "Alex" })
+                : workspace.members.firstIndex(where: { $0.participantRole == .host })
+            guard let viewerIndex else { continue }
+            workspace.members[viewerIndex].userID = developmentAccount.id
+            workspace.members[viewerIndex].email = developmentAccount.email
+            workspace.members[viewerIndex].profileImageAssetName = developmentAccount.profileImageAssetName
+            workspace.members[viewerIndex].profileImageURL = developmentAccount.profileImageURL
         }
 
 #if DEBUG
@@ -143,6 +146,17 @@ extension WorkspaceLibrary {
 #else
         return WorkspaceLibrary(workspaces: workspaces)
 #endif
+    }
+}
+
+/// Gives the collaborator roster UI test a signed-in, view-only event participant.
+enum ReadOnlyCollaboratorsUITestFixtures {
+    static var isEnabled: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-ReadOnlyCollaboratorsUITest")
+        #else
+        false
+        #endif
     }
 }
 

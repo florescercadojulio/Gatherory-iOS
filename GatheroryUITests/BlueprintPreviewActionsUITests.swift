@@ -116,9 +116,8 @@ final class BlueprintPreviewActionsUITests: XCTestCase {
                            "The fixture must not treat a suggested main date as user-confirmed.")
             mainDate.tap()
             XCTAssertTrue(app.navigationBars["Date and Time"].waitForExistence(timeout: 5))
-            let timeZoneControl = app.buttons["Time Zone"]
-            XCTAssertTrue(timeZoneControl.waitForExistence(timeout: 5),
-                          "The main date editor must let the person choose its timezone explicitly.")
+            XCTAssertFalse(app.buttons["Time Zone"].exists,
+                           "Blueprint setup dates should inherit the device timezone automatically.")
             app.navigationBars.buttons["Cancel"].tap()
             XCTAssertEqual(mainDate.value as? String, "Confirm date",
                            "Cancel must leave the main date unconfirmed.")
@@ -126,7 +125,6 @@ final class BlueprintPreviewActionsUITests: XCTestCase {
 
             mainDate.tap()
             XCTAssertTrue(app.navigationBars["Date and Time"].waitForExistence(timeout: 5))
-            let savedTimeZoneLabel = app.buttons["Time Zone"].label
             app.navigationBars.buttons["Done"].tap()
             XCTAssertEqual(mainDate.value as? String, "Confirmed date")
             XCTAssertFalse(primaryAction.isEnabled, "Confirming only the main date must leave the selected child date outstanding.")
@@ -186,8 +184,8 @@ final class BlueprintPreviewActionsUITests: XCTestCase {
             XCTAssertEqual(eventName.value as? String, savedName, "The edited event name should survive closing and reopening setup.")
             mainDate.tap()
             XCTAssertTrue(app.navigationBars["Date and Time"].waitForExistence(timeout: 5))
-            XCTAssertEqual(app.buttons["Time Zone"].label, savedTimeZoneLabel,
-                           "The selected main event timezone should survive closing and reopening setup.")
+            XCTAssertFalse(app.buttons["Time Zone"].exists,
+                           "Resumed Blueprint dates should continue using the saved event timezone automatically.")
             app.navigationBars.buttons["Cancel"].tap()
             XCTAssertTrue(primaryAction.isEnabled, "The resumed setup should retain its confirmed child date.")
             XCTAssertFalse(app.buttons["blueprint.setup.childDate.venue_visit.confirm"].exists,

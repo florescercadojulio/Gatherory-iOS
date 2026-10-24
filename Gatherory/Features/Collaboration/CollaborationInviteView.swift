@@ -4,9 +4,15 @@ import SwiftUI
 import UIKit
 
 struct CollaborationInviteView: View {
+    private let reference: EventReference?
+
+    init(reference: EventReference? = nil) {
+        self.reference = reference
+    }
+
     var body: some View {
         NavigationStack {
-            CollaborationInviteScreen()
+            CollaborationInviteScreen(reference: reference)
         }
     }
 }
@@ -345,7 +351,11 @@ private struct CollaborationInviteScreen: View {
                     .font(.title2.bold())
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text(selectedEventDate, format: .dateTime.month(.abbreviated).day().year())
+                Text(EventScheduleFormatter.string(
+                    from: selectedEventDate,
+                    includesTime: false,
+                    timeZoneIdentifier: selectedTimelineEvent?.timeZoneIdentifier ?? workspace.mainEventTimeZoneIdentifier
+                ))
                     .font(.subheadline)
                     .foregroundStyle(backdropSecondary)
 
@@ -548,19 +558,22 @@ private struct CollaborationInviteScreen: View {
                             ForEach(people) { member in
                                 let isCurrentUser = member.id == workspace.currentViewerMember(for: eventReference)?.id
 
-                                Button {
-                                    participantEditorTarget = ParticipantEditorTarget(
-                                        member: member,
-                                        eventReference: eventReference,
-                                        eventTitle: eventTitle,
-                                        isCurrentUser: isCurrentUser
-                                    )
-                                } label: {
+                                if workspace.canManageInvitations(for: eventReference) {
+                                    Button {
+                                        participantEditorTarget = ParticipantEditorTarget(
+                                            member: member,
+                                            eventReference: eventReference,
+                                            eventTitle: eventTitle,
+                                            isCurrentUser: isCurrentUser
+                                        )
+                                    } label: {
+                                        participantRow(member, isCurrentUser: isCurrentUser)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityHint("Edits this participant's role and event access")
+                                } else {
                                     participantRow(member, isCurrentUser: isCurrentUser)
                                 }
-                                .buttonStyle(.plain)
-                                .disabled(!workspace.canManageInvitations(for: eventReference))
-                                .accessibilityHint("Edits this participant's role and event access")
 
                                 if member.id != people.last?.id {
                                     Divider()
@@ -594,6 +607,7 @@ private struct CollaborationInviteScreen: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(isCurrentUser ? "\(member.name) (You)" : member.name)
                     .font(.body.weight(.medium))
+                    .foregroundStyle(AppTheme.ColorToken.textPrimary)
 
                 Text(participantDetail(for: member))
                     .font(.subheadline)

@@ -115,9 +115,11 @@ struct WorkspaceBrowserView: View {
                     Button(ExploreCopy.startFromScratch, systemImage: "square.and.pencil") {
                         activeSheet = .addWorkspace
                     }
+                    .accessibilityIdentifier("workspace.startFromScratch")
                 }
                 .labelStyle(.iconOnly)
                 .frame(width: 44, height: 44)
+                .accessibilityIdentifier("workspace.add")
 
                 AccountToolbarButton(avatarSize: 28)
                     .frame(width: 44, height: 44)
@@ -423,7 +425,12 @@ private struct WorkspacePreviewCard: View {
 
                 Text(workspace.invitationDateIsUndecided || (workspace.isScopedEvent && !workspace.mainEventHasScheduledDate)
                     ? String(localized: "Date to be decided")
-                    : workspace.mainEventStartsAt.formatted(date: .long, time: .omitted))
+                    : EventScheduleFormatter.string(
+                        from: workspace.mainEventStartsAt,
+                        includesTime: false,
+                        timeZoneIdentifier: workspace.mainEventTimeZoneIdentifier,
+                        dateStyle: .long
+                    ))
                     .font(.headline)
 
                 if let locationText {
@@ -462,7 +469,12 @@ private struct WorkspacePreviewCard: View {
     private var accessibilitySummary: String {
         let date = workspace.invitationDateIsUndecided || (workspace.isScopedEvent && !workspace.mainEventHasScheduledDate)
             ? String(localized: "Date to be decided")
-            : workspace.mainEventStartsAt.formatted(date: .long, time: .omitted)
+            : EventScheduleFormatter.string(
+                from: workspace.mainEventStartsAt,
+                includesTime: false,
+                timeZoneIdentifier: workspace.mainEventTimeZoneIdentifier,
+                dateStyle: .long
+            )
         let location = locationText.map { ", \($0)" } ?? ""
         return "\(workspace.title), \(date)\(location), \(workspace.currentMainEventStatus.title)"
     }
@@ -479,7 +491,7 @@ struct NewWorkspaceView: View {
     @Environment(\.dismiss) private var dismiss
     var onWorkspaceCreated: ((PlanningWorkspace) -> Void)?
     @State private var title = ""
-    @State private var startsAt = Calendar.current.date(byAdding: .month, value: 6, to: .now) ?? .now
+    @State private var startsAt = Date.now
     @State private var endsAt: Date?
     @State private var isAllDay = false
     @State private var timeZoneIdentifier = TimeZone.autoupdatingCurrent.identifier
@@ -564,6 +576,7 @@ struct NewWorkspaceView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("workspace.new.dateTime")
             }
             .listRowBackground(AppTheme.ColorToken.surface)
 

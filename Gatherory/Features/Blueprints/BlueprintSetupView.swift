@@ -533,8 +533,7 @@ struct BlueprintSetupView: View {
             endsAt: nil,
             isAllDay: false,
             timeZoneIdentifier: timeZoneIdentifier,
-            supportsExtendedSchedule: false,
-            allowsTimeZoneEditing: false
+            supportsExtendedSchedule: false
         ) { updatedStart, _, _, updatedTimeZone in
             guard let capture = captureAtPresentation,
                   dateEditorIsCurrent(capture, childKey: child.key),
