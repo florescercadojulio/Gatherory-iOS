@@ -1,5 +1,44 @@
 import SwiftUI
 
+struct HomeEventContextPresentation {
+    enum Kind {
+        case mainEvent
+        case subevent
+    }
+
+    let kind: Kind
+    let statusTitle: String
+    let statusSymbol: String
+
+    var contextTitle: String {
+        switch kind {
+        case .mainEvent: String(localized: "Main event")
+        case .subevent: String(localized: "Subevent")
+        }
+    }
+
+    var accessibilityLabel: String {
+        "\(contextTitle), \(statusTitle)"
+    }
+
+    func parentContextTitle(mainEventTitle: String, mainEventIsVisible: Bool) -> String? {
+        guard case .subevent = kind, mainEventIsVisible else { return nil }
+        return String(localized: "Part of \(mainEventTitle)")
+    }
+
+    func cardAccessibilityLabel(
+        title: String,
+        date: String,
+        location: String?,
+        subtitle: String?,
+        parentContext: String? = nil
+    ) -> String {
+        [title, contextTitle, statusTitle, parentContext, date, location.map { "at \($0)" }, subtitle]
+            .compactMap { $0 }
+            .joined(separator: ", ")
+    }
+}
+
 private struct HomeInvitationShareRequest: Identifiable {
     let reference: EventReference
     let accountID: String?
@@ -49,6 +88,11 @@ struct HomeView: View {
     @State private var pendingDetailRemoval: HomeEventRemovalRequest?
     @State private var isRemovalUnavailable = false
     @Namespace private var invitationTransition
+    @AppStorage(HomeEventLayout.preferenceKey) private var persistedHomeLayout = HomeEventLayout.cards.rawValue
+
+    private var homeLayout: HomeEventLayout {
+        HomeEventLayout(persistedValue: persistedHomeLayout)
+    }
 
     private let pullToCreateThreshold: CGFloat = 200
     private let pullToCreateItemHeight: CGFloat = 184
@@ -84,118 +128,30 @@ struct HomeView: View {
     }
 
     var body: some View {
-        ScrollView(.vertical) {
-            VStack(spacing: 0) {
-                LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                    if workspace.isMainEventDeleted {
-                        ContentUnavailableView {
-                            Label("No Main Event", systemImage: "calendar.badge.plus")
-                        } description: {
-                            Text("Create the event that anchors this gathering.")
-                        } actions: {
-                            if workspace.showsPlanningInterface {
-                                Button("Create Event", systemImage: "plus") {
-                                    editorTarget = .main
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .foregroundStyle(AppTheme.ColorToken.onAccent)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppTheme.Spacing.section)
-                    } else {
-                        ForEach(workspace.visibleEventContexts, id: \.self) { reference in
-                            eventHero(for: reference)
-                                .id(HomeScrollTarget.event(reference))
-                        }
-                    }
-                }
-                .scrollTargetLayout()
-
-                if workspace.canManageMainEvent, !workspace.isMainEventDeleted {
-                    PullToCreateEventIndicator(
-                        progress: pullToCreateProgress,
-                        isArmed: isPullToCreateArmed
-                    )
-                    .frame(maxWidth: .infinity)
-                    .frame(height: pullToCreateItemHeight)
-                    .opacity(pullToCreateProgress)
-                    .scaleEffect(0.86 + (0.14 * pullToCreateProgress))
-                    .offset(y: 24 * (1 - pullToCreateProgress))
-                    .accessibilityHidden(pullToCreateProgress <= 0.01)
-                    .accessibilityHint("Pull until the progress ring closes, then release")
-                }
-            }
-            .padding(.horizontal, AppTheme.Layout.screenHorizontal)
-            .padding(.top, AppTheme.Layout.screenTop)
-            .padding(.bottom, AppTheme.Layout.screenBottom)
-        }
-        .scrollIndicators(.hidden)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
-        .refreshable {
-            await cloudSync.synchronize(trigger: .manual)
-        }
-        .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
-        .scrollPosition(id: $visibleScrollTarget, anchor: .center)
-        .onScrollGeometryChange(for: HomeScrollGeometry.self) { geometry in
-            let itemTop = geometry.contentSize.height
-                - AppTheme.Layout.screenBottom
-                - pullToCreateItemHeight
-            return HomeScrollGeometry(
-                offset: geometry.contentOffset.y,
-                pullToCreateDistance: max(
-                    geometry.visibleRect.maxY - itemTop - pullToCreateRevealInset,
-                    0
+        Group {
+            if homeLayout == .cards {
+                cardsScrollView
+            } else if workspace.isMainEventDeleted {
+                noMainEventPlaceholder
+            } else {
+                HomeEventsOverviewView(
+                    actions: { reference in
+                        eventActions(for: reference, includesDestructiveActions: false)
+                    },
+                    onOpenEvent: openEvent,
+                    onRefresh: {
+                        await cloudSync.synchronize(trigger: .manual)
+                    },
+                    transitionNamespace: invitationTransition
                 )
-            )
-        } action: { _, geometry in
-            currentScrollOffset = geometry.offset
-            isPullToCreateRegionVisible = geometry.pullToCreateDistance > 0
-            updateEventSwitcherReveal(offset: geometry.offset)
-            updateEventContextAtSwipeStart(offset: geometry.offset)
-            updatePullToCreate(distance: geometry.pullToCreateDistance)
+            }
         }
-        .onScrollPhaseChange { oldPhase, newPhase in
-            if newPhase == .interacting {
-                homeReselectionTask?.cancel()
-                isHandlingHomeReselection = false
-                isScrollInteractionActive = true
-                scrollInteractionStartOffset = currentScrollOffset
-                swipeOriginEventReference = visibleEventReference ?? workspace.selectedEventReference
-                didUpdateContextForSwipe = false
-                eventSwitcherFadeTask?.cancel()
-                eventSwitcherFadeTask = nil
-                eventSwitcherOpacity = 0
-            }
-
-            if oldPhase == .interacting, newPhase != .interacting {
-                isScrollInteractionActive = false
-                completePullToCreateIfNeeded()
-                restoreLastEventAfterPullIfNeeded()
-            }
-
-            guard newPhase == .idle,
-                  !isScrubbingEvents,
-                  !isHandlingHomeReselection else { return }
-
-            if isPullToCreateRegionVisible {
-                restoreLastEventAfterPullIfNeeded()
-                return
-            }
-
-            commitVisibleScrollTarget()
-            scrollInteractionStartOffset = nil
-            swipeOriginEventReference = nil
-            didUpdateContextForSwipe = false
-            scheduleEventSwitcherFade()
-        }
-        .appSoftScrollEdges()
         .background(AppTheme.ColorToken.background)
-        .navigationTitle("")
+        .navigationTitle(workspace.isMainEventDeleted ? String(localized: "Home") : workspace.selectedEventTitle)
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .overlay(alignment: .trailing) {
-            if workspace.visibleEventContexts.count > 1 {
+            if homeLayout == .cards, workspace.visibleEventContexts.count > 1 {
                 eventContextSwitcher
                     // Like a scroll indicator, the rail stays interactive at
                     // rest but becomes visually discoverable through motion.
@@ -225,6 +181,19 @@ struct HomeView: View {
             }
 
             AdaptiveToolbarActions {
+                if workspace.showsPlanningInterface {
+                    NavigationLink {
+                        EventAnnouncementsView(eventID: workspace.selectedEventID)
+                    } label: {
+                        Label(AnnouncementCopy.title, systemImage: "megaphone")
+                            .labelStyle(.iconOnly)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(AnnouncementCopy.title)
+                    .accessibilityIdentifier("home.updates")
+                }
+
                 if workspace.isMainEventDeleted, workspace.showsPlanningInterface {
                     Button("Create event", systemImage: "plus") {
                         editorTarget = .main
@@ -234,16 +203,6 @@ struct HomeView: View {
                     .tint(.primary)
                     .frame(width: 44, height: 44)
                 } else if workspace.showsPlanningInterface {
-                    NavigationLink {
-                        EventAnnouncementsView(eventID: workspace.selectedEventID)
-                    } label: {
-                        Label(AnnouncementCopy.title, systemImage: "megaphone")
-                    }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.primary)
-                    .tint(.primary)
-                    .frame(width: 44, height: 44)
-
                     if workspace.isMainEventContext {
                         Button("Add event", systemImage: "calendar.badge.plus") {
                             addEventIdeaDetent = .large
@@ -308,15 +267,32 @@ struct HomeView: View {
             .presentationDetents([.medium, .large], selection: $addEventIdeaDetent)
             .presentationDragIndicator(.visible)
         }
-        .task {
-            // ScrollPosition needs the target layout to exist before it can
-            // resolve a non-leading event during the initial presentation.
+        .onAppear {
+            if HomeEventLayout(rawValue: persistedHomeLayout) == nil {
+                persistedHomeLayout = HomeEventLayout.cards.rawValue
+            }
+        }
+        .task(id: homeLayout) {
+            guard homeLayout == .cards else { return }
+            visibleScrollTarget = nil
             await Task.yield()
-            visibleScrollTarget = .event(workspace.selectedEventReference)
+            guard !Task.isCancelled, homeLayout == .cards else { return }
+            // Read after the layout settles so a rapid mode change cannot
+            // restore a stale event captured by an earlier task.
+            let selectedReference = workspace.selectedEventReference
+            let reference = workspace.visibleEventContexts.contains(selectedReference)
+                ? selectedReference
+                : workspace.visibleEventContexts.first
+            visibleScrollTarget = reference.map { .event($0) }
+        }
+        .onChange(of: persistedHomeLayout) { oldValue, newValue in
+            handleHomeLayoutChange(from: HomeEventLayout(persistedValue: oldValue),
+                                   to: HomeEventLayout(persistedValue: newValue))
         }
         .onChange(of: workspace.selectedEventReference) { _, reference in
             let target = HomeScrollTarget.event(reference)
-            guard !isHandlingHomeReselection,
+            guard homeLayout == .cards,
+                  !isHandlingHomeReselection,
                   !isScrollInteractionActive,
                   !isScrubbingEvents,
                   visibleScrollTarget != target else { return }
@@ -333,6 +309,121 @@ struct HomeView: View {
             homeReselectionTask?.cancel()
             eventSwitcherFadeTask?.cancel()
         }
+    }
+
+    private var cardsScrollView: some View {
+        ScrollView(.vertical) {
+            VStack(spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
+                    if workspace.isMainEventDeleted {
+                        noMainEventPlaceholder
+                    } else {
+                        ForEach(workspace.visibleEventContexts, id: \.self) { reference in
+                            eventHero(for: reference)
+                                .id(HomeScrollTarget.event(reference))
+                        }
+                    }
+                }
+                .scrollTargetLayout()
+
+                if workspace.canManageMainEvent, !workspace.isMainEventDeleted {
+                    PullToCreateEventIndicator(
+                        progress: pullToCreateProgress,
+                        isArmed: isPullToCreateArmed
+                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: pullToCreateItemHeight)
+                    .opacity(pullToCreateProgress)
+                    .scaleEffect(0.86 + (0.14 * pullToCreateProgress))
+                    .offset(y: 24 * (1 - pullToCreateProgress))
+                    .accessibilityHidden(pullToCreateProgress <= 0.01)
+                    .accessibilityHint("Pull until the progress ring closes, then release")
+                }
+            }
+            .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+            .padding(.top, AppTheme.Layout.screenTop)
+            .padding(.bottom, AppTheme.Layout.screenBottom)
+        }
+        .scrollIndicators(.hidden)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
+        .refreshable {
+            await cloudSync.synchronize(trigger: .manual)
+        }
+        .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+        .scrollPosition(id: $visibleScrollTarget, anchor: .center)
+        .onScrollGeometryChange(for: HomeScrollGeometry.self) { geometry in
+            let itemTop = geometry.contentSize.height
+                - AppTheme.Layout.screenBottom
+                - pullToCreateItemHeight
+            return HomeScrollGeometry(
+                offset: geometry.contentOffset.y,
+                pullToCreateDistance: max(
+                    geometry.visibleRect.maxY - itemTop - pullToCreateRevealInset,
+                    0
+                )
+            )
+        } action: { _, geometry in
+            guard homeLayout == .cards else { return }
+            currentScrollOffset = geometry.offset
+            isPullToCreateRegionVisible = geometry.pullToCreateDistance > 0
+            updateEventSwitcherReveal(offset: geometry.offset)
+            updateEventContextAtSwipeStart(offset: geometry.offset)
+            updatePullToCreate(distance: geometry.pullToCreateDistance)
+        }
+        .onScrollPhaseChange { oldPhase, newPhase in
+            guard homeLayout == .cards else { return }
+            if newPhase == .interacting {
+                homeReselectionTask?.cancel()
+                isHandlingHomeReselection = false
+                isScrollInteractionActive = true
+                scrollInteractionStartOffset = currentScrollOffset
+                swipeOriginEventReference = visibleEventReference ?? workspace.selectedEventReference
+                didUpdateContextForSwipe = false
+                eventSwitcherFadeTask?.cancel()
+                eventSwitcherFadeTask = nil
+                eventSwitcherOpacity = 0
+            }
+
+            if oldPhase == .interacting, newPhase != .interacting {
+                isScrollInteractionActive = false
+                completePullToCreateIfNeeded()
+                restoreLastEventAfterPullIfNeeded()
+            }
+
+            guard newPhase == .idle,
+                  !isScrubbingEvents,
+                  !isHandlingHomeReselection else { return }
+
+            if isPullToCreateRegionVisible {
+                restoreLastEventAfterPullIfNeeded()
+                return
+            }
+
+            commitVisibleScrollTarget()
+            scrollInteractionStartOffset = nil
+            swipeOriginEventReference = nil
+            didUpdateContextForSwipe = false
+            scheduleEventSwitcherFade()
+        }
+        .appSoftScrollEdges()
+    }
+
+    private var noMainEventPlaceholder: some View {
+        ContentUnavailableView {
+            Label("No Main Event", systemImage: "calendar.badge.plus")
+        } description: {
+            Text("Create the event that anchors this gathering.")
+        } actions: {
+            if workspace.showsPlanningInterface {
+                Button("Create Event", systemImage: "plus") {
+                    editorTarget = .main
+                }
+                .buttonStyle(.borderedProminent)
+                .foregroundStyle(AppTheme.ColorToken.onAccent)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppTheme.Spacing.section)
     }
 
     private func invitationDetail(for reference: EventReference) -> some View {
@@ -385,16 +476,33 @@ struct HomeView: View {
                 CollaborationInviteView(reference: request.reference)
                     .environment(workspace)
             }
-            .navigationTransition(
-                .zoom(sourceID: reference, in: invitationTransition)
-            )
+            .navigationTransition(.zoom(sourceID: reference, in: invitationTransition))
     }
 
     private func eventHero(for reference: EventReference) -> some View {
         let cardShape = RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous)
+        let eventStatus = status(for: reference)
+        let contextPresentation = HomeEventContextPresentation(
+            kind: reference == .main ? .mainEvent : .subevent,
+            statusTitle: eventStatus.title,
+            statusSymbol: eventStatus.symbol
+        )
+        let formattedDate = EventScheduleFormatter.string(
+            from: date(for: reference),
+            includesTime: false,
+            timeZoneIdentifier: timeZoneIdentifier(for: reference),
+            dateStyle: .long
+        )
+        let parentContext = contextPresentation.parentContextTitle(
+            mainEventTitle: workspace.title,
+            mainEventIsVisible: workspace.visibleEventContexts.contains(.main)
+        )
+        let secondaryText = secondaryLabel(for: reference)
+        let showsSecondaryText = parentContext == nil
+            || timelineItem(for: reference)?.purpose != .eventExperience
         return GeometryReader { proxy in
             Button {
-                openedEventReference = reference
+                openEvent(reference)
             } label: {
                 WorkspaceEventHero(title: title(for: reference)) {
                     eventArtwork(for: reference)
@@ -424,15 +532,22 @@ struct HomeView: View {
                             .accessibilityLabel("Location, \(eventLocation.formatted)")
                     }
 
-                    Text(secondaryLabel(for: reference))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.72))
+                    if let parentContext {
+                        Text(parentContext)
+                            .font(.caption.weight(.medium))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.white.opacity(0.78))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(2)
+                    }
+
+                    if showsSecondaryText {
+                        Text(secondaryText)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
                 } badge: {
-                    EventContextStatusBadge(
-                        title: status(for: reference).title,
-                        symbol: status(for: reference).symbol,
-                        context: reference == .main ? "Main event" : "Subevent"
-                    )
+                    EmptyView()
                 }
                 .frame(width: proxy.size.width, height: eventHeroHeight)
                 .clipShape(cardShape)
@@ -444,14 +559,18 @@ struct HomeView: View {
             .contentShape(.interaction, cardShape)
             .contentShape(.contextMenuPreview, cardShape)
             .contextMenu {
-                eventActions(for: reference)
+                eventActions(for: reference, includesDestructiveActions: false)
             }
             .accessibilityHint("Opens event details")
             .accessibilityIdentifier(reference == .main ? "home.event.main" : "home.event.child")
             .accessibilityLabel(
-                "\(title(for: reference)), \(EventScheduleFormatter.string(from: date(for: reference), includesTime: false, timeZoneIdentifier: timeZoneIdentifier(for: reference), dateStyle: .long)), " +
-                (location(for: reference).map { "at \($0.formatted). " } ?? "") +
-                secondaryLabel(for: reference)
+                contextPresentation.cardAccessibilityLabel(
+                    title: title(for: reference),
+                    date: formattedDate,
+                    location: location(for: reference)?.formatted,
+                    subtitle: showsSecondaryText ? secondaryText : nil,
+                    parentContext: parentContext
+                )
             )
             .frame(width: proxy.size.width, height: eventHeroHeight)
             .overlay {
@@ -465,7 +584,7 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private func eventActions(for reference: EventReference) -> some View {
+    private func eventActions(for reference: EventReference, includesDestructiveActions: Bool = true) -> some View {
         if canExport(.schedule, for: reference) {
             EventScheduleShareButton {
                 csvExportRequest = EventCSVExportRequest.make(
@@ -491,17 +610,19 @@ struct HomeView: View {
                 editorTarget = editorTarget(for: reference)
             }
         }
-        if workspace.canCancelEvent(reference) {
-            Button(AppCopy.Lifecycle.cancelEvent, systemImage: "calendar.badge.minus", role: .destructive) {
-                pendingDetailRemoval = HomeEventRemovalRequest(reference: reference, action: .cancelEvent, title: title(for: reference))
+        if includesDestructiveActions {
+            if workspace.canCancelEvent(reference) {
+                Button(AppCopy.Lifecycle.cancelEvent, systemImage: "calendar.badge.minus", role: .destructive) {
+                    pendingDetailRemoval = HomeEventRemovalRequest(reference: reference, action: .cancelEvent, title: title(for: reference))
+                }
             }
-        }
-        if let action = workspace.eventRemovalAction(for: reference) {
-            if canEdit(reference) { Divider() }
-            Button(action.title, systemImage: action.symbol, role: .destructive) {
-                pendingDetailRemoval = HomeEventRemovalRequest(
-                    reference: reference, action: action, title: title(for: reference)
-                )
+            if let action = workspace.eventRemovalAction(for: reference) {
+                if canEdit(reference) { Divider() }
+                Button(action.title, systemImage: action.symbol, role: .destructive) {
+                    pendingDetailRemoval = HomeEventRemovalRequest(
+                        reference: reference, action: action, title: title(for: reference)
+                    )
+                }
             }
         }
     }
@@ -612,14 +733,23 @@ struct HomeView: View {
         scrubbedEventIndex = nil
         isHandlingHomeReselection = true
 
-        let activeReference = visibleEventReference ?? workspace.selectedEventReference
-        let targetReference: EventReference = if activeReference == .main {
+        let activeReference = homeLayout == .cards
+            ? visibleEventReference ?? workspace.selectedEventReference
+            : workspace.selectedEventReference
+        let requestedReference: EventReference = if activeReference == .main {
             workspace.currentOrNextChildEventReference() ?? workspace.visibleEventContexts.first ?? .main
         } else {
             .main
         }
+        let targetReference = workspace.visibleEventContexts.contains(requestedReference)
+            ? requestedReference
+            : workspace.visibleEventContexts.first ?? workspace.selectedEventReference
 
         workspace.selectEventContext(targetReference)
+        guard homeLayout == .cards else {
+            isHandlingHomeReselection = false
+            return
+        }
         // A selected system tab performs its own scroll-to-top action. Clear
         // the binding first, then restore our shortcut destination after that
         // action so the event jump wins even when it was already selected.
@@ -639,7 +769,40 @@ struct HomeView: View {
         }
     }
 
+    private func handleHomeLayoutChange(from oldLayout: HomeEventLayout, to newLayout: HomeEventLayout) {
+        guard oldLayout != newLayout else { return }
+
+        homeReselectionTask?.cancel()
+        homeReselectionTask = nil
+        isHandlingHomeReselection = false
+        eventSwitcherFadeTask?.cancel()
+        eventSwitcherFadeTask = nil
+        eventSwitcherOpacity = 0
+        isScrollInteractionActive = false
+        scrollInteractionStartOffset = nil
+        swipeOriginEventReference = nil
+        didUpdateContextForSwipe = false
+        isScrubbingEvents = false
+        scrubbedEventIndex = nil
+        isPullToCreateRegionVisible = false
+        isRestoringFromPullToCreate = false
+        resetPullToCreate()
+
+        if newLayout == .cards {
+            // The task keyed to the new layout clears and restores the current
+            // selection after Cards has reinstalled its target layout.
+            visibleScrollTarget = nil
+        }
+    }
+
+    private func openEvent(_ reference: EventReference) {
+        guard workspace.visibleEventContexts.contains(reference) else { return }
+        workspace.selectEventContext(reference)
+        openedEventReference = reference
+    }
+
     private func previewEvent(at index: Int) {
+        guard homeLayout == .cards else { return }
         let references = workspace.visibleEventContexts
         guard references.indices.contains(index) else { return }
 
@@ -653,6 +816,7 @@ struct HomeView: View {
     }
 
     private func commitScrubbedEvent(at index: Int) {
+        guard homeLayout == .cards else { return }
         let references = workspace.visibleEventContexts
         guard references.indices.contains(index) else {
             isScrubbingEvents = false
@@ -669,7 +833,8 @@ struct HomeView: View {
     }
 
     private func updateEventSwitcherReveal(offset: CGFloat) {
-        guard workspace.visibleEventContexts.count > 1,
+        guard homeLayout == .cards,
+              workspace.visibleEventContexts.count > 1,
               isScrollInteractionActive,
               let startOffset = scrollInteractionStartOffset else { return }
 
@@ -682,7 +847,8 @@ struct HomeView: View {
     }
 
     private func revealEventSwitcher() {
-        guard workspace.visibleEventContexts.count > 1 else { return }
+        guard homeLayout == .cards,
+              workspace.visibleEventContexts.count > 1 else { return }
         eventSwitcherFadeTask?.cancel()
         eventSwitcherFadeTask = nil
 
@@ -692,12 +858,15 @@ struct HomeView: View {
     }
 
     private func scheduleEventSwitcherFade() {
-        guard eventSwitcherOpacity > 0 else { return }
+        guard homeLayout == .cards, eventSwitcherOpacity > 0 else { return }
         eventSwitcherFadeTask?.cancel()
 
         eventSwitcherFadeTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(1_100))
-            guard !Task.isCancelled, !isScrollInteractionActive, !isScrubbingEvents else { return }
+            guard !Task.isCancelled,
+                  homeLayout == .cards,
+                  !isScrollInteractionActive,
+                  !isScrubbingEvents else { return }
 
             withAnimation(.easeOut(duration: 0.28)) {
                 eventSwitcherOpacity = 0
@@ -706,12 +875,14 @@ struct HomeView: View {
     }
 
     private func commitVisibleScrollTarget() {
-        guard case .some(.event(let reference)) = visibleScrollTarget else { return }
+        guard homeLayout == .cards,
+              case .some(.event(let reference)) = visibleScrollTarget else { return }
         workspace.selectEventContext(reference)
     }
 
     private func updateEventContextAtSwipeStart(offset: CGFloat) {
-        guard isScrollInteractionActive,
+        guard homeLayout == .cards,
+              isScrollInteractionActive,
               !isScrubbingEvents,
               !didUpdateContextForSwipe,
               let startOffset = scrollInteractionStartOffset,
@@ -731,7 +902,9 @@ struct HomeView: View {
     }
 
     private func updatePullToCreate(distance: CGFloat) {
-        guard workspace.canManageMainEvent, isScrollInteractionActive else { return }
+        guard homeLayout == .cards,
+              workspace.canManageMainEvent,
+              isScrollInteractionActive else { return }
 
         let progress = min(max(distance / pullToCreateThreshold, 0), 1)
         let wasArmed = isPullToCreateArmed
@@ -747,10 +920,11 @@ struct HomeView: View {
     private func completePullToCreateIfNeeded() {
         let shouldCreate = isPullToCreateArmed && pullToCreateProgress >= 1
         resetPullToCreate()
-        guard shouldCreate else { return }
+        guard shouldCreate, homeLayout == .cards else { return }
 
         Task { @MainActor in
             await Task.yield()
+            guard homeLayout == .cards else { return }
             addEventIdeaDetent = .large
             isAddingEventIdea = true
         }
@@ -775,6 +949,10 @@ struct HomeView: View {
 
         Task { @MainActor in
             await Task.yield()
+            guard homeLayout == .cards else {
+                isRestoringFromPullToCreate = false
+                return
+            }
             withAnimation(.snappy) {
                 visibleScrollTarget = target
             }
@@ -1012,22 +1190,6 @@ private enum HomeEventEditorTarget: Identifiable {
         case .main: "main"
         case .subevent(let id): "subevent-\(id.uuidString)"
         }
-    }
-}
-
-private struct EventContextStatusBadge: View {
-    let title: String
-    let symbol: String
-    let context: String
-
-    var body: some View {
-        Label(title, systemImage: symbol)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 10)
-            .frame(minHeight: 30)
-            .background(.ultraThinMaterial, in: Capsule())
-            .appImageOverlayAppearance()
-            .accessibilityLabel("\(context) status: \(title)")
     }
 }
 

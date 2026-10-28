@@ -66,6 +66,7 @@ final class AuthenticationSession {
     @ObservationIgnored private let guestCredentialStore: any LocalGuestCredentialStore
     private(set) var developmentAccounts: [UserAccount]
     private(set) var isProcessing = false
+    private(set) var isOfflineAccountSession = false
     private(set) var isSigningOut = false {
         didSet { if isSigningOut && !oldValue { principalGeneration &+= 1 } }
     }
@@ -98,7 +99,8 @@ final class AuthenticationSession {
     /// A guest handover must finish before this installation can receive
     /// notifications for the account. Display names never identify a recipient.
     var notificationPrincipal: NotificationPrincipal? {
-        guard !deletionCleanup.blocksEntry, !hasPendingGuestImport, !guestDiscardNeedsAttention, !isSessionRestorationUnavailable else { return nil }
+        guard !deletionCleanup.blocksEntry, !hasPendingGuestImport, !guestDiscardNeedsAttention,
+              !isSessionRestorationUnavailable, !isOfflineAccountSession else { return nil }
         if let currentUser { return .account(id: currentUser.id) }
         return localGuestProfile.map { .guest(id: $0.id) }
     }
@@ -263,30 +265,95 @@ final class AuthenticationSession {
     }
 
     func restoreSession() async {
-        guard !deletionCleanup.blocksEntry, !isProcessing, currentUser == nil, let client else { return }
+        guard !deletionCleanup.blocksEntry, !isProcessing,
+              currentUser == nil || isOfflineAccountSession,
+              let client else { return }
+
+        if currentUser == nil,
+           let cachedAccount = try? client.cachedAccountForOfflineRestoration() {
+            // Open the previously validated account scope first. The launch
+            // experience starts server revalidation independently afterward.
+            currentUser = cachedAccount
+            isOfflineAccountSession = true
+            sessionRestorationFailure = AuthenticationFailure.networkUnavailable
+            identify(cachedAccount)
+            return
+        }
+
+        await revalidateSession(using: client)
+    }
+
+    func revalidateOfflineSession() async {
+        guard isOfflineAccountSession, currentUser != nil, let client else { return }
+        await revalidateSession(using: client)
+    }
+
+    func retrySessionRestoration() async {
+        guard !deletionCleanup.blocksEntry,
+              !isProcessing,
+              currentUser == nil || isOfflineAccountSession,
+              let client else { return }
+        await revalidateSession(using: client)
+    }
+
+    private func revalidateSession(using client: any AuthenticationClient) async {
+        guard !deletionCleanup.blocksEntry, !isProcessing else { return }
 
         isProcessing = true
         defer { isProcessing = false }
 
         do {
             currentUser = try await client.restoreSession()
+            isOfflineAccountSession = false
             sessionRestorationFailure = nil
             if let currentUser {
+                try? client.cacheValidatedAccount(currentUser)
                 identify(currentUser)
             } else {
+                client.clearCachedAccount()
                 PostHogSDK.shared.reset()
             }
         } catch AuthenticationFailure.invalidSession {
             // Clients may report expiry directly; Better Auth normally returns nil.
             sessionRestorationFailure = nil
             currentUser = nil
+            isOfflineAccountSession = false
+            client.clearCachedAccount()
             PostHogSDK.shared.reset()
+        } catch AuthenticationFailure.networkUnavailable {
+            do {
+                guard let cachedAccount = try client.cachedAccountForOfflineRestoration() else {
+                    throw AuthenticationFailure.networkUnavailable
+                }
+                currentUser = cachedAccount
+                isOfflineAccountSession = true
+                sessionRestorationFailure = AuthenticationFailure.networkUnavailable
+                identify(cachedAccount)
+            } catch {
+                // A missing, mismatched or malformed cache never creates an
+                // account identity. An already established offline identity
+                // remains available across a later secure-storage failure.
+                sessionRestorationFailure = error
+                if isOfflineAccountSession, let currentUser {
+                    identify(currentUser)
+                } else {
+                    currentUser = nil
+                    isOfflineAccountSession = false
+                    PostHogSDK.shared.reset()
+                }
+            }
         } catch {
             // Preserve the distinction between a confirmed sign-out and an
-            // unavailable check without manufacturing an authenticated state.
+            // unavailable check. A previously established offline account
+            // remains locally usable until validation confirms expiry.
             sessionRestorationFailure = error
-            currentUser = nil
-            PostHogSDK.shared.reset()
+            if isOfflineAccountSession, let currentUser {
+                identify(currentUser)
+            } else {
+                currentUser = nil
+                isOfflineAccountSession = false
+                PostHogSDK.shared.reset()
+            }
         }
     }
 
@@ -301,6 +368,8 @@ final class AuthenticationSession {
             defer { isProcessing = false }
             let account = try await client.signIn(email: normalizedEmail, password: password)
             currentUser = account
+            isOfflineAccountSession = false
+            try? client.cacheValidatedAccount(account)
             sessionRestorationFailure = nil
             identify(account)
             return
@@ -314,6 +383,7 @@ final class AuthenticationSession {
         }
 
         currentUser = account
+        isOfflineAccountSession = false
         sessionRestorationFailure = nil
         identify(account)
     }
@@ -349,10 +419,13 @@ final class AuthenticationSession {
             ) {
             case .authenticated(let account):
                 currentUser = account
+                isOfflineAccountSession = false
+                try? client.cacheValidatedAccount(account)
                 sessionRestorationFailure = nil
                 identify(account)
             case .verificationRequired(let email):
                 currentUser = nil
+                isOfflineAccountSession = false
                 sessionRestorationFailure = nil
                 registrationNotice = "Check \(email) for a verification link, then sign in."
             }
@@ -378,6 +451,7 @@ final class AuthenticationSession {
         developmentAccounts.append(account)
         developmentPasswords[normalizedEmail] = password
         currentUser = account
+        isOfflineAccountSession = false
         sessionRestorationFailure = nil
         identify(account)
     }
@@ -393,6 +467,7 @@ final class AuthenticationSession {
         var planner = DevelopmentAccountFixtures.planner
         planner.authenticationProvider = provider
         currentUser = planner
+        isOfflineAccountSession = false
         sessionRestorationFailure = nil
         identify(planner)
     }
@@ -417,6 +492,8 @@ final class AuthenticationSession {
             requestingSignUp: requestingSignUp
         )
         currentUser = account
+        isOfflineAccountSession = false
+        try? client.cacheValidatedAccount(account)
         sessionRestorationFailure = nil
         identify(account)
     }
@@ -443,6 +520,8 @@ final class AuthenticationSession {
             requestingSignUp: requestingSignUp
         )
         currentUser = account
+        isOfflineAccountSession = false
+        try? client.cacheValidatedAccount(account)
         sessionRestorationFailure = nil
         identify(account)
     }
@@ -469,16 +548,19 @@ final class AuthenticationSession {
         signOutNeedsAttention = false
         defer { isSigningOut = false; isProcessing = false }
         do {
-            // Keep the bearer alive until the final outbox and media sync.
-            try await prepareForSignOut?(keepingPendingChanges)
+            // Offline sign-out saves the local outbox without waiting for a
+            // server that cannot currently validate or receive it.
+            try await prepareForSignOut?(keepingPendingChanges || isOfflineAccountSession)
         } catch {
             SyncDiagnostics.record("sign_out_sync_failed", error: error)
             signOutNeedsAttention = true
             return false
         }
         await client?.signOut()
+        client?.clearCachedAccount()
         PostHogSDK.shared.reset()
         currentUser = nil
+        isOfflineAccountSession = false
         registrationNotice = nil
         return true
     }
@@ -526,6 +608,7 @@ final class AuthenticationSession {
         removeSavedShareLinks?(account.id)
         PostHogSDK.shared.reset()
         currentUser = nil
+        isOfflineAccountSession = false
         registrationNotice = nil
         sessionRestorationFailure = nil
         await deletionCleanup.retry()
@@ -536,8 +619,10 @@ final class AuthenticationSession {
     func clearAccountForDeviceCleanup(accountID: String) {
         guard currentUser?.id == accountID else { return }
         currentUser = nil
+        isOfflineAccountSession = false
         registrationNotice = nil
         sessionRestorationFailure = nil
+        client?.clearCachedAccount()
         PostHogSDK.shared.reset()
     }
 

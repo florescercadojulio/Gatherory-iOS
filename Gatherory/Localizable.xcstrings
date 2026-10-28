@@ -163,6 +163,7 @@
       }
     },
     "%@ status: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -744,6 +745,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un evento principal solo se puede eliminar mientras siga siendo borrador."
+          }
+        }
+      }
+    },
+    "A new event starts with you as the host. Guests, collaborators, replies, votes, tasks, notes, expenses, photos, and event sharing links aren’t copied." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A new event starts with you as the host. Guests, collaborators, replies, votes, tasks, notes, expenses, photos, and event sharing links aren’t copied."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El evento nuevo te tendrá como anfitrión. No se copian invitados, colaboradores, respuestas, votos, tareas, notas, gastos, fotos ni enlaces para compartir el evento."
           }
         }
       }
@@ -8397,13 +8414,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saves a copy. Later changes in Gatherory won’t update your calendar."
+            "value" : "Saves a copy. Changes won’t sync."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Guarda una copia. Los cambios posteriores en Gatherory no actualizarán tu calendario."
+            "value" : "Guarda una copia. Los cambios no se sincronizan."
           }
         }
       }
@@ -8434,6 +8451,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registra ahora el entorno y el tamaño aproximado. Puedes agregar una dirección precisa después de elegir el lugar."
+          }
+        }
+      }
+    },
+    "Cards" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cards"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tarjetas"
           }
         }
       }
@@ -9180,6 +9213,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Copiar enlace"
+          }
+        }
+      }
+    },
+    "Copy of" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy of"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia de"
           }
         }
       }
@@ -10832,6 +10881,22 @@
         }
       }
     },
+    "Duplicate Event" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duplicate Event"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duplicar evento"
+          }
+        }
+      }
+    },
     "Edit" : {
       "localizations" : {
         "es" : {
@@ -11226,6 +11291,22 @@
         }
       }
     },
+    "Event Can’t Be Duplicated" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Event Can’t Be Duplicated"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede duplicar el evento"
+          }
+        }
+      }
+    },
     "Event Cannot Be Removed" : {
       "localizations" : {
         "es" : {
@@ -11513,6 +11594,142 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El evento se canceló. Se conserva su historial, pero la asistencia y la planificación están cerradas."
+          }
+        }
+      }
+    },
+    "event.duplicate.copiedContent" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The event details, schedule, and planning ideas are copied. Sub-events start as drafts, and ideas start as new."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se copian los detalles del evento, el programa y las ideas de planificación. Los subeventos comienzan como borradores y las ideas como nuevas."
+          }
+        }
+      }
+    },
+    "event.duplicate.copyTitlePrefix" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy of"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia de"
+          }
+        }
+      }
+    },
+    "event.duplicate.excludedContent" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A new event starts with you as the host. Guests, collaborators, replies, votes, tasks, notes, expenses, photos, and event sharing links aren’t copied."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El evento nuevo te tendrá como anfitrión. No se copian invitados, colaboradores, respuestas, votos, tareas, notas, gastos, fotos ni enlaces para compartir el evento."
+          }
+        }
+      }
+    },
+    "event.duplicate.name" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Event name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre del evento"
+          }
+        }
+      }
+    },
+    "event.duplicate.newEvent" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Event"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Evento nuevo"
+          }
+        }
+      }
+    },
+    "event.duplicate.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duplicate Event"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duplicar evento"
+          }
+        }
+      }
+    },
+    "event.duplicate.unavailable.message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The event or your access changed. Review the latest event before trying again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El evento o tu acceso cambiaron. Revisa el evento actualizado antes de volver a intentarlo."
+          }
+        }
+      }
+    },
+    "event.duplicate.unavailable.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Event Can’t Be Duplicated"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede duplicar el evento"
           }
         }
       }
@@ -12128,6 +12345,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rechazado"
+          }
+        }
+      }
+    },
+    "Events" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Events"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eventos"
           }
         }
       }
@@ -14430,6 +14664,39 @@
         }
       }
     },
+    "Home options" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Home options"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opciones de inicio"
+          }
+        }
+      }
+    },
+    "Home view" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Home view"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vista de inicio"
+          }
+        }
+      }
+    },
     "home.daysAway.many" : {
       "localizations" : {
         "en" : {
@@ -15981,6 +16248,16 @@
         }
       }
     },
+    "Main event" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Evento principal"
+          }
+        }
+      }
+    },
     "Main Event" : {
       "localizations" : {
         "es" : {
@@ -17424,12 +17701,49 @@
         }
       }
     },
+    "Overview" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overview"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resumen"
+          }
+        }
+      }
+    },
     "Paper, printing, or delivery notes (optional)" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Notas sobre papel, impresión o entrega (opcional)"
+          }
+        }
+      }
+    },
+    "Part of %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parte de %@"
+          }
+        }
+      }
+    },
+    "Part of %arg" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parte de %arg"
           }
         }
       }
@@ -20082,6 +20396,23 @@
         }
       }
     },
+    "session.offlineContentHelp" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Showing saved content. Changes will sync when you reconnect."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se muestra el contenido guardado. Los cambios se sincronizarán cuando vuelvas a conectarte."
+          }
+        }
+      }
+    },
     "session.originalAccountHelp" : {
       "localizations" : {
         "en" : {
@@ -21020,6 +21351,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "La descripción y la portada ayudan a los colaboradores a reconocer este evento de planificación."
+          }
+        }
+      }
+    },
+    "The event details, schedule, and planning ideas are copied. Sub-events start as drafts, and ideas start as new." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The event details, schedule, and planning ideas are copied. Sub-events start as drafts, and ideas start as new."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se copian los detalles del evento, el programa y las ideas de planificación. Los subeventos comienzan como borradores y las ideas como nuevas."
+          }
+        }
+      }
+    },
+    "The event or your access changed. Review the latest event before trying again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The event or your access changed. Review the latest event before trying again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El evento o tu acceso cambiaron. Revisa el evento actualizado antes de volver a intentarlo."
           }
         }
       }
@@ -22669,6 +23032,7 @@
       }
     },
     "Weather data provided by Apple Weather" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {

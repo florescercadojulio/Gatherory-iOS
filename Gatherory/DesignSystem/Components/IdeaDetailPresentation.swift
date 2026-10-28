@@ -130,7 +130,7 @@ struct IdeaDetailPresentation<Summary: View, Details: View, Backdrop: View>: Vie
     @State private var scrollOffset: CGFloat = 0
 
     var body: some View {
-        AdaptiveArtworkPresentation {
+        AdaptiveArtworkPresentation(artworkExtendsIntoSafeAreas: true) {
             GeometryReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
@@ -169,6 +169,8 @@ struct IdeaSummaryContent<Accessory: View, Footer: View>: View {
     let title: String
     let note: String
     let category: IdeaCategory
+    /// A scannable deck preview; the reading destination retains the full text.
+    var isDecisionCard = false
     var collapsesLongText = false
     @State private var isExpanded = false
     @ViewBuilder var accessory: () -> Accessory
@@ -183,7 +185,11 @@ struct IdeaSummaryContent<Accessory: View, Footer: View>: View {
                 accessory()
             }
             Group {
-                if collapsesLongText {
+                if isDecisionCard {
+                    Text(title)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if collapsesLongText {
                     Text(title)
                         .lineLimit(isExpanded ? nil : 3)
                         .fixedSize(horizontal: false, vertical: true)
@@ -192,12 +198,16 @@ struct IdeaSummaryContent<Accessory: View, Footer: View>: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .font(.largeTitle.bold())
+            .font(isDecisionCard ? .title2.bold() : .largeTitle.bold())
             .tracking(-0.7)
             .accessibilityAddTraits(.isHeader)
             if !note.isEmpty {
                 Group {
-                    if collapsesLongText {
+                    if isDecisionCard {
+                        Text(note)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else if collapsesLongText {
                         Text(note)
                             .lineLimit(isExpanded ? nil : 4)
                             .fixedSize(horizontal: false, vertical: true)
@@ -209,7 +219,7 @@ struct IdeaSummaryContent<Accessory: View, Footer: View>: View {
                 .font(.body)
                 .foregroundStyle(.secondary)
             }
-            if collapsesLongText && (title.count > 100 || note.count > 220) {
+            if !isDecisionCard && collapsesLongText && (title.count > 100 || note.count > 220) {
                 Button(isExpanded ? "Show less" : "Show more") {
                     withAnimation(.snappy(duration: 0.22)) { isExpanded.toggle() }
                 }

@@ -125,6 +125,7 @@ struct DecideEventPrimer: View {
                 }
         }
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(AppCopy.Primer.Decide.exampleTitle)
         .accessibilityHint(AppCopy.Primer.Decide.practiceAccessibilityHint)
@@ -132,8 +133,10 @@ struct DecideEventPrimer: View {
         .accessibilityAction(named: Text(AppCopy.Primer.Decide.pass)) { previewChoice = .pass }
         .accessibilityAction(named: Text(AppCopy.Primer.Decide.maybe)) { previewChoice = .maybe }
         .accessibilityAction(named: Text(AppCopy.Primer.Decide.love)) { previewChoice = .love }
-        .gesture(
-            DragGesture(minimumDistance: 20).onEnded { value in
+        .highPriorityGesture(
+            // Own drags that begin on the practice card before the surrounding
+            // ScrollView's vertical pan can turn a Maybe swipe into page scrolling.
+            DragGesture(minimumDistance: 0).onEnded { value in
                 if value.translation.width > 40 { previewChoice = .love }
                 else if value.translation.width < -40 { previewChoice = .pass }
                 else if value.translation.height < -40 { previewChoice = .maybe }

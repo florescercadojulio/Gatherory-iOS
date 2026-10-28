@@ -94,14 +94,19 @@ header or documented JSON token field, stores it in Keychain, and sends it as
 SwiftData. The app uses an ephemeral, cookieless `URLSession`, so web cookies
 cannot accidentally become the native authentication boundary.
 
-Do not infer authentication from a locally cached profile. The server session
-is authoritative. On launch, restore the credential, validate it with Better
-Auth, and only then open that user's data scope. A network or secure-storage
-failure shows retryable restoration recovery while retaining the credential
-and isolated archives. Confirmed expiry/absence shows authentication. This
-implementation does not manufacture offline authentication from a cached
-profile. An already prepared account continues using its existing offline
-data and outbox behavior.
+The server session is authoritative for every remote operation. After a
+successful sign-in or session validation, native stores the account profile in
+Keychain with a SHA-256 fingerprint of the exact bearer token. On launch it can
+use that matching snapshot to select and hydrate only the same account's local
+archive before the network check or sync bootstrap completes. The app marks
+this as an offline local account session, keeps account notifications
+inactive, and retries server validation in the background with a visible Retry
+action. Confirmed missing/expired sessions clear the cached profile and return
+to authentication; explicit sign-out and account deletion also clear it.
+
+An older installation without a validated profile snapshot still needs one
+successful online restoration before native can safely choose an account
+namespace. Native never guesses an account from arbitrary local archive rows.
 
 ## Entry routing and preparation — October 20, 2026
 

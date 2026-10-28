@@ -30,8 +30,8 @@ struct NativeInvitationView: View {
                         Text(preview?.title ?? String(localized: "Event Invitation"))
                             .font(.largeTitle.bold())
                             .accessibilityAddTraits(.isHeader)
-                        if let value = preview?.startsAt, let date = invitationDate(value) {
-                            Text(date, format: .dateTime.month(.wide).day().year()).font(.headline)
+                        if let date = preview?.formattedStartDate() {
+                            Text(date).font(.headline)
                         }
                         if let location = preview?.locationName { Text(location).foregroundStyle(.secondary) }
                         if let role = preview?.role, preview?.status != "accepted" {
@@ -309,14 +309,6 @@ struct NativeInvitationView: View {
         } else {
             await loadPreview()
         }
-    }
-
-    private func invitationDate(_ value: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: value) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: value)
     }
 
     private func acceptAsDeviceGuest() async {

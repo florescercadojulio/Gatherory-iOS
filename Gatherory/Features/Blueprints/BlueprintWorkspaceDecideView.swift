@@ -190,7 +190,7 @@ struct BlueprintWorkspaceDecideView: View {
 
     private func cardSummary(for idea: BlueprintCatalogIdea) -> some View {
         IdeaSummaryContent(title: idea.title, note: idea.notes ?? "",
-                           category: IdeaCategory(rawValue: idea.category) ?? .other) {
+                           category: IdeaCategory(rawValue: idea.category) ?? .other, isDecisionCard: true) {
             EmptyView()
         } footer: {
             EmptyView()

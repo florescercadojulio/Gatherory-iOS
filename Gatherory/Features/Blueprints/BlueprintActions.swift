@@ -124,6 +124,7 @@ final class BlueprintActionStore {
     private var mutationGeneration: UInt64 = 0
     private var mutationGenerationByKey: [String: UInt64] = [:]
     private var measurementSettingGeneration: UInt64 = 0
+    private var measurementSettingIntentGeneration: UInt64 = 0
     private var commandTail: Task<Void, Never>?
     private var commandTasks: [UUID: Task<Bool, Never>] = [:]
     private var pending: [String: BlueprintPreferenceMutation] = [:]
@@ -164,6 +165,7 @@ final class BlueprintActionStore {
         mutationGeneration = 0
         mutationGenerationByKey = [:]
         measurementSettingGeneration = 0
+        measurementSettingIntentGeneration = 0
         commandTail?.cancel()
         commandTail = nil
         commandTasks.values.forEach { $0.cancel() }
@@ -241,18 +243,26 @@ final class BlueprintActionStore {
     func loadMeasurementSetting() async {
         let token = generation
         let settingSnapshot = measurementSettingGeneration
+        let intentSnapshot = measurementSettingIntentGeneration
         do {
             let setting = try await transport.measurementSettings()
             guard token == generation, !Task.isCancelled else { return }
-            guard settingSnapshot == measurementSettingGeneration else { return }
+            guard settingSnapshot == measurementSettingGeneration,
+                  intentSnapshot == measurementSettingIntentGeneration else { return }
             measurementEnabled = setting.enabled
             error = nil
+            // A missing preference defaults to enabled for signed-in accounts. Only
+            // expose the setting as enabled after the server acknowledges the write.
+            if !setting.enabled, !ownerID.isEmpty {
+                _ = await setMeasurementEnabled(true)
+            }
         } catch {
             guard token == generation else { return }
         }
     }
 
     func setMeasurementEnabled(_ enabled: Bool) async -> Bool {
+        measurementSettingIntentGeneration &+= 1
         let token = generation
         let pending = pendingMeasurementSetting.flatMap { $0.enabled == enabled ? $0 : nil }
             ?? (requestID: UUID(), enabled: enabled)
@@ -265,6 +275,7 @@ final class BlueprintActionStore {
             do {
                 let setting = try await self.transport.setMeasurementSettings(requestID: pending.requestID, enabled: enabled)
                 guard token == self.generation, !Task.isCancelled else { return false }
+                guard setting.enabled == enabled else { throw CloudSyncFailure.invalidResponse }
                 self.measurementEnabled = setting.enabled
                 self.measurementSettingGeneration &+= 1
                 if self.pendingMeasurementSetting?.requestID == pending.requestID {

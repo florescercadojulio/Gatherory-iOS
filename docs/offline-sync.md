@@ -44,10 +44,31 @@ app becomes active or another local edit is made.
     omissions do not discard an offline scoped workspace.
 15. `SCOPE_READ_ONLY` triggers that authorized pull even when a draft is marked
     attention; the draft remains queued while refreshed roles lock editing.
-    Only a scoped `SYNC_SCOPE_NOT_FOUND`/`SCOPE_WRITE_FORBIDDEN` response or an
-    authoritative scoped workspace delete clears the cached projection and
-    its pending work. Generic authorization failures and network errors never
-    purge it.
+    `SCOPE_WRITE_FORBIDDEN` clears only a scoped projection. A confirmed
+    `SYNC_SCOPE_NOT_FOUND` also clears a root and its cached child projections
+    when there is evidence that the scope was previously acknowledged remotely.
+    A pending workspace create protects a new offline scope. Root workspace or
+    root-event tombstones remove the root hierarchy; a child-event tombstone
+    removes that child projection. Generic authorization failures, empty
+    bootstrap responses and network errors never purge cached plans.
+
+## Cache-first account entry — October 27, 2026
+
+On launch a token-matched, previously validated account snapshot can select its
+exact local namespace before server validation or bootstrap finishes. Saved
+planner archives and cached guest invitations appear without waiting for a
+connection. Local edits still use the durable archive/outbox transaction. The
+background validation remains authoritative for server access; account push
+registration stays disabled until validation succeeds. Confirmed expiry or
+explicit sign-out leaves the account scope, while transient failures retain it.
+See `auth-integration.md` for the Keychain profile cache and upgrade limitation.
+
+Missing-scope repair no longer recreates an acknowledged event after deletion.
+Only never-acknowledged scopes can be rebuilt after a missing-scope rejection;
+malformed legacy scope identifiers retain their separate repair path. Deletion
+cleanup is account-scoped, includes cached child projections and queued media,
+and does not clear another account's copy or unrelated pending work. Remote
+page cleanup commits before the in-memory library is replaced.
 
 ## Device guest archives and account handover
 

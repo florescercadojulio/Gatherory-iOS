@@ -268,7 +268,10 @@ extension View {
 
 /// The artwork and its reading controls overlay when flat, and occupy usable
 /// panes when folded. Navigation stays outside this content-only container.
+/// Full-screen readers extend artwork into safe areas; bounded deck cards
+/// retain clipping so their artwork cannot escape the card's geometry.
 struct AdaptiveArtworkPresentation<Content: View, Artwork: View>: View {
+    var artworkExtendsIntoSafeAreas = false
     @ViewBuilder var content: () -> Content
     @ViewBuilder var artwork: () -> Artwork
 
@@ -277,7 +280,11 @@ struct AdaptiveArtworkPresentation<Content: View, Artwork: View>: View {
             ArrangementView {
                 content()
             } secondary: {
-                artwork().clipped()
+                if artworkExtendsIntoSafeAreas {
+                    artwork()
+                } else {
+                    artwork().clipped()
+                }
             }
             .arrangementViewStyle(.overlay)
         } else {

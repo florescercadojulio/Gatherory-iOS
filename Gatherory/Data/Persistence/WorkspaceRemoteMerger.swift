@@ -174,6 +174,14 @@ struct WorkspaceRemoteMerger {
                     workspaceServerVersion = change.serverVersion
                     shouldDeleteWorkspace = false
                 }
+            } else if change.entityType == .event,
+                      change.entityID == scopeID,
+                      change.operation == .delete {
+                // The root event is represented by workspace fields in a full
+                // archive, and as an event entity in an isolated scope. Its
+                // tombstone therefore deletes the local workspace projection.
+                archive = nil
+                shouldDeleteWorkspace = true
             } else if var currentArchive = archive {
                 try currentArchive.applyEntity(
                     type: change.entityType,

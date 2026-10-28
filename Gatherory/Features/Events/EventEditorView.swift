@@ -192,7 +192,8 @@ struct EventEditorView: View {
             BasicEditorNameField(
                 label: isMainEvent ? Text("Event Name") : Text("Custom Name (Optional)"),
                 prompt: isMainEvent ? Text("Name your event") : Text("Use the suggested name"),
-                text: $title
+                text: $title,
+                fieldAccessibilityIdentifier: "event.editor.title"
             )
 
             if isMainEvent {

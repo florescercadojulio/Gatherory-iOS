@@ -104,6 +104,25 @@ struct EventRemovalTests {
         #expect(workspace.timeline.first?.status == .approved)
     }
 
+    @Test("Browser removal confirmations require the same principal and live workspace instance")
+    func browserConfirmationBoundary() {
+        let workspace = makeWorkspace()
+        let request = WorkspaceBrowserEventActionRequest(
+            workspace: workspace,
+            action: .cancelEvent,
+            title: workspace.title,
+            principalGeneration: 7
+        )
+        #expect(request.isCurrent(principalGeneration: 7, isSigningOut: false, workspaces: [workspace]))
+        #expect(!request.isCurrent(principalGeneration: 8, isSigningOut: false, workspaces: [workspace]))
+        #expect(!request.isCurrent(principalGeneration: 7, isSigningOut: true, workspaces: [workspace]))
+        #expect(!request.isCurrent(principalGeneration: 7, isSigningOut: false, workspaces: []))
+
+        let replacement = makeWorkspace(mainEventID: workspace.mainEventID)
+        #expect(replacement.mainEventID == workspace.mainEventID)
+        #expect(!request.isCurrent(principalGeneration: 7, isSigningOut: false, workspaces: [replacement]))
+    }
+
     @Test("Removal rejects missing events, idea references, and the wrong action")
     func invalidReferences() {
         let workspace = makeWorkspace()
@@ -292,12 +311,17 @@ struct EventRemovalTests {
     func cancelPermissions() {
         for (role, permission) in [(WorkspaceRole.guest, PlanningPermission.viewOnly), (.collaborator, .viewOnly), (.collaborator, .contribute)] {
             let workspace = makeWorkspace(role: role, permission: permission)
+            #expect(!workspace.canCancelEvent(.main))
             #expect(!workspace.cancelEvent(.main))
             #expect(workspace.mainEventStatus == .draft)
         }
+        let host = makeWorkspace(role: .host, permission: .contribute)
+        #expect(host.canCancelEvent(.main))
         let manager = makeWorkspace(role: .collaborator, permission: .manage)
+        #expect(manager.canCancelEvent(.main))
         #expect(manager.cancelEvent(.main))
         let finished = makeWorkspace(status: .finished)
+        #expect(!finished.canCancelEvent(.main))
         #expect(!finished.cancelEvent(.main))
     }
 
@@ -317,11 +341,13 @@ struct EventRemovalTests {
     }
 
     private func makeWorkspace(
+        mainEventID: UUID = UUID(),
         status: MainEventStatus = .draft,
         role: WorkspaceRole = .host,
         permission: PlanningPermission = .manage
     ) -> PlanningWorkspace {
         PlanningWorkspace(
+            mainEventID: mainEventID,
             title: "Removal test", mainEventStartsAt: .now.addingTimeInterval(86_400),
             venueName: "", location: "", planningMode: .openToIdeas,
             members: [WorkspaceMember(name: "Planner", participantRole: role, initials: "P", planningPermission: permission)],

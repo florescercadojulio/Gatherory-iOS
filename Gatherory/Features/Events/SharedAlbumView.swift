@@ -25,10 +25,12 @@ struct SharedAlbumView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         if !moments.isEmpty {
-                            Text(isSelecting ? AlbumCopy.selectionHint : AlbumCopy.browseHint)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .accessibilityIdentifier("album.hint")
+                            if isSelecting {
+                                Text(AlbumCopy.selectionHint)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("album.hint")
+                            }
                             SharedAlbumCollage(
                                 moments: moments,
                                 availableWidth: max(geometry.size.width - 32, 0),
@@ -42,6 +44,7 @@ struct SharedAlbumView: View {
                     }
                     .padding(16)
                 }
+                .accessibilityIdentifier("album.gallery")
                 .overlay {
                     if moments.isEmpty {
                         ContentUnavailableView(AlbumCopy.title, systemImage: "photo.stack", description: Text(AlbumCopy.empty))

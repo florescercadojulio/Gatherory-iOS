@@ -775,6 +775,11 @@ final class WorkspacePersistenceController {
     func repairWorkspaceScopeMismatches(from library: WorkspaceLibrary) throws -> Int {
         let mutations = try context.fetch(FetchDescriptor<PendingMutation>())
             .filter { $0.ownerUserID == activeUserID }
+        let pendingWorkspaceCreateScopes = Set(mutations.compactMap { mutation -> UUID? in
+            mutation.entityType == .workspace && mutation.operation == .create
+                ? mutation.scopeID
+                : nil
+        })
         let workspacesByID = Dictionary(
             uniqueKeysWithValues: library.workspaces.map { ($0.mainEventID, $0) }
         )
@@ -800,6 +805,19 @@ final class WorkspacePersistenceController {
             && mutation.lastFailureCode == "SYNC_SCOPE_NOT_FOUND"
             && mutation.operation != .delete
             && mutation.entityType != .workspace {
+            // The scope's workspace create is still the authoritative local
+            // intent. Rebuilding it repeatedly after each rejected child
+            // mutation can loop forever and must not turn into a purge.
+            guard !pendingWorkspaceCreateScopes.contains(mutation.scopeID) else { continue }
+            guard let ownerUserID = activeUserID else { continue }
+            let record = try context.fetch(FetchDescriptor<WorkspaceRecord>())
+                .first { $0.ownerUserID == ownerUserID && $0.id == mutation.scopeID }
+            let wasPreviouslyAcknowledged = try hasRemoteAcknowledgement(
+                for: mutation.scopeID,
+                ownerUserID: ownerUserID,
+                record: record
+            )
+            guard !wasPreviouslyAcknowledged else { continue }
             guard let workspace = workspacesByID[mutation.scopeID] else { continue }
             repairs.append((mutation.scopeID, workspace))
         }
@@ -913,7 +931,8 @@ final class WorkspacePersistenceController {
     func applyBootstrap(
         _ snapshots: [RemoteWorkspaceSnapshot],
         entities: [RemoteEntitySnapshot] = [],
-        to library: WorkspaceLibrary
+        to library: WorkspaceLibrary,
+        reconcileStaleScopedWorkspaces: Bool = true
     ) throws {
         let pendingScopes = try pendingScopeIDs().union(pendingMediaScopeIDs())
         let authoritativeScopeIDs = Set(snapshots.map(\.scopeID))
@@ -932,8 +951,10 @@ final class WorkspacePersistenceController {
             return archive.isScopedEvent != true
         }
 
-        for workspace in library.workspaces where workspace.isScopedEvent {
-            try discardWorkspaceMutations(scopeID: workspace.mainEventID)
+        if reconcileStaleScopedWorkspaces {
+            for workspace in library.workspaces where workspace.isScopedEvent {
+                try discardWorkspaceMutations(scopeID: workspace.mainEventID)
+            }
         }
         let merger = WorkspaceRemoteMerger(context: context, codec: codec, ownerUserID: activeUserID)
         let remoteWorkspaces = try merger.stageBootstrap(
@@ -943,7 +964,7 @@ final class WorkspacePersistenceController {
             existingWorkspaceCount: library.workspaces.count
         )
 
-        let staleScopedWorkspaceIDs = hasAuthoritativeRoot
+        let staleScopedWorkspaceIDs = reconcileStaleScopedWorkspaces && hasAuthoritativeRoot
             ? try removeStaleScopedWorkspaces(
                 authoritativeScopeIDs: authoritativeScopeIDs,
                 pendingScopeIDs: pendingScopes
@@ -958,6 +979,56 @@ final class WorkspacePersistenceController {
         remoteWorkspaces.forEach(library.upsert)
     }
 
+    /// Discovers workspace scopes created or granted remotely after the account's
+    /// initial bootstrap. Existing full planner archives are left to the ordered
+    /// pull path, which preserves their local edits and checkpoints.
+    func applyDiscoveredBootstrapScopes(
+        _ snapshots: [RemoteWorkspaceSnapshot],
+        entities: [RemoteEntitySnapshot] = [],
+        to library: WorkspaceLibrary
+    ) throws {
+        guard activeUserID != nil, !snapshots.isEmpty else { return }
+        let pendingScopes = try pendingScopeIDs().union(pendingMediaScopeIDs())
+        let persistedRecords = try context.fetch(FetchDescriptor<WorkspaceRecord>())
+            .filter { $0.ownerUserID == activeUserID }
+        var recordsByScope: [UUID: WorkspaceRecord] = [:]
+        for record in persistedRecords where recordsByScope[record.id] == nil {
+            recordsByScope[record.id] = record
+        }
+        let inMemoryScopes = Set(library.workspaces.map(\.mainEventID))
+        var discoveredSnapshots: [RemoteWorkspaceSnapshot] = []
+
+        for snapshot in snapshots where !pendingScopes.contains(snapshot.scopeID) {
+            guard snapshot.effectivePayloadSchemaVersion == SyncPayloadContract.currentVersion else {
+                throw WorkspacePersistenceError.unsupportedSyncPayloadVersion(
+                    snapshot.effectivePayloadSchemaVersion
+                )
+            }
+            guard let existingRecord = recordsByScope[snapshot.scopeID] else {
+                if !inMemoryScopes.contains(snapshot.scopeID) {
+                    discoveredSnapshots.append(snapshot)
+                }
+                continue
+            }
+            guard let existingArchive = try? codec.decode(WorkspaceArchiveV1.self, from: existingRecord.payload),
+                  existingArchive.isScopedEvent == true else {
+                continue
+            }
+            let incomingArchive = try codec.decode(WorkspaceArchiveV1.self, from: snapshot.payload)
+            guard incomingArchive.isScopedEvent != true else { continue }
+            discoveredSnapshots.append(snapshot)
+        }
+
+        guard !discoveredSnapshots.isEmpty else { return }
+        let discoveredScopeIDs = Set(discoveredSnapshots.map(\.scopeID))
+        try applyBootstrap(
+            discoveredSnapshots,
+            entities: entities.filter { discoveredScopeIDs.contains($0.scopeID) },
+            to: library,
+            reconcileStaleScopedWorkspaces: false
+        )
+    }
+
     func applyRemotePage(
         _ page: SyncPullPage,
         scopeID: UUID,
@@ -969,9 +1040,17 @@ final class WorkspacePersistenceController {
             try saveChanges(in: library)
         }
         let merger = WorkspaceRemoteMerger(context: context, codec: codec, ownerUserID: activeUserID)
-        let cachedScopedArchive = try context.fetch(FetchDescriptor<WorkspaceRecord>())
+        let cachedArchive = try context.fetch(FetchDescriptor<WorkspaceRecord>())
             .first(where: { $0.id == scopeID && $0.ownerUserID == activeUserID })
             .flatMap { try? codec.decode(WorkspaceArchiveV1.self, from: $0.payload) }
+        let childEventTombstones = Set(page.changes.compactMap { change -> UUID? in
+            guard change.scopeID == scopeID,
+                  change.entityType == .event,
+                  change.operation == .delete,
+                  change.entityID != scopeID else { return nil }
+            return change.entityID
+        })
+        var removedChildScopeIDs = Set<UUID>()
         let result: WorkspaceRemoteMerger.PageResult
         do {
             result = try merger.stagePage(
@@ -983,10 +1062,29 @@ final class WorkspacePersistenceController {
             // Commit staged records, repairs, and receipts with the cursor,
             // before publishing. A failed merge must not leak a staged repair
             // into an unrelated later local save.
-            if case let .merged(_, shouldDeleteWorkspace) = result,
-               shouldDeleteWorkspace, cachedScopedArchive?.isScopedEvent == true {
-                try discardPendingMutations(scopeID: scopeID)
-                try mediaBookkeeper.stageRemoval(scopeID: scopeID)
+            if case let .merged(mergedArchive, shouldDeleteWorkspace) = result {
+                if shouldDeleteWorkspace, cachedArchive?.isScopedEvent != true {
+                    // A confirmed root tombstone invalidates every separately
+                    // cached child projection and any unsent edits for them.
+                    let childIDs = Set(cachedArchive?.timeline.map(\.id) ?? [])
+                        .union(childEventTombstones)
+                    removedChildScopeIDs = Set(try purgeDeletedChildScopes(childIDs, from: library))
+                    try discardPendingMutations(scopeID: scopeID)
+                    try mediaBookkeeper.stageRemoval(scopeID: scopeID)
+                } else if shouldDeleteWorkspace, cachedArchive?.isScopedEvent == true {
+                    // Preserve this scope's high-water cursor and tombstone
+                    // receipt, while cancelling drafts and media for the gone scope.
+                    try discardPendingMutations(scopeID: scopeID)
+                    try mediaBookkeeper.stageRemoval(scopeID: scopeID)
+                } else if let cachedArchive, cachedArchive.isScopedEvent != true {
+                    let survivingChildIDs = Set(mergedArchive?.timeline.map(\.id) ?? [])
+                    let removedChildIDs = Set(cachedArchive.timeline.map(\.id))
+                        .subtracting(survivingChildIDs)
+                        .union(childEventTombstones.subtracting(survivingChildIDs))
+                    removedChildScopeIDs = Set(try purgeDeletedChildScopes(removedChildIDs, from: library))
+                } else if cachedArchive == nil {
+                    removedChildScopeIDs = Set(try purgeDeletedChildScopes(childEventTombstones, from: library))
+                }
             }
             try saveRemoteCheckpoint(page.nextCursor, scopeID: scopeID)
         } catch {
@@ -999,13 +1097,139 @@ final class WorkspacePersistenceController {
             // Empty/duplicate pages must not replace the graph or suppress edits.
             return
         case let .merged(archive, shouldDeleteWorkspace):
-            suppressNextObservedChange = true
-            if shouldDeleteWorkspace {
-                library.remove(workspaceID: scopeID)
-            } else if let archive {
-                library.upsert(archive.makeWorkspace())
+            let removedIDs = removedChildScopeIDs.union(shouldDeleteWorkspace ? [scopeID] : [])
+            if !removedIDs.isEmpty || archive != nil {
+                var updatedWorkspaces = library.workspaces.filter {
+                    !removedIDs.contains($0.mainEventID)
+                }
+                if !shouldDeleteWorkspace, let archive {
+                    let updated = archive.makeWorkspace()
+                    if let index = updatedWorkspaces.firstIndex(where: { $0.mainEventID == scopeID }) {
+                        updatedWorkspaces[index] = updated
+                    } else {
+                        updatedWorkspaces.append(updated)
+                    }
+                }
+                suppressNextObservedChange = true
+                library.replaceAll(with: updatedWorkspaces)
             }
         }
+    }
+
+    /// Removes only account-owned scoped projections whose event IDs were
+    /// tombstoned from the root archive. The root archive and unrelated scopes
+    /// remain available to the caller's page transaction.
+    private func purgeDeletedChildScopes(
+        _ scopeIDs: Set<UUID>,
+        from library: WorkspaceLibrary
+    ) throws -> [UUID] {
+        var removedIDs: [UUID] = []
+        for scopeID in scopeIDs.sorted(by: { $0.uuidString < $1.uuidString }) {
+            let record = try context.fetch(FetchDescriptor<WorkspaceRecord>())
+                .first(where: { $0.id == scopeID && $0.ownerUserID == activeUserID })
+            if let record,
+               let cached = try? codec.decode(WorkspaceArchiveV1.self, from: record.payload),
+               cached.isScopedEvent != true {
+                continue
+            }
+            if let workspace = library.workspaces.first(where: { $0.mainEventID == scopeID }),
+               !workspace.isScopedEvent {
+                continue
+            }
+
+            if let record { context.delete(record) }
+            try discardPendingMutations(scopeID: scopeID)
+            try RemoteEntityVersionRecord.remove(scopeID: scopeID, ownerUserID: activeUserID, in: context)
+            try mediaBookkeeper.stageRemoval(scopeID: scopeID)
+            for receipt in try context.fetch(FetchDescriptor<AppliedSyncEnvelope>())
+            where receipt.ownerUserID == activeUserID && receipt.scopeID == scopeID {
+                context.delete(receipt)
+            }
+            for checkpoint in try context.fetch(FetchDescriptor<SyncCheckpoint>())
+            where checkpoint.ownerUserID == activeUserID && checkpoint.scopeID == scopeID {
+                context.delete(checkpoint)
+            }
+            removedIDs.append(scopeID)
+        }
+        return removedIDs
+    }
+
+    /// A server-confirmed missing scope is authoritative. Remove the matching
+    /// account cache and, for a root, its child projections in one transaction.
+    @discardableResult
+    func clearWorkspaceAfterRemoteScopeNotFound(
+        scopeID: UUID,
+        from library: WorkspaceLibrary
+    ) throws -> Bool {
+        guard let ownerUserID = activeUserID else { return false }
+        let record = try context.fetch(FetchDescriptor<WorkspaceRecord>())
+            .first(where: { $0.id == scopeID && $0.ownerUserID == ownerUserID })
+        let archive = record.flatMap { try? codec.decode(WorkspaceArchiveV1.self, from: $0.payload) }
+            ?? library.workspaces.first(where: { $0.mainEventID == scopeID })
+                .map(WorkspaceArchiveV1.init(workspace:))
+        guard let archive, archive.mainEventID == scopeID else { return false }
+        let hasPendingWorkspaceCreate = try context.fetch(FetchDescriptor<PendingMutation>()).contains {
+            $0.ownerUserID == ownerUserID && $0.scopeID == scopeID
+                && $0.entityType == .workspace && $0.operation == .create
+        }
+        guard !hasPendingWorkspaceCreate else { return false }
+        // A missing server scope is only authoritative for data we have
+        // previously observed or acknowledged remotely. A newly created
+        // offline workspace can also receive SYNC_SCOPE_NOT_FOUND before its
+        // create reaches the server; preserve that local plan and its outbox.
+        guard try hasRemoteAcknowledgement(for: scopeID, ownerUserID: ownerUserID, record: record) else {
+            return false
+        }
+
+        let removedChildIDs: [UUID]
+        do {
+            let childIDs = archive.isScopedEvent == true ? [] : Set(archive.timeline.map(\.id))
+            removedChildIDs = try purgeDeletedChildScopes(childIDs, from: library)
+            if let record { context.delete(record) }
+            try discardPendingMutations(scopeID: scopeID)
+            try RemoteEntityVersionRecord.remove(scopeID: scopeID, ownerUserID: ownerUserID, in: context)
+            try mediaBookkeeper.stageRemoval(scopeID: scopeID)
+            for receipt in try context.fetch(FetchDescriptor<AppliedSyncEnvelope>())
+            where receipt.ownerUserID == ownerUserID && receipt.scopeID == scopeID {
+                context.delete(receipt)
+            }
+            for checkpoint in try context.fetch(FetchDescriptor<SyncCheckpoint>())
+            where checkpoint.ownerUserID == ownerUserID && checkpoint.scopeID == scopeID {
+                context.delete(checkpoint)
+            }
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+
+        let removedIDs = Set(removedChildIDs).union([scopeID])
+        let remaining = library.workspaces.filter { !removedIDs.contains($0.mainEventID) }
+        suppressNextObservedChange = true
+        library.replaceAll(with: remaining)
+        return true
+    }
+
+    private func hasRemoteAcknowledgement(
+        for scopeID: UUID,
+        ownerUserID: String,
+        record: WorkspaceRecord?
+    ) throws -> Bool {
+        if let record, record.serverVersion > 0 { return true }
+        if try context.fetch(FetchDescriptor<SyncCheckpoint>()).contains(where: {
+            $0.ownerUserID == ownerUserID && $0.scopeID == scopeID
+                && ($0.cursor != nil || $0.lastSuccessfulSyncAt != nil)
+        }) {
+            return true
+        }
+        if try context.fetch(FetchDescriptor<AppliedSyncEnvelope>()).contains(where: {
+            $0.ownerUserID == ownerUserID && $0.scopeID == scopeID
+        }) {
+            return true
+        }
+        return try context.fetch(FetchDescriptor<RemoteEntityVersionRecord>()).contains(where: {
+            $0.ownerUserID == ownerUserID && $0.scopeID == scopeID && $0.serverVersion > 0
+        })
     }
 
     private func saveRemoteCheckpoint(_ cursor: String?, scopeID: UUID) throws {

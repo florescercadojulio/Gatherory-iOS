@@ -2,6 +2,8 @@ import SwiftUI
 
 enum WorkspaceTab: Hashable {
     case home, ideas, decide, manage
+
+    var keepsTabBarExpanded: Bool { self == .home || self == .decide }
 }
 
 /// Shared navigation chrome; callers own data, navigation stacks and actions.
@@ -49,14 +51,14 @@ struct WorkspaceTabShell<Home: View, Ideas: View, Decide: View, Manage: View>: V
                     }
                 }
                 .tabViewStyle(.sidebarAdaptable)
-                .tabBarMinimizeBehavior(selection == .home ? .never : .onScrollDown)
+                .tabBarMinimizeBehavior(selection.keepsTabBarExpanded ? .never : .onScrollDown)
         } else {
             tabContents
                 .onAppear(perform: selectVisibleTab)
                 .onChange(of: showsDecide) { _, _ in selectVisibleTab() }
                 .onChange(of: selection) { _, _ in selectVisibleTab() }
                 .tabViewStyle(.sidebarAdaptable)
-                .tabBarMinimizeBehavior(selection == .home ? .never : .onScrollDown)
+                .tabBarMinimizeBehavior(selection.keepsTabBarExpanded ? .never : .onScrollDown)
         }
     }
 

@@ -62,7 +62,7 @@ enum AppCopy {
     }
     enum Calendar {
         static var add: String { String(localized: "calendar.add", defaultValue: "Add to Calendar") }
-        static var copyExplanation: String { String(localized: "calendar.copyExplanation", defaultValue: "Saves a copy. Later changes in Gatherory won’t update your calendar.") }
+        static var copyExplanation: String { String(localized: "calendar.copyExplanation", defaultValue: "Saves a copy. Changes won’t sync.") }
     }
     enum Safety {
         static var personActionsHint: String { String(localized: "safety.personActionsHint", defaultValue: "Touch and hold a linked person for personal safety options.") }
@@ -125,6 +125,27 @@ enum AppCopy {
         }
         static var unavailableMessage: String {
             localized("event.removal.unavailable.message", default: "The event’s status or your access changed. Review the latest event before trying again.")
+        }
+    }
+
+    enum DuplicateEvent {
+        static var title: String { localized("event.duplicate.title", default: "Duplicate Event") }
+        static var newEvent: String { localized("event.duplicate.newEvent", default: "New Event") }
+        static var name: String { localized("event.duplicate.name", default: "Event name") }
+        static var copiedContent: String {
+            localized("event.duplicate.copiedContent", default: "The event details, schedule, and planning ideas are copied. Sub-events start as drafts, and ideas start as new.")
+        }
+        static var excludedContent: String {
+            localized("event.duplicate.excludedContent", default: "A new event starts with you as the host. Guests, collaborators, replies, votes, tasks, notes, expenses, photos, and event sharing links aren’t copied.")
+        }
+        static var unavailableTitle: String {
+            localized("event.duplicate.unavailable.title", default: "Event Can’t Be Duplicated")
+        }
+        static var unavailableMessage: String {
+            localized("event.duplicate.unavailable.message", default: "The event or your access changed. Review the latest event before trying again.")
+        }
+        static func initialTitle(_ title: String) -> String {
+            "\(localized("event.duplicate.copyTitlePrefix", default: "Copy of")) \(title)"
         }
     }
 

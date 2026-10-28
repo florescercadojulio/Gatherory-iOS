@@ -119,10 +119,16 @@ protocol RemoteChangeApplying: Sendable {
     func currentCursor(for scopeID: UUID) async throws -> String?
     func apply(_ page: SyncPullPage, to scopeID: UUID) async throws
     func clearForbiddenScope(_ scopeID: UUID) async throws -> Bool
+    func clearForbiddenScope(_ scopeID: UUID, failureCode: String?) async throws -> Bool
 }
 
 extension RemoteChangeApplying {
     func clearForbiddenScope(_ scopeID: UUID) async throws -> Bool { false }
+
+    func clearForbiddenScope(_ scopeID: UUID, failureCode: String?) async throws -> Bool {
+        guard failureCode != "SYNC_SCOPE_NOT_FOUND" else { return false }
+        return try await clearForbiddenScope(scopeID)
+    }
 }
 
 nonisolated enum SyncTrigger: String, Sendable {

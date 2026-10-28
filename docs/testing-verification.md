@@ -1,5 +1,9 @@
 # iOS verification
 
+See the [October 23 release readiness audit](release-readiness-audit-2026-10-23.md)
+for the broader native UI, database/HTTP and production-entrypoint checks after
+build 6, the invitation-preview date correction and remaining device acceptance.
+
 Run the native tests before changing permissions, authentication, or sync behavior.
 Use Swift Testing for native unit/transport tests and XCTest for UI automation;
 the web backend uses Vitest and `@effect/vitest`.
@@ -55,6 +59,22 @@ load live credentials as part of the ordinary local check.
 
 ## What the tests protect
 
+### TestFlight build 6 verification — October 23, 2026
+
+Build 1.0 (6) archives native HEAD `19833ddc` plus the build-number increment.
+The device Release archive and Xcode upload passed. The archived production
+configuration and distribution app/profile both verify the intended bundle,
+team, production APNs entitlement and disabled debugging; flags retain the
+production API, opt-in push, consent-gated ads and PostHog without development
+seeding/sign-in bypass. The unit/UI/Light-Dark evidence for its new behavior is
+recorded immediately below. Localization rechecked at 1,700 English/Spanish
+strings, and project/plist syntax and `git diff --check` passed. Xcode returned
+the existing two vendor dSYM warnings without rejecting the upload. See the
+[release record](app-store-release.md#testflight-build-6--october-23-2026)
+for processing/tester status and `/tmp/gatherory-testflight-1.0-6-*` for local
+archive, upload and sanitized configuration evidence. This did not rerun live
+production/device flows or deploy the backend.
+
 ### Main invitation tap editing and sharing — October 23, 2026
 
 See [invitation cards](event-invitation-cards.md#main-event-sharing-and-tap-editing--october-23-2026)
@@ -74,7 +94,7 @@ collaborator identities render as content instead of disabled controls. See the
 [cross-project feedback handoff](../../../gatherory-web-app/docs/release/beta-feedback-2026-10-23.md)
 for the final checks, evidence paths and remaining acceptance work. Earlier
 timezone-picker descriptions below record superseded implementation passes.
-These changes require a new build after TestFlight build 5.
+These changes are included in TestFlight build 6.
 
 ### TestFlight build 5 verification — October 23, 2026
 
@@ -2586,6 +2606,43 @@ policy-label migration was tested only in that disposable database. See
 [slice 04](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/04-recommendation-baseline.md#verification-and-handoff--october-22)
 for policy, compatibility, migration and rollout details. Nothing was deployed.
 
+## DEV MCP conference import acceptance — October 25, 2026
+
+The signed Debug app at `https://dev.gatherory.com` imported the real MCP-created
+IBM TechXchange 2026 planning workspace for the signed-in DEV account. The
+persisted SwiftData root had 16 timeline items, 7 ideas, 47 notes and 4 todos;
+its owner matched an active host participant with manage permission. Manual
+refresh discovered the root after initial account bootstrap. Home, Ideas,
+Manage, Notes and task details were inspected in light and dark appearance; the
+signed-in view remained available after backgrounding and reopening the app.
+No production service or user data reset was involved.
+
+Native regression coverage passed on the separate iPhone 18 Pro test simulator:
+`WorkspaceBootstrapDiscoveryTests` verifies discovery without replacing
+existing planner data or pending local mutations, repeat-sync deduplication and
+discarding a stale response after account switch. `McpPlanningPayloadTests`
+verifies actual exported conference payload decoding, and
+`EventInvitationTransportTests` covers the invitation transport contracts.
+Combined result bundle: `/tmp/gatherory-mcp-dev-ios-derived/Logs/Test/Test-Gatherory-2026.10.25_16-37-16--0400.xcresult`
+(25 test cases passed, 0 failed or skipped). The successful Debug app build was
+installed over the existing dedicated DEV simulator without erasing its data.
+This acceptance includes a signed Debug rebuild and app foreground/reopen, not
+a force-quit cold-launch check. See the [DEV MCP rollout and import guide](../../../gatherory-web-app/docs/development/mcp-dev-rollout.md)
+for server setup and conference import details.
+
+Related regression coverage also passed **54/54** across `OfflineSyncTests`,
+`LocalGuestPersistenceTests`, `AccountDeletionLocalCleanupTests`,
+`SessionLifecycleActionsTests` and `AccountDeletionSyncTests` on the separate
+test simulator. Result bundle:
+`/tmp/gatherory-mcp-dev-ios-derived/Logs/Test/Test-Gatherory-2026.10.25_16-56-08--0400.xcresult`.
+
+A follow-up MCP venue edit changed the root location to **GWCC, Atlanta**. The
+foreground app displayed the updated location, and a read-only check of its
+SwiftData archive confirmed `mainEventLocation.locationName` was updated while
+the 16/7/47/4 timeline, idea, note and task counts remained intact. The archived
+owner still matched the active host with manage permission. This confirms a
+known-scope MCP edit preserves the imported planning graph in the native store.
+
 ## Blueprint library collections — October 22, 2026
 
 The native Blueprint library now has a fixed **Blueprints** title with Yours, Saved, and Liked primary filters. Yours uses existing account-owned Blueprint records, drafts, and installation history. Saved and Liked remain independent private preferences; Not interested remains in Account. The detailed data/privacy boundaries and acceptance checks are in the [web/server roadmap](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/10-blueprint-library-collections.md).
@@ -2595,3 +2652,530 @@ The native Blueprint library now has a fixed **Blueprints** title with Yours, Sa
 - Web tests passed: **771 passed, 54 skipped** across 118 passed and 36 skipped files. Typecheck and generated contract checks passed. Eight Blueprint integration tests across six files passed against disposable PostgreSQL 18. All four ranking artifacts remained unchanged; targeted Prettier and `git diff --check` passed. English/Spanish localization verified **1,671 strings**.
 - ReUI C1–C4 source review ran twice on the changed files and found no UI violations. Native accessibility source review covered system picker/buttons/empty states, combined card text, labeled 44-point unavailable-source removal control, accessibility-size one-column layout, full titles, and layout direction. Live VoiceOver and device acceptance were not run.
 - Xcode Canvas crashed; the latest recorded failure at 18:24:35 was `EXC_BAD_ACCESS` / `SIGSEGV` in SwiftUI Preview/JIT frames. Visual acceptance remains unverified. The audit checklist tool was unavailable, so review used a manual native-adapted checklist; no native lint configuration or run is claimed. No deployment or phone release occurred.
+
+## Long decision-card content — October 25, 2026
+
+A conference idea with a long title and note could give the resting Decide card
+an intrinsic height larger than the space between the native navigation and
+tab bars. The shared decision presentation now takes its bounds from the deck,
+including its artwork. Live and blueprint Decide summaries use a semantic
+`title2` heading and three-line title/note previews. They cannot expand inline;
+the existing idea reading destination retains the complete text. Shared idea
+detail and notes-card defaults are unchanged.
+
+A DEBUG-only, explicitly opted-in fixture reproduces the reported conference
+idea in an ephemeral, signed-out development store. It does not alter or sync
+the imported App Review conference. `DecisionCardLayoutUITests` checks that the
+card stays below the navigation toolbar and above the tabs, remains tappable,
+opens the full note, and still supports a swipe decision followed by Undo.
+The native test exercises both standard Light and Dark appearance. Horizontal
+visual review uses the screenshots rather than treating the decorative shadow's
+accessibility bounds as the visible card edge.
+
+Verification on Xcode 27.1 / the `Gatherory-Decide-Visual` iPhone simulator,
+iOS 27.0:
+
+- **Passed:** 25 focused tests in `DecisionCardFlightTests`,
+  `DecisionSwipeMappingTests`, and `DecisionReviewTests`.
+- **Passed:** one native UI regression covering Light and Dark, full-text
+  navigation, swipe, and Undo; zero failures or skips in the final run.
+- App and test targets compiled successfully for Debug. Result:
+  `/tmp/gatherory-decision-card-fix-final-tests.xcresult`; log:
+  `/tmp/gatherory-decision-card-fix-final-tests.log`.
+- Final screenshots: `/tmp/gatherory-decision-card-light.png` and
+  `/tmp/gatherory-decision-card-dark.png`.
+- `git diff --check` passed. No new copy or web UI dependencies were added.
+
+The initial UI check incorrectly treated the card's existing shadow as
+horizontal content overflow; inspecting the recorded frame showed the visible
+card inside the screen. The final regression retains the navigation/tab-bar
+bounds checks. No dedicated super-large text/layout run, physical-device check,
+iOS 27.1 ArrangementView runtime check, Release archive, or TestFlight upload was
+performed for this change. Nothing was pushed or published.
+
+## Home event context clarity — October 25, 2026
+
+Home now keeps the selected event title in the inline navigation bar. The
+visible hero badge names the card context (Main event or Subevent) beside its
+status, and child cards identify their parent event when the viewer can also
+see that main event. Child-only guests do not receive the hidden parent title.
+The card's VoiceOver label includes its full event title, context and any
+visible parent title. Existing paging, rail selection and event-specific action
+references remain tied to the selected `EventReference`.
+
+`GatheroryTests.homeEventContextPresentation` covers main/child labeling, long
+event titles, visible-parent context and the child-only guest privacy boundary.
+The complete `GatheroryTests` target passed **1,036 tests**, with zero failures
+or skips, on the Gatherory MCP Dev iPhone 18 Pro simulator. Result bundle:
+`/Users/nexus/Library/Developer/Xcode/DerivedData/Gatherory-fkdlsthewnqyuwcnvrboywcmoqza/Logs/Test/Test-Gatherory-2026.10.25_20-27-50--0400.xcresult`.
+English/Spanish localization verification passed for 1,703 strings. The focused
+`GatheroryUITests.testHomeKeepsMainAndChildEventContextVisibleInLightAndDark`
+acceptance passed on iPhone 18 Pro / iOS 27.0 (1 test, 0 failures), confirming
+the selected native title, main/child context and one-line status badge in Light
+and Dark appearances. It also confirms the named parent context appears on the
+child card without the duplicate generic subtitle. Result bundle:
+`/tmp/gatherory-home-context-ui-final-dynamic.xcresult`; exported screenshots:
+`/tmp/gatherory-home-context-export-dynamic-02/`. No dedicated super-large text
+layout or physical-device check was run.
+
+## Shared album tile styling restored — October 25, 2026
+
+At the user's request, two Luna agents reverted the latest photo-picker-style
+experiment. The previous rounded tiles, wider gutters, contributor sizing,
+progressive blur and checkmark selection controls are restored. Numbered badge
+copy, selection-order tests and the experiment's acceptance entry were removed.
+Unrelated working changes, including the existing standard Light/Dark-only UI
+test configuration, were preserved.
+
+Verification passed on Xcode 27.1 / an isolated iPhone 18 Pro, iOS 27.0:
+**11 AlbumPresentationTests** and **one native UI test covering standard Light
+and Dark**, including viewing, selection and Select All/Deselect All.
+English/Spanish localization coverage passed for **1,702 strings**, and
+`git diff --check` passed. Result:
+`/tmp/gatherory-album-style-restored-20261025.xcresult`.
+The restored album Swift sources and native selection tests match their
+pre-experiment source. No
+physical-device, iOS 26 runtime, real Photos write, or deployment check was run.
+
+## Shared album introductory copy removed — October 25, 2026
+
+Removed the browsing introduction above the collage. Selection guidance remains
+in Select mode. UI regressions now locate the gallery by its stable
+`album.gallery` identifier and assert that the removed introduction is absent.
+Swift parsing and `git diff --check` passed; simulator UI tests were not rerun
+for this copy-only edit. Localization checking reported an unrelated missing
+Spanish translation for the concurrently edited `Part of %@` key; no unrelated
+copy was changed in this pass.
+
+## URL error fixture deprecation — October 25, 2026
+
+`OfflineSyncTests` now constructs URL error metadata with
+`NSURLErrorFailingURLErrorKey` and a `URL` value. The existing privacy assertion
+still verifies that log attributes include only the numeric error code, without
+private descriptions or URL contents. The test target compiled without the
+reported deprecated-key warning, and all **35 OfflineSyncTests passed** on
+Xcode 27.1 / iOS 27.0 Simulator. Result:
+`/tmp/gatherory-url-error-key-suite-20261025.xcresult`.
+Swift parsing and `git diff --check` passed; production code was unchanged.
+
+## Events tab long-press actions — October 25, 2026
+
+The complete native unit run passed **1,043 tests**. The focused duplicate UI
+acceptance passed on the iPhone 18 Pro / iOS 27.0 simulator in both Light and
+Dark appearances. It verifies Events tab long press, the Duplicate Event sheet,
+editing the proposed copy name, and opening the independent copy on Home. The
+other three focused lifecycle, read-only permission and Home context UI methods
+also passed. English/Spanish localization verification passed for **1,711
+strings**, and `git diff --check` passed.
+
+Duplicate UI result:
+`/tmp/gatherory-event-duplicate-ui-screenshots.xcresult` (1 method, both
+appearances, zero failures/skips). Menu, sheet and copied Home screenshots:
+`/tmp/gatherory-event-duplicate-ui-screenshots-attachments/`.
+
+The combined run recorded the 1,043 passing unit tests and three passing UI
+methods in `/tmp/gatherory-event-menu-duplicate-final.log`; its duplicate
+text-clearing assertion failed, then Xcode stalled finalizing its bundle. The
+focused retry verifies name editing and the actual copy handoff without relying
+on caret-position-dependent clearing. Its finalized result above passed. The
+earlier complete lifecycle/badge bundle is
+`/tmp/gatherory-event-menu-badges.xcresult`.
+Pause Replies remains deferred. No physical-device check, release archive or
+TestFlight upload was made.
+
+## Home event layout choices — October 27, 2026
+
+Home options now offers Cards (the existing default) and Overview (a
+Blueprint-style main event and compact child-event list, without ideas).
+The device remembers the choice. Both modes use the same authorized event
+selection and invitation detail screen. Updates is in the native Home options
+menu; Add event remains directly accessible.
+
+Three Luna agents handled the overview, integration and focused tests. Final
+verification passed on Xcode / iPhone 18 Pro, iOS 27.0 Simulator: **8 tests,
+zero failures or skips**:
+
+- Six `HomeEventLayoutTests` cover persisted values and fallback, child-only
+  and main-only guest scope, archived children, idea exclusion and deleted-root
+  handling. These exercise the projection used by the actual Overview view.
+- `testHomeOverviewModeAndSelectionPersistInLightAndDark` covers the native
+  options picker, event-only Overview, scrolling to a child, opening its
+  invitation, native back, selected-event restoration in Cards, and preference
+  persistence after relaunch in both appearances.
+- `testHomeKeepsMainAndChildEventContextVisibleInLightAndDark` verifies the
+  existing Cards paging and selected-event title in both appearances.
+
+The final run corrected the child-group accessibility identifier that had
+overridden each row's identifier in the first Overview test. The final native
+captures were inspected in Light and Dark: the main cover and grouped event
+rows render without idea sections or lifecycle badges. English/Spanish
+localization coverage passed for **1,716 strings**; `git diff --check` passed.
+The localization extractor still reports the existing nonliteral AppCopy key
+warning.
+
+Final result: `/tmp/gatherory-home-layout-row-ids-20261027.xcresult`.
+Build/test log: `/tmp/gatherory-home-layout-row-ids-20261027.log`.
+Exported options, main-event and child-event screenshots:
+`/tmp/gatherory-home-layout-final-artifacts/` (see `manifest.json`).
+
+These are focused simulator regressions, not a new full-suite release audit.
+No physical-device, dedicated super-large layout, live sync or VoiceOver
+interaction check was run. No server was started, release archive made,
+TestFlight build uploaded or production deployment performed. Feature details:
+`docs/home-event-layouts.md`.
+
+## Home Overview date collections — October 27, 2026
+
+Overview now uses larger image-led child-event cards in horizontal collections,
+with one heading per calendar date. Vertical scrolling moves between dates;
+horizontal scrolling reveals events on the same date. The main-event blue
+outline and child selection tint are removed; selection remains in the native
+navigation title and accessibility trait. Dates are derived in each event's
+stored time zone; unscheduled events form a final undated collection. The
+existing Cards mode and event visibility policy are preserved.
+
+Two Luna agents handled the view and grouping/tests. On iPhone 18 Pro / iOS
+27.0 Simulator, **11 focused tests passed, zero failures or skips**:
+
+- Nine `HomeEventLayoutTests`, including same-date grouping across time zones,
+  midnight boundaries, chronological ordering with stable ties, undated-last
+  behavior, guest scope, archived/deleted events and idea exclusion.
+- Two native UI methods covering Light and Dark. Overview acceptance now
+  scrolls vertically to Ceremony's day, swipes horizontally to Cocktail Hour,
+  opens it and verifies the exact selected event after native back, then returns
+  to Ceremony. Layout switching, selected-event restoration, relaunch persistence
+  and the existing Cards paging regression also pass.
+
+Inspected the final Light/Dark screenshots for date headings, larger artwork,
+the next-card peek and absence of blue selection styling. English/Spanish
+localization coverage passed for **1,722 strings**. Xcode extraction exposed
+six empty aliases for existing Duplicate Event copy; these reuse the matching
+reviewed English/Spanish translations already in the catalog. The existing
+nonliteral AppCopy extraction warning remains. `git diff --check` passed.
+
+Final bundle: `/tmp/gatherory-home-date-cards-20261027.xcresult`.
+Build/test log: `/tmp/gatherory-home-date-cards-20261027.log`.
+Screenshots and manifest: `/tmp/gatherory-home-date-cards-final-artifacts/`.
+This was focused simulator acceptance, without physical-device, live-sync,
+VoiceOver interaction or dedicated super-large layout testing. No dev server,
+release archive, TestFlight upload or production deployment was started.
+
+### Quick follow-up: transitions and edge-to-edge carousels
+
+The next code-only pass connects Overview main/child cards to the existing
+invitation namespace and native zoom transition, makes each carousel span the
+screen with native scroll-content insets, and adds system-localized relative
+date headings from yesterday through seven days ahead. `git diff --check`
+passed. At the user's explicit request, no tests, build or simulator check was
+run for this follow-up; the 11-test result above predates these changes.
+
+## Offline entry, deletion and Photos recovery — October 27, 2026
+
+Three Luna agents handled the native account-entry, remote deletion and Photos
+presentation fixes. Integration additionally restores cached guest invitations
+before account UI readiness. Implementation and upgrade boundaries are described
+in `docs/offline-recovery-2026-10-27.md`, `docs/offline-sync.md` and
+`docs/auth-integration.md`. No backend or database changes were made.
+
+The **complete GatheroryTests target passed 1,067 tests in 146 suites** on the
+iPhone 18 Pro / iOS 27.0 simulator. This includes:
+
+- Token-matched offline account recovery, an isolated real-Keychain cache
+  roundtrip, missing-cache recovery, explicit sign-out and confirmed expiry.
+- A real file-backed SwiftData cold relaunch with two account namespaces,
+  suspended server bootstrap, continued local routing/editing and retained
+  outbox mutation IDs after relaunch.
+- Cache-only guest invitation activation without a network request, subsequent
+  validation/refresh, network-failure retention and account isolation.
+- Root/child tombstones, confirmed missing scopes, child projection cleanup,
+  another account's protected archive/outbox and unrelated pending work.
+- New offline creates surviving missing-scope rejections, and previously
+  acknowledged roots with rejected child edits being removed rather than
+  recreated. Generic auth/network failures and empty responses retain data.
+
+Unit execution log:
+`/tmp/gatherory-offline-recovery-verified-20261027.log`.
+That combined run's initial UI test used an ambiguous Cancel/Close query and
+failed; Xcode stalled finalizing its result bundle and was stopped after test
+execution. The full unit run above passed before the UI failure. The subsequent
+changes affect the UI test's selectors and diagnostic captures only.
+
+The focused native
+`PhotoAttachmentPickerUITests.testMainEventPhotoPickerOpensCancelsAndReopensWithoutDiscardingDraft`
+then **passed in Light and Dark** (one method, zero failures). It opens the real
+system Photos picker twice in each appearance, cancels through its own Photos
+navigation bar, waits for the image choices to become interactive and confirms
+the unsaved main-event title is preserved after closing image choices. The
+test waits beyond iOS's transient `PUPickerUnavailableView` loading hierarchy,
+which is not the ready Photos screen.
+Native acceptance log: `/tmp/gatherory-photo-picker-native-20261027.log`.
+Xcode also stalled finalizing the focused result bundle after reporting the
+passing test and was stopped. Its requested bundle
+`/tmp/gatherory-photo-picker-native-20261027.xcresult` is incomplete; use the
+completed native test log above as execution evidence.
+
+English/Spanish localization verification passed for **1,723 strings**;
+`git diff --check` passed. The existing nonliteral AppCopy extraction warning
+remains. No physical-device airplane-mode, new library-photo import/save,
+iCloud photo download, live-server delete, release archive or TestFlight check
+was performed. Previously downloaded content is required offline; older
+installations need one successful online validation to initialize the secure
+profile cache. No dev server was started and nothing was deployed.
+
+## Invitation full-screen artwork — October 27, 2026
+
+Scope was narrowed by the user to the invitation image's black top/bottom bars;
+other pending fixes were left for later. Two Luna agents handled the scoped
+layout fix and native regression. The invitation alone opts out of the iOS
+27.1 adaptive artwork container's explicit clipping, so its existing backdrop
+can draw into safe areas without adding a second image/blur layer.
+
+`InvitationArtworkBleedUITests.testHomeInvitationArtworkReachesSafeAreasInCardsAndOverview`
+passed on **iPhone 18 Pro / iOS 27.0** and **iPhone Duo / iOS 27.1**, one
+method per runtime, zero failures/skips. Each run covers **Cards and Overview
+in Light and Dark**, with screenshot-pixel checks away from controls at the
+top and bottom screen edges. The newer runtime exercises the ArrangementView
+branch; the older runtime confirms its existing path is preserved. The available
+27.1 simulator runtime supports Duo; creating an 18 Pro for that runtime was
+rejected as incompatible. No dedicated large-text or expanded-layout matrix
+was added.
+
+Finalized results:
+
+- `/tmp/gatherory-invitation-bleed-ios270-20261027.xcresult`
+- `/tmp/gatherory-invitation-bleed-ios271-20261027.xcresult`
+
+Exported screenshots/manifests:
+`/tmp/gatherory-invitation-bleed-ios270-artifacts/` and
+`/tmp/gatherory-invitation-bleed-ios271-artifacts/`.
+The 27.1 Light/Dark screenshots were inspected for edge-to-edge image coverage.
+`git diff --check` passed. No copy, dependencies, schema, server or production
+deployment changed. Physical-device acceptance remains separate.
+
+## Idea detail full-screen artwork — October 27, 2026
+
+The invitation-only correction left the shared idea reader under the same
+iOS 27.1 clip. The audited full-screen consumers now all explicitly extend
+their artwork into safe areas: `EventInvitationScreen`, `IdeaDetailPresentation`
+(workspace and Blueprint ideas), and `BlueprintWorkspaceEventDetail`.
+`DecisionCardPresentation` is intentionally bounded to its deck card and keeps
+clipping. Existing image decoding, blur, text, response controls and navigation
+are preserved; no duplicate background render is introduced.
+
+Two Luna agents handled the scoped consumer fix and regression coverage.
+`IdeaArtworkBleedUITests.testIdeaDetailArtworkReachesSafeAreasFromIdeasAndDecide`
+passed on **iPhone 18 Pro / iOS 27.0** and **iPhone Duo / iOS 27.1**, one
+method per runtime with zero failures/skips. Each run opens an image-backed
+idea from **Ideas and Decide in Light and Dark**, samples actual screenshot
+pixels at the top and bottom edges, then scrolls the detail and repeats those
+checks. Sixteen screenshots cover the two runtimes and before/after positions.
+The initial 27.1 attempt used a bottom-tab-only selector; the successful test
+uses native buttons accessible in both the bottom bar and adaptive side rail.
+
+Finalized results:
+
+- `/tmp/gatherory-idea-bleed-native270-20261027.xcresult`
+- `/tmp/gatherory-idea-bleed-native271-20261027.xcresult`
+
+Screenshot manifests:
+`/tmp/gatherory-idea-bleed-native270-artifacts/` and
+`/tmp/gatherory-idea-bleed-native271-artifacts/`.
+The 27.1 idea-detail capture was inspected for continuous backdrop coverage.
+`git diff --check` passed. Blueprint reader changes were audited and compiled;
+this focused UI run did not navigate a live Blueprint catalog. No physical
+device, large-text matrix, backend, offline/deletion work or deployment was
+performed in this pass.
+
+## Simplified invitation calendar tile — October 27, 2026
+
+The calendar tile now emphasizes a localized month/day stamp, weekday and time
+range, with the event time zone as secondary text. A year appears when needed;
+cross-date ranges and daylight-saving zone changes remain explicit. Category,
+status and event-purpose labels are removed from this tile. The separate native
+Add to Calendar footer uses a divider, disclosure chevron, 44-point touch target
+and short copy-only explanation instead of the oversized filled capsule.
+Host date editing and calendar export remain independent actions; a view-only
+guest keeps export without date editing. Unscheduled content cannot export.
+
+Three Luna agents handled the native card, localized presentation model and
+regressions. Focused checks on iPhone 18 Pro / iOS 27.0 Simulator:
+
+- **9 unit tests passed**: six `InvitationSchedulePresentationTests` plus three
+  `CalendarEventTests`, covering same-day/overnight timing, inclusive all-day
+  ranges, event-local dates across daylight saving, Spanish, year context,
+  unscheduled state and unchanged EventKit draft conversion.
+- The host native UI method passed in **Light and Dark**, opening and cancelling
+  the focused date editor and native EventKit editor separately, without saving
+  a calendar event.
+- The guest native UI method passed in **Light and Dark**, retaining calendar
+  export and excluding the date-edit action.
+
+The first formatter run assumed a full localized date interval repeats its
+start year. Its assertion now checks the actual range boundaries and end year;
+the native interval already preserved the correct dates. Both UI methods
+passed in `/tmp/gatherory-schedule-card-final-20261027.log`; Xcode stalled
+finalizing that combined failed bundle and was stopped after execution.
+The corrected unit suite and repeated host acceptance are captured by
+`/tmp/gatherory-schedule-card-verified-20261027.xcresult` and its matching log.
+Light/Dark card captures were inspected in
+`/tmp/gatherory-schedule-card-verified-artifacts/`. The final year-context
+polish displays localized weekday and year as separate metadata (`Friday ·
+2027`), avoiding the native template's year-first order. Its formatter checks
+are recorded in `/tmp/gatherory-schedule-format-20261027.xcresult`; the UI
+navigation acceptance above precedes this text-only adjustment.
+
+English/Spanish localization coverage passed for **1,723 strings**, and
+`git diff --check` passed. The existing nonliteral AppCopy extraction warning
+remains. No physical-device calendar save, provider synchronization, dedicated
+large-text matrix, new permission prompt, backend change or deployment was
+performed. The existing copy-only EventKit behavior is preserved.
+
+## Invitation opening schedule and RSVP spacing — October 27, 2026
+
+Two Luna agents handled the native layout and focused UI regression. The
+invitation hero now fills its available viewport and uses a 12-point standard
+bottom inset instead of the capped hero height and larger inset. Full dates,
+time ranges or All-day, and the event time zone appear together above the RSVP
+row. Long content remains scrollable; Blueprint heroes keep default spacing.
+
+`InvitationHeroLayoutUITests.testMainAndChildInvitationHeroesKeepScheduleAndResponsesAccessibleInLightAndDark`
+passed on **iPhone 18 Pro / iOS 27.0 Simulator**, with zero failures or skips.
+The method checks both main and child invitations in **Light and Dark**,
+requires visible formatted time, verifies the RSVP row does not overlap the
+native tabs and remains within 36 points, then saves a long fixture title and
+checks schedule and response reachability by scrolling. The child read-only
+schedule is checked by visible frame rather than tappability. The captured
+child geometry has a **12-point RSVP-to-tabs gap**.
+
+Finalized result and matching log:
+`/tmp/gatherory-invitation-hero-verified-20261027.xcresult` and
+`/tmp/gatherory-invitation-hero-verified-20261027.log`.
+Four main/child Light/Dark screenshots are exported in
+`/tmp/gatherory-invitation-hero-verified-artifacts/`; the main Light and child
+Dark captures were inspected for readable timing, close response placement
+and continuous full-screen artwork.
+
+The six `InvitationSchedulePresentationTests` also passed in the preceding
+focused runs, covering same-day/overnight times, all-day, DST, localization/year
+context and unscheduled state. Those initial combined runs stopped on UI test
+assumptions about scroll direction and read-only element hittability; their
+Xcode processes stalled finalizing and were stopped. The corrected UI method
+above completed with `TEST SUCCEEDED`; no product changes were needed for
+those test corrections.
+
+English/Spanish coverage passed for **1,723 strings**, with the existing
+nonliteral AppCopy extraction warning, and `git diff --check` passed. These
+checks use isolated local fixtures, with no live RSVP writes. Physical-device
+acceptance and a dedicated large-text matrix were not performed. No server,
+backend, dependency or production deployment changed in this pass.
+
+## Lean invitation schedule — October 27, 2026
+
+The hero now uses a separate compact presentation instead of repeating the
+date tile's full schedule. Single-day events show native localized Yesterday,
+Today or Tomorrow when applicable, otherwise a short date, with only the start
+time for timed events. Multi-day events show one date interval without times
+or a timezone line; all-day events show only dates. Relative-day comparisons
+use the event's calendar/timezone, with a periodic native SwiftUI update while
+open. Full schedule details remain in the date tile and VoiceOver label.
+The calendar footer's copy/synchronization footnote and matching hint were
+removed; export and date editing retain their separate native actions.
+
+Three Luna agents handled the presentation model, screen integration and
+focused regression updates. **16 unit tests passed** across the new seven-case
+`InvitationHeroSchedulePresentationTests`, six detailed schedule tests and
+three EventKit conversion tests. They cover relative days, event-local
+midnight/DST boundaries, multi-day summaries without times, all-day/start-only
+dates, Spanish, year context, undecided dates and complete spoken schedules.
+
+The first compile found the application's existing `TimelineView` name
+shadowing the system type. Qualifying `SwiftUI.TimelineView` resolved it before
+the passing unit run. No dependency or backend changes were required.
+
+The finalized lean-invitation run completed with **19 tests passed**, zero
+failures/skips: the 16 units above plus native hero, host date/calendar and
+guest date/calendar UI methods, each in Light/Dark. The UI checks retain
+main/child RSVP geometry, long-title scrolling, full spoken schedule, host
+date editing, guest view-only boundaries, native EventKit open/cancel and
+absence of the removed footer. Results:
+`/tmp/gatherory-lean-invitation-verified-20261027.xcresult` and matching log;
+eight screenshots in `/tmp/gatherory-lean-invitation-verified-artifacts/`.
+Main Dark and date-tile Light captures were inspected. English/Spanish
+localization coverage passed for 1,723 strings with the existing nonliteral
+AppCopy warning. No physical-device save, live RSVP mutation, large-text matrix
+or deployment was performed.
+
+## Home overview compact time ranges — October 28, 2026
+
+Two Luna agents implemented compact event-local time presentation, integration
+and focused regressions. Main and child Overview cards show both endpoints
+when a valid end exists. Same-day ranges use native localized interval
+formatting (for example `4:00–4:30 PM`); overnight ranges add just the end's
+abbreviated date, retaining its year when crossing years. Day headings stay
+outside child cards. The main card uses a shorter date line and a separate
+time row. Missing/invalid ends show the start alone; unscheduled events do not
+invent times. Complete dates/time zones remain in accessible card labels,
+including an undecided-date fallback. No event permissions or navigation
+policies changed.
+
+On iPhone 18 Pro / iOS 27.0 Simulator, **15 unit tests passed**: six new time
+presentation cases plus nine existing Home layout/grouping/scope cases.
+Coverage includes same-day and overnight ranges, year crossings, DST zones,
+Spanish 24-hour output, all-day/undecided/invalid-end states, child-only guests,
+deleted/archived events, grouping and ordering. The native Overview method
+passed in Light/Dark, checking main/child schedule labels and tapping through
+both cards to Invitation and back. A second native method passed in both
+appearances using the Birthday fixture's actual main-event `6:30–10:00 PM`
+range. The normal seeded main event has no end and correctly shows only its
+start. These are **17 distinct passing tests**, with zero failures/skips.
+
+Results and matching logs:
+
+- `/tmp/gatherory-overview-time-20261028.xcresult` (15 units and first UI method).
+- `/tmp/gatherory-overview-main-time-20261028.xcresult` (timed main UI method).
+
+Main-event screenshots are exported in
+`/tmp/gatherory-overview-main-time-artifacts-20261028/`; the Dark capture was
+inspected for the visible compact range. The first child screenshot caught
+only its tappable artwork before the time row entered the viewport; its native
+test was tightened to expose the whole card above the tabs before capture.
+That tightened Light/Dark method also passed in
+`/tmp/gatherory-overview-time-visible-20261028.xcresult`; captures are in
+`/tmp/gatherory-overview-time-visible-artifacts-20261028/`. The Light child
+capture was inspected and shows the complete `4:00–4:30 PM` line above tabs.
+
+English/Spanish coverage passed for 1,723 strings, with the existing AppCopy
+nonliteral-key warning. No dependency, backend, schema, dev-server startup or
+production deployment changed. Physical-device and dedicated large-text
+acceptance remain outside this focused pass.
+
+## Account and workspace chrome cleanup — October 28, 2026
+
+Home and Decide now request an expanded native tab bar while Ideas and Manage
+retain scroll minimization. Home exposes Updates directly for planners; the
+persisted Cards/Overview choice moved to Account's Home view picker, including
+guest Account. UI test helpers now follow that Account navigation path.
+Account's haptic control retains its toggle with a blue icon and no explanatory
+paragraph. The profile email occupies a separate full-width wrapping row below
+name/avatar/edit. Weather attribution places its introductory text above the
+official color-scheme mark and Learn More link, preserving the provider URL and
+text fallback.
+
+The recommendation toggle and its explanatory prose were removed. The native
+signed-in action store now enables the default via its existing server setting
+update, retaining acknowledged-only local state, idempotent retry, exposure
+validation and account-reset protection. No server or anonymous/private signal
+policy was changed. Three Luna agents handled the scoped changes and test
+migration. **32 focused unit tests passed** across `BlueprintActionsTests`,
+`HomeEventLayoutTests` and `WorkspaceTabPolicyTests`, covering automatic-default
+acknowledgement/failure/retry, stale reads/reset and tab behavior policy.
+Result: `/tmp/gatherory-account-chrome-20261028.xcresult`, with matching log.
+The final app and both test targets also passed `build-for-testing` after the
+fallback attribution layout change; log:
+`/tmp/gatherory-account-chrome-build-20261028.log`.
+
+Per the user's code-only instruction, no UI tests or screenshots were run in
+this pass; actual native collapse behavior and the Account layout need visual
+acceptance separately. Existing UI tests were updated and compiled. Localization
+coverage passed for 1,723 English/Spanish strings with the existing nonliteral
+AppCopy warning. Nothing was deployed or uploaded.

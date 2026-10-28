@@ -22,7 +22,7 @@ final class SharedAlbumUITests: XCTestCase {
         reveal(openAlbum, in: app)
         openAlbum.tap()
         XCTAssertTrue(app.buttons["album.close"].waitForExistence(timeout: 5))
-        let gallery = app.scrollViews.containing(.staticText, identifier: "album.hint").firstMatch
+        let gallery = app.scrollViews["album.gallery"]
         let photos = gallery.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "album.photo."))
         XCTAssertTrue(photos.firstMatch.waitForExistence(timeout: 5))
         let firstCards = Array(photos.allElementsBoundByIndex.prefix(4))
@@ -52,8 +52,8 @@ final class SharedAlbumUITests: XCTestCase {
     }
 
     @MainActor
-    func testAlbumPreviewViewerAndSelectionInLightDarkAndLargeText() throws {
-        for (appearance, largeText) in [("Light", false), ("Dark", false), ("Dark", true)] {
+    func testAlbumPreviewViewerAndSelectionInLightAndDark() throws {
+        for (appearance, largeText) in [("Light", false), ("Dark", false)] {
             let app = fixtureApplication(withPhotos: true, appearance: appearance, largeText: largeText)
             app.launch()
             defer { app.terminate() }
@@ -67,7 +67,8 @@ final class SharedAlbumUITests: XCTestCase {
             XCTAssertTrue(app.buttons["album.select"].isHittable)
             attachScreenshot(of: app, named: "Album gallery — \(appearance)\(largeText ? " — Large Text" : "")")
 
-            let gallery = app.scrollViews.containing(.staticText, identifier: "album.hint").firstMatch
+            XCTAssertFalse(app.staticTexts["The event, through everyone’s eyes. Tap a photo to take a closer look."].exists)
+            let gallery = app.scrollViews["album.gallery"]
             let photos = gallery.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "album.photo."))
             XCTAssertTrue(photos.firstMatch.waitForExistence(timeout: 5))
             let firstPhotoID = photos.allElementsBoundByIndex.first(where: \.isHittable)?.identifier

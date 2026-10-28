@@ -61,8 +61,8 @@ struct BlueprintActionsTests {
             sceneIsActive: true, previewIsPresented: false))
     }
 
-    @Test("Measurement stays opt-in and sends no signals before consent")
-    func measurementOptOut() async throws {
+    @Test("Measurement stays off until the default is acknowledged")
+    func measurementWaitsForDefaultAcknowledgement() async throws {
         let base = try catalogEntry()
         let context = BlueprintDiscoveryContext(exposureId: "exposure-1", expiresAt: Date().addingTimeInterval(60))
         let entry = BlueprintCatalogEntry(catalogKey: base.catalogKey, revision: base.revision,
@@ -73,6 +73,7 @@ struct BlueprintActionsTests {
         await store.record(.open, for: entry)
         #expect(transport.signals.isEmpty)
         #expect(!store.measurementEnabled)
+        #expect(transport.settingMutationCount == 0)
     }
 
     @Test("Expired exposure IDs are dropped and opted-in signals deduplicate per exposure and kind")
@@ -96,14 +97,60 @@ struct BlueprintActionsTests {
         #expect(transport.signals.map(\.kind) == [.impression, .open])
     }
 
-    @Test("Loading measurement consent reads server state without writing it")
-    func measurementReadIsNotMutation() async {
+    @Test("Loading a disabled server setting enables the default only after acknowledgement")
+    func measurementDefaultIsAcknowledged() async {
         let transport = FakeBlueprintActionsTransport()
-        transport.setting = .init(enabled: true)
+        transport.settingWriteDelay = .milliseconds(50)
+        let store = BlueprintActionStore(ownerID: "account-a", transport: transport)
+        let load = Task { await store.loadMeasurementSetting() }
+        while transport.settingRequestIDs.isEmpty { await Task.yield() }
+        #expect(!store.measurementEnabled)
+        await load.value
+        #expect(store.measurementEnabled)
+        #expect(transport.settingMutationCount == 1)
+        #expect(transport.settingRequestIDs.count == 1)
+    }
+
+    @Test("Failed default enable stays off and retries the same acknowledged-setting request")
+    func failedMeasurementDefaultCanRetry() async {
+        let transport = FakeBlueprintActionsTransport()
+        transport.settingFailuresRemaining = 1
         let store = BlueprintActionStore(ownerID: "account-a", transport: transport)
         await store.loadMeasurementSetting()
+        #expect(!store.measurementEnabled)
+        let requestID = transport.settingRequestIDs.last
+        #expect(requestID != nil)
+        await store.retryMeasurementSetting()
         #expect(store.measurementEnabled)
+        #expect(transport.settingRequestIDs.count == 2)
+        #expect(transport.settingRequestIDs[0] == requestID)
+    }
+
+    @Test("A setting read from a prior account cannot enable measurement after reset")
+    func staleMeasurementReadDoesNotCrossAccountReset() async {
+        let transport = FakeBlueprintActionsTransport()
+        transport.settingReadDelay = .milliseconds(50)
+        let store = BlueprintActionStore(ownerID: "account-a", transport: transport)
+        let load = Task { await store.loadMeasurementSetting() }
+        while transport.settingReadCount == 0 { await Task.yield() }
+        store.resetForAccountChange()
+        await load.value
+        #expect(!store.measurementEnabled)
         #expect(transport.settingMutationCount == 0)
+    }
+
+    @Test("An explicit disabled setting read is not overwritten by a stale read")
+    func explicitMeasurementResetWinsReadRace() async {
+        let transport = FakeBlueprintActionsTransport()
+        transport.settingReadDelay = .milliseconds(50)
+        transport.setting = .init(enabled: true)
+        let store = BlueprintActionStore(ownerID: "account-a", transport: transport)
+        let load = Task { await store.loadMeasurementSetting() }
+        while transport.settingReadCount == 0 { await Task.yield() }
+        #expect(await store.setMeasurementEnabled(false))
+        await load.value
+        #expect(!store.measurementEnabled)
+        #expect(transport.settingMutationCount == 1)
     }
 
     @Test("Consent retry reuses the failed setting request instead of retrying an older card action")
@@ -366,6 +413,9 @@ private final class FakeBlueprintActionsTransport: BlueprintActionsTransport {
     var preferenceDelaysByCall: [Int: Duration] = [:]
     var preferenceFailuresByCall = Set<Int>()
     var settingMutationCount = 0
+    var settingReadCount = 0
+    var settingReadDelay: Duration = .zero
+    var settingWriteDelay: Duration = .zero
     var setting = BlueprintMeasurementSettings(enabled: false)
 
     func update(_ mutation: BlueprintPreferenceMutation) async throws -> BlueprintPreferenceAcknowledgement {
@@ -399,9 +449,14 @@ private final class FakeBlueprintActionsTransport: BlueprintActionsTransport {
         }
         return .init(items: preferenceResponsesByCall[call] ?? preferenceItems)
     }
-    func measurementSettings() async throws -> BlueprintMeasurementSettings { setting }
+    func measurementSettings() async throws -> BlueprintMeasurementSettings {
+        settingReadCount += 1
+        if settingReadDelay > .zero { try await Task.sleep(for: settingReadDelay) }
+        return setting
+    }
     func setMeasurementSettings(requestID: UUID, enabled: Bool) async throws -> BlueprintMeasurementSettings {
         settingRequestIDs.append(requestID)
+        if settingWriteDelay > .zero { try await Task.sleep(for: settingWriteDelay) }
         if settingFailuresRemaining > 0 {
             settingMutationCount += 1
             settingFailuresRemaining -= 1

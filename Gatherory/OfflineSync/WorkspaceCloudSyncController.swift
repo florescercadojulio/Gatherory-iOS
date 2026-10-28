@@ -24,11 +24,10 @@ private enum PostHogSyncLogCapture {
     }
 
     static func failed(trigger: SyncTrigger, stage: String, error: Error) {
-        PostHogSDK.shared.logger?.error("workspace_sync_failed", attributes: [
-            "trigger": trigger.rawValue,
-            "stage": stage,
-            "error_type": String(describing: type(of: error))
-        ])
+        PostHogSDK.shared.logger?.error(
+            "workspace_sync_failed",
+            attributes: SyncFailureLogAttributes.make(trigger: trigger, stage: stage, error: error)
+        )
     }
 }
 
@@ -59,6 +58,14 @@ final class WorkspaceRemoteChangeApplier: RemoteChangeApplying {
 
     func clearForbiddenScope(_ scopeID: UUID) async throws -> Bool {
         guard persistence.activeUserID == ownerUserID else { throw CancellationError() }
+        return try persistence.clearScopedWorkspaceAfterWriteForbidden(scopeID: scopeID, from: library)
+    }
+
+    func clearForbiddenScope(_ scopeID: UUID, failureCode: String?) async throws -> Bool {
+        guard persistence.activeUserID == ownerUserID else { throw CancellationError() }
+        if failureCode == "SYNC_SCOPE_NOT_FOUND" {
+            return try persistence.clearWorkspaceAfterRemoteScopeNotFound(scopeID: scopeID, from: library)
+        }
         return try persistence.clearScopedWorkspaceAfterWriteForbidden(scopeID: scopeID, from: library)
     }
 }
@@ -347,28 +354,38 @@ final class WorkspaceCloudSyncController {
         syncPass: repeat {
             needsAnotherSync = false
             do {
-                if hasBootstrappedUserID != userID, !isPreparingSignOut {
+                let needsInitialBootstrap = hasBootstrappedUserID != userID
+                let discoversNewScopes = trigger == .manual || trigger == .appBecameActive
+                if !isPreparingSignOut && (needsInitialBootstrap || discoversNewScopes) {
                     stage = "bootstrap"
                     let response = try await transport.bootstrap()
                     try Task.checkCancellation()
-                    guard activeUserID == userID else { return }
-                    try persistence.applyBootstrap(
-                        response.snapshots,
-                        entities: response.entitySnapshots,
-                        to: library
-                    )
-                    let hasCompletedOnboarding =
-                        response.account?.hasCompletedOnboarding == true ||
-                        !response.snapshots.isEmpty ||
-                        hasConfirmedOnboarding(for: userID) ||
-                        !library.workspaces.isEmpty
-                    accountOnboardingState = hasCompletedOnboarding
-                        ? .complete
-                        : .needsOnboarding
-                    if hasCompletedOnboarding {
-                        setConfirmedOnboarding(true, for: userID)
+                    guard activeUserID == userID, persistence.activeUserID == userID else { return }
+                    if needsInitialBootstrap {
+                        try persistence.applyBootstrap(
+                            response.snapshots,
+                            entities: response.entitySnapshots,
+                            to: library
+                        )
+                        let hasCompletedOnboarding =
+                            response.account?.hasCompletedOnboarding == true ||
+                            !response.snapshots.isEmpty ||
+                            hasConfirmedOnboarding(for: userID) ||
+                            !library.workspaces.isEmpty
+                        accountOnboardingState = hasCompletedOnboarding
+                            ? .complete
+                            : .needsOnboarding
+                        if hasCompletedOnboarding {
+                            setConfirmedOnboarding(true, for: userID)
+                        }
+                        hasBootstrappedUserID = userID
+                    } else {
+                        try persistence.applyDiscoveredBootstrapScopes(
+                            response.snapshots,
+                            entities: response.entitySnapshots,
+                            to: library
+                        )
                     }
-                    hasBootstrappedUserID = userID
                 }
 
                 stage = "prepare_outbox"
@@ -400,6 +417,7 @@ final class WorkspaceCloudSyncController {
                 for scopeID in scopes.sorted(by: { $0.uuidString < $1.uuidString }) {
                     try Task.checkCancellation()
                     guard activeUserID == userID else { return }
+                    guard try hasLocalSyncWork(scopeID, in: library) else { continue }
                     activeSyncScopeID = scopeID
                     refreshSaveState()
                     stage = "push_pull"
@@ -409,7 +427,23 @@ final class WorkspaceCloudSyncController {
                         pullRemoteChanges: !isPreparingSignOut
                     )
                     if syncSummary.scopeWasRevoked { continue }
+                    guard try hasLocalSyncWork(scopeID, in: library) else { continue }
                     if let failureCode = syncSummary.attentionFailureCode {
+                        // Rebuild malformed/recoverable scope batches before
+                        // considering a server-missing response authoritative.
+                        // A missing local scope can otherwise erase the graph
+                        // that repairWorkspaceScopeMismatches needs to recreate.
+                        if failureCode == "SYNC_SCOPE_NOT_FOUND",
+                           try persistence.repairWorkspaceScopeMismatches(from: library) > 0 {
+                            continue syncPass
+                        }
+                        if failureCode == "SYNC_SCOPE_NOT_FOUND",
+                           try persistence.clearWorkspaceAfterRemoteScopeNotFound(
+                            scopeID: scopeID,
+                            from: library
+                           ) {
+                            continue
+                        }
                         if failureCode == "SCOPE_WRITE_FORBIDDEN",
                            try persistence.clearScopedWorkspaceAfterWriteForbidden(
                             scopeID: scopeID,
@@ -446,6 +480,8 @@ final class WorkspaceCloudSyncController {
                             trigger: .mutationCreated,
                             pullRemoteChanges: !isPreparingSignOut
                         )
+                        if published.scopeWasRevoked { continue }
+                        guard try hasLocalSyncWork(scopeID, in: library) else { continue }
                         if let code = published.attentionFailureCode { throw CloudSyncFailure.server(code) }
                     }
                     // Signing out uploads local work, not a fresh offline photo
@@ -507,6 +543,13 @@ final class WorkspaceCloudSyncController {
         UserDefaults.standard.bool(forKey: onboardingCacheKey(for: userID))
     }
 
+    private func hasLocalSyncWork(_ scopeID: UUID, in library: WorkspaceLibrary) throws -> Bool {
+        if library.workspaces.contains(where: { $0.mainEventID == scopeID }) { return true }
+        let pendingScopes = try persistence.pendingScopeIDs()
+        let pendingMediaScopes = try persistence.pendingMediaScopeIDs()
+        return pendingScopes.contains(scopeID) || pendingMediaScopes.contains(scopeID)
+    }
+
     private func setConfirmedOnboarding(_ isComplete: Bool, for userID: String) {
         let key = onboardingCacheKey(for: userID)
         if isComplete {
@@ -521,6 +564,6 @@ final class WorkspaceCloudSyncController {
     }
 
     private func isRecoverableWorkspaceBootstrapFailure(_ code: String) -> Bool {
-        code == "WORKSPACE_SCOPE_MISMATCH" || code == "SYNC_SCOPE_NOT_FOUND"
+        code == "WORKSPACE_SCOPE_MISMATCH"
     }
 }

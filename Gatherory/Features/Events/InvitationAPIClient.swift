@@ -6,6 +6,10 @@ struct InvitationPreview: Decodable {
     let role: String?
     let locationName: String?
     let startsAt: String?
+    /// Optional while older deployed preview endpoints are still in use.
+    let timeZone: String?
+    /// Optional while older deployed preview endpoints are still in use.
+    let isAllDay: Bool?
     let status: String?
     let coverURL: URL?
     let requiresApproval: Bool?
@@ -27,6 +31,27 @@ struct InvitationPreview: Decodable {
     /// Public previews disclose collaborator details without authentication too.
     /// Only an explicit guest invitation permits attending without an account.
     var permitsDeviceGuestAttendance: Bool { role == "guest" && !requiresSignIn }
+
+    func formattedStartDate(
+        deviceTimeZone: TimeZone = .autoupdatingCurrent,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String? {
+        guard let startsAt, let date = Self.parseISO8601(startsAt) else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeZone = timeZone.flatMap(TimeZone.init(identifier:)) ?? deviceTimeZone
+        formatter.dateStyle = .long
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+
+    private static func parseISO8601(_ value: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: value) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: value)
+    }
 
     func shouldOpenExistingEvent(isAuthenticated: Bool) -> Bool {
         // Only a fresh, account-specific server preview can establish access.

@@ -30,6 +30,49 @@ struct EventInvitationTransportTests {
         }
     }
 
+    @Test("Invitation dates use the event timezone across a device-local midnight")
+    func invitationDateUsesEventTimeZone() throws {
+        let data = Data(#"{"requiresSignIn":false,"startsAt":"2026-07-15T04:30:00.000Z","timeZone":"America/Los_Angeles","isAllDay":false}"#.utf8)
+        let preview = try JSONDecoder().decode(InvitationPreview.self, from: data)
+
+        #expect(preview.isAllDay == false)
+        #expect(preview.formattedStartDate(
+            deviceTimeZone: TimeZone(identifier: "America/Detroit")!,
+            locale: Locale(identifier: "en_US")
+        ) == "July 14, 2026")
+    }
+
+    @Test("All-day invitation dates use the event timezone")
+    func allDayInvitationDateUsesEventTimeZone() throws {
+        let data = Data(#"{"requiresSignIn":false,"startsAt":"2026-07-14T15:00:00.000Z","timeZone":"Asia/Tokyo","isAllDay":true}"#.utf8)
+        let preview = try JSONDecoder().decode(InvitationPreview.self, from: data)
+
+        #expect(preview.isAllDay == true)
+        #expect(preview.formattedStartDate(
+            deviceTimeZone: TimeZone(identifier: "America/Detroit")!,
+            locale: Locale(identifier: "en_US")
+        ) == "July 15, 2026")
+    }
+
+    @Test("Legacy or invalid invitation timezone uses the device timezone")
+    func invitationDateTimeZoneFallback() throws {
+        let legacy = try JSONDecoder().decode(
+            InvitationPreview.self,
+            from: Data(#"{"requiresSignIn":false,"startsAt":"2026-07-15T04:30:00.000Z"}"#.utf8)
+        )
+        let invalid = try JSONDecoder().decode(
+            InvitationPreview.self,
+            from: Data(#"{"requiresSignIn":false,"startsAt":"2026-07-15T04:30:00.000Z","timeZone":"Not/AZone","isAllDay":false}"#.utf8)
+        )
+        let deviceZone = TimeZone(identifier: "America/Detroit")!
+        let locale = Locale(identifier: "en_US")
+
+        #expect(legacy.timeZone == nil)
+        #expect(legacy.isAllDay == nil)
+        #expect(legacy.formattedStartDate(deviceTimeZone: deviceZone, locale: locale) == "July 15, 2026")
+        #expect(invalid.formattedStartDate(deviceTimeZone: deviceZone, locale: locale) == "July 15, 2026")
+    }
+
     @Test("Guest invitation guides decode from newer feeds and remain optional for older caches")
     func guestGuidesAreBackwardCompatible() throws {
         let eventID = "10000000-0000-4000-8000-000000000001"

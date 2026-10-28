@@ -438,6 +438,62 @@ struct GatheroryTests {
         #expect(workspace.visibleEventContexts == [.main])
     }
 
+    @Test("Home identifies main and child cards while preserving long event names for guests")
+    @MainActor
+    func homeEventContextPresentation() {
+        let main = HomeEventContextPresentation(
+            kind: .mainEvent,
+            statusTitle: "Happening now",
+            statusSymbol: "calendar"
+        )
+        let child = HomeEventContextPresentation(
+            kind: .subevent,
+            statusTitle: "Upcoming",
+            statusSymbol: "calendar"
+        )
+        let longChildTitle = "Family Welcome Dinner and Outdoor Celebration"
+        let longMainTitle = "Alex and Jordan's Weekend Celebration"
+
+        #expect(main.contextTitle == "Main event")
+        #expect(main.accessibilityLabel == "Main event, Happening now")
+        #expect(child.contextTitle == "Subevent")
+        #expect(child.accessibilityLabel == "Subevent, Upcoming")
+        #expect(child.parentContextTitle(mainEventTitle: longMainTitle, mainEventIsVisible: true)
+            == "Part of \(longMainTitle)")
+        #expect(child.parentContextTitle(mainEventTitle: longMainTitle, mainEventIsVisible: false) == nil,
+                "A child-only guest must not learn the hidden main event's title.")
+        #expect(main.parentContextTitle(mainEventTitle: longMainTitle, mainEventIsVisible: true) == nil)
+        let childCardLabel = child.cardAccessibilityLabel(
+            title: longChildTitle,
+            date: "Saturday, June 6, 2026",
+            location: nil,
+            subtitle: nil,
+            parentContext: child.parentContextTitle(mainEventTitle: longMainTitle, mainEventIsVisible: true)
+        )
+        #expect(childCardLabel.contains(longChildTitle))
+        #expect(childCardLabel.contains("Subevent"))
+        #expect(childCardLabel.contains("Upcoming"))
+        #expect(childCardLabel.contains(longMainTitle))
+
+        let workspace = PlanningWorkspace.sample
+        let guestIndex = workspace.members.firstIndex { $0.participantRole == .guest }
+        if let guestIndex {
+            workspace.members[guestIndex].userID = "home-context-guest"
+            workspace.configureViewer(UserAccount(
+                id: "home-context-guest",
+                email: workspace.members[guestIndex].email ?? "guest@gatherory.test",
+                displayName: "Guest",
+                role: .member,
+                authenticationProvider: .password,
+                createdAt: .now
+            ))
+            #expect(workspace.visibleEventContexts == [.main])
+            #expect(!workspace.canManageMainEvent)
+        } else {
+            Issue.record("The sample workspace should include a guest for Home visibility coverage.")
+        }
+    }
+
     private func workspaceFilterFixture(
         title: String,
         date: Date,

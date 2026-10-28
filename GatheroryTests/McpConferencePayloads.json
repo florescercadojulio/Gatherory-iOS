@@ -1,0 +1,968 @@
+{
+  "workspace": {
+    "currencyCode": "USD",
+    "defaultCollaboratorPermission": "contribute",
+    "dressCode": "",
+    "eventExpenses": [],
+    "eventMessage": "Recommended itinerary imported from user-supplied plan. Dates and catalog details were not independently verified.",
+    "eventMoments": [],
+    "eventParticipations": [
+      {
+        "attendance": "going",
+        "createdAt": 814649173.1040001,
+        "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+        "id": "b3c2c835-9cba-5a0a-87b3-db18a7eeac80",
+        "invitationStatus": "active",
+        "memberID": "10092c2c-47bb-5900-bdd8-b40d70453595",
+        "planningPermission": "manage",
+        "role": "host",
+        "updatedAt": 814649173.1040001
+      }
+    ],
+    "guides": [],
+    "ideaResponses": [],
+    "ideas": [],
+    "isCollaboratorLinkEnabled": true,
+    "isMainEventDeleted": false,
+    "isRegistryShared": false,
+    "isScopedEvent": false,
+    "location": "",
+    "mainEventBudgetCap": null,
+    "mainEventEndsAt": 814982400,
+    "mainEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+    "mainEventIsAllDay": false,
+    "mainEventLocation": {
+      "address": "",
+      "addressLine2": "",
+      "latitude": null,
+      "locationName": "",
+      "longitude": null,
+      "mapItemIdentifier": null,
+      "placeName": "",
+      "shortAddress": ""
+    },
+    "mainEventParticipantIDs": [
+      "10092c2c-47bb-5900-bdd8-b40d70453595"
+    ],
+    "mainEventResponse": "going",
+    "mainEventStartsAt": 814723200,
+    "mainEventStatus": "draft",
+    "mainEventTimeZoneIdentifier": "America/New_York",
+    "members": [
+      {
+        "attendance": "going",
+        "id": "10092c2c-47bb-5900-bdd8-b40d70453595",
+        "initials": "H",
+        "invitationStatus": "active",
+        "name": "Host",
+        "participantRole": "host",
+        "planningPermission": "manage",
+        "userID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815"
+      }
+    ],
+    "notes": [],
+    "planningMode": "openToIdeas",
+    "registry": [],
+    "requiresCollaboratorApproval": true,
+    "timeline": [],
+    "title": "IBM TechXchange 2026 — personal and Humphrey Products plan",
+    "todos": [
+      {
+        "id": "d8ee7cee-c9d5-5b5d-b0b9-65cf4be5f27c",
+        "eventID": "39f2d381-f45f-546c-be9d-cfebfdcf9467",
+        "title": "Capture one useful idea, prerequisite, use case, contact, and next action",
+        "dueDate": "2026-10-26",
+        "websiteURL": null,
+        "assigneePersonID": null,
+        "isCompleted": false,
+        "createdAt": 814649174.5539999
+      },
+      {
+        "id": "139dcded-5ed3-5783-bd8f-330aab98a978",
+        "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+        "title": "Prepare configuration note for expert conversations",
+        "dueDate": "2026-10-26",
+        "websiteURL": null,
+        "assigneePersonID": null,
+        "isCompleted": false,
+        "createdAt": 814649176.4619999
+      },
+      {
+        "id": "16be7ca7-0ba1-579c-b105-5bc2dfb72f93",
+        "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+        "title": "Capture one useful idea, prerequisite or limitation, use case, contact, and next action after each session",
+        "dueDate": "2026-10-29",
+        "websiteURL": null,
+        "assigneePersonID": null,
+        "isCompleted": false,
+        "createdAt": 814649176.52
+      },
+      {
+        "id": "34e77b5a-c8c3-5783-90a4-f0d9f655a7fc",
+        "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+        "title": "Share a one-page recommendation with the relevant Humphrey team",
+        "dueDate": "2026-11-02",
+        "websiteURL": null,
+        "assigneePersonID": null,
+        "isCompleted": false,
+        "createdAt": 814649176.5840001
+      },
+      {
+        "id": "be8bd70a-5f85-59fd-ac72-3e30d57619f0",
+        "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+        "title": "Aim for a demonstrated test-environment pilot and timed restore exercise",
+        "dueDate": "2026-11-28",
+        "websiteURL": null,
+        "assigneePersonID": null,
+        "isCompleted": false,
+        "createdAt": 814649176.644
+      }
+    ],
+    "venueName": "",
+    "workspaceBudgetCap": null
+  },
+  "childEvents": [
+    {
+      "id": "39f2d381-f45f-546c-be9d-cfebfdcf9467",
+      "title": "IBM Bob User Group: Part 1 — Meet IBM Bob (MUP-4635)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814726800,
+      "schedulingState": "scheduled",
+      "endsAt": 814730400,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "B215, Level 2, Building B",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=MUP-4635",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "cdd176da-88b4-5891-9b8c-8ed5f23e0ed9",
+      "title": "IBM Bob User Group: Part 3 — IBM i Development and Modernization (MUP-4637)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814735800,
+      "schedulingState": "scheduled",
+      "endsAt": 814739400,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "B215, Level 2, Building B",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=MUP-4637",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "c7dbc91a-f075-58d4-813c-e47d57310cab",
+      "title": "Opening night block party (optional) (NETWORK)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814744800,
+      "schedulingState": "scheduled",
+      "endsAt": 814755600,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "Sandbox Expo",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://www.ibm.com/events/techxchange/experience\nOptional item in the source itinerary.",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "980e7676-7710-5de9-9747-67fc7f0cc000",
+      "title": "Opening general session — Make Your Agents Enterprise Ready (GEN-5572)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814798800,
+      "schedulingState": "scheduled",
+      "endsAt": 814802400,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "Hall B4, Building B, GWCC",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog/session/1790115059212001fgKJ",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "932b1cf1-b423-52ae-9890-e075c1bf6d74",
+      "title": "Navigating the HA/DR Maze: Make the Right Move (TEC-4380)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814804200,
+      "schedulingState": "scheduled",
+      "endsAt": 814806900,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "C212, Level 2, Building C",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4380",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "83e3c2a8-ac8c-5caa-9c82-c8296947e6b7",
+      "title": "Demo: IBM Bob Premium Package for i (DMO-4677)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814807800,
+      "schedulingState": "scheduled",
+      "endsAt": 814809600,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "IBM Bob for Infrastructure, Sandbox",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=DMO-4677",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "5be84635-7ff7-5735-a50a-19755193b15e",
+      "title": "Meet the Expert: IBM Bob Self-hosted (MTE-5888)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814815000,
+      "schedulingState": "scheduled",
+      "endsAt": 814816800,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "Expert Bar 01, IBM Bob, Sandbox",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=MTE-5888",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "4a95a011-827d-599c-80b1-cfa6623f3363",
+      "title": "IBM Bob & Db2 for i (TEC-4512)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814819500,
+      "schedulingState": "scheduled",
+      "endsAt": 814822200,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "C208, Level 2, Building C",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4512",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "dc41fc15-4152-5a6c-9e49-fb9355f42844",
+      "title": "An Overview of IBM i Migrate While Active (TEC-4455)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814824000,
+      "schedulingState": "scheduled",
+      "endsAt": 814826700,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "C213, Level 2, Building C",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4455",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "ed862a34-127e-58f2-a44c-a55ae467c97c",
+      "title": "Creating Virtual IBM i Partitions Hosted by IBM i (TEC-4470)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814890600,
+      "schedulingState": "scheduled",
+      "endsAt": 814893300,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "C208, Level 2, Building C",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4470",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "4508a656-7577-59b9-ad29-1a1ef5a748f5",
+      "title": "Meet the Expert: Bill Starke — IBM Power (MTE-4977)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814894200,
+      "schedulingState": "scheduled",
+      "endsAt": 814896000,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "Workbench 03, Infrastructure, Sandbox",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=MTE-4977",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "a5fbe4ba-7b04-5779-8067-9e243bcf0f60",
+      "title": "Meet the Expert: Tim Rowe — Bob for IBM i (MTE-5894)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814897800,
+      "schedulingState": "scheduled",
+      "endsAt": 814899600,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "Expert Bar 01, IBM Bob, Sandbox",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=MTE-5894",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "1e8f5d6d-a655-5fb1-8233-759b5abe02d9",
+      "title": "DR Planning Yearly Checkup (TEC-4522)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814901400,
+      "schedulingState": "scheduled",
+      "endsAt": 814904100,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "C213, Level 2, Building C",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4522",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "373a5267-bc21-5fe0-ae1c-a2312a6d652c",
+      "title": "Optimizing Performance Priorities with Power11 Resource Groups (TEC-1402)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814905900,
+      "schedulingState": "scheduled",
+      "endsAt": 814908600,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "C205, Level 2, Building C",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-1402",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "7d5ad4d1-ecd8-5723-8a4a-7aee8728e068",
+      "title": "Rapid Fire Tips for Using IBM i on PowerVS (TLK-4864)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814910400,
+      "schedulingState": "scheduled",
+      "endsAt": 814911600,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "Tech Talk 08 / 831, COMMON Hub, Sandbox",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TLK-4864",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "1ae66c7b-613b-56fb-a05a-bbc634da74a7",
+      "title": "Deep Dive with IBM Bob Premium Package for i (TEC-4517)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814971600,
+      "schedulingState": "scheduled",
+      "endsAt": 814974300,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "C209, Level 2, Building C",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4517",
+      "dressCode": "",
+      "budgetCap": null
+    },
+    {
+      "id": "da1c12fc-eb1a-5717-9254-03a0712d9997",
+      "title": "Full-System Resilience for IBM i on PowerVS: Live Demo (TEC-4499)",
+      "category": "other",
+      "purpose": "eventExperience",
+      "scheduledAt": 814976100,
+      "schedulingState": "scheduled",
+      "endsAt": 814978800,
+      "isAllDay": false,
+      "timeZoneIdentifier": "America/New_York",
+      "eventLocation": {
+        "locationName": "C213, Level 2, Building C",
+        "placeName": "",
+        "shortAddress": "",
+        "address": "",
+        "addressLine2": "",
+        "latitude": null,
+        "longitude": null,
+        "mapItemIdentifier": null
+      },
+      "participantIDs": [
+        "10092c2c-47bb-5900-bdd8-b40d70453595"
+      ],
+      "parentEventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "status": "approved",
+      "completionStatus": "upcoming",
+      "response": null,
+      "linkedIdeaID": null,
+      "imageData": null,
+      "mediaAssetID": null,
+      "eventDescription": "Source: User-supplied pasted plan; catalog was not refetched.\nCatalog URL: https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4499",
+      "dressCode": "",
+      "budgetCap": null
+    }
+  ],
+  "notes": [
+    {
+      "id": "e02755f3-2c9f-5b5e-a452-999ce2646e9c",
+      "eventID": "39f2d381-f45f-546c-be9d-cfebfdcf9467",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Session preparation: bring current Power and IBM i configuration details. Source and context are in the parent event notes.",
+      "sentAt": 814649174.4909999
+    },
+    {
+      "id": "53dd3e4d-6e47-56f0-ad24-9280a813ad76",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (1/25)\n# IBM TechXchange 2026 — personal and Humphrey Products plan\n\nPrepared October 25, 2026 from the live IBM catalog inspected in your Safari session.\n\n**Attendance:** Monday, October 26 around noon through Thursday, October 29 at noon. All times below are Atlanta local time (EDT), which matches Detroit during the event.\n\n**Your priorities:** IBM i learning and modernization with on-premises deployment in mind; Bob for IBM i; backups while keeping the system available; cloud options; and Power11.\n\n**Known configuration:** You described the system as “the latest one.” Exact Power model, IBM i release/PTFs, storage, and backup tooling remain unconfirmed. This plan",
+      "sentAt": 814649174.9679999
+    },
+    {
+      "id": "e631a724-095a-565e-8fbd-ada8bfcc3931",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (2/25)\ndoes not assume a particular version or backup architecture.\n\n**Account status:** Your Safari Registration tab showed the IBM Events login form when checked. That is a separate account from IBMid. This is a recommended itinerary, with no event reservations or account favorites changed. The calendar file is an optional local import and does not reserve seats. Confirm access and any capacity limits in the attendee portal.\n\n## What to bring back\n\n1. **An on-premises modernization pilot:** document and improve one small IBM i application or process, with a test environment, baseline behavior, validation, and rollback.\n2. **A backup-window decision:** compare",
+      "sentAt": 814649175.0179999
+    },
+    {
+      "id": "e1826a0b-0a0a-5db7-ad95-e5855aa9bda0",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (3/25)\nfeasible approaches against Humphrey’s maximum acceptable application pause, recovery time (RTO), and acceptable data loss (RPO).\n3. **A Power11 and cloud decision note:** identify what the current system already provides, what needs configuring or licensing, and whether cloud dev/test or DR adds enough value to justify its ongoing cost.\n\nHumphrey designs and manufactures pneumatic and fluid-control products. My planning inference is to prioritize continuity of business operations and maintainable applications, then evaluate new tools through a bounded pilot. This is not an assertion about Humphrey’s current ERP or internal application architecture. [Humphrey",
+      "sentAt": 814649175.069
+    },
+    {
+      "id": "1852d789-9e6d-5d0f-a052-652d8f1d81a4",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (4/25)\ncompany background](https://www.humphrey-products.com/our-company).\n\n## Recommended agenda\n\nThese are non-overlapping selections with transition time between scheduled sessions. Check rooms and times in the linked catalog before attending. Most IBM i breakouts are in Building C; Sandbox and Building B trips need extra attention.\n\n### Monday, October 26\n\n| Time (EDT) | Session | Location | Purpose |\n|---|---|---|---|\n| 1:00 PM–2:00 PM | [IBM Bob User Group: Part 1 — Meet IBM Bob (MUP-4635)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=MUP-4635) | B215, Level 2, Building B | Learn Bob’s workflow and identify what is",
+      "sentAt": 814649175.1199999
+    },
+    {
+      "id": "4503d199-0fb1-5690-a54d-80678dfa5f16",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (5/25)\nspecific to IBM i versus general development. |\n| 3:30 PM–4:30 PM | [IBM Bob User Group: Part 3 — IBM i Development and Modernization (MUP-4637)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=MUP-4637) | B215, Level 2, Building B | Top priority. RPG/CL/DDS awareness, native tools, modernization use cases, and roadmap. Meet Tim Rowe, Ryan Moeller, and Anjali Kulkarni. |\n| 6:00 PM–9:00 PM | [Opening night block party (optional) (NETWORK)](https://www.ibm.com/events/techxchange/experience) | Sandbox Expo | Find two IBM i practitioners with on-premises systems and ask about their backup and modernization experience. |",
+      "sentAt": 814649175.1689999
+    },
+    {
+      "id": "b88596eb-8bc9-563c-b1be-895ea8e0745f",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (6/25)\nUse noon–1:00 for badge pickup, food, and finding B215. The IBM i RPG/Bob lab (LAB-3318) runs only Monday 10:00–11:30 in the inspected catalog, so it does not fit your arrival. Ask the Monday IBM i meetup speakers for its guide or a way to repeat it later.\n\n### Tuesday, October 27\n\n| Time (EDT) | Session | Location | Purpose |\n|---|---|---|---|\n| 9:00 AM–10:00 AM | [Opening general session — Make Your Agents Enterprise Ready (GEN-5572)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog/session/1790115059212001fgKJ) | Hall B4, Building B, GWCC | Optional broad context. Capture only announcements relevant to IBM i, Bob, or",
+      "sentAt": 814649175.227
+    },
+    {
+      "id": "140cd99a-dba5-5b20-a494-d00d6d0ddc5c",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (7/25)\noperating an on-premises environment. |\n| 10:30 AM–11:15 AM | [Navigating the HA/DR Maze: Make the Right Move (TEC-4380)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4380) | C212, Level 2, Building C | Top priority. Brian Nordland covers on-premises and cloud resilience choices. Ask for a follow-up on reducing the IBM i backup outage. |\n| 11:30 AM–12:00 PM | [Demo: IBM Bob Premium Package for i (DMO-4677)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=DMO-4677) | IBM Bob for Infrastructure, Sandbox | Watch the workflow and note prerequisites, platform connections, and",
+      "sentAt": 814649175.283
+    },
+    {
+      "id": "81121940-a67e-54f5-a8eb-9ea117798a5b",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (8/25)\nhow output is validated. |\n| 1:30 PM–2:00 PM | [Meet the Expert: IBM Bob Self-hosted (MTE-5888)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=MTE-5888) | Expert Bar 01, IBM Bob, Sandbox | Top priority for the on-premises goal. Ask Ryley Wharton about supported models, infrastructure, connectivity, licensing, and compatibility with Premium Package for i. |\n| 2:45 PM–3:30 PM | [IBM Bob & Db2 for i (TEC-4512)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4512) | C208, Level 2, Building C | Connect Bob evaluation to existing IBM i data and database development; identify",
+      "sentAt": 814649175.338
+    },
+    {
+      "id": "aeeafb9f-3f4e-568a-94f9-af55ae6a2f8c",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (9/25)\none small Humphrey pilot. |\n| 4:00 PM–4:45 PM | [An Overview of IBM i Migrate While Active (TEC-4455)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4455) | C213, Level 2, Building C | Learn reduced-disruption migration options for hardware refreshes, private cloud, or public cloud. Ask about remaining cutover downtime; this is a migration session, not a backup guarantee. |\n\nProtect 12:00–1:00 for lunch and notes. After the HA/DR session, ask Brian Nordland where and when you can discuss on-premises backup architecture in more detail.\n\n### Wednesday, October 28\n\n| Time (EDT) | Session | Location | Purpose |",
+      "sentAt": 814649175.3889999
+    },
+    {
+      "id": "93107826-5c77-51ab-9ad8-ad062e845213",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (10/25)\n|---|---|---|---|\n| 10:30 AM–11:15 AM | [Creating Virtual IBM i Partitions Hosted by IBM i (TEC-4470)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4470) | C208, Level 2, Building C | Top priority for an on-premises test environment. Pete Massiello covers IBM i hosting IBM i versus VIOS, prerequisites, virtual storage, and upgrade testing. |\n| 11:30 AM–12:00 PM | [Meet the Expert: Bill Starke — IBM Power (MTE-4977)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=MTE-4977) | Workbench 03, Infrastructure, Sandbox | Discuss Power11 architecture and what matters for",
+      "sentAt": 814649175.4449999
+    },
+    {
+      "id": "712fa675-08f9-5363-b639-5ae2740d6bdc",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (11/25)\nHumphrey’s actual workload. Bring model, processor, memory, storage, and utilization details if available. |\n| 12:30 PM–1:00 PM | [Meet the Expert: Tim Rowe — Bob for IBM i (MTE-5894)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=MTE-5894) | Expert Bar 01, IBM Bob, Sandbox | Top priority. Confirm the support matrix for IBM i plus self-hosted Bob, code understanding, documentation, modernization, and testing. |\n| 1:30 PM–2:15 PM | [DR Planning Yearly Checkup (TEC-4522)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4522) | C213, Level 2, Building C | Turn backup",
+      "sentAt": 814649175.497
+    },
+    {
+      "id": "a47b5478-6236-5933-9c41-085ff4a95b81",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (12/25)\ndiscussions into a recoverable plan: recovery steps, dependencies, owners, test frequency, and measurable recovery objectives. |\n| 2:45 PM–3:30 PM | [Optimizing Performance Priorities with Power11 Resource Groups (TEC-1402)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-1402) | C205, Level 2, Building C | Power11 / PowerVM architecture and performance priorities. Confirm which recommendations apply to IBM i and to Humphrey’s specific model; the presenter also works with AIX. |\n| 4:00 PM–4:20 PM | [Rapid Fire Tips for Using IBM i on PowerVS",
+      "sentAt": 814649175.5469999
+    },
+    {
+      "id": "e56b7311-a038-5e4d-a408-8877c50bb5c3",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (13/25)\n(TLK-4864)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TLK-4864) | Tech Talk 08 / 831, COMMON Hub, Sandbox | A compact cloud overview. Explore dev/test or DR use while retaining on-premises production as the planning baseline. |\n\nUse noon–12:30 for lunch and 4:20 onward for follow-ups. Optional evening: TechXchange Unplugged, 7:00–10:00 PM at Georgia Aquarium and World of Coca-Cola.\n\n### Thursday, October 29\n\n| Time (EDT) | Session | Location | Purpose |\n|---|---|---|---|\n| 9:00 AM–9:45 AM | [Deep Dive with IBM Bob Premium Package for i",
+      "sentAt": 814649175.5969999
+    },
+    {
+      "id": "24a99c0b-5f3c-5ad7-8a2c-7725fef4f39e",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (14/25)\n(TEC-4517)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4517) | C209, Level 2, Building C | Top priority. Tim Rowe demonstrates architecture and programmer use cases. Close remaining questions about an on-premises modernization pilot. |\n| 10:15 AM–11:00 AM | [Full-System Resilience for IBM i on PowerVS: Live Demo (TEC-4499)](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4499) | C213, Level 2, Building C | Top priority for backup concepts. Brian Nordland demonstrates full-system FlashCopy and GRS in PowerVS. Explicitly ask which parts transfer to on-premises",
+      "sentAt": 814649175.644
+    },
+    {
+      "id": "de9332ee-d001-50c4-8ec6-6d8cd57e6900",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (15/25)\nstorage and what application pause remains. |\n\nFinish formal sessions at 11:00 and protect the remaining hour for departure. This assumes noon means leaving the event; if noon is your flight departure, omit the 10:15 session and arrange a backup discussion earlier. Avoid the 11:00–12:30 labs.\n\n## Questions that matter for Humphrey\n\n### Backups while the system stays available — highest-priority expert discussion\n\nStart with: “We want to retain on-premises IBM i production and reduce or eliminate the application outage during backups. Can you outline supported options for our specific storage and recovery requirements?”\n\n- What is being protected: selected",
+      "sentAt": 814649175.6930001
+    },
+    {
+      "id": "073323b4-ac01-50d6-92b8-b6517aef4da5",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (16/25)\nlibraries/IFS and application data, or a complete system recovery image? Which operations still require restricted state, quiescing, or a checkpoint wait?\n- How far can save-while-active and BRMS reduce the current window? How are multi-library transactions, journals, IFS objects, and application consistency handled?\n- If FlashCopy or a separate backup partition is appropriate, which storage, licenses, orchestration tools, and spare capacity are required? What is the measured pause on production?\n- Would replication and saving from a secondary system be suitable? How are independent historical copies retained and restores tested?\n- What are the achievable",
+      "sentAt": 814649175.743
+    },
+    {
+      "id": "f35891ed-2201-56d8-95b3-01783e975503",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (17/25)\nRPO/RTO, implementation effort, ongoing cost, and restore procedure for each option?\n- Can the specialist provide a diagram, prerequisites, and a reference architecture for **on-premises IBM i**, followed by a test plan?\n\nIBM documents save-while-active as saving parts of a system without restricted state, with checkpoint constraints. That does not establish that every full-system backup can run with zero application interruption. IBM also documents backup-window reduction using replication and FlashCopy approaches. The catalog’s full-system demonstration is explicitly PowerVS, so its on-premises applicability must be confirmed. [Save-while-active",
+      "sentAt": 814649175.7939999
+    },
+    {
+      "id": "a07491ef-05cc-58dd-8909-ce077fdcaab7",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (18/25)\nconcepts](https://www.ibm.com/docs/en/i/7.5.0?topic=function-save-while-active-concepts), [backup-window reduction](https://www.ibm.com/docs/en/i/7.5.0?topic=availability-backup-window-reduction).\n\n### Bob for IBM i and self-hosted deployment\n\n- Can Premium Package for i run with the proposed self-hosted Bob deployment? Request the current support matrix, not a roadmap assumption.\n- Which pieces stay on premises: source, prompts, model inference, metadata, logs, credentials, and tool execution? What external connectivity remains necessary?\n- What are the supported IBM i releases, developer workstation tools, server components, models, hardware requirements, and",
+      "sentAt": 814649175.839
+    },
+    {
+      "id": "f7fed4cd-aa50-509f-a712-5173a02de176",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (19/25)\nlicensing costs?\n- Can we start with code understanding, dependency mapping, business-rule documentation, or tests before changing RPG/CL/DDS or the database?\n- How do we compile, compare behavior, review changes, and roll back? What cannot safely be automated yet?\n\n### Power11 and cloud\n\n- What changes are relevant to our actual Power model, firmware, IBM i release, virtualization, and storage arrangement?\n- Which capabilities require hardware, firmware, PowerVM, or licensing changes? Which Resource Group recommendations apply to IBM i workloads?\n- For any hardware move, what service interruption remains and what must be tested before cutover?\n- Can PowerVS",
+      "sentAt": 814649175.885
+    },
+    {
+      "id": "45a8689c-0ba8-5bab-a507-ac63baaefe39",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (20/25)\nserve a bounded dev/test or DR role while production remains on premises? Obtain realistic compute, storage, connectivity, backup, software, and standby costs, plus an exit/restore path.\n\n## Alternatives — replace a conflicting session, do not stack them\n\n| Alternative | Time / place | Use it when |\n|---|---|---|\n| [From Idea to Application with Bob — LAB-4975](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=LAB-4975) | Mon 4:15–5:45 PM, Lab 04 | You prefer a general hands-on Bob lab over the IBM i meetup. It overlaps the meetup; my recommendation is the IBM i meetup. The Wed 4:45–6:15 repeat can fit if you want a lab",
+      "sentAt": 814649175.9330001
+    },
+    {
+      "id": "eb2ee5e0-eaff-5aed-a995-0ba7d8e8540b",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (21/25)\nlater. |\n| [Air-gapped Bob deployment lab — LAB-3069](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=LAB-3069) | Mon 2:15–3:45 PM, Lab 02 | Deployment implementation is more urgent than the IBM i community discussion. It overlaps the 3:30 meetup. The Thu repeat ends after your departure. |\n| [Navigator for i — Administrator’s View — TEC-4459](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog?search=TEC-4459) | Wed 4:00–4:45 PM, C207 | Daily on-premises administration is more valuable than the short PowerVS overview. |\n| [IBM i MCP Server —",
+      "sentAt": 814649175.9790001
+    },
+    {
+      "id": "91bc07f2-caae-5a3c-809d-f8e68a9b23c3",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (22/25)\nTEC-4514](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog/session/1783100663083001QMlT) | Thu 10:15–11:00 AM, C209 | Agent integration takes priority over the FlashCopy demo. For your stated backup goal, I favor FlashCopy. |\n| [Power10/Power11 architecture distinctions — TEC-1403](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog/session/1776127585244001bhH2) | Thu 9:00–9:45 AM, C205 | Hardware selection is the immediate decision. It conflicts with the Bob deep dive; discuss hardware with Bill Starke Wednesday if you keep Bob. |\n\n## Make the learning usable\n\nBefore each expert conversation,",
+      "sentAt": 814649176.0239999
+    },
+    {
+      "id": "0e7e8fc1-9ead-5d07-b7bf-df0ffd500c57",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (23/25)\nhave a short configuration note: Power model, IBM i release/PTFs, internal disks versus external storage and model, backup software and target, current save duration/application outage, data volume and growth, journaling/replication, and the latest successful restore test. Obtain missing details from the appropriate Humphrey owner; no production changes are needed for this preparation.\n\nAfter each session, capture: **one useful idea, one prerequisite or limitation, one Humphrey use case, one contact, and one next action**. Ask speakers where to obtain guides and slides; keep source material separate from your own conclusions.\n\nWithin two business days of",
+      "sentAt": 814649176.073
+    },
+    {
+      "id": "1001e929-56a3-58f2-9cf2-1f336c270ed1",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (24/25)\nreturning, share a one-page recommendation with the relevant Humphrey team: one small Bob/IBM i pilot, a backup options comparison, and unresolved Power11/cloud questions. Within 30 days, aim for a demonstrated pilot in a test environment and a timed restore exercise for the selected backup approach. Agree measurable targets with the team before implementation rather than promising unverified savings or zero downtime.\n\nUseful official links: [session catalog](https://reg.tools.ibm.com/flow/ibm/techxchange26/sessioncatalog/page/sessioncatalog), [event experience and daily overview](https://www.ibm.com/events/techxchange/experience), [FAQ and event-account",
+      "sentAt": 814649176.1199999
+    },
+    {
+      "id": "a1b232ed-fe13-5d03-a1ab-b61f5919ca49",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Original conference plan (25/25)\nguidance](https://www.ibm.com/events/techxchange/faq). The FAQ confirms COMMON sessions are available to valid TechXchange attendees without a separate COMMON registration.",
+      "sentAt": 814649176.1700001
+    },
+    {
+      "id": "579e736c-e132-543c-9f5f-e197f8af4f92",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Planning goals\n1. An on-premises modernization pilot: document and improve one small IBM i application or process, with a test environment, baseline behavior, validation, and rollback.\n2. A backup-window decision: compare feasible approaches against Humphrey’s maximum acceptable application pause, recovery time (RTO), and acceptable data loss (RPO).\n3. A Power11 and cloud decision note: identify what the current system already provides, what needs configuring or licensing, and whether cloud dev/test or DR adds enough value to justify its ongoing cost.",
+      "sentAt": 814649176.2160001
+    },
+    {
+      "id": "99509d57-8bf0-5f50-ba3e-7634ceb68ec4",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Questions for expert discussions\nUse the full original plan notes for detailed questions. Priorities: on-premises backups with minimized interruption, IBM Bob for IBM i and self-hosted support, and Power11/cloud fit. Record constraints and verified details; exact Power model, IBM i release/PTFs, storage, and backup tooling are unknown.",
+      "sentAt": 814649176.2720001
+    },
+    {
+      "id": "98550bb5-23e9-5563-ad1d-c2c433b46ce8",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Preparation and follow-up\nBefore expert conversations, gather the Power model, IBM i release/PTFs, storage model, backup software and target, current save duration and application pause, data volume and growth, journaling/replication, and latest restore test. Get missing details from the relevant Humphrey owner. After each session, capture one useful idea, prerequisite or limitation, use case, contact, and next action. Within two business days of return, share a one-page pilot and backup comparison; within 30 days aim for a test-environment pilot and timed restore. These dates are goals, not commitments.",
+      "sentAt": 814649176.3299999
+    },
+    {
+      "id": "3464414f-8a89-5350-beb1-81ee647d011b",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "authorUserID": "mcp-conference-341cb158-6ba1-4cad-8f2a-9c23a4b1d815",
+      "body": "Conference source and review boundary\nPrepared October 25, 2026 from user-pasted material said to have been inspected in Safari. Links and times are preserved from that material and were not independently verified. Recommended itinerary only; no session reservations or account favorites are created.",
+      "sentAt": 814649176.3859999
+    }
+  ],
+  "tasks": [
+    {
+      "id": "d8ee7cee-c9d5-5b5d-b0b9-65cf4be5f27c",
+      "eventID": "39f2d381-f45f-546c-be9d-cfebfdcf9467",
+      "title": "Capture one useful idea, prerequisite, use case, contact, and next action",
+      "dueDate": "2026-10-26",
+      "websiteURL": null,
+      "assigneePersonID": null,
+      "isCompleted": false,
+      "createdAt": 814649174.5539999
+    },
+    {
+      "id": "139dcded-5ed3-5783-bd8f-330aab98a978",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "title": "Prepare configuration note for expert conversations",
+      "dueDate": "2026-10-26",
+      "websiteURL": null,
+      "assigneePersonID": null,
+      "isCompleted": false,
+      "createdAt": 814649176.4619999
+    },
+    {
+      "id": "16be7ca7-0ba1-579c-b105-5bc2dfb72f93",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "title": "Capture one useful idea, prerequisite or limitation, use case, contact, and next action after each session",
+      "dueDate": "2026-10-29",
+      "websiteURL": null,
+      "assigneePersonID": null,
+      "isCompleted": false,
+      "createdAt": 814649176.52
+    },
+    {
+      "id": "34e77b5a-c8c3-5783-90a4-f0d9f655a7fc",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "title": "Share a one-page recommendation with the relevant Humphrey team",
+      "dueDate": "2026-11-02",
+      "websiteURL": null,
+      "assigneePersonID": null,
+      "isCompleted": false,
+      "createdAt": 814649176.5840001
+    },
+    {
+      "id": "be8bd70a-5f85-59fd-ac72-3e30d57619f0",
+      "eventID": "8b5da84e-25ad-52c2-bc35-de2e0fb4b542",
+      "title": "Aim for a demonstrated test-environment pilot and timed restore exercise",
+      "dueDate": "2026-11-28",
+      "websiteURL": null,
+      "assigneePersonID": null,
+      "isCompleted": false,
+      "createdAt": 814649176.644
+    }
+  ]
+}

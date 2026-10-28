@@ -12,7 +12,7 @@ struct BlueprintWorkspaceEventDetail: View {
     @State private var scrollProgress = CGFloat.zero
 
     var body: some View {
-        AdaptiveArtworkPresentation {
+        AdaptiveArtworkPresentation(artworkExtendsIntoSafeAreas: true) {
             GeometryReader { proxy in
                 let heroHeight = LayoutDimensions.heroHeight(
                     availableHeight: proxy.size.height,

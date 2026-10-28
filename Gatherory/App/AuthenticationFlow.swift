@@ -14,6 +14,7 @@ struct AuthenticationFlowContext: Equatable, Sendable {
     var isAuthenticated: Bool = false
     var guestPreparationFailed: Bool = false
     var preparedIdentityMatches: Bool = false
+    var hasLocalAccountLibraryReady = false
     var hasGuestInvitations: Bool = false
     var didJoinInvitationThisSession: Bool = false
     var alwaysShowsOnboarding: Bool = false
@@ -21,6 +22,7 @@ struct AuthenticationFlowContext: Equatable, Sendable {
     var usesRemoteAccountState: Bool = false
     var accountOnboardingState: AccountOnboardingState = .signedOut
     var sessionRestorationUnavailable = false
+    var isOfflineAccountSession = false
     var restorationSignInRequested = false
     var guestDiscardNeedsAttention = false
     var accountPreparationFailed = false
@@ -88,6 +90,7 @@ struct AuthenticationFlowChain: Sendable {
         InvitationHandler(),
         GuestModeHandler(),
         SignedOutHandler(),
+        LocalAccountLibraryHandler(),
         AccountPreparationHandler(),
         InvitationArrivalHandler(),
         OnboardingHandler(),
@@ -117,7 +120,13 @@ private struct GuestDiscardHandler: AuthenticationFlowHandler {
 
 private struct AccountRecoveryHandler: AuthenticationFlowHandler {
     func destination(for context: AuthenticationFlowContext) -> AuthenticationFlowDestination? {
-        context.isAuthenticated && context.accountPreparationFailed ? .accountRecovery : nil
+        // Keep an already activated account archive visible while remote
+        // preparation retries. The archive belongs to this exact identity;
+        // account recovery remains the destination when there is no local
+        // library available for the current account.
+        context.isAuthenticated && context.accountPreparationFailed && !context.hasLocalAccountLibraryReady
+            ? .accountRecovery
+            : nil
     }
 }
 
@@ -200,6 +209,19 @@ private struct AccountPreparationHandler: AuthenticationFlowHandler {
 private struct InvitationArrivalHandler: AuthenticationFlowHandler {
     func destination(for context: AuthenticationFlowContext) -> AuthenticationFlowDestination? {
         guard context.hasGuestInvitations || context.didJoinInvitationThisSession else { return nil }
+        return .app
+    }
+}
+
+private struct LocalAccountLibraryHandler: AuthenticationFlowHandler {
+    func destination(for context: AuthenticationFlowContext) -> AuthenticationFlowDestination? {
+        guard context.isAuthenticated,
+              context.hasLocalAccountLibraryReady,
+              !context.guestSignInRequested,
+              !context.guestImportNeedsSignIn,
+              !context.hasPendingGuestImport,
+              !context.guestDiscardNeedsAttention,
+              !context.accountDeletionCleanupPending else { return nil }
         return .app
     }
 }

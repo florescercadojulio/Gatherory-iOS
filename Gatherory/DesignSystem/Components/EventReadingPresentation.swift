@@ -6,6 +6,7 @@ struct EventReadingHero<EyebrowStatus: View, TimingLocation: View, Response: Vie
     let title: String
     let height: CGFloat
     let topSpacer: CGFloat
+    var bottomPadding: CGFloat
     var titleAction: AnyView?
     @ViewBuilder let eyebrowStatus: () -> EyebrowStatus
     @ViewBuilder let timingLocation: () -> TimingLocation
@@ -15,6 +16,7 @@ struct EventReadingHero<EyebrowStatus: View, TimingLocation: View, Response: Vie
         title: String,
         height: CGFloat,
         topSpacer: CGFloat,
+        bottomPadding: CGFloat = AppTheme.Spacing.spacious,
         titleAction: AnyView? = nil,
         @ViewBuilder eyebrowStatus: @escaping () -> EyebrowStatus,
         @ViewBuilder timingLocation: @escaping () -> TimingLocation,
@@ -23,6 +25,7 @@ struct EventReadingHero<EyebrowStatus: View, TimingLocation: View, Response: Vie
         self.title = title
         self.height = height
         self.topSpacer = topSpacer
+        self.bottomPadding = bottomPadding
         self.titleAction = titleAction
         self.eyebrowStatus = eyebrowStatus
         self.timingLocation = timingLocation
@@ -54,7 +57,9 @@ struct EventReadingHero<EyebrowStatus: View, TimingLocation: View, Response: Vie
             response()
         }
         .foregroundStyle(.white)
-        .padding(AppTheme.Spacing.spacious)
+        .padding(.horizontal, AppTheme.Spacing.spacious)
+        .padding(.top, AppTheme.Spacing.spacious)
+        .padding(.bottom, bottomPadding)
         .adaptiveReadingWidth(680)
         .frame(minHeight: LayoutDimensions.nonnegative(height), alignment: .bottom)
     }

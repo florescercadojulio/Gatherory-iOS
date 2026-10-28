@@ -43,6 +43,7 @@ struct PhotoAttachmentPicker: View {
                         }
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("photoAttachmentPicker.open")
             } else {
                 Button {
                     openImagePicker()
@@ -62,6 +63,7 @@ struct PhotoAttachmentPicker: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("photoAttachmentPicker.open")
             }
         }
         .accessibilityLabel(hasVisibleArtwork ? CoverImageCopy.changeImage : CoverImageCopy.addImage)
@@ -141,6 +143,7 @@ private struct AddImageView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isShowingPhotoPicker = false
     @State private var isLoadingImage = false
     @State private var isShowingCamera = false
     @State private var isShowingImagePlayground = false
@@ -183,7 +186,9 @@ private struct AddImageView: View {
                 }
 
                 Section {
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Button {
+                        isShowingPhotoPicker = true
+                    } label: {
                         ImageSourceRow(
                             title: CoverImageCopy.chooseFromPhotos,
                             detail: CoverImageCopy.photosDetail,
@@ -191,6 +196,7 @@ private struct AddImageView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("photoAttachmentPicker.chooseFromPhotos")
                     .disabled(isLoadingImage)
 
                     Button {
@@ -282,9 +288,15 @@ private struct AddImageView: View {
                         dismiss()
                     }
                     .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("photoAttachmentPicker.close")
                 }
             }
         }
+        .photosPicker(
+            isPresented: $isShowingPhotoPicker,
+            selection: $selectedPhoto,
+            matching: .images
+        )
         .onChange(of: selectedPhoto) { _, newValue in
             guard let newValue else { return }
             let requestID = beginRequest()

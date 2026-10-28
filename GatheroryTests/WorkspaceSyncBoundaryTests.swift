@@ -157,8 +157,10 @@ struct WorkspaceSyncBoundaryTests {
         try persistence.saveChanges(in: library)
         let queued = try ModelContext(persistence.container)
             .fetch(FetchDescriptor<PendingMutation>())
-        let beforeDelete = queued.map(PendingMutationSnapshot.init)
-        #expect(Set(queued.filter { $0.ownerUserID == "first" }.map(PendingMutationSnapshot.init)) == Set(firstMutations))
+        let firstAccountMutationsBeforeDelete = queued
+            .filter { $0.ownerUserID == "first" }
+            .map(PendingMutationSnapshot.init)
+        #expect(Set(firstAccountMutationsBeforeDelete) == Set(firstMutations))
         #expect(queued.contains { $0.ownerUserID == "second" })
 
         // Exercise the persistence boundary directly; the sync coordinator's
@@ -173,7 +175,12 @@ struct WorkspaceSyncBoundaryTests {
         let records = try reader.fetch(FetchDescriptor<WorkspaceRecord>())
         #expect(records.count == 1)
         #expect(records.first?.ownerUserID == "first")
-        #expect(Set(try reader.fetch(FetchDescriptor<PendingMutation>()).map(PendingMutationSnapshot.init)) == Set(beforeDelete))
+        let afterDeleteRecords = try reader.fetch(FetchDescriptor<PendingMutation>())
+        let afterDelete = afterDeleteRecords.map(PendingMutationSnapshot.init)
+        // The remote tombstone deletes the active second-account scope and its
+        // queued work. The first account's independent offline edit is retained.
+        #expect(Set(afterDelete) == Set(firstAccountMutationsBeforeDelete))
+        #expect(afterDeleteRecords.allSatisfy { $0.ownerUserID == "first" })
         let receipt = try #require(reader.fetch(FetchDescriptor<AppliedSyncEnvelope>()).first)
         #expect(receipt.id == deletion.id)
         #expect(receipt.ownerUserID == "second")

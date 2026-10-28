@@ -1,13 +1,65 @@
 # Gatherory App Store release and review handoff
 
-The [October 23 beta feedback follow-up](../../../gatherory-web-app/docs/release/beta-feedback-2026-10-23.md)
-changes date defaults/display and read-only collaborator contrast after build 5.
-It still needs a new native archive/upload; the browser beta gate needs a web
-deployment. The uploaded build described below does not contain these fixes.
+The later [release readiness audit](release-readiness-audit-2026-10-23.md)
+found and corrected an invitation-preview timezone issue, broken Home lifecycle
+shortcuts and the primer's upward practice gesture. It also improves safe sync
+failure diagnostics. These native/backend working-tree changes are newer than
+build 6 and require a new build plus the compatible backend deployment. The
+audit records current checks and remaining live-device acceptance separately
+from the uploaded build history below.
 
-The subsequent [main invitation tap-editing and sharing follow-up](event-invitation-cards.md#main-event-sharing-and-tap-editing--october-23-2026)
-also belongs in the next native build. It adds focused main-event edit sheets
-and sharing beside native Back; it requires no server or schema change.
+## TestFlight build 6 — October 23, 2026
+
+Version **1.0 (6)** was signed for Guide Systems LLC (`LW97NHT3JA`) and
+successfully uploaded to Gatherory's existing App Store Connect app
+(`6820635528`) at **8:27 PM America/Detroit**. Xcode completed with
+`EXPORT SUCCEEDED`; after processing, App Store Connect lists build 6 as
+**Testing**, expiring in 90 days, with both existing Friends & Family and
+External Friends & Family groups attached (four invitees). The detail confirms
+both groups. What to Test notes were saved, export compliance completed, and
+Submit for Review completed with automatic tester notification enabled. The
+overall status is Testing; no separate external review approval was observed.
+See [build 6 detail](https://appstoreconnect.apple.com/teams/56187352-94ba-429f-82d1-35f22508a99b/apps/6820635528/testflight/ios/d4faf37c-8300-40f5-8c8d-fb6a2374fb0a).
+
+The archive contains native HEAD `19833ddc93734b00cfe3a660f0e66f576e4a0118`
+(`Next release`) plus the build-number increment from 5 to 6. This includes the
+[beta date/contrast fixes](../../../gatherory-web-app/docs/release/beta-feedback-2026-10-23.md)
+and [main invitation tap editing/sharing](event-invitation-cards.md#main-event-sharing-and-tap-editing--october-23-2026).
+Share sits beside native Back; authorized main-event planners can tap title,
+date and location to open focused native edit sheets. Guests/view-only attendees
+stay read-only. These native changes require no server/schema changes; this
+upload does not establish the separate browser beta-gate deployment status.
+
+The submitted distribution signature and provisioning profile both verify
+`aps-environment=production`, `get-task-allow=false` and the exact Gatherory
+bundle/team. The archived app targets iOS 26.0 and uses
+`https://app.gatherory.com`; push, consent-gated production ads and PostHog are
+enabled. Development seeding, sign-in bypass and forced onboarding are disabled.
+
+For this build, App Store Connect's encryption question was answered **None of
+the algorithms mentioned above**: Gatherory's app code uses Apple OS networking
+for HTTPS, Apple Keychain for credentials and SHA-256 hashes, with no app-level
+cipher implementation found. No encryption declaration key was added to the
+project. Reassess this answer when the app's encryption usage changes.
+
+The pre-upload checks include the passing 1,023-test native unit suite
+(1,157 executions), all five focused invitation UI methods passing across the
+final run/rerun, normal Light/Dark visual review, Release simulator build and
+1,700-string English/Spanish localization check. The device archive passed.
+See [invitation verification](event-invitation-cards.md#main-event-sharing-and-tap-editing--october-23-2026)
+for evidence and the combined-bundle/UI-rerun distinction. Live sign-in,
+invitation delivery, cross-device date sync and physical-device push remain
+beta acceptance checks.
+
+The upload completed with the same two non-blocking vendor dSYM warnings
+for `GoogleMobileAds.framework` and `UserMessagingPlatform.framework`. Their
+internal stack traces may be less detailed. The existing App Intents metadata
+warning also remains; no SDK version was changed.
+
+Archive: `~/Library/Developer/Xcode/Archives/2026-10-23/Gatherory 1.0 (6).xcarchive`.
+Logs, testing notes and verified distribution settings:
+`/tmp/gatherory-testflight-1.0-6-*`. No database reset, backend deployment,
+Git commit/push or public App Store release was performed for this upload.
 
 ## TestFlight build 5 — October 23, 2026
 
@@ -65,8 +117,11 @@ Release now enables `FCM_NOTIFICATIONS_ENABLED=YES` and
 `EXPLORE_ADS_ENABLED=YES`. `EXPLORE_ADS_TEST_MODE=NO` retains Gatherory's
 production native ad unit. Existing UMP consent and notification opt-in remain
 required. Debug retains Google's sample ad unit and development APNs.
-`POSTHOG_ENABLED=YES` remains unchanged. General PostHog telemetry does not
-enable the separate, default-off recommendation measurement setting.
+`POSTHOG_ENABLED=YES` remains unchanged. Recommendation measurement remains
+separate from PostHog. The October 28 native source automatically enables its
+account-bound server setting after acknowledgement, with no Account toggle;
+signals still require valid public exposure context and server eligibility.
+This source change has not been uploaded by the current work.
 
 Production APNs setup was completed in Safari on October 23 for
 `gatherory-e4d8b` / `com.guide-systems.gatherory`, with the release owner's
@@ -207,7 +262,7 @@ item as proof that the current code lacks that feature.
 | **Blocking if collaboration is advertised** | Cross-device sync | Authenticated native entities are synchronized through PostgreSQL with idempotent mutation receipts, an ordered change cursor, canonical-table materialization, and organization membership authorization. Separate S3 media transfer is not yet complete. | Verify two-account collaboration and owner sync on physical devices. Do not advertise cross-device photo sync until media transfer is connected and tested. |
 | **Verified** | Legal and support URLs | Privacy, Terms, and Support URLs have been verified manually. | Recheck all three from a signed-out browser immediately before submission and keep the privacy answers accurate. See [Manage app privacy](https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy). |
 | **Blocking for weather** | WeatherKit provisioning | The entitlement is in the project; profile/account configuration must still match. | Enable WeatherKit for the production App ID and regenerate the distribution profile. Test a forecast in the archived build. |
-| Required | Export compliance | Not declared in the project. | Answer App Store Connect’s encryption questions. Add `ITSAppUsesNonExemptEncryption` only after confirming the correct answer. See [Apple’s encryption documentation guidance](https://developer.apple.com/help/app-store-connect/manage-app-information/determine-and-upload-app-encryption-documentation). |
+| Required | Export compliance | Answered for build 6 in App Store Connect; no declaration key in the project. | Reassess when encryption usage changes. Add `ITSAppUsesNonExemptEncryption` only after confirming the correct answer. See [Apple’s encryption documentation guidance](https://developer.apple.com/help/app-store-connect/manage-app-information/determine-and-upload-app-encryption-documentation). |
 | Required | App privacy | Not verifiable from code alone. | Declare every data type collected by Gatherory and its integrated providers, including authentication, photos, location, diagnostics, and user content as applicable. |
 | Required | Age rating | Not verifiable from code alone. | Complete the current age-rating questionnaire in App Store Connect. |
 

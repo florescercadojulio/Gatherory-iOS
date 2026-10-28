@@ -65,13 +65,13 @@ struct LocalGuestAccountView: View {
             }
             Section("App Settings") {
                 Toggle(isOn: $hapticsEnabled) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label(String(localized: "haptics.title", defaultValue: "Haptic Feedback"), systemImage: "waveform")
-                        Text(String(localized: "haptics.help", defaultValue: "Use gentle vibrations for actions and confirmations."))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: AppTheme.Spacing.compact) {
+                        Image(systemName: "waveform")
+                            .foregroundStyle(.blue)
+                        Text(String(localized: "haptics.title", defaultValue: "Haptic Feedback"))
                     }
                 }
+                HomeEventLayoutPicker()
             }
             Section {
                 Button(GuestCopy.leave, role: .destructive) { confirmsExit = true }

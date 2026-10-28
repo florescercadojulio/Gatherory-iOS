@@ -1,5 +1,50 @@
 # Event invitation cards
 
+## Lean opening invitation schedule — October 27, 2026
+
+The opening artwork is for scanning: a single-day event shows Yesterday,
+Today or Tomorrow in the event's local calendar, or a short date for other
+days. Timed events add only the start time. Multi-day events show a compact
+date range, with no repeated timestamps or time-zone line. Other-year dates
+retain their year. All-day events use the date alone and undecided schedules
+stay undecided. Relative labels use native localized formatting and refresh
+while the invitation remains open.
+
+The date tile below remains the place for the complete date/time range and
+time zone. VoiceOver retains that full schedule even when the hero's visible
+summary is short. The Add to Calendar footer keeps its native action without
+the visible copy/synchronization footnote.
+
+## Opening invitation RSVP spacing — October 27, 2026
+
+The invitation hero uses the available reading viewport instead of a fixed
+640-point cap. Its RSVP row has a 12-point normal-size bottom inset, bringing
+Going, Not Sure and Not Going closer to the native tabs without overlaying
+them. Responses remain part of the scrollable invitation. Long titles and
+schedule text can grow beyond the initial viewport and remain scrollable.
+Blueprint event heroes retain their existing default spacing.
+
+The main-event date button keeps its existing focused editor and permission
+checks; response state, pending/saved/error feedback and retry behavior are
+preserved. The lean schedule above supersedes the earlier full-schedule hero.
+
+## Full-screen artwork regression — October 27, 2026
+
+Invitation artwork must extend behind the status/navigation controls and bottom
+tabs. The iOS 27.1 adaptive artwork container was explicitly clipping its
+secondary artwork to content bounds, exposing the black root background above
+and below it. `EventInvitationScreen` now opts into
+`AdaptiveArtworkPresentation.artworkExtendsIntoSafeAreas`, retaining a single
+backdrop and its existing blur/scrim. The same setting also applies to the
+shared idea-detail reader (Ideas, Decide and Blueprint ideas) and Blueprint
+event details. The bounded decision deck card retains clipping. Both Home
+entry layouts retain native zoom navigation.
+
+The focused native UI regression opens the real cover fixture through Cards
+and Overview in Light/Dark, samples top/bottom safe-area image pixels and saves
+screenshots. It passed on iOS 27.0 and 27.1; see `testing-verification.md` under
+Invitation full-screen artwork. Other pending fixes were deferred for this pass.
+
 ## Main-event sharing and tap editing — October 23, 2026
 
 Opening an invitation from Home retains native back navigation and adds Share
@@ -63,17 +108,29 @@ October 23 verification (Xcode 27.1, iPhone 18 Pro simulator, iOS 27.0):
 
 These checks use synthetic, ephemeral local data and bypass authentication.
 They do not prove production sign-in, invitation-link creation/sending, live
-sync or an external Maps launch. There are no server/schema changes. This work
-requires a new native build; no TestFlight upload was performed for this change.
+sync or an external Maps launch. There are no server/schema changes. The
+subsequent [TestFlight build 6 upload](app-store-release.md#testflight-build-6--october-23-2026)
+includes these changes; device acceptance remains separate from the local checks.
 
 ## Invitation information cards
 
 The invitation information area uses compact cards over the event artwork.
-Schedule dates remain fully localized and use the event's time zone. Timed
-overnight or multi-day events include the end date beside the time range;
-multi-day all-day events show both dates. Status stays secondary, and the
-calendar action and its explanation share the schedule card without an extra
-nested card.
+The schedule card leads with a localized month/day stamp, weekday and readable
+time range; a year is added when it differs from the current event-local year.
+The event's time zone is secondary, including both zone abbreviations across
+a daylight-saving transition. Overnight and multi-day events retain a compact
+date range, and all-day ranges keep their inclusive displayed end date. Full
+dates and times remain in the accessibility label.
+
+Category, status and purpose are omitted from this focused schedule tile.
+Add to Calendar is a native footer row separated by a divider, with a short
+copy-only explanation, a disclosure chevron and a 44-point touch target. It
+opens the existing EventKit editor; it does not automatically save an event or
+create a synchronization link. Host date editing is a separate date-row action;
+guest/read-only viewing retains export without gaining edit controls.
+Unscheduled events offer date editing only when allowed and never fabricate a
+calendar export. See `InvitationSchedulePresentation.swift` and the schedule
+card acceptance in `testing-verification.md`.
 
 Music ideas keep a two-by-two preview of up to four tracks. Artwork tiles are
 88 points square (previously 52 points), with a taller preview area; tapping it
@@ -106,3 +163,13 @@ covered schedule dark/light and accessibility text, the enlarged four-cover
 grid, and update-card dark/light presentations. These are isolated presentation
 previews; no live announcement or album write, phone install, or test run was
 performed.
+
+## Main-event Photos presentation — October 27, 2026
+
+Choose from Photos now presents the system picker explicitly from the image
+choices screen's navigation host, instead of nesting a PhotosPicker control
+inside its Form row. Cancelling returns to image choices without discarding
+the main-event editor draft. The existing import, image preparation, file,
+camera and curated-cover paths remain in place. See
+`offline-recovery-2026-10-27.md` and `testing-verification.md` for this pass's
+executed native acceptance and remaining device checks.

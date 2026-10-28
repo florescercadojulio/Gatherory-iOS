@@ -163,38 +163,41 @@ struct EventInvitationScreen: View {
     var body: some View {
         Group {
             if let presentation {
-                AdaptiveArtworkPresentation {
-                    GeometryReader { proxy in
-                        let heroHeight = min(
-                            LayoutDimensions.heroHeight(
-                                availableHeight: proxy.size.height,
-                                isAccessibilitySize: dynamicTypeSize.isAccessibilitySize),
-                            LayoutDimensions.nonnegative(proxy.size.height - AppTheme.Spacing.section))
+                AdaptiveArtworkPresentation(
+                    artworkExtendsIntoSafeAreas: true,
+                    content: {
+                        GeometryReader { proxy in
+                            // Fill the reading viewport so the response controls
+                            // settle close to the native tab bar. Long titles and
+                            // schedule labels can still grow this scrollable hero.
+                            let heroHeight = LayoutDimensions.nonnegative(proxy.size.height)
 
-                        // This is a finite event detail surface, not an unbounded feed.
-                        // Resolving the complete layout up front keeps the bottom edge stable
-                        // when the final cards (map, album, or guest ideas) appear.
-                        ScrollView {
-                            VStack(spacing: 0) {
-                                hero(presentation, height: heroHeight)
-                                information(presentation)
+                            // This is a finite event detail surface, not an unbounded feed.
+                            // Resolving the complete layout up front keeps the bottom edge stable
+                            // when the final cards (map, album, or guest ideas) appear.
+                            ScrollView {
+                                VStack(spacing: 0) {
+                                    hero(presentation, height: heroHeight)
+                                    information(presentation)
+                                }
+                            }
+                            .scrollIndicators(.hidden)
+                            .scrollBounceBehavior(.basedOnSize)
+                            .appSoftScrollEdges()
+                            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                                InvitationScrollState.progress(for: geometry.contentOffset.y + geometry.contentInsets.top)
+                            } action: { _, newOffset in
+                                scrollState.progress = newOffset
                             }
                         }
-                        .scrollIndicators(.hidden)
-                        .scrollBounceBehavior(.basedOnSize)
-                        .appSoftScrollEdges()
-                        .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                            InvitationScrollState.progress(for: geometry.contentOffset.y + geometry.contentInsets.top)
-                        } action: { _, newOffset in
-                            scrollState.progress = newOffset
-                        }
+                    },
+                    artwork: {
+                        EventInvitationBackdrop(
+                            presentation: presentation, scrollState: scrollState,
+                            reduceMotion: reduceMotion, reduceTransparency: reduceTransparency
+                        )
                     }
-                } artwork: {
-                    EventInvitationBackdrop(
-                        presentation: presentation, scrollState: scrollState,
-                        reduceMotion: reduceMotion, reduceTransparency: reduceTransparency
-                    )
-                }
+                )
             } else {
                 ContentUnavailableView("Event unavailable", systemImage: "calendar.badge.exclamationmark")
             }
@@ -275,6 +278,7 @@ struct EventInvitationScreen: View {
             title: event.title,
             height: height,
             topSpacer: dynamicTypeSize.isAccessibilitySize ? 150 : 260,
+            bottomPadding: dynamicTypeSize.isAccessibilitySize ? AppTheme.Spacing.spacious : 12,
             titleAction: canEditMainEvent ? AnyView(
                 Button { beginEditing(.title) } label: {
                     Text(event.title)
@@ -349,6 +353,8 @@ struct EventInvitationScreen: View {
                 }
                 .padding(.top, AppTheme.Spacing.compact)
                 .appImageOverlayAppearance()
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("invitation.hero.response")
             }
         }
     }
@@ -394,19 +400,26 @@ struct EventInvitationScreen: View {
     }
 
     private func dateHeroLabel(_ event: EventPresentation) -> some View {
-        Group {
-            if let startsAt = event.startsAt {
-                Text(EventScheduleFormatter.string(
-                    from: startsAt,
-                    includesTime: false,
-                    timeZoneIdentifier: event.timeZoneIdentifier,
-                    dateStyle: .full
-                ))
-            } else {
-                Text("Date to be decided")
+        SwiftUI.TimelineView(.periodic(from: .now, by: 60)) { context in
+            let schedule = InvitationHeroSchedulePresentation(
+                startsAt: event.startsAt,
+                endsAt: event.endsAt,
+                isAllDay: event.isAllDay,
+                timeZoneIdentifier: event.timeZoneIdentifier,
+                now: context.date
+            )
+            VStack(spacing: 0) {
+                Text(schedule.text)
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("invitation.hero.schedule.text")
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(schedule.accessibilityText ?? schedule.text)
+            .accessibilityIdentifier("invitation.hero.schedule")
         }
-        .font(.headline)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func locationHeroLabel(_ event: EventPresentation) -> some View {
@@ -715,17 +728,19 @@ struct EventInvitationScreen: View {
     }
 
     private func timingCard(_ event: EventPresentation) -> some View {
-        EventInvitationScheduleCard(
-            categoryTitle: event.categoryTitle,
-            categorySymbol: event.categorySymbol,
-            dateText: event.startsAt.map {
-                invitationDateText($0, endsAt: event.endsAt, isAllDay: event.isAllDay, timeZoneIdentifier: event.timeZoneIdentifier)
-            } ?? String(localized: "Date to be decided"),
-            timeText: event.startsAt.flatMap { invitationTimeText($0, endsAt: event.endsAt, isAllDay: event.isAllDay, timeZoneIdentifier: event.timeZoneIdentifier) },
-            statusTitle: event.statusTitle,
-            statusSymbol: event.statusSymbol,
-            purposeTitle: event.purpose?.shortTitle,
-            purposeSymbol: event.purpose?.symbol,
+        let schedule = InvitationSchedulePresentation(
+            startsAt: event.startsAt,
+            endsAt: event.endsAt,
+            isAllDay: event.isAllDay,
+            timeZoneIdentifier: event.timeZoneIdentifier
+        )
+        return EventInvitationScheduleCard(
+            monthText: schedule.monthText,
+            dayText: schedule.dayText,
+            dateText: schedule.dateText ?? String(localized: "Date to be decided"),
+            timeText: schedule.timeText,
+            timezoneText: schedule.timezoneText,
+            accessibilityText: schedule.accessibilityText ?? String(localized: "Date to be decided"),
             addToCalendar: event.startsAt == nil ? nil : {
                 calendarDraft = CalendarEventDraft.make(
                     title: event.title,
@@ -739,49 +754,6 @@ struct EventInvitationScreen: View {
             },
             editAction: canEditMainEvent ? { beginEditing(.date) } : nil
         )
-    }
-
-    private func invitationDateText(_ date: Date, endsAt: Date?, isAllDay: Bool, timeZoneIdentifier: String) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
-        formatter.timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .autoupdatingCurrent
-        formatter.dateStyle = .full
-        formatter.timeStyle = .none
-        let start = formatter.string(from: date)
-        guard isAllDay, let endsAt else { return start }
-
-        var calendar = Calendar.autoupdatingCurrent
-        calendar.timeZone = formatter.timeZone
-        guard !calendar.isDate(date, inSameDayAs: endsAt) else { return start }
-        return "\(start) – \(formatter.string(from: endsAt))"
-    }
-
-    private func invitationTimeText(_ startsAt: Date, endsAt: Date?, isAllDay: Bool, timeZoneIdentifier: String) -> String {
-        guard !isAllDay else { return String(localized: "All-day") }
-        let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
-        let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .autoupdatingCurrent
-        formatter.timeZone = timeZone
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        let start = formatter.string(from: startsAt)
-        var endDateText: String?
-        let range = endsAt.map { end -> String in
-            var calendar = Calendar.autoupdatingCurrent
-            calendar.timeZone = timeZone
-            if !calendar.isDate(startsAt, inSameDayAs: end) {
-                let dateFormatter = DateFormatter()
-                dateFormatter.locale = .autoupdatingCurrent
-                dateFormatter.timeZone = timeZone
-                dateFormatter.dateStyle = .full
-                dateFormatter.timeStyle = .none
-                endDateText = dateFormatter.string(from: end)
-            }
-            return "\(start) – \(formatter.string(from: end))"
-        } ?? start
-        let zoneName = timeZone.abbreviation(for: startsAt) ?? timeZone.identifier
-        let endDate = endDateText.map { " · \($0)" } ?? ""
-        return "\(range)\(endDate) · \(zoneName)"
     }
 
     @ViewBuilder
@@ -1392,87 +1364,64 @@ private struct EventPlaylistArtworkGrid<Artwork: View>: View {
 }
 
 private struct EventInvitationScheduleCard: View {
-    let categoryTitle: String
-    let categorySymbol: String
+    let monthText: String?
+    let dayText: String?
     let dateText: String
     let timeText: String?
-    let statusTitle: String
-    let statusSymbol: String
-    let purposeTitle: String?
-    let purposeSymbol: String?
+    let timezoneText: String?
+    let accessibilityText: String
     let addToCalendar: (() -> Void)?
     var editAction: (() -> Void)? = nil
 
     var body: some View {
         EventInvitationFeatureCard {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                let scheduleContent = VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.compact) {
-                            categoryLabel
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                            Spacer(minLength: AppTheme.Spacing.compact)
-                            statusLabel
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                        }
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                let scheduleContent = HStack(alignment: .center, spacing: AppTheme.Spacing.standard) {
+                    dateStamp
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            categoryLabel
-                            statusLabel
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(dateText)
-                            .font(.title3.weight(.semibold))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.84))
                             .fixedSize(horizontal: false, vertical: true)
+
                         if let timeText {
-                            Label(timeText, systemImage: "clock")
-                                .font(.body)
-                                .foregroundStyle(.white.opacity(0.86))
+                            Text(timeText)
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.white)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        if let purposeTitle, let purposeSymbol {
-                            Label(purposeTitle, systemImage: purposeSymbol)
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.68))
+
+                        if let timezoneText {
+                            Text(timezoneText)
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.66))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityText)
 
                 if let editAction {
                     Button(action: editAction) { scheduleContent }
                         .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
                         .contentShape(Rectangle())
                         .accessibilityIdentifier("invitation.edit.date.info")
                         .accessibilityHint("Edits the main event date and time.")
                 } else {
                     scheduleContent
+                        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
                 }
 
                 if let addToCalendar {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .center, spacing: AppTheme.Spacing.compact) {
-                            calendarButton(addToCalendar)
-                            Text(AppCopy.Calendar.copyExplanation)
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.70))
-                                .fixedSize(horizontal: true, vertical: false)
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            calendarButton(addToCalendar)
-                            Text(AppCopy.Calendar.copyExplanation)
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.70))
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                    VStack(alignment: .leading, spacing: 0) {
+                        Divider()
+                            .overlay(.white.opacity(0.12))
+                        calendarButton(addToCalendar)
                     }
-                    .padding(.top, 2)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1480,39 +1429,76 @@ private struct EventInvitationScheduleCard: View {
         .appImageOverlayAppearance()
     }
 
-    private var categoryLabel: some View {
-        Label(categoryTitle, systemImage: categorySymbol)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.white.opacity(0.72))
-    }
-
-    private var statusLabel: some View {
-        Label(statusTitle, systemImage: statusSymbol)
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(.white.opacity(0.74))
+    @ViewBuilder
+    private var dateStamp: some View {
+        if let monthText, let dayText {
+            VStack(spacing: 0) {
+                Text(monthText)
+                    .font(.caption2.weight(.bold))
+                    .textCase(.uppercase)
+                    .foregroundStyle(.white.opacity(0.72))
+                Text(dayText)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 52)
+            .frame(minHeight: 58)
+            .accessibilityHidden(true)
+        } else {
+            Image(systemName: "calendar.badge.clock")
+                .font(.title2.weight(.regular))
+                .foregroundStyle(.white.opacity(0.72))
+                .frame(width: 52)
+                .frame(minHeight: 58)
+                .accessibilityHidden(true)
+        }
     }
 
     private func calendarButton(_ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(AppCopy.Calendar.add, systemImage: "calendar.badge.plus")
+            HStack(spacing: AppTheme.Spacing.compact) {
+                Label(AppCopy.Calendar.add, systemImage: "calendar.badge.plus")
+                Spacer(minLength: AppTheme.Spacing.compact)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.50))
+                    .accessibilityHidden(true)
+            }
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.88))
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("invitation.add-to-calendar")
     }
+}
+
+#Preview("Unscheduled event") {
+    EventInvitationScheduleCard(
+        monthText: nil,
+        dayText: nil,
+        dateText: String(localized: "Date to be decided"),
+        timeText: nil,
+        timezoneText: nil,
+        accessibilityText: String(localized: "Date to be decided"),
+        addToCalendar: nil
+    )
+    .padding()
+    .background(.black)
+    .preferredColorScheme(.dark)
 }
 
 #Preview("Main event schedule") {
     EventInvitationScheduleCard(
-        categoryTitle: "Main Event",
-        categorySymbol: "calendar",
+        monthText: "Jun",
+        dayText: "13",
         dateText: "Sunday, June 13, 2027",
-        timeText: "4:00 PM – 1:00 AM · Monday, June 14, 2027 · EDT",
-        statusTitle: "Confirmed",
-        statusSymbol: "checkmark.circle",
-        purposeTitle: nil,
-        purposeSymbol: nil,
+        timeText: "4:00 PM – 1:00 AM, June 13–14",
+        timezoneText: "EDT",
+        accessibilityText: "Sunday, June 13, 2027, 4:00 PM – 1:00 AM, Monday, June 14, 2027, EDT",
         addToCalendar: {}
     )
     .padding()
@@ -1522,14 +1508,12 @@ private struct EventInvitationScheduleCard: View {
 
 #Preview("Main event schedule · Light") {
     EventInvitationScheduleCard(
-        categoryTitle: "Main Event",
-        categorySymbol: "calendar",
+        monthText: "Jun",
+        dayText: "13",
         dateText: "Sunday, June 13, 2027",
-        timeText: "4:00 PM – 1:00 AM · Monday, June 14, 2027 · EDT",
-        statusTitle: "Confirmed",
-        statusSymbol: "checkmark.circle",
-        purposeTitle: nil,
-        purposeSymbol: nil,
+        timeText: "4:00 PM – 1:00 AM, June 13–14",
+        timezoneText: "EDT",
+        accessibilityText: "Sunday, June 13, 2027, 4:00 PM – 1:00 AM, Monday, June 14, 2027, EDT",
         addToCalendar: {}
     )
     .padding()
@@ -1539,14 +1523,12 @@ private struct EventInvitationScheduleCard: View {
 
 #Preview("Main event schedule · Large text") {
     EventInvitationScheduleCard(
-        categoryTitle: "Main Event",
-        categorySymbol: "calendar",
+        monthText: "Jun",
+        dayText: "13",
         dateText: "Sunday, June 13, 2027",
-        timeText: "4:00 PM – 1:00 AM · Monday, June 14, 2027 · EDT",
-        statusTitle: "Confirmed",
-        statusSymbol: "checkmark.circle",
-        purposeTitle: nil,
-        purposeSymbol: nil,
+        timeText: "4:00 PM – 1:00 AM, June 13–14",
+        timezoneText: "EDT",
+        accessibilityText: "Sunday, June 13, 2027, 4:00 PM – 1:00 AM, Monday, June 14, 2027, EDT",
         addToCalendar: {}
     )
     .padding()
@@ -1557,14 +1539,12 @@ private struct EventInvitationScheduleCard: View {
 
 #Preview("Overnight event · June 13–14") {
     EventInvitationScheduleCard(
-        categoryTitle: "Main Event",
-        categorySymbol: "calendar",
-        dateText: "Sunday, June 13, 2027",
-        timeText: "4:00 PM – 1:00 AM · Monday, June 14, 2027 · EDT",
-        statusTitle: "Confirmed",
-        statusSymbol: "checkmark.circle",
-        purposeTitle: nil,
-        purposeSymbol: nil,
+        monthText: "Jun",
+        dayText: "13",
+        dateText: "Sunday, June 13 – Monday, June 14, 2027",
+        timeText: "4:00 PM – 1:00 AM, June 13–14",
+        timezoneText: "EDT",
+        accessibilityText: "Sunday, June 13, 2027, 4:00 PM – 1:00 AM, Monday, June 14, 2027, EDT",
         addToCalendar: {}
     )
     .padding()
@@ -1574,14 +1554,12 @@ private struct EventInvitationScheduleCard: View {
 
 #Preview("All-day event · June 13–14") {
     EventInvitationScheduleCard(
-        categoryTitle: "Main Event",
-        categorySymbol: "calendar",
+        monthText: "Jun",
+        dayText: "13",
         dateText: "Sunday, June 13 – Monday, June 14, 2027",
         timeText: String(localized: "All-day"),
-        statusTitle: "Confirmed",
-        statusSymbol: "checkmark.circle",
-        purposeTitle: nil,
-        purposeSymbol: nil,
+        timezoneText: nil,
+        accessibilityText: "Sunday, June 13 – Monday, June 14, 2027, All-day",
         addToCalendar: {}
     )
     .padding()

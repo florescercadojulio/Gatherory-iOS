@@ -442,6 +442,7 @@ private struct DecisionCard: View {
         .shadow(color: .black.opacity(0.18), radius: 20, y: 10)
         .matchedTransitionSource(id: idea.id, in: transitionNamespace)
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("decision-card-\(idea.id)")
         .accessibilityHint("Opens idea details. Swipe left to pass, right to love it, or up to save for later.")
     }
 
@@ -473,7 +474,7 @@ private struct DecisionCard: View {
 
 }
 
-/// The same summary surface in the deck and its expanded detail destination.
+/// A bounded preview for the deck; idea details retain the full reading layout.
 struct IdeaSummaryCard<Footer: View>: View {
     let idea: PlanningIdea
     let currencyCode: String
@@ -481,7 +482,7 @@ struct IdeaSummaryCard<Footer: View>: View {
     @ViewBuilder var footer: () -> Footer
 
     var body: some View {
-        IdeaSummaryContent(title: idea.title, note: idea.note, category: idea.category) {
+        IdeaSummaryContent(title: idea.title, note: idea.note, category: idea.category, isDecisionCard: true) {
             if let cost = idea.estimatedCost {
                 Text(cost, format: .currency(code: currencyCode).precision(.fractionLength(0)))
                     .font(.subheadline.weight(.semibold))

@@ -122,6 +122,83 @@ struct OfflineSyncTests {
         #expect(SyncDiagnostics.serverFailure(in: Data("not json".utf8)).code == nil)
     }
 
+    @Test("Sync failure log attributes preserve release context and exclude server details")
+    func syncFailureLogAttributesAreBounded() {
+        let attributes = SyncFailureLogAttributes.make(
+            trigger: .appBecameActive,
+            stage: "push_pull",
+            error: CloudSyncFailure.server("PRIVATE_SERVER_MESSAGE_HTTP_500"),
+            buildNumber: "6"
+        )
+
+        #expect(attributes["trigger"] == "appBecameActive")
+        #expect(attributes["stage"] == "push_pull")
+        #expect(attributes["build_number"] == "6")
+        #expect(attributes["error_type"] == "CloudSyncFailure")
+        #expect(attributes["failure_category"] == "server")
+        #expect(attributes["http_status"] == nil)
+        #expect(!attributes.values.contains { $0.contains("PRIVATE_SERVER_MESSAGE") })
+        #expect(!attributes.keys.contains("failure_code"))
+    }
+
+    @Test("Sync failure categories are fixed and HTTP status parsing is bounded")
+    func syncFailureCategoriesAndStatuses() {
+        let cases: [(CloudSyncFailure, String)] = [
+            (.invalidSession, "invalid_session"),
+            (.invalidResponse, "invalid_response"),
+            (.forbidden("private permission code"), "forbidden"),
+            (.server("arbitrary private code"), "server"),
+            (.payloadTooLarge, "payload_too_large"),
+            (.clientUpgradeRequired("private upgrade code"), "upgrade_required")
+        ]
+
+        for (failure, category) in cases {
+            let attributes = SyncFailureLogAttributes.make(
+                trigger: .manual,
+                stage: "push_pull",
+                error: failure,
+                buildNumber: "6"
+            )
+            #expect(attributes["failure_category"] == category)
+            #expect(attributes["http_status"] == nil)
+            #expect(!attributes.values.contains { $0.contains("private") })
+        }
+
+        let explicitStatus = SyncFailureLogAttributes.make(
+            trigger: .manual,
+            stage: "push_pull",
+            error: CloudSyncFailure.server("HTTP_500"),
+            buildNumber: "6"
+        )
+        #expect(explicitStatus["http_status"] == "500")
+
+        let outOfRangeStatus = SyncFailureLogAttributes.make(
+            trigger: .manual,
+            stage: "push_pull",
+            error: CloudSyncFailure.server("HTTP_099"),
+            buildNumber: "6"
+        )
+        #expect(outOfRangeStatus["http_status"] == nil)
+    }
+
+    @Test("Sync failure log attributes include only the numeric URL error code")
+    func syncFailureLogAttributesIncludeURLErrorCodeOnly() throws {
+        let failingURL = try #require(URL(string: "https://private.example/path?token=secret"))
+        let error = NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut, userInfo: [
+            NSLocalizedDescriptionKey: "PRIVATE request description",
+            NSURLErrorFailingURLErrorKey: failingURL
+        ])
+        let attributes = SyncFailureLogAttributes.make(
+            trigger: .manual,
+            stage: "push_pull",
+            error: error,
+            buildNumber: "6"
+        )
+
+        #expect(attributes["url_error_code"] == String(NSURLErrorTimedOut))
+        #expect(!attributes.values.contains { $0.contains("PRIVATE") || $0.contains("private.example") || $0.contains("token") })
+    }
+
     @Test("A cancelled pull cannot apply its late response during account teardown")
     @MainActor
     func cancelledPullDoesNotApply() async throws {
@@ -1217,7 +1294,7 @@ private final class SignOutSyncTransport: WorkspaceSnapshotTransport {
     }
     func pull(scopeID: UUID, after cursor: String?) async throws -> SyncPullPage {
         pullCount += 1
-        if failPull { throw CloudSyncFailure.server("SYNC_SCOPE_NOT_FOUND") }
+        if failPull { throw URLError(.notConnectedToInternet) }
         if holdNextPull {
             holdNextPull = false
             await withCheckedContinuation { resumePull = $0 }

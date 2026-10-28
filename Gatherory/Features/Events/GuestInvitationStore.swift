@@ -104,6 +104,7 @@ final class GuestInvitationStore {
     @ObservationIgnored private var leaveIntentEventIDs: Set<UUID> = []
     @ObservationIgnored private var leaveJournalUnreadable = false
     @ObservationIgnored private var leaveRequestsInFlight: Set<UUID> = []
+    @ObservationIgnored private var accountCacheNeedsRefresh = false
 
     init(
         baseURL: URL?,
@@ -151,8 +152,13 @@ final class GuestInvitationStore {
         if activeIdentity == identity { leaveIntentEventIDs = []; leaveJournalUnreadable = false }
     }
 
-    func activate(account newAccount: UserAccount?) async {
-        guard account?.id != newAccount?.id || localGuest != nil else { return }
+    func activate(account newAccount: UserAccount?, refreshRemote: Bool = true) async {
+        guard account?.id != newAccount?.id || localGuest != nil else {
+            if refreshRemote, newAccount != nil, accountCacheNeedsRefresh {
+                await refresh()
+            }
+            return
+        }
         refreshTask?.cancel()
         mediaTask?.cancel()
         identityGeneration = UUID()
@@ -172,9 +178,10 @@ final class GuestInvitationStore {
         leaveIntentEventIDs = []
         leaveJournalUnreadable = false
         leaveRequestsInFlight = []
+        accountCacheNeedsRefresh = newAccount != nil
         guard newAccount != nil else { return }
         restoreCache()
-        await refresh()
+        if refreshRemote { await refresh() }
     }
 
     func activate(localGuest newGuest: LocalGuestProfile?) async {
@@ -185,6 +192,7 @@ final class GuestInvitationStore {
         feedRevision = UUID()
         refreshTask = nil
         account = nil
+        accountCacheNeedsRefresh = false
         localGuest = newGuest
         localClient = newGuest.map(localClientFactory)
         events = []
@@ -209,6 +217,7 @@ final class GuestInvitationStore {
             if !force { return }
         }
         guard activeIdentity != nil, activeTransport != nil else { return }
+        accountCacheNeedsRefresh = false
         let task = Task { await loadFeed() }
         refreshTask = task
         await task.value
@@ -547,6 +556,7 @@ final class GuestInvitationStore {
         feedRevision = UUID()
         refreshTask = nil
         account = nil
+        accountCacheNeedsRefresh = false
         localGuest = nil
         localClient = nil
         events = []

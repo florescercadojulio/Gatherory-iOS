@@ -325,11 +325,10 @@ catalog behavior. Older servers can ignore the additive query parameter.
 
 The server now supports an experimental `blueprint-personal-likes-v2` rule behind
 the same `ranking=baseline_v1` request. It uses only the requesting account's
-current exact public Likes and bounded public-content overlap; measurement opt-in
+current exact public Likes and bounded public-content overlap; measurement
 is independent. Bookmarks, installs and other accounts' Likes do not contribute.
 The native client preserves server order and performs no local affinity ranking.
-Account settings explain in English and Spanish that Likes tailor recommendations
-and can be undone. See the server's [personal Like rule and evaluation](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/08-personal-like-ranking.md)
+Likes can be undone in the existing preference controls. See the server's [personal Like rule and evaluation](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/08-personal-like-ranking.md)
 for the original implementation history. The server-only [v2 precision tuning](../../../gatherory-web-app/docs/roadmaps/blueprint-ranking-roadmap/09-personal-like-precision.md)
 separates title/summary/notes roles, downweights common content and normalizes
 similarity. Its policy fingerprint restarts incompatible v1 cursors even if order
@@ -373,17 +372,19 @@ Not interested choice and shows current public titles where available. A failed
 preference refresh keeps existing rows visible and offers a retry; an empty
 initial load shows progress instead of a false empty state.
 
-Explore passes its account-bound action store into Account settings, so consent
-and saved preferences are immediately shared between both surfaces. Closing
+Explore passes its account-bound action store into Account settings, so saved
+preferences are immediately shared between both surfaces. Closing
 Account settings and returning to Explore after a tab or scene transition
 refreshes preferences, consent, and the current catalog page. The impression
 dwell pauses while Account settings or a category screen covers Explore.
 
-The account setting **Improve Blueprint recommendations** is off by default and
-describes organic views, opens, and public source usage. Until the setting is
-enabled, the client does not submit measurement signals; preferences remain
-fully functional. Public catalog responses may include an expiring
-`discoveryContext` only for eligible opted-in viewers. A passive impression is
+As of October 28, Account no longer offers **Improve Blueprint recommendations**.
+When the signed-in store reads a disabled measurement setting, it enables the
+default through the existing acknowledged server update. Measurement remains
+off until the server confirms; failure can retry with the same request ID.
+Account resets and newer setting commands invalidate stale reads. Functional
+preferences remain independent. Public catalog responses may include an expiring
+`discoveryContext` only for eligible enabled viewers. A passive impression is
 claimed after SwiftUI reports at least 50% scroll visibility continuously for
 one second while Explore is active and no preview or covering screen is
 presented. The card task is keyed to the account, consent state, exposure ID,

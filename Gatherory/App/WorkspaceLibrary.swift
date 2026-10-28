@@ -142,7 +142,8 @@ extension WorkspaceLibrary {
         }
 
 #if DEBUG
-        return WorkspaceLibrary(workspaces: SharedAlbumUITestFixtures.applying(to: workspaces))
+        return WorkspaceLibrary(workspaces: DecisionCardUITestFixtures.applying(
+            to: SharedAlbumUITestFixtures.applying(to: workspaces)))
 #else
         return WorkspaceLibrary(workspaces: workspaces)
 #endif

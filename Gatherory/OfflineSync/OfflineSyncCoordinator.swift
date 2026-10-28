@@ -119,14 +119,14 @@ actor OfflineSyncCoordinator {
                 guard Self.isAuthoritativeScopeRevocation(code) else {
                     throw CloudSyncFailure.forbidden(code)
                 }
-                guard try await remoteApplier.clearForbiddenScope(scopeID) else {
+                guard try await remoteApplier.clearForbiddenScope(scopeID, failureCode: code) else {
                     throw CloudSyncFailure.forbidden(code)
                 }
                 summary.scopeWasRevoked = true
                 summary.completedAt = .now
                 return summary
             } catch let CloudSyncFailure.server(code) where Self.isAuthoritativeScopeRevocation(code) {
-                guard try await remoteApplier.clearForbiddenScope(scopeID) else {
+                guard try await remoteApplier.clearForbiddenScope(scopeID, failureCode: code) else {
                     throw CloudSyncFailure.server(code)
                 }
                 summary.scopeWasRevoked = true

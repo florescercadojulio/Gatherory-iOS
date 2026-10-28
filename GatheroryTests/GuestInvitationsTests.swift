@@ -4,6 +4,39 @@ import Testing
 @testable import Gatherory
 
 struct GuestInvitationsTests {
+    @Test("Cached account invitations open without a request and refresh after validation")
+    @MainActor func cacheOnlyActivationThenValidation() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "guest-offline-start-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let savedEvent = try fixture(role: "guest")
+        let online = GuestTestTransport(events: [savedEvent])
+        let original = GuestInvitationStore(baseURL: nil, cacheDirectory: directory, client: online)
+        await original.activate(account: account("offline-guest"))
+
+        let retryTransport = GuestTestTransport(events: [])
+        retryTransport.failRefresh = true
+        let restored = GuestInvitationStore(baseURL: nil, cacheDirectory: directory, client: retryTransport)
+        await restored.activate(account: account("offline-guest"), refreshRemote: false)
+        #expect(retryTransport.refreshCount == 0)
+        #expect(restored.events.map(\.id) == [savedEvent.id])
+        #expect(restored.presentations[savedEvent.id] != nil)
+        #expect(!restored.isRefreshing)
+        #expect(restored.errorMessage == nil)
+
+        await restored.activate(account: account("offline-guest"))
+        #expect(retryTransport.refreshCount == 1)
+        #expect(restored.events.map(\.id) == [savedEvent.id])
+        #expect(restored.errorMessage != nil)
+
+        retryTransport.failRefresh = false
+        await restored.refresh(force: true)
+        #expect(restored.events.isEmpty, "An authoritative empty feed replaces the old cache.")
+        await restored.activate(account: account("another-account"), refreshRemote: false)
+        #expect(restored.events.isEmpty)
+        #expect(restored.presentations.isEmpty)
+        #expect(retryTransport.refreshCount == 2)
+    }
+
     @Test("Pulling invitations refreshes each person's RSVP for the matching event")
     @MainActor func refreshAttendance() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "guest-rsvp-test-\(UUID())")
@@ -264,8 +297,10 @@ struct GuestInvitationsTests {
     var events: [GuestEventInvitation]
     var failLeave = false
     var failRefresh = false
+    private(set) var refreshCount = 0
     init(events: [GuestEventInvitation]) { self.events = events }
     func invitations() async throws -> GuestInvitationFeed {
+        refreshCount += 1
         if failRefresh { throw EventInvitationFailure.unavailable }
         return GuestInvitationFeed(events: events)
     }

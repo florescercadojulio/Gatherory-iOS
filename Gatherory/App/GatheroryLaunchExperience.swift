@@ -30,6 +30,7 @@ struct GatheroryLaunchContainer: View {
     @State private var showsGuestAccount = false
     @State private var notificationNavigation = NotificationNavigationState()
     @State private var notificationSessionGeneration = UUID()
+    @State private var localAccountLibraryID: String?
 
     private var sessionIdentity: String {
         authentication.currentUser?.id ?? authentication.localGuestProfile?.storageID ?? "signed-out"
@@ -40,7 +41,9 @@ struct GatheroryLaunchContainer: View {
     }
 
     private var isSessionReady: Bool {
-        !authentication.deletionCleanup.blocksEntry && !authentication.isSessionRestorationUnavailable && !authentication.guestDiscardNeedsAttention &&
+        !authentication.deletionCleanup.blocksEntry
+            && (!authentication.isSessionRestorationUnavailable || authentication.isOfflineAccountSession)
+            && !authentication.guestDiscardNeedsAttention &&
             preparation.isReady(for: preparationRequest.identity)
     }
     private var preparationRecovery: SessionPreparationRecovery? { preparation.recovery(for: preparationRequest.identity) }
@@ -57,6 +60,7 @@ struct GatheroryLaunchContainer: View {
             isAuthenticated: authentication.isAuthenticated,
             guestPreparationFailed: preparationRecovery != nil,
             preparedIdentityMatches: isSessionReady,
+            hasLocalAccountLibraryReady: localAccountLibraryID == authentication.currentUser?.id,
             hasGuestInvitations: !guestInvitations.events.isEmpty,
             didJoinInvitationThisSession: invitations.didJoinThisSession,
             alwaysShowsOnboarding: AppRuntimeConfiguration.alwaysShowsOnboarding,
@@ -64,6 +68,7 @@ struct GatheroryLaunchContainer: View {
             usesRemoteAccountState: AppRuntimeConfiguration.usesRemoteAccountState,
             accountOnboardingState: cloudSync.accountOnboardingState,
             sessionRestorationUnavailable: authentication.isSessionRestorationUnavailable,
+            isOfflineAccountSession: authentication.isOfflineAccountSession,
             restorationSignInRequested: restorationSignInRequested,
             guestDiscardNeedsAttention: authentication.guestDiscardNeedsAttention,
             accountPreparationFailed: authentication.isAuthenticated && preparationRecovery != nil,
@@ -137,6 +142,11 @@ struct GatheroryLaunchContainer: View {
                     accountDeletionCleanupRecovery
                 case .app:
                     AppRootView()
+                        .safeAreaInset(edge: .top, spacing: 0) {
+                            if authentication.isOfflineAccountSession {
+                                offlineAccountBanner
+                            }
+                        }
                 case .onboarding:
                     OnboardingView(onCreateWorkspace: finishOnboarding, onSkipCreation: completeOnboarding)
                 case .remoteAccount:
@@ -158,10 +168,18 @@ struct GatheroryLaunchContainer: View {
             notificationNavigation.attendanceAnnouncement = nil
             completedOnboardingIdentity = nil
             restorationSignInRequested = false
+            if localAccountLibraryID != authentication.currentUser?.id {
+                localAccountLibraryID = nil
+            }
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .active, authentication.isOfflineAccountSession {
+                Task { await authentication.retrySessionRestoration() }
+                return
+            }
             guard phase == .active, hasRestoredAuthentication,
                   !authentication.isProcessing, !authentication.isSigningOut,
+                  !authentication.isOfflineAccountSession,
                   isSessionReady else { return }
             Task {
                 guard !authentication.isProcessing, !authentication.isSigningOut,
@@ -227,6 +245,13 @@ struct GatheroryLaunchContainer: View {
 
             await authentication.deletionCleanup.retry()
             await authentication.restoreSession()
+            if let account = authentication.currentUser {
+                persistence.activate(userID: account.id, in: workspaceLibrary)
+                workspaceLibrary.configureViewer(account)
+                await guestInvitations.activate(account: account, refreshRemote: false)
+                let hasLocalAccountContent = !workspaceLibrary.workspaces.isEmpty || !guestInvitations.events.isEmpty
+                localAccountLibraryID = hasLocalAccountContent ? account.id : nil
+            }
             hasRestoredAuthentication = true
             await minimumSplash.value
             guard !Task.isCancelled else { return }
@@ -235,10 +260,15 @@ struct GatheroryLaunchContainer: View {
                 isShowingSplash = false
             }
         }
+        .task(id: authentication.isOfflineAccountSession) {
+            guard authentication.isOfflineAccountSession else { return }
+            await authentication.revalidateOfflineSession()
+        }
         .task(id: "\(hasRestoredAuthentication)|\(sessionIdentity)|\(authentication.isSessionRestorationUnavailable)|\(authentication.deletionCleanup.blocksEntry)|\(preparationAttempt)") {
             // Never synchronize using a cached profile before its bearer
             // session has resolved to the canonical account identity.
-            guard hasRestoredAuthentication, !authentication.deletionCleanup.blocksEntry, !authentication.isSessionRestorationUnavailable,
+            guard hasRestoredAuthentication, !authentication.deletionCleanup.blocksEntry,
+                  (!authentication.isSessionRestorationUnavailable || authentication.isOfflineAccountSession),
                   !authentication.guestDiscardNeedsAttention else { return }
             invitations.resetJoinedSession()
             let request = preparationRequest
@@ -333,12 +363,33 @@ struct GatheroryLaunchContainer: View {
         } description: {
             Text(SessionFlowCopy.restorationHelp)
         } actions: {
-            Button(AppCopy.Common.retry) { Task { await authentication.restoreSession() } }
+            Button(AppCopy.Common.retry) { Task { await authentication.retrySessionRestoration() } }
                 .buttonStyle(.borderedProminent)
                 .foregroundStyle(AppTheme.ColorToken.onAccent)
             Button("Sign In") { restorationSignInRequested = true }
         }
         .disabled(authentication.isProcessing)
+    }
+
+    private var offlineAccountBanner: some View {
+        HStack(spacing: AppTheme.Spacing.compact) {
+            Image(systemName: "wifi.slash")
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .accessibilityHidden(true)
+            Text(SessionFlowCopy.offlineHelp)
+                .font(.footnote)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button(AppCopy.Common.retry) {
+                Task { await authentication.retrySessionRestoration() }
+            }
+            .font(.footnote.weight(.semibold))
+            .disabled(authentication.isProcessing)
+            .accessibilityIdentifier("offline-account.retry")
+        }
+        .padding(.horizontal, AppTheme.Spacing.standard)
+        .padding(.vertical, AppTheme.Spacing.compact)
+        .background(.regularMaterial)
+        .accessibilityElement(children: .contain)
     }
 
     private var accountDeletionCleanupRecovery: some View {

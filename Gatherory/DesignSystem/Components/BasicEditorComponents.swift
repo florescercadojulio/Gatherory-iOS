@@ -6,6 +6,14 @@ struct BasicEditorNameField: View {
     @Binding var text: String
     var capitalization: TextInputAutocapitalization = .words
     var fieldAccessibilityLabel: Text? = nil
+    var fieldAccessibilityIdentifier: String? = nil
+
+    private var textField: some View {
+        TextField(text: $text, prompt: prompt) {
+            fieldAccessibilityLabel ?? label ?? prompt
+        }
+        .textInputAutocapitalization(capitalization)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -15,10 +23,11 @@ struct BasicEditorNameField: View {
                     .foregroundStyle(.secondary)
             }
 
-            TextField(text: $text, prompt: prompt) {
-                fieldAccessibilityLabel ?? label ?? prompt
+            if let fieldAccessibilityIdentifier {
+                textField.accessibilityIdentifier(fieldAccessibilityIdentifier)
+            } else {
+                textField
             }
-                .textInputAutocapitalization(capitalization)
         }
     }
 }

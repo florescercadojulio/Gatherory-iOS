@@ -3,15 +3,86 @@ import SwiftUI
 @MainActor
 private enum WorkspaceBrowserSheet: Identifiable {
     case addWorkspace
+    case duplicateEvent(PlanningWorkspace, principalGeneration: UInt64)
     case blueprintCreateShare(PlanningWorkspace, createsShareLink: Bool)
     case blueprintLinks(BlueprintLinkManagementRequest)
 
     var id: String {
         switch self {
         case .addWorkspace: "add-workspace"
+        case .duplicateEvent(let workspace, let generation): "duplicate-event-\(workspace.mainEventID.uuidString)-\(generation)"
         case .blueprintCreateShare(let workspace, let createsShareLink): "blueprint-create-share-\(workspace.mainEventID.uuidString)-\(createsShareLink)"
         case .blueprintLinks(let request): request.id.uuidString
         }
+    }
+}
+
+@MainActor
+enum WorkspaceBrowserRequestIdentity {
+    static func isCurrent(
+        workspace: PlanningWorkspace,
+        principalGeneration: UInt64,
+        expectedPrincipalGeneration: UInt64,
+        isSigningOut: Bool,
+        workspaces: [PlanningWorkspace]
+    ) -> Bool {
+        expectedPrincipalGeneration == principalGeneration
+            && !isSigningOut
+            && workspaces.contains(where: { $0 === workspace })
+    }
+}
+
+@MainActor
+struct WorkspaceBrowserEventActionRequest {
+    let workspace: PlanningWorkspace
+    let action: EventRemovalAction
+    let title: String
+    let principalGeneration: UInt64
+
+    func isCurrent(
+        principalGeneration: UInt64,
+        isSigningOut: Bool,
+        workspaces: [PlanningWorkspace]
+    ) -> Bool {
+        WorkspaceBrowserRequestIdentity.isCurrent(
+            workspace: workspace,
+            principalGeneration: self.principalGeneration,
+            expectedPrincipalGeneration: principalGeneration,
+            isSigningOut: isSigningOut,
+            workspaces: workspaces
+        )
+    }
+}
+
+@MainActor
+private struct WorkspaceBrowserEventActionConfirmation: ViewModifier {
+    @Binding var request: WorkspaceBrowserEventActionRequest?
+    @Binding var isUnavailable: Bool
+    var onConfirm: (WorkspaceBrowserEventActionRequest) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .alert(
+                request?.title ?? AppCopy.EventRemoval.actions,
+                isPresented: Binding(
+                    get: { request != nil },
+                    set: { if !$0 { request = nil } }
+                ),
+                presenting: request
+            ) { request in
+                Button(request.action.title, role: .destructive) { onConfirm(request) }
+                Button(AppCopy.Common.cancel, role: .cancel) {}
+            } message: { request in
+                Text(request.action.confirmationMessage)
+            }
+            .alert(
+                AppCopy.EventRemoval.unavailableTitle,
+                isPresented: $isUnavailable
+            ) {
+                Button(AppCopy.Common.done, role: .cancel) {}
+            } message: {
+                Text(AppCopy.EventRemoval.unavailableMessage)
+            }
     }
 }
 
@@ -21,6 +92,8 @@ struct WorkspaceBrowserView: View {
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(AuthenticationSession.self) private var authentication
     @State private var activeSheet: WorkspaceBrowserSheet?
+    @State private var pendingMainEventAction: WorkspaceBrowserEventActionRequest?
+    @State private var isMainEventActionUnavailable = false
     @State private var selectedFilter: WorkspaceFilter = .all
     @State private var focusedEventID: UUID?
     var onExplore: () -> Void = {}
@@ -55,6 +128,7 @@ struct WorkspaceBrowserView: View {
                             .accessibilityHint("Opens this workspace")
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
                             .contextMenu {
+                                mainEventDuplicateAction(for: workspace)
                                 if sharingURL(for: workspace) != nil {
                                     Button(BlueprintCopy.saveBlueprint, systemImage: "square.and.arrow.down") {
                                         activeSheet = .blueprintCreateShare(workspace, createsShareLink: false)
@@ -65,14 +139,34 @@ struct WorkspaceBrowserView: View {
                                         Label(BlueprintCopy.shareTemplate, systemImage: "square.and.arrow.up")
                                     }
                                 }
+                                mainEventLifecycleActions(for: workspace)
                             }
                             .accessibilityActions {
+                                if PlanningWorkspaceDuplicateFactory.canDuplicate(
+                                    from: workspace,
+                                    owner: authentication.currentUser,
+                                    localGuest: authentication.isGuestMode ? authentication.localGuestProfile : nil
+                                ) {
+                                    Button(AppCopy.DuplicateEvent.title) {
+                                        requestDuplicateEvent(for: workspace)
+                                    }
+                                }
                                 if sharingURL(for: workspace) != nil {
                                     Button(BlueprintCopy.saveBlueprint) {
                                         activeSheet = .blueprintCreateShare(workspace, createsShareLink: false)
                                     }
                                     Button(BlueprintCopy.shareTemplate) {
                                         presentBlueprintLinks(for: workspace, mode: .share)
+                                    }
+                                }
+                                if workspace.canCancelEvent(.main) {
+                                    Button(AppCopy.Lifecycle.cancelEvent) {
+                                        requestMainEventAction(.cancelEvent, for: workspace)
+                                    }
+                                }
+                                if let action = workspace.eventRemovalAction(for: .main) {
+                                    Button(action.title) {
+                                        requestMainEventAction(action, for: workspace)
                                     }
                                 }
                             }
@@ -101,6 +195,11 @@ struct WorkspaceBrowserView: View {
                 }.padding().frame(maxWidth: .infinity).background(.regularMaterial)
             }
         }
+        .modifier(WorkspaceBrowserEventActionConfirmation(
+            request: $pendingMainEventAction,
+            isUnavailable: $isMainEventActionUnavailable,
+            onConfirm: confirmMainEventAction
+        ))
         .navigationTitle("")
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
@@ -132,6 +231,11 @@ struct WorkspaceBrowserView: View {
             activeSheet = nil
             focusedEventID = nil
         }
+        .onChange(of: authentication.principalGeneration) { _, _ in
+            activeSheet = nil
+            pendingMainEventAction = nil
+            isMainEventActionUnavailable = false
+        }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .addWorkspace:
@@ -139,6 +243,16 @@ struct WorkspaceBrowserView: View {
                     NewWorkspaceView()
                 }
                 .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            case .duplicateEvent(let workspace, let principalGeneration):
+                WorkspaceBrowserDuplicateEventSheet(workspace: workspace) { title in
+                    duplicateEvent(
+                        workspace,
+                        principalGeneration: principalGeneration,
+                        title: title
+                    )
+                }
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             case .blueprintCreateShare(let workspace, let createsShareLink):
                 NavigationStack {
@@ -184,6 +298,92 @@ struct WorkspaceBrowserView: View {
             workspace: workspace
         )
         activeSheet = .blueprintLinks(request)
+    }
+
+    @ViewBuilder
+    private func mainEventDuplicateAction(for workspace: PlanningWorkspace) -> some View {
+        if PlanningWorkspaceDuplicateFactory.canDuplicate(
+            from: workspace,
+            owner: authentication.currentUser,
+            localGuest: authentication.isGuestMode ? authentication.localGuestProfile : nil
+        ) {
+            Button(AppCopy.DuplicateEvent.title, systemImage: "plus.square.on.square") {
+                requestDuplicateEvent(for: workspace)
+            }
+            .accessibilityIdentifier("workspace.duplicateEvent")
+        }
+    }
+
+    private func requestDuplicateEvent(for workspace: PlanningWorkspace) {
+        activeSheet = .duplicateEvent(workspace, principalGeneration: authentication.principalGeneration)
+    }
+
+    private func duplicateEvent(
+        _ source: PlanningWorkspace,
+        principalGeneration: UInt64,
+        title: String
+    ) -> Bool {
+        guard WorkspaceBrowserRequestIdentity.isCurrent(
+                  workspace: source,
+                  principalGeneration: authentication.principalGeneration,
+                  expectedPrincipalGeneration: principalGeneration,
+                  isSigningOut: authentication.isSigningOut,
+                  workspaces: library.workspaces
+              ),
+              let duplicate = PlanningWorkspaceDuplicateFactory.makeDuplicate(
+                from: source,
+                title: title,
+                owner: authentication.currentUser,
+                localGuest: authentication.isGuestMode ? authentication.localGuestProfile : nil
+              ) else {
+            return false
+        }
+        library.add(duplicate)
+        guard library.workspaces.contains(where: { $0 === duplicate }) else { return false }
+        AppHaptics.play(.success)
+        return true
+    }
+
+    @ViewBuilder
+    private func mainEventLifecycleActions(for workspace: PlanningWorkspace) -> some View {
+        if workspace.canCancelEvent(.main) {
+            Button(AppCopy.Lifecycle.cancelEvent, systemImage: "calendar.badge.minus", role: .destructive) {
+                requestMainEventAction(.cancelEvent, for: workspace)
+            }
+        }
+        if let action = workspace.eventRemovalAction(for: .main) {
+            Button(action.title, systemImage: action.symbol, role: .destructive) {
+                requestMainEventAction(action, for: workspace)
+            }
+        }
+    }
+
+    private func requestMainEventAction(_ action: EventRemovalAction, for workspace: PlanningWorkspace) {
+        pendingMainEventAction = WorkspaceBrowserEventActionRequest(
+            workspace: workspace,
+            action: action,
+            title: workspace.title,
+            principalGeneration: authentication.principalGeneration
+        )
+    }
+
+    private func confirmMainEventAction(_ request: WorkspaceBrowserEventActionRequest) {
+        pendingMainEventAction = nil
+        guard request.isCurrent(
+            principalGeneration: authentication.principalGeneration,
+            isSigningOut: authentication.isSigningOut,
+            workspaces: library.workspaces
+        ) else {
+            isMainEventActionUnavailable = true
+            return
+        }
+        let changed = request.action == .cancelEvent
+            ? request.workspace.cancelEvent(.main)
+            : request.workspace.removeEventFromHome(.main, expecting: request.action)
+        guard changed else {
+            isMainEventActionUnavailable = true
+            return
+        }
     }
 
     private var emptyState: some View {
@@ -407,16 +607,6 @@ private struct WorkspacePreviewCard: View {
             )
 
             VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-                Label(
-                    workspace.currentMainEventStatus.title,
-                    systemImage: workspace.currentMainEventStatus.symbol
-                )
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 10)
-                .frame(minHeight: 30)
-                .background(.ultraThinMaterial, in: Capsule())
-                .appImageOverlayAppearance()
-
                 Spacer(minLength: AppTheme.Spacing.section)
 
                 Text(workspace.title)

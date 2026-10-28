@@ -13,7 +13,6 @@ struct AccountView: View {
     @State private var isDeletingAccount = false
     @State private var weatherAttribution: EventWeatherAttribution?
     @State private var localBlueprintActions: BlueprintActionStore?
-    @State private var showingMeasurementSettingsError = false
 
     private var blueprintActions: BlueprintActionStore? {
         sharedBlueprintActions ?? localBlueprintActions
@@ -136,38 +135,41 @@ struct AccountView: View {
     private var accountForm: some View {
         Form {
             Section {
-                HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
-                    UserAvatarView(
-                        account: authentication.currentUser,
-                        size: 58
-                    )
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                    HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
+                        UserAvatarView(
+                            account: authentication.currentUser,
+                            size: 58
+                        )
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(accountTitle)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(AppTheme.ColorToken.textPrimary)
-                            .lineLimit(2)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(accountTitle)
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(AppTheme.ColorToken.textPrimary)
+                                .lineLimit(2)
+                        }
 
-                        Text(authentication.currentUser?.email ?? "Gatherory member")
-                            .font(.footnote)
-                            .foregroundStyle(AppTheme.ColorToken.textSecondary)
-                            .lineLimit(2)
-                            .textSelection(.enabled)
+                        Spacer(minLength: AppTheme.Spacing.compact)
+
+                        Button {
+                            isEditingProfile = true
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.body.weight(.semibold))
+                                .frame(width: 44, height: 44)
+                                .background(AppTheme.ColorToken.elevatedSurface, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(AppTheme.ColorToken.accent)
+                        .accessibilityLabel("Edit profile")
                     }
 
-                    Spacer(minLength: AppTheme.Spacing.compact)
-
-                    Button {
-                        isEditingProfile = true
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.body.weight(.semibold))
-                            .frame(width: 44, height: 44)
-                            .background(AppTheme.ColorToken.elevatedSurface, in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(AppTheme.ColorToken.accent)
-                    .accessibilityLabel("Edit profile")
+                    Text(authentication.currentUser?.email ?? "Gatherory member")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.ColorToken.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
                 }
                 .padding(.vertical, 8)
             }
@@ -175,11 +177,10 @@ struct AccountView: View {
 
             Section("App Settings") {
                 Toggle(isOn: $hapticsEnabled) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label(String(localized: "haptics.title", defaultValue: "Haptic Feedback"), systemImage: "waveform")
-                        Text(String(localized: "haptics.help", defaultValue: "Use gentle vibrations for actions and confirmations."))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: AppTheme.Spacing.compact) {
+                        Image(systemName: "waveform")
+                            .foregroundStyle(.blue)
+                        Text(String(localized: "haptics.title", defaultValue: "Haptic Feedback"))
                     }
                 }
 
@@ -189,31 +190,6 @@ struct AccountView: View {
                 .disabled(!notifications.isConfigured || notificationPrincipal == nil)
                 .tint(AppTheme.ColorToken.accent)
 
-                Toggle(isOn: Binding(
-                    get: { blueprintActions?.measurementEnabled ?? false },
-                    set: { enabled in
-                        Task {
-                            guard let blueprintActions else { return }
-                            if !(await blueprintActions.setMeasurementEnabled(enabled)) {
-                                showingMeasurementSettingsError = true
-                            }
-                        }
-                    }
-                )) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label(BlueprintCopy.improveRecommendations, systemImage: "sparkles")
-                        Text(BlueprintCopy.measurementExplanation)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .disabled(blueprintActions == nil)
-                .tint(AppTheme.ColorToken.accent)
-
-                Text(BlueprintCopy.likeRecommendationExplanation)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
                 if let blueprintActions {
                     NavigationLink {
                         SavedBlueprintsView(actionStore: blueprintActions)
@@ -221,6 +197,8 @@ struct AccountView: View {
                         Label(BlueprintCopy.notInterested, systemImage: "eye.slash")
                     }
                 }
+
+                HomeEventLayoutPicker()
 
                 Picker(selection: appearanceSelection) {
                     ForEach(AppAppearance.allCases) { option in
@@ -361,7 +339,6 @@ struct AccountView: View {
                     return
                 }
                 await sharedBlueprintActions.loadPreferences()
-                await sharedBlueprintActions.loadMeasurementSetting()
                 return
             }
             guard let ownerID = authentication.currentUser?.id,
@@ -377,13 +354,6 @@ struct AccountView: View {
             let store = BlueprintActionStore(ownerID: ownerID, transport: coordinator)
             localBlueprintActions = store
             await store.loadPreferences()
-            await store.loadMeasurementSetting()
-        }
-        .alert(BlueprintCopy.actionUpdateFailed, isPresented: $showingMeasurementSettingsError) {
-            Button(AppCopy.Common.retry) { Task { await blueprintActions?.retryMeasurementSetting() } }
-            Button(AppCopy.Common.cancel, role: .cancel) { blueprintActions?.clearError() }
-        } message: {
-            Text(blueprintActions?.error?.localizedDescription ?? BlueprintCopy.actionUpdateFailed)
         }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -444,22 +414,29 @@ private struct AccountWeatherAttributionFooter: View {
     var body: some View {
         Group {
             if let attribution {
-                Link(destination: attribution.legalPageURL) {
-                    HStack(spacing: 4) {
-                        Text("Weather data provided by")
-                        weatherMark(for: attribution)
-                        Text("Learn More")
-                            .foregroundStyle(AppTheme.ColorToken.accent)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Weather data provided by")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.ColorToken.textSecondary)
+                    Link(destination: attribution.legalPageURL) {
+                        HStack(spacing: 6) {
+                            weatherMark(for: attribution)
+                            Text("Learn More")
+                                .foregroundStyle(AppTheme.ColorToken.accent)
+                        }
+                        .font(.footnote)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
-                    .font(.footnote)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Weather data attribution")
+                    .accessibilityHint("Opens Apple Weather data sources")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Weather data attribution")
-                .accessibilityHint("Opens Apple Weather data sources")
             } else {
-                Text("Weather data provided by Apple Weather")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Weather data provided by")
+                    Text(verbatim: "Apple Weather")
+                }
                     .font(.footnote)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }

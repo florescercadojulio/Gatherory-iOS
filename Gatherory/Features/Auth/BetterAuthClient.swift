@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import CryptoKit
 
 enum RegistrationOutcome: Equatable, Sendable {
     case authenticated(UserAccount)
@@ -17,12 +18,21 @@ struct AppleIdentity: Sendable {
 
 protocol AuthenticationClient: Sendable {
     func restoreSession() async throws -> UserAccount?
+    func cachedAccountForOfflineRestoration() throws -> UserAccount?
+    func cacheValidatedAccount(_ account: UserAccount) throws
+    func clearCachedAccount()
     func signIn(email: String, password: String) async throws -> UserAccount
     func register(displayName: String, email: String, password: String) async throws -> RegistrationOutcome
     func signInWithApple(_ identity: AppleIdentity, requestingSignUp: Bool) async throws -> UserAccount
     func signInWithGoogle(identityToken: String, nonce: String, requestingSignUp: Bool) async throws -> UserAccount
     func deleteAccount() async throws
     func signOut() async
+}
+
+extension AuthenticationClient {
+    func cachedAccountForOfflineRestoration() throws -> UserAccount? { nil }
+    func cacheValidatedAccount(_ account: UserAccount) throws {}
+    func clearCachedAccount() {}
 }
 
 enum SecureSessionTokenError: LocalizedError {
@@ -107,20 +117,106 @@ struct KeychainSessionTokenStore: SessionTokenStore {
     }
 }
 
+protocol ValidatedAccountCache: Sendable {
+    func account(matching token: String) throws -> UserAccount?
+    func save(_ account: UserAccount, matching token: String) throws
+    func clear()
+}
+
+struct KeychainValidatedAccountCache: ValidatedAccountCache {
+    private let service: String
+    private let account = "last-validated-account"
+
+    init(bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.guide-systems.gatherory") {
+        service = "\(bundleIdentifier).authentication"
+    }
+
+    func account(matching token: String) throws -> UserAccount? {
+        guard let data = try readData() else { return nil }
+        let record: ValidatedAccountCacheRecord
+        do {
+            record = try JSONDecoder().decode(ValidatedAccountCacheRecord.self, from: data)
+        } catch {
+            throw ValidatedAccountCacheError.malformed
+        }
+        guard record.tokenFingerprint == Self.fingerprint(token),
+              !record.account.id.isEmpty,
+              !record.account.email.isEmpty else { return nil }
+        return record.account
+    }
+
+    func save(_ account: UserAccount, matching token: String) throws {
+        let record = ValidatedAccountCacheRecord(
+            tokenFingerprint: Self.fingerprint(token),
+            account: account
+        )
+        let data = try JSONEncoder().encode(record)
+        var query = baseQuery
+        query[kSecValueData as String] = data
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        SecItemDelete(baseQuery as CFDictionary)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else { throw SecureSessionTokenError.unwritable(status) }
+    }
+
+    func clear() {
+        SecItemDelete(baseQuery as CFDictionary)
+    }
+
+    private func readData() throws -> Data? {
+        var query = baseQuery
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let data = result as? Data else {
+            throw SecureSessionTokenError.unreadable(status)
+        }
+        return data
+    }
+
+    private var baseQuery: [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+    }
+
+    private static func fingerprint(_ token: String) -> String {
+        SHA256.hash(data: Data(token.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+}
+
+private struct ValidatedAccountCacheRecord: Codable {
+    let tokenFingerprint: String
+    let account: UserAccount
+}
+
+enum ValidatedAccountCacheError: Error {
+    case malformed
+}
+
 struct BetterAuthClient: AuthenticationClient {
     private let baseURL: URL
     private let urlSession: URLSession
     private let tokenStore: any SessionTokenStore
+    private let accountCache: any ValidatedAccountCache
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
     init(
         baseURL: URL,
         urlSession: URLSession? = nil,
-        tokenStore: any SessionTokenStore = KeychainSessionTokenStore()
+        tokenStore: any SessionTokenStore = KeychainSessionTokenStore(),
+        accountCache: any ValidatedAccountCache = KeychainValidatedAccountCache()
     ) {
         self.baseURL = baseURL
         self.tokenStore = tokenStore
+        self.accountCache = accountCache
 
         if let urlSession {
             self.urlSession = urlSession
@@ -130,31 +226,55 @@ struct BetterAuthClient: AuthenticationClient {
             configuration.httpCookieStorage = nil
             configuration.urlCache = nil
             configuration.urlCredentialStorage = nil
-            configuration.waitsForConnectivity = true
+            configuration.waitsForConnectivity = false
             configuration.timeoutIntervalForRequest = 30
             self.urlSession = URLSession(configuration: configuration)
         }
     }
 
     func restoreSession() async throws -> UserAccount? {
-        guard let token = try tokenStore.read() else { return nil }
+        guard let token = try tokenStore.read() else {
+            accountCache.clear()
+            return nil
+        }
 
         do {
-            let result: SessionResponse? = try await request(
-                path: ["get-session"],
-                method: "GET",
-                token: token
-            )
+            var request = URLRequest(url: endpointURL(["get-session"]))
+            request.httpMethod = "GET"
+            request.timeoutInterval = 8
+            let result: SessionResponse? = try await perform(request, token: token)
 
             guard let result else {
                 tokenStore.delete()
+                accountCache.clear()
                 return nil
             }
             return result.user.account(provider: .password)
         } catch AuthenticationFailure.invalidSession {
             tokenStore.delete()
+            accountCache.clear()
             return nil
         }
+    }
+
+    func cachedAccountForOfflineRestoration() throws -> UserAccount? {
+        guard let token = try tokenStore.read(), !token.isEmpty else {
+            accountCache.clear()
+            return nil
+        }
+        return try accountCache.account(matching: token)
+    }
+
+    func cacheValidatedAccount(_ account: UserAccount) throws {
+        guard let token = try tokenStore.read(), !token.isEmpty else {
+            accountCache.clear()
+            return
+        }
+        try accountCache.save(account, matching: token)
+    }
+
+    func clearCachedAccount() {
+        accountCache.clear()
     }
 
     func signIn(email: String, password: String) async throws -> UserAccount {
@@ -268,12 +388,14 @@ struct BetterAuthClient: AuthenticationClient {
             throw AuthenticationFailure.invalidServerResponse
         }
         tokenStore.delete()
+        accountCache.clear()
         await resetNetworkSession()
     }
 
     func signOut() async {
         let token = try? tokenStore.read()
         tokenStore.delete()
+        accountCache.clear()
         guard let token else {
             await resetNetworkSession()
             return
