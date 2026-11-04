@@ -37,7 +37,7 @@ final class SharedAlbumUITests: XCTestCase {
     func testPreviewPhotoOpensViewerAndCloseReturnsThroughAlbumToEvent() {
         let app = fixtureApplication(withPhotos: true)
         app.launch()
-        defer { app.terminate() }
+        addFailureDiagnostics(for: app, context: "Album viewer and return")
         openMainEvent(in: app)
         let preview = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "album.photo.")).firstMatch
         reveal(preview, in: app)
@@ -47,7 +47,7 @@ final class SharedAlbumUITests: XCTestCase {
         XCTAssertTrue(app.buttons["album.select"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["album.viewer.close"].waitForNonExistence(timeout: 3), "Closing the viewer must not replay the original preview navigation.")
         app.buttons["album.close"].tap()
-        XCTAssertTrue(app.buttons["Event Actions"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Invitation"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["View Album"].exists)
     }
 
@@ -152,10 +152,31 @@ final class SharedAlbumUITests: XCTestCase {
         XCTAssertTrue(workspace.waitForExistence(timeout: 8))
         reveal(workspace, in: app)
         workspace.tap()
-        let event = app.buttons["home.event.main"]
+        let event = app.buttons.matching(NSPredicate(
+            format: "identifier == %@ OR identifier == %@", "home.overview.mainEvent", "home.event.main"
+        )).firstMatch
         XCTAssertTrue(event.waitForExistence(timeout: 5))
         event.tap()
-        XCTAssertTrue(app.buttons["Event Actions"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Invitation"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    private func addFailureDiagnostics(for app: XCUIApplication, context: String) {
+        addTeardownBlock { [weak self] in
+            defer { app.terminate() }
+            guard let self, self.testRun?.hasSucceeded == false,
+                  app.state == .runningForeground else { return }
+            let snapshot = app.debugDescription
+            print("UI_FAILURE_\(context)\n\(snapshot)")
+            let accessibilityAttachment = XCTAttachment(data: Data(snapshot.utf8), uniformTypeIdentifier: "public.plain-text")
+            accessibilityAttachment.name = "Accessibility tree — \(context)"
+            accessibilityAttachment.lifetime = .keepAlways
+            self.add(accessibilityAttachment)
+            let screenshotAttachment = XCTAttachment(screenshot: app.screenshot())
+            screenshotAttachment.name = "Failure screen — \(context)"
+            screenshotAttachment.lifetime = .keepAlways
+            self.add(screenshotAttachment)
+        }
     }
 
     @MainActor

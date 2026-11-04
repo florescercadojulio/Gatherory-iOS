@@ -6,7 +6,7 @@ struct HomeEventsOverviewProjection {
     let mainEventIsVisible: Bool
     let childEvents: [TimelineItem]
 
-    init(workspace: PlanningWorkspace) {
+    init(workspace: PlanningWorkspace, now: Date = .now) {
         let visibleReferences = workspace.visibleEventContexts
         let rootIsAvailable = !workspace.isMainEventDeleted
 
@@ -23,7 +23,7 @@ struct HomeEventsOverviewProjection {
                     && $0.parentEventID == workspace.mainEventID
                     && $0.status != .archived
             }
-        }
+        }.sorted { EventDateOrdering.key(for: $0, now: now) < EventDateOrdering.key(for: $1, now: now) }
     }
 }
 
@@ -35,6 +35,7 @@ struct HomeEventsOverviewView<Actions: View>: View {
 
     @ViewBuilder var actions: (EventReference) -> Actions
     let onOpenEvent: (EventReference) -> Void
+    let onManageEvent: (EventReference) -> Void
     let onRefresh: () async -> Void
     let transitionNamespace: Namespace.ID
 
@@ -109,7 +110,7 @@ struct HomeEventsOverviewView<Actions: View>: View {
     private var mainEvent: some View {
         let shape = RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous)
 
-        return Button {
+        let eventButton = Button {
             onOpenEvent(.main)
         } label: {
             VStack(alignment: .leading, spacing: 0) {
@@ -152,24 +153,31 @@ struct HomeEventsOverviewView<Actions: View>: View {
                 .padding(AppTheme.Spacing.standard)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(AppTheme.ColorToken.surface)
-            .clipShape(shape)
-            .overlay {
-                shape.stroke(.primary.opacity(0.12), lineWidth: 0.5)
-            }
             .contentShape(shape)
-            .matchedTransitionSource(id: EventReference.main, in: transitionNamespace) { source in
-                source.clipShape(shape)
-            }
         }
         .buttonStyle(.plain)
-        .contextMenu { actions(.main) }
-        .padding(.horizontal, AppTheme.Layout.screenHorizontal)
-        .id(EventReference.main)
-        .accessibilityIdentifier("home.overview.mainEvent")
         .accessibilityLabel(mainEventAccessibilityLabel)
         .accessibilityAddTraits(workspace.selectedEventReference == .main ? .isSelected : [])
         .accessibilityHint("Opens event details")
+        .accessibilityIdentifier("home.overview.mainEvent")
+
+        return VStack(spacing: 0) {
+            eventButton
+            if EventManagementAccess.canOpen(reference: .main, in: workspace) {
+                manageFooter(for: .main)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.ColorToken.surface, in: shape)
+        .clipShape(shape)
+        .overlay { shape.stroke(.primary.opacity(0.12), lineWidth: 0.5) }
+        .contentShape(.contextMenuPreview, shape)
+        .matchedTransitionSource(id: EventReference.main, in: transitionNamespace) { source in
+            source.clipShape(shape)
+        }
+        .contextMenu { actions(.main) }
+        .padding(.horizontal, AppTheme.Layout.screenHorizontal)
+        .id(EventReference.main)
     }
 
     private var childEvents: some View {
@@ -200,6 +208,7 @@ struct HomeEventsOverviewView<Actions: View>: View {
                 .scrollIndicators(.hidden)
                 .scrollTargetBehavior(.viewAligned)
                 .scrollBounceBehavior(.basedOnSize)
+                .scrollClipDisabled()
                 .contentMargins(.horizontal, AppTheme.Layout.screenHorizontal, for: .scrollContent)
                 .accessibilityIdentifier("home.overview.day.\(group.id)")
                 .task(id: workspace.selectedEventReference) {
@@ -224,7 +233,7 @@ struct HomeEventsOverviewView<Actions: View>: View {
     private func childEventCard(_ event: TimelineItem) -> some View {
         let reference = EventReference.subevent(event.id)
 
-        return Button {
+        let eventButton = Button {
             onOpenEvent(reference)
         } label: {
             VStack(alignment: .leading, spacing: 0) {
@@ -258,25 +267,55 @@ struct HomeEventsOverviewView<Actions: View>: View {
                 .padding(AppTheme.Spacing.standard)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(AppTheme.ColorToken.surface)
-            .clipShape(.rect(cornerRadius: AppTheme.Radius.card))
-            .overlay {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
-                    .stroke(.primary.opacity(0.12), lineWidth: 0.5)
-            }
-            .containerRelativeFrame(.horizontal) { length, _ in min(length * 0.78, 260) }
             .contentShape(.rect(cornerRadius: AppTheme.Radius.card))
-            .matchedTransitionSource(id: reference, in: transitionNamespace) { source in
-                source.clipShape(.rect(cornerRadius: AppTheme.Radius.card))
-            }
         }
         .buttonStyle(.plain)
-        .contextMenu { actions(reference) }
-        .id(reference)
-        .accessibilityIdentifier("home.overview.event.\(event.id.uuidString)")
         .accessibilityLabel(childEventAccessibilityLabel(event))
         .accessibilityAddTraits(workspace.selectedEventReference == reference ? .isSelected : [])
         .accessibilityHint("Opens event details")
+        .accessibilityIdentifier("home.overview.event.\(event.id.uuidString)")
+
+        let shape = RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+        return VStack(spacing: 0) {
+            eventButton
+            if EventManagementAccess.canOpen(reference: reference, in: workspace) {
+                manageFooter(for: reference)
+            }
+        }
+        .containerRelativeFrame(.horizontal) { length, _ in min(length * 0.78, 260) }
+        .background(AppTheme.ColorToken.surface, in: shape)
+        .clipShape(shape)
+        .overlay { shape.stroke(.primary.opacity(0.12), lineWidth: 0.5) }
+        .contentShape(.contextMenuPreview, shape)
+        .matchedTransitionSource(id: reference, in: transitionNamespace) { source in
+            source.clipShape(shape)
+        }
+        .contextMenu { actions(reference) }
+        .id(reference)
+    }
+
+    private func manageFooter(for reference: EventReference) -> some View {
+        Button {
+            onManageEvent(reference)
+        } label: {
+            VStack(spacing: 0) {
+                Divider()
+                HStack {
+                    Text("Manage")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, AppTheme.Spacing.standard)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.manage.\(reference.id)")
     }
 
     @ViewBuilder

@@ -26,7 +26,7 @@ final class ReleaseCoreFlowsUITests: XCTestCase {
 
             XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 8),
                           "Creating should automatically open the new workspace Home tab.")
-            let homeEvent = app.buttons["home.event.main"]
+            let homeEvent = mainEventCard(in: app)
             XCTAssertTrue(homeEvent.waitForExistence(timeout: 5))
             XCTAssertTrue(homeEvent.label.contains(title), "Home should show the newly created event title.")
 
@@ -116,6 +116,14 @@ final class ReleaseCoreFlowsUITests: XCTestCase {
     }
 
     @MainActor
+    private func mainEventCard(in app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(
+            format: "identifier == %@ OR identifier == %@",
+            "home.overview.mainEvent", "home.event.main"
+        )).firstMatch
+    }
+
+    @MainActor
     private func createWorkspace(named title: String, in app: XCUIApplication) {
         XCTAssertTrue(app.buttons["workspace.add"].waitForExistence(timeout: 8))
         app.buttons["workspace.add"].tap()
@@ -128,7 +136,7 @@ final class ReleaseCoreFlowsUITests: XCTestCase {
 
         XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 8),
                       "Creating should automatically open the new workspace Home tab.")
-        let homeEvent = app.buttons["home.event.main"]
+        let homeEvent = mainEventCard(in: app)
         XCTAssertTrue(homeEvent.waitForExistence(timeout: 5))
         XCTAssertTrue(homeEvent.label.contains(title))
     }

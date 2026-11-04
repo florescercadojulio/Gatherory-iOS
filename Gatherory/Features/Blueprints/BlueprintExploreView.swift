@@ -1,12 +1,17 @@
 import SwiftUI
+import UIKit
 
 struct BlueprintExploreView: View {
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
+    @Environment(WorkspaceLibrary.self) private var workspaceLibrary
+    @Environment(WorkspacePersistenceController.self) private var persistence
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.blueprintPreviewPresented) private var previewPresented
     @Namespace private var blueprintTransition
     @State private var model: BlueprintDiscoveryModel
     @State private var feed: BlueprintCatalogFeedModel
+    @State private var ideaFeed = IdeaDiscoveryFeedModel()
+    @State private var additionStore: IdeaDiscoveryAdditionStore
     @State private var discoveryContextStore: BlueprintDiscoveryContextStore
     @State private var adSession: ExploreAdSession
     @State private var actions: BlueprintActionStore?
@@ -15,27 +20,41 @@ struct BlueprintExploreView: View {
     @State private var isSearchActive = false
     @State private var navigation = BlueprintDiscoveryNavigation()
     @State private var isAccountPresented = false
+    @State private var selectedIdea: IdeaDiscoveryEntry?
+    @State private var exploreKind: ExploreContentKind = .all
+    @State private var isShowingSearchPrimer = false
+    @State private var searchPrimerAccountID = ""
+    @State private var tourFinishRevision = 0
 #if DEBUG
     @State private var searchVisualFixture: BlueprintSearchVisualFixture?
     @State private var discoveryRequestCount = 0
     @State private var discoveryFirstPageRequests = 0
     @State private var lastDiscoveryRequestContext: BlueprintDiscoveryRequestContext? = nil
+    @State private var ideaFixturePageRequests = 0
 #endif
     private let searchVisualFixtureEnabled: Bool
     private let discoverySessionFixtureEnabled: Bool
     private let adsScrollVerificationEnabled: Bool
+    private let ideaDiscoveryFixtureEnabled: Bool
+    private let ideaPagingFixtureEnabled: Bool
     @FocusState private var isFocused: Bool
     private let ownerID: String
+    private let tourSelection: (() -> Void)?
+    private let bundledMovieNightEntry: BlueprintCatalogEntry?
     let isActive: Bool
 
-    init(ownerID: String, isActive: Bool = true) {
+    init(ownerID: String, isActive: Bool = true, tourSelection: (() -> Void)? = nil) {
         self.ownerID = ownerID
         self.isActive = isActive
+        self.tourSelection = tourSelection
+        bundledMovieNightEntry = MovieNightTourExplorePolicy.bundledEntry()
 #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
         let adsVerificationEnabled = arguments.contains("-BlueprintAdsScrollVerification")
+        let ideaFixtureEnabled = arguments.contains("-IdeaDiscoveryVisualFixture")
+        let ideaPagingFixture = arguments.contains("-IdeaDiscoveryPagingFixture")
         let sessionFixtureEnabled = arguments.contains("-BlueprintDiscoverySessionFixture")
-        let fixtureEnabled = arguments.contains("-BlueprintSearchVisualFixture") || adsVerificationEnabled || sessionFixtureEnabled
+        let fixtureEnabled = arguments.contains("-BlueprintSearchVisualFixture") || adsVerificationEnabled || sessionFixtureEnabled || ideaFixtureEnabled || ideaPagingFixture
         let localDefaults: UserDefaults
         if sessionFixtureEnabled {
             guard let isolatedDefaults = UserDefaults(suiteName: "BlueprintDiscoverySessionFixture-\(UUID().uuidString)") else {
@@ -48,15 +67,20 @@ struct BlueprintExploreView: View {
         searchVisualFixtureEnabled = fixtureEnabled
         discoverySessionFixtureEnabled = sessionFixtureEnabled
         adsScrollVerificationEnabled = adsVerificationEnabled
+        ideaDiscoveryFixtureEnabled = ideaFixtureEnabled
+        ideaPagingFixtureEnabled = ideaPagingFixture
         _searchVisualFixture = State(initialValue: fixtureEnabled ? BlueprintSearchVisualFixture.load() : nil)
 #else
         searchVisualFixtureEnabled = false
         discoverySessionFixtureEnabled = false
         adsScrollVerificationEnabled = false
+        ideaDiscoveryFixtureEnabled = false
+        ideaPagingFixtureEnabled = false
         let localDefaults = UserDefaults.standard
 #endif
         _model = State(initialValue: BlueprintDiscoveryModel(ownerID: ownerID))
         _feed = State(initialValue: BlueprintCatalogFeedModel(ownerID: ownerID))
+        _additionStore = State(initialValue: IdeaDiscoveryAdditionStore(ownerID: ownerID, defaults: localDefaults))
         _discoveryContextStore = State(initialValue: BlueprintDiscoveryContextStore(
             accountID: ownerID, defaults: localDefaults
         ))
@@ -67,32 +91,53 @@ struct BlueprintExploreView: View {
     }
 
     private var mode: BlueprintSearchMode { navigation.mode(isFocused: isSearchActive || isFocused, query: query) }
-    private var accountStateID: String { String(describing: cloudSync.accountOnboardingState) }
-    private var catalogTaskID: String {
-        "\(ownerID)|\(isActive)|\(scenePhase == .active)|\(accountStateID)|\(mode)|\(query)"
+    private var isGuidedTour: Bool { tourSelection != nil }
+    private var guidedSelectionKey: String? {
+        isGuidedTour && bundledMovieNightEntry != nil ? MovieNightTourExplorePolicy.catalogKey : nil
     }
+    private var guidedSearchPresentation: Binding<Bool> {
+        Binding(get: { isSearchActive }, set: { if !isGuidedTour { isSearchActive = $0 } })
+    }
+    private var guidedQuery: Binding<String> {
+        Binding(get: { query }, set: { if !isGuidedTour { query = $0 } })
+    }
+    private var accountStateID: String { String(describing: cloudSync.accountOnboardingState) }
+    private var contextualPrimerCheckID: String {
+        "\(ownerID)|\(isActive)|\(accountStateID)|\(tourFinishRevision)"
+    }
+    private var addedIdeaSourceIDs: Set<String> {
+        Set(ideaFeed.ideas.compactMap { additionStore.isAdded($0, in: workspaceLibrary) ? $0.id : nil })
+    }
+    private var catalogTaskID: String {
+        "\(ownerID)|\(isActive)|\(scenePhase == .active)|\(accountStateID)|\(isGuidedTour)|\(mode)|\(query)|\(exploreKind.rawValue)"
+    }
+    private var ideaTaskID: String { "\(ownerID)|\(isActive)|\(scenePhase == .active)|\(accountStateID)|\(isGuidedTour)|\(query)|\(exploreKind.rawValue)" }
     private var adTaskID: String {
-        "\(ownerID)|\(isActive)|\(scenePhase == .active)|\(accountStateID)|\(mode == .browse)|\(navigation.selection?.entry.id ?? "")|\(previewPresented.wrappedValue)|\(isAccountPresented)"
+        "\(ownerID)|\(isGuidedTour)|\(isActive)|\(scenePhase == .active)|\(accountStateID)|\(mode)|\(exploreKind.rawValue)|\(navigation.selection?.entry.id ?? "")|\(selectedIdea?.id ?? "")|\(previewPresented.wrappedValue)|\(isAccountPresented)"
     }
     private var actionsTaskID: String {
-        "actions|\(ownerID)|\(isActive)|\(scenePhase == .active)|\(accountStateID)"
+        "actions|\(ownerID)|\(isActive)|\(scenePhase == .active)|\(accountStateID)|\(isGuidedTour)"
     }
     private var measurementIsActive: Bool {
         isActive && scenePhase == .active && navigation.selection == nil
-            && !previewPresented.wrappedValue && !isAccountPresented && !searchVisualFixtureEnabled
+            && selectedIdea == nil && !previewPresented.wrappedValue && !isAccountPresented
+            && !searchVisualFixtureEnabled && !isGuidedTour
     }
     private var localHistoryIsActive: Bool {
         isActive && scenePhase == .active && navigation.selection == nil
-            && !previewPresented.wrappedValue && !isAccountPresented && mode == .browse
-            && !ownerID.isEmpty && (!searchVisualFixtureEnabled || discoverySessionFixtureEnabled)
+            && selectedIdea == nil && !previewPresented.wrappedValue && !isAccountPresented && mode == .browse && exploreKind != .ideas
+            && !ownerID.isEmpty && !isGuidedTour && (!searchVisualFixtureEnabled || discoverySessionFixtureEnabled)
     }
     private var feedAdsAreEligible: Bool {
         isActive && scenePhase == .active && navigation.selection == nil
-            && !previewPresented.wrappedValue && !isAccountPresented && mode == .browse
+            && selectedIdea == nil && !previewPresented.wrappedValue && !isAccountPresented
+            && !isGuidedTour
+            && ExploreAdFeedPolicy.allowsAds(content: exploreKind, mode: mode)
             && (!searchVisualFixtureEnabled || adsScrollVerificationEnabled)
     }
     private var feedAdLayoutIsEnabled: Bool {
-        mode == .browse && (!searchVisualFixtureEnabled || adsScrollVerificationEnabled)
+        ExploreAdFeedPolicy.allowsAds(content: exploreKind, mode: mode)
+            && (!searchVisualFixtureEnabled || adsScrollVerificationEnabled)
     }
     private var measurementScopeID: String {
         "\(catalogTaskID)|account:\(isAccountPresented)"
@@ -111,42 +156,95 @@ struct BlueprintExploreView: View {
     }
 
     private var contentSurface: some View {
-        pagedGrid(
-            source: mode == .recent ? .recent : .results,
-            itemsHeader: mode == .recent ? AnyView(recentHeading) : nil
-        )
+        Group {
+            if exploreKind == .ideas {
+                IdeaDiscoveryGrid(entries: ideaFeed.ideas, isLoading: ideaFeed.isLoading,
+                                      loadFailed: ideaFeed.loadFailed,
+                                      hasLoadedFirstPage: ideaFeed.hasLoadedFirstPage,
+                                      shouldAutoAdvanceEmptyPage: ideaFeed.shouldAutoAdvanceEmptyPage,
+                                      nextCursor: ideaFeed.nextCursor,
+                                      onSelect: { selectedIdea = $0 },
+                                      onLoadMore: { Task { await loadMoreIdeas() } },
+                                      onRetry: { Task { await refreshIdeas() } },
+                                      onRefresh: { await refreshIdeas() },
+                                      addedSourceIDs: addedIdeaSourceIDs,
+                                      adSession: feedAdLayoutIsEnabled ? adSession : nil,
+                                      transitionNamespace: blueprintTransition,
+                                      scope: query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .all : .search(query))
+            } else {
+                pagedGrid(source: mode == .recent ? .recent : .results,
+                          itemsHeader: mode == .recent ? AnyView(recentHeading) : nil)
+            }
+        }
+        .sheet(item: $selectedIdea) { entry in
+            let capturedOwnerID = ownerID
+            let capturedStoreGeneration = additionStore.callbackGeneration
+            let capturedAccountGeneration = persistence.activeUserGeneration
+            IdeaDiscoveryDetailView(entry: entry,
+                isAdded: additionStore.isAdded(entry, in: workspaceLibrary),
+                onAdded: { receipt in
+                    guard ownerID == capturedOwnerID,
+                          additionStore.callbackGeneration == capturedStoreGeneration,
+                          persistence.activeUserID == capturedOwnerID,
+                          persistence.activeUserGeneration == capturedAccountGeneration,
+                          receipt.accountID == capturedOwnerID else { return }
+                    additionStore.record(receipt)
+                })
+        }
         .background(AppTheme.ColorToken.background)
-        .navigationTitle(ExploreCopy.searchTitle)
-        .toolbarTitleDisplayMode(.inlineLarge)
+        .navigationTitle("")
+        .toolbarTitleDisplayMode(.inline)
         .toolbar {
             if navigation.selection == nil {
-                if mode == .browse {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button(ExploreCopy.refresh, systemImage: "arrow.clockwise") {
-                            Task { await refreshPagedSurface(startNewDiscoverySession: true) }
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Picker(String(localized: "Explore content", defaultValue: "Explore content"), selection: $exploreKind) {
+                            ForEach(ExploreContentKind.allCases) { kind in Text(kind.title).tag(kind) }
                         }
-                        .labelStyle(.iconOnly)
-                        .disabled(feed.isLoading)
-                        .accessibilityIdentifier("blueprint.discovery.refresh")
+                        if mode == .browse {
+                            Divider()
+                            Button(ExploreCopy.refresh, systemImage: "arrow.clockwise") {
+                                Task {
+                                    if exploreKind != .blueprints { await refreshIdeas() }
+                                    if exploreKind != .ideas { await refreshPagedSurface(startNewDiscoverySession: true) }
+                                }
+                            }
+                            .disabled(exploreKind == .ideas ? ideaFeed.isLoading : feed.isLoading)
+                            .accessibilityIdentifier("blueprint.discovery.refresh")
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(exploreKind.title).font(.headline)
+                            Image(systemName: "chevron.down").font(.caption.weight(.semibold))
+                        }
                     }
+                    .disabled(isGuidedTour)
+                    .accessibilityIdentifier("explore.content.filter")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     AccountToolbarButton(blueprintActionStore: actions,
                         onPresentationChange: { isAccountPresented = $0 },
                         onDismiss: { Task { await refreshAfterAccountPresentation() } })
+                    .disabled(isGuidedTour)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     ExploreAdvertisingPrivacyButton(session: adSession)
+                        .disabled(isGuidedTour)
                 }
             }
         }
         .searchable(
-            text: $query,
-            isPresented: $isSearchActive,
+            text: guidedQuery,
+            isPresented: guidedSearchPresentation,
             placement: .navigationBarDrawer(displayMode: .always),
             prompt: ExploreCopy.search
         )
         .searchFocused($isFocused)
+        .background {
+            GuidedExploreSearchFieldLock(isLocked: isGuidedTour)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
         .onSubmit(of: .search) { Task { await submitSearch() } }
         .onChange(of: isSearchActive) { _, active in
             if !active {
@@ -154,10 +252,24 @@ struct BlueprintExploreView: View {
                 isFocused = false
             }
         }
+        .onChange(of: isGuidedTour) { _, guided in
+            guard guided else { return }
+            query = ""
+            isSearchActive = false
+            isFocused = false
+            exploreKind = .all
+            navigation = BlueprintDiscoveryNavigation()
+        }
     }
 
     private var previewSurface: some View {
         contentSurface
+        .fullScreenCover(isPresented: $isShowingSearchPrimer) {
+            SearchPrimer {
+                ContextualPrimerStore().markSeen(.search, accountID: searchPrimerAccountID)
+                isShowingSearchPrimer = false
+            }
+        }
         .fullScreenCover(item: $navigation.selection, onDismiss: { handlePreviewDismissal() }) { selection in
             BlueprintPreviewView(entry: selection.entry, actionStore: actions)
                 .navigationTransition(.zoom(sourceID: selection.id, in: blueprintTransition))
@@ -178,19 +290,49 @@ struct BlueprintExploreView: View {
         }
         .onChange(of: ownerID) { _, newOwnerID in
             handleOwnerChange(newOwnerID)
+            presentSearchPrimerIfNeeded()
         }
         .onChange(of: accountStateID) { _, _ in
             handleAccountStateChange()
+            presentSearchPrimerIfNeeded()
         }
+        .onChange(of: isActive) { _, active in
+            if active { presentSearchPrimerIfNeeded() }
+        }
+        .task(id: contextualPrimerCheckID) {
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            presentSearchPrimerIfNeeded()
+        }
+        .onChange(of: isShowingSearchPrimer) { wasShowing, isShowing in
+            if wasShowing && !isShowing {
+                ContextualPrimerStore().markSeen(.search, accountID: searchPrimerAccountID)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .contextualPrimerTourDidFinish)) { notification in
+            guard notification.userInfo?["accountID"] as? String == ownerID else { return }
+            tourFinishRevision += 1
+        }
+    }
+
+    private func presentSearchPrimerIfNeeded() {
+        guard ContextualPrimerPolicy.shouldPresent(
+            hasSeenPrimer: ContextualPrimerStore().hasSeen(.search, accountID: ownerID),
+            isTabActive: isActive,
+            accountState: cloudSync.accountOnboardingState
+        ) else { return }
+        searchPrimerAccountID = ownerID
+        isShowingSearchPrimer = true
     }
 
     private var lifecycleSurface: some View {
         previewSurface
         .task(id: actionsTaskID) { await loadActionsForCurrentAccount() }
         .task(id: catalogTaskID) { await loadCatalogForCurrentSurface() }
+        .task(id: ideaTaskID) { await loadIdeasForCurrentSurface() }
         .task(id: adTaskID) { await prepareAdSessionIfNeeded() }
         .onDisappear {
-            if navigation.selection != nil || previewPresented.wrappedValue {
+            if navigation.selection != nil || selectedIdea != nil || previewPresented.wrappedValue || isAccountPresented {
                 adSession.suspendForCoveredPreview()
             } else { resetAdSession() }
         }
@@ -205,11 +347,27 @@ struct BlueprintExploreView: View {
                     .accessibilityValue(discoverySessionAuditValue)
                     .allowsHitTesting(false)
             }
+            if ideaPagingFixtureEnabled {
+                Text("")
+                    .frame(width: 1, height: 1)
+                    .accessibilityElement()
+                    .accessibilityLabel("Idea paging audit")
+                    .accessibilityIdentifier("idea.discovery.paging.audit")
+                    .accessibilityValue(ideaPagingAuditValue)
+                    .allowsHitTesting(false)
+            }
         }
 #endif
     }
 
 #if DEBUG
+    private var ideaPagingAuditValue: String {
+        let value: [String: Int] = ["requestCount": ideaFixturePageRequests, "loadedCount": ideaFeed.ideas.count]
+        guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+              let string = String(data: data, encoding: .utf8) else { return "{}" }
+        return string
+    }
+
     private var discoverySessionAuditValue: String {
         let value: [String: Any] = [
             "sessionId": discoveryContextStore.session?.sessionId.uuidString ?? "",
@@ -244,6 +402,11 @@ struct BlueprintExploreView: View {
     }
 
     private func handleFocusChange(_ focused: Bool) {
+        if isGuidedTour {
+            if focused { isFocused = false }
+            if isSearchActive { isSearchActive = false }
+            return
+        }
         if focused {
             isSearchActive = true
             navigation.completeReturn()
@@ -269,6 +432,9 @@ struct BlueprintExploreView: View {
         )
         resetAdSession()
         navigation = BlueprintDiscoveryNavigation()
+        ideaFeed.invalidate(ownerID: newOwnerID)
+        additionStore.switchAccount(to: newOwnerID)
+        selectedIdea = nil
         actions?.resetForAccountChange()
         actions = nil
         query = ""
@@ -283,12 +449,17 @@ struct BlueprintExploreView: View {
         discoveryContextStore = BlueprintDiscoveryContextStore(
             accountID: ownerID, defaults: discoveryContextDefaults
         )
+        ideaFeed.invalidate(ownerID: ownerID)
+        additionStore.invalidateCallbacks()
+        additionStore.switchAccount(to: ownerID)
+        selectedIdea = nil
         resetAdSession()
         actions?.resetForAccountChange()
         actions = nil
     }
 
     private func loadActionsForCurrentAccount() async {
+        guard !isGuidedTour else { return }
 #if DEBUG
         if let fixture = BlueprintPreviewActionsVisualFixture.load(ownerID: ownerID) {
             actions = fixture.actionStore
@@ -311,14 +482,14 @@ struct BlueprintExploreView: View {
     }
 
     private func loadCatalogForCurrentSurface() async {
-        guard isActive, scenePhase == .active, navigation.selection == nil else { return }
+        guard isActive, scenePhase == .active, navigation.selection == nil, exploreKind != .ideas else { return }
         if mode == .results {
             let scope = BlueprintCatalogFeedScope.search(query)
             if feed.scope != scope { feed.activate(scope) }
             do { try await Task.sleep(nanoseconds: 275_000_000) } catch { return }
             guard !Task.isCancelled else { return }
         }
-        if mode == .browse, !ownerID.isEmpty {
+        if mode == .browse, !ownerID.isEmpty, !isGuidedTour {
             let priorSessionID = discoveryContextStore.session?.sessionId
             let current = discoveryContextStore.beginOrResumeSession()
             if priorSessionID != nil, current?.sessionId != priorSessionID, feed.hasLoadedFirstPage {
@@ -329,8 +500,45 @@ struct BlueprintExploreView: View {
         await loadCurrentSurface()
     }
 
+    private func loadIdeasForCurrentSurface() async {
+        guard exploreKind != .blueprints, isActive, scenePhase == .active else { return }
+        ideaFeed.activate(query: query, ownerID: ownerID)
+        guard !Task.isCancelled else { return }
+        do { try await Task.sleep(nanoseconds: 250_000_000) } catch { return }
+        guard !Task.isCancelled, exploreKind != .blueprints, isActive, scenePhase == .active else { return }
+        if !ideaFeed.hasLoadedFirstPage || ideaFeed.loadFailed {
+            await ideaFeed.loadNextPage(fetch: fetchIdeasPage)
+        }
+    }
+
+    private func loadMoreIdeas() async {
+        guard exploreKind != .blueprints, isActive, scenePhase == .active else { return }
+        await ideaFeed.loadNextPage(fetch: fetchIdeasPage)
+    }
+
+    private func refreshIdeas() async {
+        guard !isGuidedTour else { return }
+        guard exploreKind != .blueprints, isActive, scenePhase == .active else { return }
+        ideaFeed.activate(query: query, ownerID: ownerID)
+        await ideaFeed.refresh(fetch: fetchIdeasPage)
+    }
+
+    private func fetchIdeasPage(cursor: String?, query: String?) async throws -> IdeaDiscoveryResponse {
+#if DEBUG
+        if ideaPagingFixtureEnabled {
+            ideaFixturePageRequests += 1
+            return IdeaDiscoveryVisualFixture.pagingPage(cursor: cursor, query: query)
+        }
+        if ideaDiscoveryFixtureEnabled { return IdeaDiscoveryVisualFixture.page(cursor: cursor, query: query) }
+#endif
+        guard let coordinator = cloudSync.makeBlueprintInstallationCoordinator() else {
+            throw CloudSyncFailure.invalidSession
+        }
+        return try await coordinator.ideaCatalogPage(cursor: cursor, limit: IdeaDiscoveryFeedModel.pageSize, query: query)
+    }
+
     private func prepareAdSessionIfNeeded() async {
-        if navigation.selection != nil || previewPresented.wrappedValue {
+        if navigation.selection != nil || selectedIdea != nil || previewPresented.wrappedValue || isAccountPresented {
             adSession.suspendForCoveredPreview()
             return
         }
@@ -349,6 +557,7 @@ struct BlueprintExploreView: View {
             if !model.recentEntries.isEmpty {
                 Button(ExploreCopy.clear) { model.clearRecents() }
                     .frame(minHeight: 44)
+                    .disabled(isGuidedTour)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -364,11 +573,17 @@ struct BlueprintExploreView: View {
             entries = model.recentEntries
         } else {
             let candidateEntries = navigation.entries(for: source, fallback: feed.entries)
-            entries = mode == .results ? candidateEntries : candidateEntries.filter {
+            let visibleEntries = mode == .results ? candidateEntries : candidateEntries.filter {
                 !(actions?.states[$0.catalogKey]?.notInterested ?? $0.viewerState?.notInterested ?? false)
             }
+            entries = isGuidedTour
+                ? MovieNightTourExplorePolicy.merge(bundled: bundledMovieNightEntry, catalogEntries: visibleEntries)
+                : visibleEntries
         }
         let isLoading = isRecent ? model.loading : feed.isLoading
+        let waitsForMixedFirstPage = !isRecent && exploreKind == .all
+            && (!(feed.hasLoadedFirstPage || feed.loadFailed)
+                || !(ideaFeed.hasLoadedFirstPage || ideaFeed.loadFailed))
         let isExhausted = isRecent || feed.isExhausted
         let loadFailed = isRecent ? model.loadFailed : feed.loadFailed
         let scope = isRecent ? BlueprintCatalogFeedScope.all : (feed.scope ?? .all)
@@ -376,16 +591,42 @@ struct BlueprintExploreView: View {
         let exposureGeneration = exposureStore.callbackGeneration
         let exposureAccountID = ownerID
 
+        let resolvedHeader = itemsHeader
+        let ideaFooter: AnyView? = exploreKind == .all && !isRecent ? AnyView(
+            Group {
+                if ideaFeed.shouldAutoAdvanceEmptyPage {
+                    ProgressView().task(id: ideaFeed.nextCursor) { await loadMoreIdeas() }
+                } else if ideaFeed.isLoading {
+                    ProgressView()
+                } else if ideaFeed.loadFailed {
+                    VStack(spacing: 8) {
+                        Text(String(localized: "More ideas couldn't load.", defaultValue: "More ideas couldn't load."))
+                            .font(.footnote).foregroundStyle(AppTheme.ColorToken.textSecondary)
+                        Button(String(localized: "Retry", defaultValue: "Retry")) { Task { await loadMoreIdeas() } }
+                            .disabled(isGuidedTour)
+                    }
+                }
+            }
+        ) : nil
         return BlueprintPagedCatalogGrid(
             entries: entries,
+            ideaEntries: ideaFeed.ideas,
+            addedIdeaSourceIDs: addedIdeaSourceIDs,
+            showsIdeas: exploreKind == .all && !isRecent,
+            projectionIsReady: isGuidedTour || !waitsForMixedFirstPage,
             source: source,
             transitionNamespace: blueprintTransition,
             scope: scope,
-            adSession: !isRecent && feedAdLayoutIsEnabled ? adSession : nil,
-            isLoading: isLoading,
+            adSession: !isRecent && feedAdLayoutIsEnabled && !isGuidedTour ? adSession : nil,
+            isLoading: isLoading || waitsForMixedFirstPage,
             isExhausted: isExhausted,
             loadFailed: loadFailed,
             onSelect: { open($0, source: source, entries: entries) },
+            onSelectIdea: { selectedIdea = $0 },
+            onIdeaLoadMore: { Task { await loadMoreIdeas() } },
+            guidedSelectionKey: guidedSelectionKey,
+            onGuidedSelection: { _ in tourSelection?() },
+            guidedTourActive: isGuidedTour,
             onLoadMore: { if !isRecent { Task { await loadNextPage() } } },
             onRetry: {
                 Task {
@@ -394,17 +635,20 @@ struct BlueprintExploreView: View {
                 }
             },
             actionStore: actions,
-            itemsHeader: itemsHeader,
+            itemsHeader: resolvedHeader,
+            itemsFooter: ideaFooter,
             measurementIsActive: !isRecent && measurementIsActive,
             localExposureIsActive: !isRecent && localHistoryIsActive,
             measurementScopeID: measurementScopeID,
-            onMeaningfulExposure: mode == .browse && !isRecent ? { catalogKey in
+            onMeaningfulExposure: mode == .browse && !isRecent && !isGuidedTour ? { catalogKey in
                 exposureStore.recordSeen(catalogKey: catalogKey, accountID: exposureAccountID,
                                          generation: exposureGeneration)
             } : nil
         )
         .overlay {
-            if !isLoading && entries.isEmpty {
+            let allHasIdeaContent = exploreKind == .all
+                && (waitsForMixedFirstPage || ideaFeed.isLoading || ideaFeed.loadFailed || !ideaFeed.ideas.isEmpty)
+            if !isLoading && entries.isEmpty && !allHasIdeaContent {
                 ContentUnavailableView(
                     loadFailed ? ExploreCopy.unavailable : (isRecent ? ExploreCopy.noRecents : (mode == .results ? ExploreCopy.noResults : ExploreCopy.emptyCategory)),
                     systemImage: loadFailed ? "wifi.exclamationmark" : "magnifyingglass",
@@ -414,14 +658,21 @@ struct BlueprintExploreView: View {
             }
         }
         .refreshable {
+            guard !isGuidedTour else { return }
             if isRecent { await loadRecentCatalog() }
-            else { await refreshPagedSurface(startNewDiscoverySession: mode == .browse) }
+            else {
+                if exploreKind == .all { await refreshIdeas() }
+                await refreshPagedSurface(startNewDiscoverySession: mode == .browse)
+            }
         }
     }
 
     private func submitSearch() async {
+        guard !isGuidedTour else { return }
         isSearchActive = true
         guard mode == .results else { return }
+        if exploreKind != .blueprints { await refreshIdeas() }
+        guard exploreKind != .ideas else { return }
         let requestedScope = BlueprintCatalogFeedScope.search(query)
         if feed.scope != requestedScope { feed.activate(requestedScope) }
         await feed.refresh(fetch: fetchPage)
@@ -429,6 +680,7 @@ struct BlueprintExploreView: View {
 
     private func open(_ entry: BlueprintCatalogEntry, source: BlueprintCatalogSource,
                       entries: [BlueprintCatalogEntry]) {
+        guard !isGuidedTour else { return }
         if source != .recent, let actions { Task { await actions.record(.open, for: entry) } }
         previewPresented.wrappedValue = true
         navigation.open(entry, from: source, entries: entries, mode: mode, query: query)
@@ -464,6 +716,7 @@ struct BlueprintExploreView: View {
     }
 
     private func refreshPagedSurface(startNewDiscoverySession: Bool = false) async {
+        guard !isGuidedTour else { return }
         guard isActive, scenePhase == .active else { return }
         let scope: BlueprintCatalogFeedScope = mode == .results ? .search(query) : .all
         if feed.scope != scope { feed.activate(scope) }
@@ -512,7 +765,7 @@ struct BlueprintExploreView: View {
             throw CloudSyncFailure.invalidSession
         }
         let requestStore = discoveryContextStore
-        let context = query?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let context = isGuidedTour || query?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             ? nil
             : requestStore.beginOrResumeSession()
         do {
@@ -524,7 +777,8 @@ struct BlueprintExploreView: View {
                 discoveryContext: context
             )
         } catch {
-            if query?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
+            if !isGuidedTour,
+               query?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
                let failure = error as? CloudSyncFailure,
                case .server("BLUEPRINT_CATALOG_CURSOR_STALE") = failure {
                 requestStore.beginOrResumeSession(forceNew: true)
@@ -549,6 +803,82 @@ struct BlueprintExploreView: View {
                 throw CloudSyncFailure.invalidSession
             }
             return try await coordinator.catalog()
+        }
+    }
+}
+
+/// SwiftUI's searchable modifier has no disabled parameter in the current SDK.
+/// Lock the native search field itself while keeping its regular Explore chrome
+/// visible during the guided selection step.
+private struct GuidedExploreSearchFieldLock: UIViewRepresentable {
+    let isLocked: Bool
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+        view.accessibilityElementsHidden = true
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        applyLock(isLocked, from: view, coordinator: context.coordinator)
+        DispatchQueue.main.async {
+            self.applyLock(isLocked, from: view, coordinator: context.coordinator)
+        }
+    }
+
+    static func dismantleUIView(_ view: UIView, coordinator: Coordinator) {
+        coordinator.restore()
+    }
+
+    private func applyLock(_ isLocked: Bool, from view: UIView, coordinator: Coordinator) {
+        guard let searchBar = currentSearchBar(for: view) else {
+            coordinator.restore()
+            return
+        }
+        coordinator.setLocked(isLocked, searchBar: searchBar)
+    }
+
+    private func currentSearchBar(for view: UIView) -> UISearchBar? {
+        var responder: UIResponder? = view
+        while let current = responder {
+            if let viewController = current as? UIViewController,
+               let navigationController = viewController.navigationController,
+               navigationController.topViewController === viewController {
+                return viewController.navigationItem.searchController?.searchBar
+            }
+            responder = current.next
+        }
+        return nil
+    }
+
+    final class Coordinator {
+        private weak var searchBar: UISearchBar?
+        private var previousSearchFieldEnabled: Bool?
+
+        func setLocked(_ isLocked: Bool, searchBar newSearchBar: UISearchBar) {
+            if searchBar !== newSearchBar {
+                restore()
+                searchBar = newSearchBar
+            }
+            let field = newSearchBar.searchTextField
+            if isLocked {
+                if previousSearchFieldEnabled == nil { previousSearchFieldEnabled = field.isEnabled }
+                field.resignFirstResponder()
+                field.isEnabled = false
+            } else {
+                restore()
+            }
+        }
+
+        func restore() {
+            if let previousSearchFieldEnabled, let searchBar {
+                searchBar.searchTextField.isEnabled = previousSearchFieldEnabled
+            }
+            previousSearchFieldEnabled = nil
+            searchBar = nil
         }
     }
 }

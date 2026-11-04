@@ -3,6 +3,7 @@ import Foundation
 nonisolated enum SyncClientCapabilities {
     static let blueprintGuidesV1 = "blueprint-guides-v1"
     static let eventTodosV2 = "event-todos-v2"
+    static let budgetAtomicV1 = "budget-atomic-v1"
     static let todosUpgradeRequiredCode = "todos_client_upgrade_required"
     static let upgradeRequiredCode = "BLUEPRINT_CLIENT_UPGRADE_REQUIRED"
     static let legacyUpgradeRequiredCode = "blueprint_client_upgrade_required"
@@ -14,7 +15,7 @@ nonisolated enum SyncClientCapabilities {
         "planning.todos_v1"
     ]
     static let headerName = "X-Gatherory-Capabilities"
-    static let headerValue = ([blueprintGuidesV1, eventTodosV2] + blueprintFeatures).joined(separator: ",")
+    static let headerValue = ([blueprintGuidesV1, eventTodosV2, budgetAtomicV1] + blueprintFeatures).joined(separator: ",")
 }
 
 nonisolated enum SyncPushDisposition: String, Codable, Sendable {
@@ -29,6 +30,7 @@ nonisolated struct SyncPushResult: Codable, Sendable {
     let disposition: SyncPushDisposition
     let serverVersion: Int?
     let failureCode: String?
+    var workspaceServerVersion: Int? = nil
 }
 
 nonisolated struct SyncPushResponse: Codable, Sendable {

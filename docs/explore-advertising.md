@@ -1,5 +1,52 @@
 # Explore advertising and paged discovery
 
+## Exact native asset bounds — November 4, 2026
+
+The validator report was reproduced with a host just **0.25 points shorter**
+than its measured asset stack: the registered CTA extended outside
+`NativeAdView`. The renderer previously accepted up to 0.5 points of overflow
+and assigned full asset frames even when an undersized/zero-height host could
+not contain them.
+
+The renderer now requires exact containment. It detaches a displayed creative
+before moving its registered assets; if the host is too small, it clears the
+asset frames and requests the measured height before retrying registration.
+A one-point internal inset prevents coordinate conversion from rounding a
+fractional/RTL edge outward. Actual UIKit asset coordinates are checked after
+SDK layout. Valid fitted
+layouts restore the complete assets and register the same creative. Repeated
+SwiftUI updates for that immutable creative leave the media and registered
+asset content alone. No SDK update, validator disable switch, production ad-ID
+change, consent bypass or application-owned ad click handler was introduced.
+
+Regression coverage checks fractional/zero/shrunken host heights, recovery,
+multiline/optional assets, narrow columns and RTL bounds. The sample-ad UI
+harness scrolls real Google test inventory and, in Debug only, reads
+registration/asset-containment diagnostics. This diagnostic is limited to
+`-BlueprintAdsScrollVerification` and is absent from Release. See
+[verification results](testing-verification.md) for executed runs and limits.
+
+Google requires each asset view to be a descendant of the native ad view and
+uses its registered assets for SDK-owned interaction and measurement. The
+validator remains enabled. References: [display native ads](https://developers.google.com/admob/ios/native/advanced)
+and [native validator](https://developers.google.com/admob/ios/native/validator).
+
+## All Explore channels — November 2, 2026
+
+All, Blueprints and Ideas now support native ads in browsing and typed search.
+Search keeps organic relevance order; ads are separate placements after organic
+items 6, 18, 30 and so on, counting either card type in All. Short or empty
+results do not gain artificial rows. Local recent history and private event
+planning remain ad-free. The Ideas filter shares the existing lazy, measured
+native-ad renderer rather than creating a second ad implementation.
+
+Consent, privacy choices, non-personalized requests and bounded inventory remain
+in effect. Search text, idea content and account/event information are not sent
+as advertising targeting. Covering Explore with either detail or Account pauses
+requests and retains valid inventory; leaving Explore or changing accounts
+invalidates it. This is a source change; no deployment or TestFlight upload was
+performed. See the final test evidence in [verification](testing-verification.md).
+
 ## Beta enablement — October 23, 2026
 
 At the release owner's request, Release now sets `EXPLORE_ADS_ENABLED=YES`
@@ -98,14 +145,14 @@ signals on a test device; do not claim this mismatch is resolved by configuratio
 
 ## Experience
 
-Explore browse and category results use a cursor-paged blueprint catalog,
-20 organic items per request. The first ad slot follows item 6; later slots
-follow items 18, 30, and so on. Slots retain their organic positions as pages
-append. The next three scheduled slots prefetch in the background so a creative
-can be ready before its lazy organic anchor appears. Search results, recently
-viewed history, and private event planning surfaces do not contain ads. The grid
-retains the existing fold-aware lazy layout and uses one column for accessibility
-text sizes.
+All, Blueprints and Ideas use cursor-paged catalogs, with each stream requesting
+20 organic items per page. Browsing and typed search share the same ad policy.
+The first scheduled slot follows organic item 6; later slots follow items 18,
+30, and so on. All counts Blueprints and Ideas together; organic relevance and
+source order are preserved. Slots retain their positions as pages append. The
+next three slots prefetch so a creative can be ready before its lazy anchor
+appears. Recently viewed history and private event planning do not contain ads.
+The grid retains the fold-aware lazy layout and adapts to available width.
 
 A first creative enters the grid only after loading and while its organic
 anchor's insertion edge is below the viewport. If it arrives after that edge
@@ -115,7 +162,7 @@ existing reservation while visible; a taller replacement waits until its
 insertion edge is below the viewport before the reservation grows. Native media,
 headline, advertiser, and action are registered with Google's `NativeAdView`;
 the SDK handles clicks and impressions. The visible Ad label and reserved
-AdChoices area distinguish advertising from blueprints. There is no
+AdChoices area distinguish advertising from organic content. There is no
 application-owned click overlay, simulated impression, or fabricated production
 ad.
 The renderer uses the same width-based layout calculation for SwiftUI's fitting
@@ -129,7 +176,7 @@ reserved shell only for slots already admitted. A replacement that fits the
 reservation can render without shrinking it; a taller replacement waits until
 the insertion edge is below the viewport before the reservation grows. The
 renderer associates the ad only after the host has finite, nonzero bounds
-containing every registered asset. A text-size or width change that requires
+strictly containing every registered asset, without overflow tolerance. A text-size or width change that requires
 more height defers registration until the host fits again. This addresses the
 reported “Advertiser assets outside native ad view” warning without clipping
 assets or disabling Google's validator.
@@ -159,12 +206,12 @@ stale responses. Server search is debounced 275 ms.
   a local 40-item catalog paged 20 at a time, the Google sample app ID supplied
   as a build override, and Google's sample native unit. Blueprint actions and
   measurement are disabled for this fixture. This verification override leaves
-  the checked-in Debug IDs and flags unchanged; Release advertising remains off.
-- Release: both flags remain NO. The verified production app/unit IDs are filled
-  in, and a fail-closed configuration guard supports only that exact pair with
-  explicit enablement and test mode off. This prepares configuration without
-  enabling SDK startup or live requests. Wrong, blank, mixed or sample IDs fail
-  closed. Preview startup/request guards remain.
+  the checked-in Debug and Release IDs and flags unchanged.
+- Release: `EXPLORE_ADS_ENABLED=YES` and `EXPLORE_ADS_TEST_MODE=NO`, as authorized
+  for beta on October 23. The fail-closed guard supports only Gatherory's exact
+  production app/unit pair. Wrong, blank, mixed or sample IDs fail closed.
+  Preview startup/request guards remain. Provider readiness and fill still
+  determine actual serving.
 - SDK startup is deferred until an active Explore surface prepares ads.
   `GADDelayAppMeasurementInit` is enabled. Canvas previews never start the SDK
   or request ads. The Light, Dark, Large text, and Narrow previews in
@@ -189,11 +236,12 @@ no device, network, diagnostic, or advertising interaction data.
 Inventory is bounded to three cached/in-flight ads and twelve queued slots;
 unowned inventory can be evicted. Ads expire at 55 minutes. A failure gets one
 delayed retry. Visible loaders/cards hold leases. Covering Explore with a
-blueprint preview suspends requests and retains unexpired inventory for the same
-account until the cover is actually dismissed. Full app backgrounding, leaving
-the Explore tab, account changes, or privacy-choice changes reset inventory and
-invalidate late callbacks; layout identity changes also clear measured slot
-geometry.
+Blueprint preview, idea detail or Account suspends requests and retains
+unexpired inventory for the same account until the cover is dismissed. Full app
+backgrounding, leaving the Explore tab, account changes, or privacy-choice
+changes reset inventory and invalidate late callbacks; layout identity changes also clear measured slot
+geometry. New typed queries start the result scroll at the top; page appends
+retain the browsing position.
 
 ## Server dependency and rollout
 

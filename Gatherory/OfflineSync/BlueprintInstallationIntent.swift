@@ -223,6 +223,14 @@ final class BlueprintInstallationCoordinator {
         return response
     }
 
+    func ideaCatalogPage(cursor: String? = nil, limit: Int = 20,
+                         query: String? = nil) async throws -> IdeaDiscoveryResponse {
+        try requireBoundAccount()
+        let response = try await transport.ideaCatalogPage(cursor: cursor, limit: limit, query: query)
+        try requireBoundAccount()
+        return response
+    }
+
     func prepareDraftCopy(_ draft: BlueprintSetupDraft) async throws -> BlueprintSetupDraft {
         try requireBoundAccount()
         let generation = boundAccountGeneration

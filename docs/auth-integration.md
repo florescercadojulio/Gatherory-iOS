@@ -136,12 +136,76 @@ so relaunch resumes its recovery gate if archive/cache cleanup already
 succeeded. Wrong-account preparation and guest editing stay blocked until the
 matching cleanup completes.
 
-The regression suites cover restoration retry/expiry, provider save gates,
-guest source/proof retention, preparation ordering, cancellation, account round
-trips, and real in-memory persistence through the installed lifecycle hooks.
-No automated UI tests are included. See the shared
+### First-run onboarding and the Movie Night tour
+
+`AuthenticationFlowChain` and `SessionPreparationCoordinator` continue to own
+eligibility, account recovery, invitation routing, and readiness. The intro
+primer still offers **Start tour** or **Skip**; `-ClassicOnboarding` preserves
+access to classic `OnboardingView` without changing auth routing.
+
+Start records an account-scoped `MovieNightTourDiscoveryStore` phase, creates no
+workspace, and opens the native Events/workspaces tab with the guide prompt to
+**Tap Explore**. Explore advances the durable phase and shows the regular native
+Explore interface with its header, profile, search, content filter, masonry
+layout, and cached or online catalog cards. The bundled Movie Night entry is
+pinned first and deduplicated against feed data, so it remains available offline
+or when catalog loading fails. During the entry route, only Movie Night can be
+selected; the other cards and controls are visible but disabled. The Movie Night
+card has a decorative accent border and a stable target ID; measured pointers
+identify both the actual Explore tab and Movie Night card without occluding
+accessibility. Previous returns to the Events prompt. Skip before card selection
+completes the tour, clears discovery state, creates no plan, and restores normal
+app behavior. This flow reuses `BlueprintExploreView`, not a separate mock feed.
+
+Selecting the Movie Night card validates the discovery phase, then creates a
+locally owned workspace from the bundled snapshot and persists it through the
+normal workspace and outbox path. It uses no remote Blueprint installation or
+catalog receipt. The child activity is attached to the Movie Night event. The
+guide advances only through real actions: love and approve the snack idea, then
+schedule the event idea. The onboarding copy tells people that they may delete the
+practice event from Events.
+
+Discovery state is stored under `movieNightTourDiscovery.<accountID>` with the
+`chooseExplore` and `chooseMovieNight` phases. Workspace progress is stored
+separately at `movieNightTourProgress.<accountID>` with
+`installedWorkspaceID`, `snackIdeaID`, `eventIdeaID`, and `step`. Both are bound
+to the canonical Better Auth user ID. Account's **Redo tour** revisits the
+Events/Explore entry first: unfinished lessons resume with edits preserved;
+completed or unavailable lessons create a fresh local copy only after selection,
+leaving older workspaces intact. Account deletion removes only the matching
+account's discovery state, lesson progress, and contextual primer dismissals.
+
+The entry NPC and workspace guide use a full-width Previous / centered Skip /
+Next footer. Previous returns from Explore to the Events prompt; Next stays
+disabled until a real forward action is available. The workspace guide changes
+Next to Finish when its actual completion conditions are met. Buttons never
+simulate a completed action.
+
+Finishing or skipping an instantiated lesson asks whether to keep or remove its
+practice event. Keep preserves content; Remove rechecks the active identity and
+exact receipt ID plus current delete authority, and commits a scoped local/outbox
+delete before marking the guide complete. Save failure restores the library and
+leaves the guide retryable. Skipping before selecting Movie Night creates no plan
+and needs no cleanup prompt. Neither choice changes authentication routing.
+
+The Decide and Search primers remain post-onboarding first-use education. They
+require the relevant tab to be active, account onboarding to be complete, and
+both discovery and workspace tour state to be inactive. Completion/skip rechecks
+the visible tab after SwiftUI updates. Per-account/per-primer dismissals are
+cleared for that account when an explicit redo starts. Search explains blueprint
+and idea search, the default All filter and type filters, and adding an idea to
+the person's event; showing this primer does not require network access.
+
+Current validation passes 1,269 unit tests (one opt-in live test skipped) and eight
+distinct native UI cases across the full run and corrected search-selector rerun.
+Light/Dark coverage includes measured Explore/card pointers, regular-feed locks,
+text navigation, real lesson actions, replay, Keep/Remove, classic onboarding,
+primers, and normal native search typing/scrolling after completion. See
+[iOS verification](testing-verification.md#regular-explore-tour-and-text-navigation--november-2-2026)
+for artifacts and the superseded stale-selector failure, and
+[Movie Night onboarding](movie-night-onboarding.md) for acceptance limits. The
 [mobile lifecycle design](../../../gatherory-web-app/docs/architecture/mobile-session-lifecycle.md)
-for the state/retention table and remaining physical-device checks.
+continues to describe account preparation and retained-data boundaries.
 
 ## Sign-in flows
 

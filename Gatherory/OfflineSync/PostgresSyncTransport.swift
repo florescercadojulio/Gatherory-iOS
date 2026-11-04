@@ -189,6 +189,23 @@ struct PostgresSyncTransport: WorkspaceSnapshotTransport {
         return try await perform(request)
     }
 
+    func ideaCatalogPage(cursor: String? = nil, limit: Int = 20,
+                         query: String? = nil) async throws -> IdeaDiscoveryResponse {
+        var components = URLComponents(
+            url: endpointURL(path: ["api", "blueprints", "ideas"]),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "cursor", value: cursor),
+            URLQueryItem(name: "q", value: query)
+        ].filter { $0.value != nil }
+        guard let url = components?.url else { throw CloudSyncFailure.invalidResponse }
+        var request = try authenticatedRequest(url: url)
+        request.httpMethod = "GET"
+        return try await perform(request)
+    }
+
     /// Resolves a shared published revision without sending the viewer's
     /// session or workspace credentials. The token is also omitted from logs.
     func sharedBlueprint(token: String) async throws -> BlueprintCatalogEntry {

@@ -385,8 +385,8 @@ struct GatheroryTests {
         )
     }
 
-    @Test("Collaborators receive the complete planning interface")
-    func collaboratorViewerReceivesHostControls() throws {
+    @Test("Contributing collaborators can plan without deleting an active main event")
+    func collaboratorViewerReceivesPlanningControls() throws {
         let workspace = PlanningWorkspace.sample
         let collaboratorIndex = try #require(
             workspace.members.firstIndex { $0.participantRole == .collaborator }
@@ -407,7 +407,7 @@ struct GatheroryTests {
 
         #expect(workspace.showsPlanningInterface)
         #expect(workspace.canManageMainEvent)
-        #expect(workspace.canDeleteMainEvent)
+        #expect(!workspace.canDeleteMainEvent)
         #expect(workspace.visibleEventContexts == workspace.availableEventContexts)
     }
 
@@ -1050,8 +1050,12 @@ struct GatheroryTests {
 
     @Test("Budget transfers preserve the workspace cap")
     func budgetTransfersPreserveWorkspaceCap() throws {
-        let workspace = PlanningWorkspace.sample
-        let child = try #require(workspace.childEvents.first)
+        let workspace = budgetManagerWorkspace()
+        let availableChildren = workspace.childEvents.filter {
+            workspace.canManageBudgets(for: .subevent($0.id))
+        }
+        #expect(!availableChildren.isEmpty)
+        let child = try #require(availableChildren.first)
         let totalBefore = workspace.allocatedBudgetTotal
 
         #expect(workspace.setEventRequiresBudget(true, eventID: child.id))
@@ -1067,8 +1071,12 @@ struct GatheroryTests {
 
     @Test("An event cannot take more budget than its source owns")
     func budgetTransferCannotOverdrawSource() throws {
-        let workspace = PlanningWorkspace.sample
-        let child = try #require(workspace.childEvents.first)
+        let workspace = budgetManagerWorkspace()
+        let availableChildren = workspace.childEvents.filter {
+            workspace.canManageBudgets(for: .subevent($0.id))
+        }
+        #expect(!availableChildren.isEmpty)
+        let child = try #require(availableChildren.first)
         let mainBudget = try #require(workspace.mainEventBudgetCap)
 
         #expect(workspace.setEventRequiresBudget(true, eventID: child.id))
@@ -1085,8 +1093,12 @@ struct GatheroryTests {
 
     @Test("Removing an event budget returns its allocation to the free pool")
     func removingEventBudgetReturnsAllocationToPool() throws {
-        let workspace = PlanningWorkspace.sample
-        let child = try #require(workspace.childEvents.first)
+        let workspace = budgetManagerWorkspace()
+        let availableChildren = workspace.childEvents.filter {
+            workspace.canManageBudgets(for: .subevent($0.id))
+        }
+        #expect(!availableChildren.isEmpty)
+        let child = try #require(availableChildren.first)
         let mainBudget = try #require(workspace.mainEventBudgetCap)
         let freePool = workspace.freeBudgetPool
 
@@ -1101,8 +1113,12 @@ struct GatheroryTests {
 
     @Test("Budget can move through the free pool")
     func budgetCanMoveThroughFreePool() throws {
-        let workspace = PlanningWorkspace.sample
-        let child = try #require(workspace.childEvents.first)
+        let workspace = budgetManagerWorkspace()
+        let availableChildren = workspace.childEvents.filter {
+            workspace.canManageBudgets(for: .subevent($0.id))
+        }
+        #expect(!availableChildren.isEmpty)
+        let child = try #require(availableChildren.first)
         let initialPool = workspace.freeBudgetPool
 
         #expect(workspace.setEventRequiresBudget(true, eventID: child.id))
@@ -1757,6 +1773,23 @@ struct GatheroryTests {
         #expect(restored.note == idea.note)
     }
 
+    private func budgetManagerWorkspace() -> PlanningWorkspace {
+        let workspace = PlanningWorkspace.sample
+        guard let managerIndex = workspace.members.firstIndex(where: { $0.participantRole == .host }) else {
+            preconditionFailure("The budget regression fixture requires a host manager.")
+        }
+        let managerID = "budget-regression-host"
+        workspace.members[managerIndex].userID = managerID
+        workspace.configureViewer(UserAccount(
+            id: managerID,
+            email: "budget-regression-host@example.test",
+            displayName: "Budget regression host",
+            role: .planner,
+            authenticationProvider: .password,
+            createdAt: .now
+        ))
+        return workspace
+    }
 }
 
 private struct ArtworkAuthorizationProvider: MusicCatalogProviding {

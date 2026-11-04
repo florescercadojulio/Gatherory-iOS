@@ -48,13 +48,30 @@ struct WorkspaceRemoteMerger {
                         entity.effectivePayloadSchemaVersion
                     )
                 }
-                try archive.applyEntity(
-                    type: entity.entityType,
-                    id: entity.entityID,
-                    operation: .update,
-                    payload: entity.payload,
-                    codec: codec
-                )
+                if entity.entityType == .budgetTransfer {
+                    guard entity.entityID == snapshot.scopeID else {
+                        throw DecodingError.dataCorrupted(
+                            .init(codingPath: [], debugDescription: "Invalid budget version entity identity.")
+                        )
+                    }
+                    try RemoteEntityVersionRecord.upsert(
+                        in: context, scopeID: entity.scopeID, entityType: .budgetTransfer,
+                        entityID: entity.entityID, serverVersion: entity.serverVersion,
+                        ownerUserID: ownerUserID
+                    )
+                    try archive.apply(JSONDecoder().decode(
+                        ReplaceBudgetMutationPayload.self, from: entity.payload
+                    ))
+                    archive.remoteBudgetSnapshotData = entity.payload
+                } else {
+                    try archive.applyEntity(
+                        type: entity.entityType,
+                        id: entity.entityID,
+                        operation: .update,
+                        payload: entity.payload,
+                        codec: codec
+                    )
+                }
                 if entity.entityType == .todo {
                     try RemoteEntityVersionRecord.upsert(
                         in: context, scopeID: entity.scopeID, entityType: .todo,
@@ -139,6 +156,7 @@ struct WorkspaceRemoteMerger {
         var workspaceServerVersion = record?.serverVersion ?? 0
         var latestUpdatedAt = record?.updatedAt ?? .distantPast
         var shouldDeleteWorkspace = false
+        var authoritativeBudgetPayload: Data?
 
         for change in newChanges {
             guard change.effectivePayloadSchemaVersion == SyncPayloadContract.currentVersion else {
@@ -173,6 +191,25 @@ struct WorkspaceRemoteMerger {
                     }
                     workspaceServerVersion = change.serverVersion
                     shouldDeleteWorkspace = false
+                }
+            } else if change.entityType == .budgetTransfer {
+                guard change.entityID == scopeID else {
+                    throw DecodingError.dataCorrupted(
+                        .init(codingPath: [], debugDescription: "Invalid budget version change identity.")
+                    )
+                }
+                try RemoteEntityVersionRecord.upsert(
+                    in: context, scopeID: change.scopeID, entityType: .budgetTransfer,
+                    entityID: change.entityID, serverVersion: change.serverVersion,
+                    ownerUserID: ownerUserID
+                )
+                authoritativeBudgetPayload = change.payload
+                if var currentArchive = archive {
+                    try currentArchive.apply(JSONDecoder().decode(
+                        ReplaceBudgetMutationPayload.self, from: change.payload
+                    ))
+                    currentArchive.remoteBudgetSnapshotData = change.payload
+                    archive = currentArchive
                 }
             } else if change.entityType == .event,
                       change.entityID == scopeID,
@@ -278,8 +315,17 @@ struct WorkspaceRemoteMerger {
         if shouldDeleteWorkspace {
             if let record { context.delete(record) }
             try RemoteEntityVersionRecord.remove(scopeID: scopeID, ownerUserID: ownerUserID, in: context)
-        } else if let archive {
-            let payload = try codec.encode(archive)
+        } else if let storedArchive = archive {
+            var mergedArchive = storedArchive
+            if let authoritativeBudgetPayload {
+                try mergedArchive.apply(JSONDecoder().decode(
+                    ReplaceBudgetMutationPayload.self, from: authoritativeBudgetPayload
+                ))
+                mergedArchive.remoteBudgetSnapshotData = authoritativeBudgetPayload
+            }
+            try overlayPendingBudgetMutations(scopeID: scopeID, on: &mergedArchive)
+            archive = mergedArchive
+            let payload = try codec.encode(mergedArchive)
             if let record {
                 record.payload = payload
                 record.payloadSchemaVersion = WorkspaceArchiveV1.schemaVersion
@@ -360,6 +406,25 @@ struct WorkspaceRemoteMerger {
                 payload: mutation.payload,
                 codec: codec
             )
+        }
+    }
+
+    private func overlayPendingBudgetMutations(
+        scopeID: UUID,
+        on archive: inout WorkspaceArchiveV1
+    ) throws {
+        let mutations = try context.fetch(FetchDescriptor<PendingMutation>())
+            .filter {
+                $0.ownerUserID == ownerUserID
+                    && $0.scopeID == scopeID
+                    && $0.entityType == .budgetTransfer
+            }
+            .sorted { $0.createdAt < $1.createdAt }
+        for mutation in mutations {
+            guard let payload = try? JSONDecoder().decode(
+                ReplaceBudgetMutationPayload.self, from: mutation.payload
+            ), payload.operation == "replace_budget" else { continue }
+            try archive.apply(payload)
         }
     }
 

@@ -75,6 +75,7 @@ final class BlueprintDiscoverySessionUITests: XCTestCase {
 
             for _ in 0..<5 where !first.isHittable { scroll.swipeDown() }
             XCTAssertTrue(first.isHittable)
+            app.buttons["explore.content.filter"].tap()
             let refresh = app.buttons["blueprint.discovery.refresh"]
             XCTAssertTrue(refresh.waitForExistence(timeout: 5))
             XCTAssertTrue(refresh.isHittable)

@@ -1,5 +1,1492 @@
 # iOS verification
 
+## Core gathering follow-up — November 4, 2026
+
+All 11 UI methods left unresolved in the initial core audit now have passing follow-ups. Thirteen distinct UI methods passed across the finalized selections, including permissions through Account layout changes, exact-event budget/back behavior, cancellation, native Photos picker recovery, shared album viewer/back, and idea scheduling/native swipe. The final native selection passed 68 tests: 67 focused model tests (overlap with the earlier 800) plus one real two-account native dev sync acceptance, including bounded cleanup of interrupted-run records. See the [completed follow-up](core-gathering-release-followup-2026-11-04.md) for result bundles, intermediate harness failures, warning and device/service limits. No production deployment or upload occurred.
+
+
+## V1 core gathering simulation — November 4, 2026
+
+Three Luna agents covered host/collaborator planning, guest/server access and
+offline/media recovery. Explore, Blueprints and advertising were excluded.
+The parent ran **800 native tests in 108 suites, all passing**, and two initial
+UI lanes containing **24 methods: 12 passed, 12 failed**. A fresh follow-up
+passed the repaired task scenario and two default-Overview guest/read-only UI
+checks, plus three overlapping model checks. Eleven older UI acceptance
+methods still need classification/retesting; this is **not a production go**.
+
+A confirmed interrupted-upload defect was fixed: account restoration now
+requeues that account's abandoned `.uploading` transfers while preserving file,
+transfer ID, retry count and other-account state. Both regressions pass.
+Server checks in the actual owning checkout passed **112 non-DB tests** and
+**13 isolated PostgreSQL tests**. The disposable DB was migrated only for tests,
+then dropped; current production compatibility and live HTTP/device flows
+were not asserted. The additional focused 22-test server rerun overlaps the
+112 tests and is not additive coverage.
+
+See the [full scope, scenario, per-method results, artifacts and release hold](core-gathering-release-check-2026-11-04.md).
+No deployment, upload, real guest messaging or production data change occurred.
+
+## AdMob native asset bounds — November 4, 2026
+
+The reported validator error was reproduced by focused UIKit tests before the
+fix: a 180-point native view measured 381 points tall but accepted a host height
+of 380.75, leaving its CTA 0.25 points outside. A shorter/zero-height host also
+retained overflowing asset frames. The old 0.5-point tolerance was insufficient.
+Baseline: `/tmp/gatherory-native-ad-bounds-before-20261104.xcresult`
+(two failing regression cases, one passing normal-layout case).
+
+`RegisteredNativeAdView` now uses exact containment, a one-point internal inset,
+and actual UIKit coordinates after SDK layout. It detaches the creative before
+moving assets, clears invalid transient frames, requests a fitting height and
+registers only a contained layout. Repeated updates of the same immutable
+creative avoid resetting the registered media/content. No validator switch,
+production IDs, consent policy, SDK version or click handling was changed.
+
+Final scoped run: `/tmp/gatherory-native-ad-bounds-scoped-20261104.xcresult` —
+**18 unit tests in four suites and one native UI test passed**, zero failures,
+on iPhone Duo / iOS 27.1, default appearance and portrait app window.
+The suites are `NativeAdAssetBoundsTests` (5), `ExploreAdPlacementTests`,
+`ExploreAdConfigurationTests` and `ExploreAdSessionLifecycleTests`.
+New bounds cases cover fractional/short/zero heights, collapsed widths,
+recovery, multiline/optional assets, narrow columns, RTL and fractional bounds
+origins. A first RTL check caught outward coordinate rounding; the internal
+inset resolved it without relaxing the containment rule.
+
+`NativeAdValidationUITests.testGoogleSampleAssetBoundsWhileScrolling`
+passed in **28.574 seconds**, loading Google's real sample native inventory,
+scrolling around the creative and checking a Debug-only diagnostic for both
+`registered=true` and `assetsContained=true` before and after scrolling.
+The SDK validator remains enabled. Captures were inspected; the validator shows
+**No implementation issues found**. Evidence:
+`/tmp/gatherory-native-ad-bounds-scoped-attachments-20261104`.
+The sample app ID was a command-line build override; checked-in configuration
+was preserved. No ad/CTA/AdChoices clicks or live creative requests were used.
+
+**Separate acceptance limit:** an exploratory longer scroll-away/return test
+repeatedly lost the original `explore-ad-6` slot. Its cause is unconfirmed;
+slot inventory/lazy remount retention is not certified by this fix. The broader
+return runs (`...bounds-verified...`, `...bounds-final...`, and
+`...bounds-final-r2...` result bundles) failed that return assertion, although
+the initial creative's registered/contained checks passed and no bounds warning
+was observed. The retained UI test is scoped to the reported asset bounds error;
+it does not claim long-distance remount acceptance. Investigate slot retention
+separately before treating the older scroll-stability results as current proof.
+
+English/Spanish coverage passed for **1,882 strings**, with the existing
+nonliteral-key extraction advisory at `AppCopy.swift:326`.
+`git diff --check` passed. No physical-device, Light/Dark matrix, oversized-text,
+expanded Duo, signed Release archive, new TestFlight build or production rollout
+was performed. SDK sample behavior does not establish approval for every
+creative/provider/device configuration. No server, database or ad-account state
+was changed.
+
+## Branded primer refinement — November 4, 2026
+
+Following visual feedback, Explore and Decide now use the original welcome's
+Gatherory mark instead of oversized SF Symbol heroes. The header uses the
+existing 108-point asset and system large-title style, with 24-point internal
+spacing and 40 points before the feature group. Leading row alignment and short
+copy are retained. Native full-screen covers replace the large-detent sheets,
+removing the rounded inset surface and grabber. Continue remains a centered,
+content-sized native capsule. The original welcome screen and tour content were
+not redesigned. Existing adaptive colors remain; no custom appearance switch,
+new palette, decorative cards or animation was introduced.
+
+The Apple design skill informed the layout/typography review; rationale and
+actual layout values are recorded in `movie-night-onboarding.md`.
+
+`/tmp/gatherory-brand-primers-20261104.xcresult` passed **4 unit tests and two
+native UI tests** on Duo / iOS 27.1, default appearance and portrait app window:
+`ContextualPrimerPolicyTests`,
+`testDecidePrimerSimpleLayoutAndDismissal` (**18.212 s**) and
+`testOriginalWelcomePrecedesTourAndSearchWaitsForExplore` (**23.220 s**).
+Assertions cover brand header presence, edge-to-edge presentation rather than a
+sheet, content-sized/reachable Continue, brief instruction rows, no practice
+controls or decision writes, account-scoped first-tab timing and dismissal.
+Both captured layouts were inspected; all three feature rows and the action
+fit clearly in the tested compact window. Captures:
+`/tmp/gatherory-brand-primers-attachments-20261104`.
+
+The tour handoff also passed in
+`/tmp/gatherory-brand-primers-tour-20261104.xcresult`:
+`testWorkspaceGuidePointersFollowDecideAndIdeasTabs` (**54.309 s**).
+This exercises Search during guided discovery, native tab hit testing, the
+full-screen Decide primer, its dismissal, a real Love It response and the
+resumed Ideas guidance. Total for this refinement: **4 unit tests and 3 native
+UI tests passed**, zero failures.
+
+Localization coverage passed for **1,882 English/Spanish strings** with the
+existing dynamic-key advisory; `git diff --check` passed. No Light/Dark matrix,
+large-text matrix, expanded Duo posture, physical-device or Release archive
+acceptance is claimed. No account, database, server or deployment changes.
+
+## Welcome-style contextual primers — November 4, 2026
+
+Explore and Decide now share a native welcome-style layout: centered blue hero,
+large title, short leading icon/text rows, and one content-sized capsule Continue
+button. Decide's interactive practice deck, sample idea, feedback, choice buttons
+and date lesson were removed. Its three rows explain left/Pass, up/Maybe and
+right/Love It. Explore retains its three discovery features with shorter copy.
+The original welcome and Movie Night tour are unchanged; primers still appear
+on their own first active tab and remember dismissal per account.
+
+Final run: `/tmp/gatherory-simple-primers-r2-20261104.xcresult`, **12 unit tests
+and two native UI tests passed**, zero failures, on iPhone Duo / iOS 27.1 in its
+default appearance and portrait app window. This supersedes the first passing
+run's longer Explore descriptions.
+
+- `ContextualPrimerPolicyTests` (4): first-tab timing, completion, persisted
+  dismissal, account isolation and replay reset.
+- `DecisionSwipeMappingTests` (8): real swipe thresholds/direction precedence,
+  queue handling and existing response/undo presentation behavior.
+- `testDecidePrimerSimpleLayoutAndDismissal` (**17.421 s**): three instruction
+  rows, no practice UI/text, reachable 44-point Continue, final row clear of the
+  action, no recorded decision on dismissal, and no repeated primer on revisit.
+- `testOriginalWelcomePrecedesTourAndSearchWaitsForExplore` (**24.640 s**):
+  original Welcome and Skip, Search deferred until Explore, feature rows,
+  reachable Continue, last row clear of footer, and remembered dismissal.
+
+Exported captures were reviewed for both primers. The shorter Explore copy fits
+above the footer in this compact window. Content can scroll when needed; the
+footer uses an opaque adaptive background. Attachments are in
+`/tmp/gatherory-simple-primers-r2-attachments-20261104`.
+Localization coverage passed for **1,882 English/Spanish strings**, with the
+existing nonliteral-key extraction advisory at `AppCopy.swift:326`.
+`git diff --check` passed. No dedicated Light/Dark, oversized-text, expanded Duo,
+physical-device or signed Release acceptance was performed. No deployment,
+account, server or database changes were made.
+
+## Developer-only full onboarding replay — November 3, 2026
+
+Two Luna agents implemented the Account action and focused regression coverage.
+Development Debug builds expose **Account → Developer → Redo onboarding**, using
+the existing launch onboarding rather than a second copy of its UI. The request
+is in memory and bound to the current prepared, authenticated non-guest account.
+Only that account's tutorial/discovery/primer keys are cleared; authentication,
+existing workspaces and normal account onboarding state remain intact. Recovery,
+imports, invitations and shared-blueprint routing keep priority. The normal Redo
+tour action is unchanged.
+
+UI, request subscription and replay state are compiled out of Release. Configured
+staging/production are also ineligible. The developer gate reads configured
+`APP_ENVIRONMENT` independently of `SIMULATE_PRODUCTION_FLOW`, allowing the
+ordinary development Debug build to exercise production-like sign-in and still
+use the control. The shared scheme archives with Release configuration.
+
+Final verification: **30 unit tests across two suites and one native UI method
+passed**, zero failures/skips, in
+`/tmp/gatherory-developer-redo-onboarding-r4-20261103.xcresult`, using the clean
+Simulator build directory `/tmp/gatherory-developer-onboarding-dd-20261103`.
+Unit coverage checks configured environment gating, Release/staging/production
+rejection, nil/empty/stale accounts, guest/signed-out/unprepared sessions, blocked
+recovery/import/invitation/shared-blueprint requests, safe terminal destinations,
+notification scoping and the existing authentication chain.
+
+On Duo / iOS 27.1 in the default appearance,
+`testDeveloperRedoOnboardingRepeatsWelcomeAndSkipWithoutChangingAccountOrWorkspaces`
+passes in **35.119 seconds**. It starts with an existing signed-in seeded library,
+uses the adaptive Account control and lazy settings List, repeats full welcome →
+Movie Night choice → Skip twice, and compares the same event card IDs after each
+cycle without logging in again.
+
+The first attempts used stale generated modules and an invalid cached simulator
+test signature; a clean derived-data directory with ad-hoc Simulator signing
+resolved those build artifacts. The first clean UI attempt also assumed an
+existing cached account would initially show onboarding; the test now enters
+through its real library fast path before pressing the developer action. Those
+attempts are superseded by R4 and are not green acceptance evidence.
+
+Localization verifies 1,879 English/Spanish strings with the existing dynamic-key
+advisory; `git diff --check` passes. No Light/Dark matrix, full planning matrix,
+signed Release archive or live-account provider test was performed for this
+developer control. No database reset, package/version change, deployment or upload.
+
+## Explore primer in the welcome style — November 3, 2026
+
+Two Luna agents handled the native layout and focused regression additions.
+The Explore/Search primer now uses a centered accent search hero, large centered
+heading, supporting introduction and welcome-style icon/feature rows. The existing
+Search/filter/add education and first-visit policy remain. Its native bottom
+action has a solid adaptive background, and compact windows scroll to reveal all
+features. No extra collaboration copy or UI package was added.
+
+`/tmp/gatherory-explore-welcome-style-20261103.xcresult` passes **four contextual
+primer unit tests and two native UI methods**, zero failures or skips, on Duo /
+iOS 27.1 in the default appearance. The welcome/first-Explore case passed in
+**24.769 seconds** and the tour's Explore/Decide pointer and real Love It case in
+**61.165 seconds**. Stable feature-row identifiers verify actual content, while
+the native CTA is checked for a visible, hittable touch target of at least 44 points.
+
+Visual inspection caught text showing behind the fixed action. The final footer
+follow-up passes the strengthened first-Explore case in **27.623 seconds**, zero
+failures/skips, in
+`/tmp/gatherory-explore-welcome-style-footer-r2-20261103.xcresult`. It also scrolls
+the final feature fully above the action and verifies the action remains hittable,
+dismissal returns to Search, and revisiting Explore does not repeat the primer.
+Both initial and scrolled captures in
+`/tmp/gatherory-explore-welcome-style-footer-r2-attachments-20261103/` were inspected.
+The earlier tour check precedes only that footer background adjustment.
+
+No Light/Dark, complete device-size or full-planning matrix was rerun for this
+visual change. Localization passes for 1,879 English/Spanish strings with the
+existing dynamic-key advisory; `git diff --check` passes. No production deployment,
+upload or package installation.
+
+## Original welcome and contextual tab primers — November 3, 2026
+
+Restored the original Welcome to Gatherory content before Movie Night's
+Start tour / Skip choice. `OnboardingWelcomePrimer` shares the existing mark,
+invitation/planning features, collaboration copy and native layout with classic
+onboarding. The classic creation screen remains intact. Decide and Search are
+no longer consumed before the choice: each presents on its first active tab
+visit, including during the tour. Its native sheet takes priority, and dismissing
+it returns to the same guide. Starting/replaying the lesson resets only its
+account's tab-primer dismissals; dismissing a primer persists that account's
+completion across later visits.
+
+**Nine unit tests in two suites and four native UI methods passed across the
+targeted runs**, on Duo / iOS 27.1:
+
+| Check | Passing result |
+| --- | --- |
+| Contextual primer persistence/eligibility and onboarding flow | 9 unit tests |
+| Original welcome → tour choice → Skip; Search only after first Explore visit, without repeating | 18.278 s |
+| First Explore/Decide primers during the lesson; real control hit testing, guide resumption, Love It and Ideas | 69.566 s |
+| Complete guided planning, approval, scheduling, Finish/Keep, reopen and keyboard Search | 179.068 s |
+| Original classic welcome/create/skip flow | 12.635 s |
+
+The unit tests, welcome/Skip case and first-tab/pointer case pass in
+`/tmp/gatherory-welcome-contextual-primers-20261103.xcresult`. That bundle is not
+wholly green: the full-tour helper still expected Search to have been consumed
+before discovery. It now explicitly dismisses the first-visit Search sheet for
+both discovery entry paths. The full flow passes in
+`/tmp/gatherory-welcome-contextual-primers-full-r2-20261103.xcresult`, and the
+default-appearance classic check passes in
+`/tmp/gatherory-welcome-contextual-primers-classic-r3-20261103.xcresult`.
+Application behavior is unchanged between these follow-up runs; only UI test
+helpers and the classic test's appearance override changed.
+
+Accepted UI evidence uses the default appearance; no Light/Dark or full device
+matrix was rerun. Earlier account-replay evidence below describes its prior
+source; the account sheet itself was not rerun in this pass. Localization passes
+for 1,879 English/Spanish strings with the existing dynamic-key advisory;
+`git diff --check` passes. No database reset, packages, deployment or upload.
+
+## Standard primers before the tour — November 3, 2026
+
+**Historical, superseded:** the restored-welcome follow-up above replaces this
+ordering. Decide and Search now present on their first active tab visits; the
+original general welcome content precedes the optional tour.
+
+Movie Night onboarding now reuses the existing Decide primer, then Search primer,
+before showing Start tour / Skip. Each Continue persists account-scoped education
+state. Interrupted onboarding resumes the next unseen primer; starting the tour
+preserves those values so they do not repeat after completion or Skip. Account's
+Redo tour explicitly replays both primers before its choice. Classic onboarding
+and contextual fallback for unseen education remain available. No workspace,
+discovery phase or real decision is created by viewing the primers.
+
+**Ten unit tests in two suites and five native UI methods passed across the
+targeted runs** on Duo / iOS 27.1:
+
+| Check | Passing result |
+| --- | --- |
+| Contextual primer policy and onboarding flow | 10 unit tests |
+| Primers precede choice; Skip creates no event and Search does not repeat | 26.591 s |
+| Relaunch between primers resumes Search | 18.531 s |
+| Full tour: Love It, approval, scheduling, Finish/Keep, reopen and keyboard Search | 192.521 s |
+| Classic override retains the original onboarding | 11.459 s |
+| Account replay repeats education, resumes unfinished content, and creates a fresh lesson after completion | 123.622 s |
+
+The ten unit tests and first four UI methods passed in
+`/tmp/gatherory-primers-before-tour-20261103.xcresult`. That bundle is **not wholly
+green**: its replay case used an outdated navigation-bar-only Account selector.
+The intermediate R2 replay then exposed a test assumption that offscreen native
+List rows already exist. The helper now supports the real adaptive toolbar and
+scrolls the lazy List before requiring Redo tour to exist. The final replay
+passes with zero failures or skips in
+`/tmp/gatherory-primers-before-tour-replay-r3-20261103.xcresult`, superseding those
+two harness failures. Application source is unchanged between these runs.
+
+The new first-run/recovery, full-planning and final replay checks use the current
+default appearance; no Light/Dark or complete device matrix was rerun. Localization
+passes for 1,879 English/Spanish strings with the existing dynamic-key advisory;
+`git diff --check` passes. No database, package, deployment or upload changes.
+
+## Instructions-only tour with pill buttons — November 3, 2026
+
+Discovery and workspace guides now show their instruction and footer without
+the smiling face, title or minus button. The obsolete minimize/resume state and
+mascot entry point were removed. Previous, Skip tour and Next/Finish use separate
+native bordered capsule buttons; disabled actions retain native muted styling.
+The rounded gradient, arrows, real-action gates and Keep/Remove confirmation remain.
+
+**Three unit tests and two native UI methods passed**, zero failures or skips,
+in `/tmp/gatherory-tour-instructions-pill-20261103.xcresult`, on Duo / iOS 27.1
+using the default appearance. `testTourLayoutAndPlanningFlowOnCurrentDevice`
+passed in **158.686 seconds**, covering discovery, Previous/Next, real Love It,
+approval, scheduling, Finish/Keep, reopening without restarting, and keyboard
+Search. `testWorkspaceGuidePointersFollowDecideAndIdeasTabs` passed in **44.355
+seconds**. Updated assertions verify instruction visibility, absence of the old
+heading/minimize/resume controls, full-size on-screen tappable buttons, centered
+Skip tour and stable underlying event/navigation frames across tabs.
+
+Discovery and workspace captures in
+`/tmp/gatherory-tour-instructions-pill-attachments-20261103/` were inspected for
+instruction-only content, visible capsule boundaries, muted disabled states,
+the gradient and clear pointing arrows. No Light/Dark or full device matrix was
+rerun. Localization passes for 1,879 English/Spanish strings with the existing
+dynamic-key advisory; `git diff --check` passes. No production deployment or upload.
+
+## Rounded gradient tour backdrop — November 3, 2026
+
+The shared discovery/workspace guide now has continuous 32-point corners, a
+soft outer blur and a cyan/lilac/pink/peach gradient wash. The strong adaptive
+background remains beneath the colors; primary text and blue pointers stay
+sharp. Reduce Transparency retains an opaque rounded background with the same
+color wash. No layout space, border or shadow was added.
+
+**Three focused unit tests and one native UI method passed**, zero failures or
+skips, in `/tmp/gatherory-tour-gradient-20261103.xcresult`. Tests cover rounded
+corner protection at the heading/footer insets, the outside-only linear feather,
+and invalid/transient geometry. The Duo / iOS 27.1 default-appearance
+`testWorkspaceGuidePointersFollowDecideAndIdeasTabs` passed in **46.197 seconds**,
+including discovery, native navigation, Love It and Ideas guidance. Exported
+captures in `/tmp/gatherory-tour-gradient-attachments-20261103/` were visually
+checked for rounded edges, visible gradient, readable text and unobscured arrows.
+
+No Light/Dark or full device-size matrix was rerun. This is Debug Simulator
+evidence; no new Release archive, package installation, deployment or upload.
+Localization verification passes for 1,879 English/Spanish strings with the
+existing dynamic-key advisory; `git diff --check` passes.
+
+## Tour overlay contrast — November 3, 2026
+
+Discovery and workspace guides now use thick native material with a 94% adaptive
+system-background wash. The fully opaque mask plateau protects the entire guide
+rectangle, including the header and footer; feathering is confined to the extra
+44-point area outside it. The heading and active Skip tour text use primary
+foreground contrast. Workspace arrows draw above the backdrop, keeping the blue
+pointer visible near the soft edge. The existing opaque Reduce Transparency
+fallback remains. No border, shadow or layout-reserving card was added.
+
+Final result: **two unit tests and one native UI method passed**, zero failures
+or skips, in `/tmp/gatherory-tour-contrast-final-20261103.xcresult`. The unit tests
+check full mask protection across short/tall content and its horizontal extent,
+with translucent outer edges and finite ordered stops for transient geometry.
+The default-appearance Duo / iOS 27.1 UI case
+`testWorkspaceGuidePointersFollowDecideAndIdeasTabs` passed in **46.431 seconds**,
+including discovery, native control hit testing, actual Love It input and
+subsequent Ideas guidance. Captures over busy artwork were visually inspected.
+The earlier passing `/tmp/gatherory-tour-contrast-20261103.xcresult` precedes only
+the final arrow layering adjustment.
+
+No Light/Dark matrix or complete phone-size/full-planning matrix was rerun for
+this visual change. The following full-journey results describe their earlier
+source snapshots. This pass is Debug Simulator evidence, not a new signed Release
+archive. Localization remains 1,879
+English/Spanish strings, with the existing dynamic-key advisory; `git diff --check`
+passes. No package, shared-data, deployment or upload changes were involved.
+
+## Movie Night tour on iPhone Duo — November 3, 2026
+
+The preceding navigation-compatibility full guided planning journey and keyboard Search handoff passed on
+iPhone Duo / iOS 27.1 in portrait. Its app window is **466 × 678 points** and
+uses the native vertical toolbar, not a tab bar. The run completed in **154.995
+seconds**, with one UI method and zero failures, in
+`/tmp/gatherory-tour-device-duo-r14-20261103.xcresult`. It covered the real
+Explore-to-Movie-Night entry, approval and scheduling, completion, and native
+Search with the keyboard open.
+
+The production native-control measurement now uses public UIKit APIs and a
+bounded NSObject accessibility walk matching the exact localized label, public
+identifier, and button trait. It falls back to public getters for objects that do
+not declare the accessibility protocol. A hidden virtual backing control is
+accepted only when it has a real finite visible frame and `window.hitTest`
+confirms hit-testing. Lookup is limited to the current target and at most 12
+attempts, starting after 20 ms and retrying missing frames every 150 ms. Each
+walk is bounded by depth 40, 2,048 work units and validated container counts of
+1–128; stale work is cancelled. The Ideas filter target is `ideas.filter`. Pointer visibility uses
+the visible viewport union including the side filter, while the dialog remains
+in the content lane. The discovery probe is a 1-point background inside the
+visible guide. Temporary measurement logs were removed.
+
+The UI helpers use adaptive native navigation, workspace exit, a hittable Back
+control or edge swipe, and native Search Close. The screenshot evidence is from
+the actual app window. A separate repeated-entry case passed on two fresh
+launches in **43.684 seconds** in
+`/tmp/gatherory-tour-device-duo-r13-20261103.xcresult`. R13's full case later
+failed on a hidden Back selector and is superseded by R14; it is not a green
+full-suite result. R13 also recorded 24 unit tests across four suites passing.
+
+The current-source standard iPhone 18 Pro / iOS 27.0 regression also passes:
+**24 unit tests in four suites and two native UI methods**, zero failures/skips,
+in `/tmp/gatherory-tour-duo-standard-regression-20261103.xcresult`.
+`testAdaptiveExplorePointerSurvivesRepeatedEntry` passes in 46.710 seconds and
+`testWorkspaceGuidePointersFollowDecideAndIdeasTabs` in 46.012 seconds. These
+verify the original tab-bar path, repeated entry, real Love It and the Ideas
+filter after the adaptive-toolbar change. Earlier three-phone full-journey
+evidence below predates this source; the current Pro check is focused coverage.
+The default appearance was used throughout; no Light/Dark matrix, UI package,
+Release archive, deployment or upload was involved.
+
+Duo captures from the passing full journey are in
+`/tmp/gatherory-tour-device-duo-r14-attachments-20261103/`, including the actual
+side-filter arrow, both scheduled activities and keyboard Search. The standard
+regression keeps the previously running development simulator; the Duo is
+restored to its original shutdown state after the run. Localization verification
+passes for 1,879 English/Spanish strings with the existing dynamic-key advisory;
+`git diff --check` passes.
+
+Intermediate attempts exposed assumptions about tab-bar-only selectors, public
+getter protocol conformance, hidden backing views, startup timing and exclusion
+of side controls from the pointer viewport. Those failed bundles are not green
+acceptance evidence. The final full Duo result supersedes their failures. Test
+helpers now find the real native toolbar controls and use a real Back action or
+edge swipe, preserving the return-state assertion. No tap, alignment, workflow,
+or keyboard acceptance assertion was removed.
+
+Public `simctl` exposes two integrated display streams (1398 × 2034 and 2007 ×
+2853 pixels), but no documented fold, posture, or input-routing API was available
+for this run. Evidence is limited to the current app window. No expanded-window,
+folded-posture, or physical-hardware behavior is claimed.
+
+## Movie Night tour across iPhone sizes — November 3, 2026
+
+> Historical results: this three-device run predates the latest source. See the
+> current-source [Duo verification](#movie-night-tour-on-iphone-duo--november-3-2026).
+
+At that source snapshot, the default-appearance regression completed the real tour on three
+representative iPhone viewports. No app layout or device-specific offsets were
+changed for this pass. Existing appearance-loop tests remain available, but were
+not selected; the owner's request to skip Light/Dark mode testing is preserved.
+
+| Simulator (iOS 27.0, portrait) | Viewport in points | Result | UI duration |
+| --- | --- | --- | --- |
+| iPhone SE (3rd generation), `Gatherory Tour Compact SE` | 375 × 667 | Passed | 157.189 seconds |
+| iPhone 17 | 402 × 874 | Passed | 164.050 seconds |
+| iPhone 18 Pro Max | 440 × 956 | Passed | 162.249 seconds |
+
+`MovieNightOnboardingUITests.testTourLayoutAndPlanningFlowOnCurrentDevice` reuses
+the complete real planning journey with no appearance launch overrides. Assertions
+cover initial Explore pointing, bundled Movie Night-only selection, on-screen
+guide text, 44-point footer controls (one-point rounding tolerance), nonoverlapping
+footer buttons, enabled controls remaining hittable, and measured Decide/Ideas/
+Home frames matching the actual native tabs within three points. Hide/Resume and
+Previous/Next preserve underlying content/navigation frames and saved actions.
+The case performs Love It → Liked → long-press Approve → Schedule, enters/dismisses
+native sheets and detail navigation, verifies both activities on Home, completes
+with Keep and reopens the event without restarting the guide.
+
+It then returns to normal Explore, dismisses the Search primer, types `wedding`,
+verifies the software keyboard and reachable native Close/Cancel, submits,
+checks enabled fixture results, scrolls while retaining the query and dismisses
+Search. Results and content are deterministic local fixtures; this is not a live
+server/network acceptance run.
+
+Artifacts:
+
+- Compact: `/tmp/gatherory-tour-device-se-r2-20261103.xcresult`.
+- Regular and Pro Max, run sequentially:
+  `/tmp/gatherory-tour-device-regular-promax-20261103.xcresult`.
+  The log reports both destination executions passed. Xcode's summary counts one
+  unique method for that two-destination bundle. Across both artifacts this is
+  **three passing device executions of one regression**, with no failures/skips.
+- Inspected captures: `/tmp/gatherory-tour-device-se-r2-attachments-20261103/`
+  and `/tmp/gatherory-tour-device-regular-promax-attachments-20261103/`.
+  Recorded PNG resolutions are respectively 750×1334, 1206×2622 and 1320×2868.
+- The initial compact attempt asserted the complete accessibility container bounds
+  and failed because the decorative feathered blur intentionally overscans the
+  display. Inspection confirmed the visible guide fit. The corrected assertion
+  checks actual text and interactive controls, leaving the blur unchanged. That
+  initial bundle is superseded by the passing compact rerun.
+- English/Spanish verification remains **1,879 strings**, with the existing
+  dynamic-key advisory. `git diff --check` passes. Only test code and docs changed.
+
+These are simulator results for the tour and its search handoff at normal text
+size in portrait. They do not prove every app screen, physical hardware, minimum
+supported iOS 26, iPad layouts, landscape or accessibility text sizes. Those
+acceptance boundaries remain open. No packages, backend changes, shared-account
+data, release build, deployment or upload were involved. Test simulators are shut
+down afterward; the preexisting running development simulator was retained.
+
+## Planning tour tab pointers — November 3, 2026
+
+Three Luna agents split native tab measurement, target routing/policy tests and a
+focused native UI regression. The guide now points to Decide for the initial
+input step, Ideas after Love It or when returning to approval/scheduling, and Home
+after scheduling. On the appropriate tab, existing arrows point to the filter or
+exact idea/decision card. Copy names the same next action. Earlier instruction
+recaps remain unpointed. Native tab arrows have no partial outline behind the
+tab bar; card/filter outlines remain. The soft backdrop and initial Explore
+spotlight are preserved.
+
+Native target measurement uses localized labels and public UIKit properties,
+prioritizing visibly hosted bars with a fallback for adaptive backing containers.
+It validates the actual target frame rather than relying on the container's own
+bounds. Only the currently needed native target is scanned, outside layout with
+cancellation guards. Accessibility-container counts are bounded before iteration,
+including handling the NSNotFound sentinel. The guide remains inside the content
+safe area; pointer visibility includes the measured tab bounds beyond that area.
+Native arrows ignore hits and are hidden from accessibility. The isolated Debug
+readout reports the rendered local target projected back into window coordinates.
+
+Final artifact: `/tmp/gatherory-tour-pointers-final-20261103.xcresult`.
+**20 unit tests in four suites plus one native UI case passed**, zero failures or
+skips. The UI case `testWorkspaceGuidePointersFollowDecideAndIdeasTabs` passed in
+**41.951 seconds**, using the simulator's current default appearance with no
+appearance launch overrides. It traverses initial Explore and bundled selection,
+checks actual Decide/Ideas target frames against native tabs, taps both, records
+Love It on Popcorn bar and verifies the next filter/card focus. Unit tests cover
+step/tab/filter routing, missing IDs, completed and earlier recap states, localized
+tab labels, invalid container counts, pointer placement and same-window/stale
+measurement boundaries. English/Spanish verification passes for **1,879 strings**;
+only the existing dynamic-key extraction advisory remains. `git diff --check` passes.
+
+The first compilation's missing explicit return was fixed. Intermediate attempts
+caught rejected adaptive backing containers and an unbounded native accessibility
+count that stalled workspace entry; that run was cancelled, and the final bounded,
+single-target implementation passes. These attempts are superseded by the final
+artifact. The preceding R5 passing run predates the final tab-outline cleanup.
+
+At the owner's request, **Light/Dark appearance testing was not run for this
+addition**; earlier appearance evidence below covers its earlier source snapshots.
+Home-after-schedule targeting has unit coverage but no new full journey UI run.
+This pass builds Debug for Simulator; signed Release, minimum-iOS and physical
+device acceptance remain separate. No deployment, upload or shared data changed.
+
+## Feathered guide backdrop and Explore spotlight — November 3, 2026
+
+Both discovery and workspace guides use a feathered live native-material backdrop
+instead of a bordered, shadowed card. Text, mascot and buttons stay sharp. Reduce
+Transparency retains an opaque system-background fallback. No content or control
+frames are moved. The first Tap Explore step dims the rest of the app, cutting out
+the actual measured native tab and guide; its outline and arrow remain blue.
+The overlay ignores hits and is hidden from accessibility. Overlapping cutouts
+are unioned; the outer mask extends beyond the viewport to prevent bright screen
+edges when feathering. The spotlight disappears after the native tab is selected.
+The normal guided Explore feed and Movie Night-only selection rules are unchanged.
+
+Validation on iPhone 18 Pro / iOS 27.0 Simulator:
+
+- `/tmp/gatherory-tour-spotlight-20261103.xcresult`: **11 unit tests in two
+  suites and two native UI cases passed**, zero failures/skips. Unit coverage
+  includes target/guide cutouts, overlap, unavailable/offscreen geometry and
+  existing placement boundaries. Native Light/Dark tests pass regular-feed locks,
+  native search restoration (99.703 seconds) and the complete real planning tour
+  through approval, scheduling, Finish and Keep (248.911 seconds).
+- After the visual-only outer mask edge adjustment,
+  `/tmp/gatherory-tour-spotlight-final-20261103.xcresult`: **the same 11 unit
+  tests plus a new focused native UI case passed**, zero failures/skips. The new
+  Light/Dark case (30.549 seconds) proves Explore is hittable through the
+  spotlight, Previous returns to the same native tab frame, the guide controls
+  remain tappable and Skip removes the guide without obstructing navigation.
+  These bundles establish **three distinct passing UI cases**.
+- Simulator captures were inspected in Light/Dark for the feathered guide and
+  actual Explore-tab highlight. English/Spanish coverage remains **1,876
+  strings**; the existing dynamic-key advisory in `AppCopy.swift` remains.
+  `git diff --check` passes.
+
+This slice builds in Debug for Simulator. It does not claim a new signed Release
+archive, physical-device, minimum-iOS, or assistive-technology acceptance run.
+No packages, server changes, shared data writes, deployment or upload were needed.
+
+## Regular Explore tour and text navigation — November 2, 2026
+
+The guide uses Previous / Skip tour / Next words, changing Next to Finish tour
+at completion. Start points at the actual native Explore tab with a blue border
+and arrow. Explore reuses the regular header, profile, native search, filter and
+masonry feed; cached/online cards remain visible but disabled. Bundled Movie
+Night is pinned first, deduplicated, outlined and the only selectable item.
+Its local creation works without a catalog response. Feed scrolling remains
+available; activation resets to the pinned card. Ads, discovery measurements and
+other selection/action paths stay inactive while guided. Normal controls and
+search restore after completion/skip. Keep/Remove and classic onboarding remain.
+
+Final evidence on iPhone 18 Pro / iOS 27.0 Simulator:
+
+- Full run: `/tmp/gatherory-tour-clarity-final-20261102.xcresult`.
+  **1,269 unit tests passed**, one opt-in live-sync test skipped (1,270
+  registered in 180 suites), plus **seven native UI cases passed**. One UI case
+  failed because it queried the obsolete “Search blueprints” placeholder rather
+  than the current “Search blueprints and ideas”; this full bundle is not green.
+- Corrected search case: `/tmp/gatherory-tour-clarity-search-final-20261102.xcresult`:
+  **one passed, zero failed**, 100.278 seconds. The test now locates the native
+  search field directly. No app behavior changed for this correction. In Light
+  and Dark it proves the actual native Explore tab remains hittable, measured
+  tab/card frames match the controls within 3 points, text navigation is visible,
+  other feed items/controls are disabled, and only Movie Night opens the lesson.
+  After Skip → Keep, native search accepts `wedding`, returns enabled fixture
+  cards and preserves the query during scrolling. This supersedes that one
+  failure; **all eight distinct targeted UI cases have passing evidence**.
+- Other passing UI cases cover the complete real planning journey in Light/Dark
+  (247.209 seconds), replay/resume/fresh copy (95.412 seconds), intro Skip and
+  Search primer (32.342 seconds), classic override (8.091 seconds), Skip → Remove
+  (34.429 seconds, Light), discovery Skip without creating a workspace
+  (19.911 seconds), and Skip → Keep persistence in Light/Dark (88.528 seconds).
+- Generic Simulator **Release build passed for arm64 and x86_64**, signing
+  disabled: `/tmp/gatherory-tour-clarity-release-20261102.log`. Existing warnings
+  remain for the constant development-fixture branch and skipped App Intents
+  metadata extraction. This is not a signed device archive.
+- English/Spanish verification passes for **1,876 strings**. The existing
+  dynamic-key extraction advisory in `AppCopy.swift` remains. Native and changed
+  web-doc `git diff --check` pass.
+
+The native tab target uses public UIKit view/accessibility geometry, with the
+scan deferred outside layout. Decorative outlines/pointers are hidden from
+accessibility and ignore hits, preserving the real tab/card targets. A Debug-only
+isolated-test diagnostic exposes measured coordinates as a value inside the
+guide; it does not cover the native control and is absent from Release. This
+corrects development attempts that synchronously scanned during layout or placed
+an accessible decoration over the tab. Temporary logging has been removed.
+
+Catalog/search results in this test use deterministic fixtures. Live catalog,
+authenticated reconnect, physical-device and minimum-supported-iOS acceptance
+remain release checks. No shared data, schema, deployment or TestFlight upload
+was changed. Earlier results below describe their respective historical slices.
+
+## Tour completion: keep or remove Movie Night — November 2, 2026
+
+Finish tour and in-lesson Skip now open a native Keep event / Remove event alert.
+The tutorial is marked completed only after the choice; Keep leaves the complete
+practice plan intact and returns Home. Remove validates the current account,
+exact stored tour workspace ID, active host/manage permission, lifecycle and
+normal deletion authorization, then physically removes that workspace through
+the existing local persistence/outbox transaction and returns to Events. It does
+not locate events by title. Intro/discovery Skip before selecting Movie Night
+has nothing to remove and remains prompt-free.
+
+Final focused result: **25 passed, zero failed/skipped** — 22 unit tests in three
+suites plus three native UI cases. Artifact:
+`/tmp/gatherory-tour-cleanup-final-20261102.xcresult`.
+
+- Full Light/Dark journey with Finish → Keep: **239.145 seconds**. The native
+  prompt appears after the final chevron; keeping retains both activities and
+  ideas, finishes the guide, avoids hidden-tab primers and stays finished when
+  the workspace is reopened.
+- Skip → Remove: **30.788 seconds**, Light. The prompt's destructive choice
+  removes the local lesson and returns to the main Events tab with no Movie Night
+  entry. This case does not separately exercise destructive selection in Dark;
+  the native alert itself is exercised in both appearances by the Keep paths.
+- Skip → Keep in Light/Dark: **81.348 seconds**. The event is retained and the
+  guide stays dismissed across native tab changes.
+- Unit coverage includes pending local-create coalescing, exact renamed lesson
+  removal with another workspace retained, normal server ACK at version 7 then
+  one account-scoped delete tombstone surviving disk relaunch, preservation of
+  another account's data/mutations, failed-save rollback of library order,
+  selection, records and outbox, stale/replaced receipts, wrong accounts,
+  non-hosts and lost manage permission. Completed receipts remain scoped for
+  post-tour primers and fresh replay.
+- Generic iOS Simulator **Release build passed for arm64 and x86_64**, signing
+  disabled: `/tmp/gatherory-tour-cleanup-release-20261102.log`. Only the existing
+  constant development-fixture branch and skipped App Intents metadata warnings
+  remain. This is not a signed archive or upload.
+- English/Spanish coverage passes for **1,875 strings** and `git diff --check`
+  passes. The existing dynamic-key extraction advisory in `AppCopy.swift`
+  remains. The earlier rollback test's reversed insertion-order expectation and
+  native alert's nested accessibility-button query ambiguity are fixed; the
+  passing final bundle supersedes the initial attempt.
+
+The save and delete paths are local and offline-capable; the server ACK test
+uses the real local acknowledgement API with synthetic responses, not a live
+server deletion. Production reconnect, physical device and minimum-iOS remain
+release acceptance checks. No live account data, schema, server, production
+rollout, or TestFlight build was changed for this slice.
+
+
+## Explore-first tour and chevron navigation — November 2, 2026
+
+The intro primer still offers Start tour or Skip. Start now records a durable,
+account-scoped entry phase and prompts the real Explore tab; it creates no plan.
+Guided Explore shows only the bundled Movie Night card. Selecting it creates or
+resumes the ordinary local owned lesson through the existing transaction/outbox.
+Previous on Explore returns to the Events prompt. Preselection Skip creates no
+lesson and restores normal Explore and its Search primer. Both entry and workspace
+coaches have dialog-wide Previous / centered Skip tour / Next controls with 44pt
+hit targets. Next waits for actual actions; Previous reviews completed steps as
+recaps without reversing votes, approval or scheduling. Old target pointers are
+suppressed for recap steps. Classic onboarding/auth routing stay intact.
+
+Current native results on standard iPhone 18 Pro / iOS 27.0, PostHog disabled:
+
+- Full unit portion: **1,259 registered in 177 suites; 1,258 passed and one opt-in
+  live sync test skipped**, zero unit failures. Log:
+  `/tmp/gatherory-explore-tour-final-r2-20261102.log`; result bundle:
+  `/tmp/gatherory-explore-tour-final-r2-20261102.xcresult`. That bundle also holds
+  an earlier UI attempt that used the removed Done-button identifier; its UI
+  failure is superseded by the final journey below. The entire earlier bundle
+  must not be described as passing.
+- Final full Light/Dark UI journey: **passed, 234.345 seconds**. Artifact:
+  `/tmp/gatherory-explore-tour-journey-final-20261102.xcresult`. It verifies Start
+  with no workspace, native Explore, one bundled choice/no live cards or Search
+  primer, Previous back to Events and return, actual local copy, unchanged Home
+  frames on hide/resume, real Love It, reviewing the earlier instruction without
+  losing the response, Next disabled until approval, Liked/detail push-back,
+  native approval and Schedule sheets, two Home activities, Finish tour using the
+  right chevron, no hidden-tab primer, and persistent completion on reopening.
+  It also measures Skip centered between the chevron controls.
+- The other **five focused UI cases passed** in
+  `/tmp/gatherory-explore-tour-r2-20261102.xcresult`: account replay via Explore
+  (**77.049 seconds**), intro Skip/Search primer in Light/Dark, classic override
+  (**8.328 seconds**), discovery Skip/no workspace/normal searchable Explore
+  (**20.964 seconds**), and guide Skip across Light/Dark (**68.350 seconds**).
+  The earlier failed full journey in that bundle is superseded, not an extra
+  passing test; there are six distinct passing UI cases across these runs.
+- Final unsigned generic iOS Simulator **Release build passed for arm64 and
+  x86_64**: `/tmp/gatherory-explore-tour-release-final-20261102.log`. Only the
+  existing constant development-fixture branch and skipped App Intents metadata
+  warnings remain. This is a local build, not a signed archive or upload.
+- The final disabled-control styling check passed the discovery-Skip case again
+  (**21.528 seconds**): `/tmp/gatherory-explore-tour-final-skip-20261102.xcresult`.
+  Locked Events actions are visibly disabled during entry; the overlaid Skip
+  remains interactive and restores the normal searchable surface. This is the
+  same UI case repeated after the styling change, not a seventh distinct case.
+- Discovery tests cover phase restoration/account isolation, no planning data on
+  Start, selection blocked before Explore, bundled local creation/outbox,
+  failed-save retry/no orphan state, and wrong-account protection. Navigation
+  tests cover earlier-step bounds, real-action gates, recap detection and final
+  schedule readiness. Primer and deletion tests cover the discovery phase too.
+- Localization coverage passes for **1,870 English/Spanish strings**; only the
+  existing nonliteral-key extraction advisory in `AppCopy.swift` remains.
+  `git diff --check` passes. Ten automatic journey captures were exported; Events
+  prompt, sole Movie Night selection in Light/Dark, and the new footer were
+  visually reviewed. No oversized UI scenarios were added.
+
+The initial missing environment binding and switch-return compile errors, stale
+previous-instruction expectation, and removed Done-button probe are fixed. Initial
+sign-in/account preparation retains its existing network/cache requirements;
+tour entry and the lesson use local content afterward. Normal Explore remains
+server-backed. Signed-device/minimum-supported-iOS and authenticated production
+reconnect remain release acceptance checks. No DB reset, seed, migration, server
+start, production deployment or TestFlight upload was performed for this slice.
+
+
+## Bundled offline tour, replay, and post-tour primers — November 2, 2026
+
+First run now offers Start tour or Skip only. The app loads its shipped Movie
+Night blueprint and saves an ordinary account-owned local workspace plus durable
+sync outbox, without a remote catalog/installation request. Account → Redo tour
+reuses an unfinished valid lesson or creates one fresh copy after completion or
+missing/deleted targets; earlier content is preserved. The intro explains that
+people can delete the practice event. Contextual Decide and new Search primers
+wait for tour completion/skip and their active tab, with per-account dismissals.
+The original classic onboarding and authentication/recovery chain are preserved.
+
+Current native verification:
+
+- Full unit suite: **1,250 registered tests in 175 suites; 1,249 passed and one
+  opt-in live sync test skipped**, zero failures. The same result bundle also
+  contains one passing Account replay UI method; its top-level summary is 1,250
+  passed / one skipped. Do not count that repeated UI method twice. Artifact:
+  `/tmp/gatherory-bundled-tour-replay-20261102.xcresult`.
+- Final focused native UI suite: **5 passed, zero failures**, standard iPhone 18
+  Pro / iOS 27.0, PostHog disabled, ephemeral data. Artifact:
+  `/tmp/gatherory-bundled-tour-ui-final-20261102.xcresult`.
+- Account replay: **34.323 seconds**. Minimized unfinished replay restores the
+  guide without duplicating the event; completed replay preserves the earlier
+  event and creates one fresh lesson. Decide education is eligible afterward.
+- Start/Skip and Search primer in Light and Dark: **32.228 seconds**. No catalog
+  preview/Discover/blank-plan choice is offered; Skip creates no lesson. Search
+  education appears on Explore and stays dismissed after switching away/back.
+- Preserved classic onboarding override: **8.032 seconds**.
+- Full Light/Dark lesson: **187.277 seconds**. Real Love It → Liked → detail
+  push/back → long-press approval → Schedule creates the second activity. Native
+  sheets suppress the guide, hide/resume leaves content frames unchanged, Done
+  from Decide returns Home without a hidden-tab primer, and reopening preserves
+  completion. Skip in Light/Dark remains dismissed across tabs: **35.047 seconds**.
+- Unit coverage includes loading the actual app-bundle resource, stable blueprint
+  key-to-ID mapping, canonical host/child participation, real actions surviving
+  disk relaunch with identical queued mutation IDs, scheduled-but-unfinished
+  replay, missing/deleted targets, account/authority isolation, malformed data,
+  failed-save rollback/previous-selection recovery, primer gating and scoped
+  account deletion cleanup.
+- Unsigned generic iOS Simulator **Release build passed for arm64 and x86_64**.
+  Log: `/tmp/gatherory-bundled-tour-release-final-20261102.log`. The new tour's
+  actor-initialization warning is resolved. Only the existing Release-constant
+  fixture branch and skipped App Intents metadata warnings remain. This is not a
+  signed device archive or upload.
+- A final MainActor-safe default-store initialization cleanup passed all **22
+  focused regressions in four suites** (tour creation/progress, primers, and
+  account cleanup), zero failures. Artifact:
+  `/tmp/gatherory-bundled-tour-focused-final-20261102.xcresult`.
+- English/Spanish localization coverage passes for **1,857 strings**. The existing
+  nonliteral-key extraction advisory in `AppCopy.swift` remains. `git diff --check`
+  passes. Intro, Search primer and mascot captures were visually reviewed in
+  standard Light and Dark; no oversized UI scenarios were added.
+
+The initial compile's complex test expressions and first replay test's ambiguous
+Account-button query are fixed and superseded by these passing runs. Tests prove
+local creation/recovery without a tour network dependency, not live reconnect
+acceptance with the production server. Initial sign-in/account preparation still
+uses the established authentication contract. Explore data remains server-backed.
+No DB reset, migration, server seed, deployment, TestFlight upload, or production
+change was performed for this slice. Signed-device/minimum-iOS and authenticated
+reconnect acceptance remain release checks.
+
+
+## Control-pointing Movie Night mascot overlay — November 2, 2026
+
+The coach now floats above the existing layout through SwiftUI overlay, rather
+than reserving a top safe-area inset. A native-drawn mascot delivers one short
+instruction. Measured anchors identify the actual current decision card, idea
+card, or native filter. Pointer/highlight decoration passes touches through;
+the dialog's buttons and minimized mascot remain interactive. Real card swipes,
+native filtering, and long-press menus retain their behavior. Hide/resume state
+is shared across tabs, and native tab selection advances the introduction.
+The classic onboarding screen and authentication chain remain unchanged.
+
+The native filter's separate toolbar hosting hierarchy uses noninteractive
+UIKit window-space probes and same-window projection. Bubble safe bounds are
+separate from target visibility, so toolbar targets can be highlighted without
+putting the dialog over native navigation. The last actual filter survives
+push/back; missing preferences cannot turn Liked back into All guidance. The
+coach yields to pushed idea details, approval and Schedule sheets. Account,
+workspace, host, exact-target, Skip/Done, deleted-target and persistence rules
+remain those of the existing Movie Night receipt.
+
+**Final regression:** `/tmp/gatherory-tour-overlay-regressions-20261102.xcresult`
+reports **1,237 passed, one skipped, zero failures**. Swift Testing registered
+1,235 tests in 173 suites and passed in **27.841 seconds**; one independent-client
+live sync test remains opt-in and skipped without its credentials. The xcresult
+summary includes three native UI methods:
+
+- Classic fallback and override: **14.822 seconds**.
+- Full planning journey in Light and Dark: **212.115 seconds**. It compares Home
+  card/native navigation frames before and after hiding/resuming to **1 point**,
+  verifies minimization across tabs, checks the measured focus belongs to the
+  actual Popcorn decision card and native filter, performs the real swipe, and
+  checks detail push/back plus Liked context before long-press approval. Both
+  native sheets hide the guide. Schedule creates the second activity; Done and
+  reopening preserve completion.
+- Skip in Light and Dark: **71.261 seconds**, including actual native-tab
+  navigation, immediate dismissal, and no return on subsequent tab changes.
+
+Runs use standard iPhone 18 Pro / iOS 27.0, ephemeral data, PostHog disabled, and
+local protocol responses through the real installation coordinator. Six automatic
+attachments cover setup, actual card pointing, and completion in both appearances.
+The Light/Dark card-pointing captures were visually reviewed. Earlier compile,
+host-mount, toolbar-target and stale-filter failures are superseded by the final
+bundle. No oversized native UI scenarios were added. The new geometry tests cover
+clipping, offscreen/missing targets, narrow safe bounds, exposed regions on large
+cards, zero/nonfinite inputs, toolbar targets outside bubble bounds, same-window
+projection, and invalidated/dismantled probe callbacks.
+
+**Release:** `/tmp/gatherory-tour-overlay-release-20261102.log` reports
+`BUILD SUCCEEDED` for `generic/platform=iOS Simulator`, Release, arm64 and x86_64,
+with `CODE_SIGNING_ALLOWED=NO POSTHOG_ENABLED=NO`. Existing warnings remain for a
+constant-false fixture branch and skipped App Intents metadata extraction. This
+is not a signed device archive or live service-delivery acceptance.
+
+Localization passes for **1,841 English/Spanish strings** with the existing
+nonliteral extraction advisory. Tracked and new-file whitespace checks pass.
+No package, shared database seed/reset, production deployment, or TestFlight
+upload was performed. VoiceOver/Reduce Motion/Transparency settings are respected
+by source behavior; a physical-device assistive-technology acceptance run is
+still separate. The live catalog and signed-device limits in the [onboarding
+architecture](movie-night-onboarding.md) remain open.
+
+## Movie Night onboarding — November 2, 2026
+
+This initial inset-based presentation is superseded by the mascot overlay record
+above; the following results document its earlier implementation.
+
+The new first-run experience is selected after the existing authentication chain.
+The original `OnboardingView` and `AuthenticationFlow.swift` remain unchanged.
+Both onboarding entry destinations use one presentation selector; Start with a
+blank plan and `-ClassicOnboarding` select the preserved flow.
+
+Movie Night uses the ordinary Blueprint preview and Use coordinator, including
+explicit date confirmation, private-copy receipt, durable import, and workspace
+opening. A device-local, account-specific receipt records the exact installed
+workspace and guided idea IDs. The coach advances from the current user's real
+Love It response, snack approval, and linked scheduled movie activity. Undo
+returns to the corresponding instruction. Customized-away or deleted targets
+end education without mutating content or claiming completed planning actions.
+Account deletion removes only the deleted account's receipt; stale catalog loads
+cannot publish a previous account's card or action store.
+
+**Full native regression:** `/tmp/gatherory-movie-night-final-20261102.xcresult`
+reports **1,224 passed, one skipped, zero failures**, including two UI methods.
+Swift Testing registered 1,223 tests in 171 suites; the opt-in independent-client
+live sync test was skipped because live credentials were not supplied. Coverage
+includes selector/fallback policy, per-account progress reload, malformed and
+legacy receipts, exact-target action progression, Undo, removed targets, cleanup
+isolation, existing authentication boundaries, approval, and event scheduling.
+The companion log is `/tmp/gatherory-movie-night-final-20261102.log`.
+
+**Final native UI rerun:**
+`/tmp/gatherory-movie-night-navigation-20261102.xcresult` passed both methods.
+Catalog unavailable → classic create/skip, and the dark classic override passed
+in **17.435 seconds**. The full tour passed in Light and Dark in **158.376
+seconds**: preview Save changes state, Use confirms both dates and imports,
+Decide Love It → Ideas Liked → long-press Approve, then Schedule Watch the movie
+creates the second activity. Done persists and reopening does not show the guide.
+The Events navigation control remains hittable during coaching. The guide is
+mounted within each navigation root, below native toolbars. Four automatic test
+attachments cover setup and the saved plan; the final Light/Dark plan attachments
+were visually reviewed for toolbar overlap. These runs use iPhone 18 Pro / iOS
+27.0, ephemeral data, and local protocol responses through the actual installation
+coordinator; they do not create a live server account or exercise a deployed
+catalog. No oversized-layout tests were added.
+
+**Release build:** `xcodebuild build -project Gatherory.xcodeproj -scheme
+Gatherory -configuration Release -destination 'generic/platform=iOS Simulator'
+CODE_SIGNING_ALLOWED=NO POSTHOG_ENABLED=NO` passed for arm64 and x86_64.
+Log: `/tmp/gatherory-movie-night-release-20261102.log`. Existing warnings remain
+for a constant-false Release fixture branch in GatheroryApp and skipped App
+Intents metadata extraction. There are no build errors. This is an unsigned
+simulator build, not a signed device archive or service-delivery acceptance.
+
+English/Spanish localization coverage passes for **1,828 strings** with the
+existing nonliteral extraction advisory. The bundled Movie Night JSON exactly
+matches the server contract example. Source diff/whitespace checks pass.
+
+The web work reports **169 test files passed / 46 skipped**, with **1,012 tests
+passed / 74 skipped**, plus passing typecheck and contract checks. Effect remains
+4.1.1. A checked-in pnpm patch corrects Drizzle rc.4's removed TaggedErrorClass
+references; the bare adapter import and focused regression pass. These counts
+are separate from native results and must not be added to older slice totals.
+
+No shared database reset, catalog seed, production deployment, or TestFlight
+upload occurred. Live acceptance still requires additive `movie_night` catalog
+seeding in the intended environment, authenticated installation, relaunch/offline
+recovery, and a signed candidate. See [flow architecture and live acceptance
+boundaries](movie-night-onboarding.md).
+
+## Ideas Liked and approval shortcuts — November 2, 2026
+
+Ideas now filters the current viewer's personal Love It responses through Liked,
+independently of shared Shortlist and Blueprint Likes. Event scope, blocked
+creators and masonry remain intact. Long-press and accessibility actions open
+Approve for pending non-event ideas and the existing Schedule sheet for event
+ideas. Detail Approve uses the same new native confirmation sheet. Cancel does
+not mutate; confirmation uses existing expense/status reconciliation and
+preserves the Liked collection and personal response.
+
+**29 focused units in five suites passed**:
+`/tmp/gatherory-ideas-approval-units-20261102.xcresult` (`TEST SUCCEEDED`).
+Seven new approval/filter cases cover account-bound preferences, exact retries,
+stale source/account/permission boundaries, missing/stale parents, draft parent
+preservation, expense targeting, and planning-only invitation visibility. Existing
+filter, event Schedule, linked-event and budget regressions are included. Permission
+loss is tested through normalized event participation, not just cached member
+metadata. The original one-argument filter API remains available for existing
+filter predicates.
+
+**Two native UI methods passed in Light and Dark**:
+`/tmp/gatherory-ideas-approval-ui-final-20261102.xcresult` (`TEST SUCCEEDED`).
+Event long-press Schedule → date/location sheet → Cancel passed in **43.327
+seconds**. Decide Love It → Ideas Liked → long-press Approve → Cancel/reopen →
+Confirm → Approved filter passed in **84.764 seconds**. Both Cancel and approval
+retain the personal Liked collection; confirmation retains one idea. The harness
+checks actual filtered content rather than relying on a native Menu exposing an
+accessibility value. Runs use ephemeral seeds, no screenshots and no server writes.
+Earlier compile/harness/fixture-failure bundles are superseded by these artifacts.
+
+Approval of a non-event idea does not approve or schedule its parent. A positive
+estimate becomes a committed expense for the exact event. A dated draft can
+already appear to authorized planners, and invitation visibility remains a
+separate policy. See [behavior and parent-event semantics](ideas-liked-and-approval.md).
+
+English/Spanish coverage passes for **1,807 strings** with the existing nonliteral
+extraction advisory. Tracked diffs and new-file whitespace checks pass. No database
+migration, production deployment or TestFlight upload occurred. Live cross-device
+acceptance and signed-candidate validation were not run for this native UI slice.
+
+## Idea and Decide author photos — November 2, 2026
+
+Replaced the generic submitter icon with the actual linked author's avatar in
+both live card footers and Shared by / Proposed By metadata. The shared view
+keeps a 26-point footprint and preserves names, accessibility and edit actions.
+Only exact account IDs resolve a photo; unknown/legacy authors retain the icon,
+and known people without a photo retain initials. No public-profile lookup or
+server/schema change was added.
+
+**Seven unit tests and one native UI method passed**. The UI method covers both
+Ideas and Decide in Light and Dark using the birthday fixture, taking **59.492
+seconds**. Result: `/tmp/gatherory-author-avatars-20261102.xcresult` (`TEST
+SUCCEEDED`); matching `.log` records the checks. It takes no screenshots or
+votes. Localization coverage passes for 1,800 English/Spanish strings;
+`git diff --check` passes. Live remote photo downloads and pixel comparisons
+were not part of this fixture run. See [author-photo behavior](idea-author-attribution.md).
+No production deployment or TestFlight upload occurred.
+
+## Ads across all Explore channels — November 2, 2026
+
+All, Blueprints and Ideas now allow native ads in browsing and typed search.
+The shared lazy masonry renderer inserts separate ad placements after organic
+items 6, 18, 30 and so on, counting both card types in All. Organic relevance
+order, consent/NPA gates, three-ad inventory bounds and safe below-viewport
+admission remain intact. Recent history and private planning remain ad-free.
+No query, account or event values were added to SDK request targeting.
+
+The native UI evaluation found that searching Ideas after scrolling could leave
+the new result set partway down. Native `ScrollPosition.scrollTo(edge: .top)`
+now resets the position for a new query without rebuilding the native scroll/search
+hierarchy; page appends retain the browsing position. An intermediate `.id`
+rebuild triggered repeated 60-second XCTest animation waits on short searches
+and was removed. The corrected short-result search/Cancel flow passed in
+**23.980 seconds**, with no animation timeout:
+`/tmp/gatherory-ads-native-scroll-cancel-20261102.xcresult`.
+An earlier harness run also needed its native menu selector scoped to avoid
+matching the Blueprints tab. The final channel tests cover searching after
+scrolling and finding the first organic result.
+
+On iPhone 18 Pro / iOS 27.0, the final run passed **24 focused units in six
+suites** covering channel eligibility, spacing, consent/configuration guards,
+placement stability, inventory suspension, idea paging and mixed projections.
+Real Google sample ads became visible on all three channels in browse and typed
+search, in **Dark (93.814 seconds)** and **Light (93.093 seconds)**. The existing
+Light/Dark no-layout-shift test passed in **23.765 seconds**. The 80-idea paging
+regression passed in **29.583 seconds**, retaining one request / 20 initially,
+then two requests / 40 after scrolling rather than draining all pages.
+
+Final result: `TEST EXECUTE SUCCEEDED`, **24 units plus four UI methods**:
+`/tmp/gatherory-ads-native-scroll-final-20261102.xcresult` (matching `.log`).
+Together with the separate passing Cancel method, this is **24 units and five
+UI methods** on the final native-scroll implementation. Earlier selector-failure
+and interrupted animation-wait bundles are superseded by these final artifacts.
+English/Spanish coverage passes for 1,800 strings; `git diff --check` passes.
+The existing nonliteral localization extraction advisory remains.
+
+Sample-ad tests use Google's complete sample app/native-unit pair as command-line
+build overrides; checked-in Debug and Release configuration remain unchanged.
+No live ad or CTA was clicked. Regional UMP choices and live production fill
+were not evaluated by this sample-inventory run. No production deployment or
+TestFlight upload was performed.
+
+## Explore Ideas lazy paging — November 2, 2026
+
+Ideas now uses AdaptiveLazyMasonry and positive scroll-visibility triggers for
+the last four loaded cards. All uses the same visibility condition for idea
+pagination. Source page size remains 20; filter/tab returns reuse the loaded
+stream. Offscreen creation can no longer start successive page requests.
+
+The new 80-item/four-page fixture and native paging UI method passed in
+**30.573 seconds** on iPhone 18 Pro / iOS 27.0. It verifies one request / 20
+loaded on entry and after filter/tab changes, the last first-page card remaining
+unmounted initially, then two requests / 40 loaded after scrolling. The final
+80th card remains unmounted. The focused nine feed/projection units passed.
+Result: `/tmp/gatherory-idea-lazy-paging-20261102.xcresult`; matching log:
+`/tmp/gatherory-idea-lazy-paging-20261102.log`.
+
+The same run passed Cancel (**23.635 seconds**) and the complete Light/Dark
+main/child add-and-Added flow (**98.907 seconds**): `TEST SUCCEEDED`, three
+native UI methods and nine focused units. English/Spanish coverage remains
+green for 1,800 strings with the existing nonliteral extraction advisory.
+
+The fixture counts native fetch invocations; this is not a live-server latency
+measurement. The server still scans the public catalog and ranks candidates
+before slicing its response, as documented in the [flow guide](explore-idea-discovery.md).
+No backend, dependency, schema or production deployment changed.
+
+## Add completion and Explore Added markers — November 2, 2026
+
+A durable successful add closes the destination sheet, then the idea detail,
+returning to the current Explore query/filter. Both All and Ideas cards overlay
+Added without changing geometry. Added remains informational; the detail still
+permits another intentional Add to Event. Cancel retains the detail and does
+not mark the card; failed image/save paths retain their previous recovery.
+
+Account-scoped identity-only receipts persist on this device. Badge projection
+requires the matching copy and active readable membership; removed/deleted
+destinations and other accounts cannot inherit the mark. Temporary library
+loading gaps retain receipts. Delayed sheet completions check account and store
+generations, including A→B→A. Account deletion clears only its receipt namespace.
+
+The final run passed **1,202 registered native unit tests in 166 suites**
+(1,201 executed; the opt-in live sync test skipped), including six receipt-store
+tests. Two native UI methods passed on iPhone 18 Pro / iOS 27.0: Cancel returning
+to detail without a mark (**23.528 seconds**), and the complete Light/Dark
+main/child add flow (**94.698 seconds**). The latter verifies both sheets close,
+the Garden query and Ideas scope remain, the card reads Added, repeat-add is
+enabled, and the copied idea is present in the chosen event.
+
+Result: `/tmp/gatherory-added-idea-final-20261102.xcresult`; matching log:
+`/tmp/gatherory-added-idea-final-20261102.log` (`TEST SUCCEEDED`). Localization
+coverage passes for **1,800 English/Spanish strings**, with the existing
+nonliteral extraction advisory. No manual screenshots, large-layout matrix,
+backend, schema, shared-account mutations or deployment changed. Cross-device
+Added state is outside this local receipt implementation.
+
+## Flat Explore and workspace destination masonry — November 2, 2026
+
+Explore uses one selected-value native menu (All by default), with no Search
+title, filter icon or Ideas/More section. All mixes content in one masonry feed.
+First-page coordination removes request-arrival ordering differences; a cached
+projection appends later pages without shifting existing identities. Idea card
+height estimates match their rendered category aspect ratio. Existing Blueprint
+ad anchors, source IDs and impression rules remain scoped to Blueprint cards.
+
+Add to Event shows searchable workspace masonry, then pushes image cards for
+that workspace's main event and eligible children. Search matches only eligible
+content; opening a match restores all eligible choices. Child write access is
+retained when the main event is view-only. Exact account/destination checks and
+durable add/retry behavior are retained.
+
+The full native unit target passed **1,196 registered tests in 165 suites**,
+with the opt-in live sync test skipped (1,195 executed):
+`/tmp/gatherory-destination-masonry-final-20261102.xcresult`. This includes nine
+new projection cases and five mixed-feed ordering/cache cases. The existing
+Light/Dark Blueprint discovery-session method separately passed in **75.664
+seconds** in `/tmp/gatherory-flat-explore-picker-20261102.xcresult`.
+The final native add journey passed in Light/Dark in **90.831 seconds**:
+`/tmp/gatherory-masonry-picker-ui-20261102.xcresult` (`TEST SUCCEEDED`). It
+verifies the value menu, absent Ideas/More and Search headings, discovery query,
+local child-title search, main/child choices, native Back with retained query,
+explicit confirmation, and the resulting copy in the event's Ideas tab. Light
+selects the main event; Dark selects Ceremony. An earlier harness tapped the
+underlying detail sheet's Done button; the final check scopes Back to the
+destination navigation bar. The earlier missing child-screen Add toolbar was
+fixed by attaching confirmation directly to that destination screen.
+English/Spanish coverage passes for **1,798 strings**, with the existing
+nonliteral AppCopy advisory. No shared database, backend or deployment changed.
+
+## Explore toolbar filter — November 2, 2026
+
+All / Blueprints / Ideas moved from a segmented row into a native toolbar Menu
+above the Search title. The icon-only filter stays available during typed
+search; All remains the initial selection. The same menu retains explicit
+Refresh. The native add journey now opens the filter menu and checks the actual
+mixed All feed before choosing Ideas, then types a query and completes the
+existing destination/add/find-in-Ideas flow. The discovery-session regression
+opens the menu before Refresh, preserving its session and return-position checks.
+
+Both native UI methods passed in Light and Dark: discovery-session/menu Refresh
+in `/tmp/gatherory-explore-filter-menu-20261102.xcresult`, and the final
+default-All/menu selection/search/add journey in
+`/tmp/gatherory-explore-filter-final-20261102.xcresult` (`TEST SUCCEEDED`). The
+first combined run's add method failed because UIKit reports an empty Menu
+accessibility value; its default assertion now checks the visible mixed feed.
+English/Spanish coverage passes for 1,793 strings with the existing extraction
+advisory; `git diff --check` passes. No backend or deployment changed.
+
+## Explore individual ideas and Add to Event — November 2, 2026
+
+See [the V1 implementation and acceptance record](explore-idea-discovery.md)
+for the new All / Blueprints / Ideas surface, native destination sheet,
+source-authorized image copying and durable offline add. The complete Light/
+Dark typed-search/add-and-find-in-Ideas journey passed in 67.019 seconds, along
+with 21 focused native units. The full unit run passed 1,182 registered tests /
+163 suites, with the opt-in live sync case skipped (1,181 executed). The
+existing Blueprint browsing-session Light/Dark UI regression also passed in
+72.244 seconds. The final unsigned Release simulator build also passed.
+Relevant result bundles and acceptance limits are recorded in that guide;
+no deployment was performed.
+
+## Events tab bar and V1 checkpoint — November 2, 2026
+
+The root tab view uses native `.never` minimization for Events and retains
+`.onScrollDown` for Blueprints and Explore. `events.list` identifies the Events
+scroll surface without changing its layout. The new
+`EventsTabBarUITests.testEventsKeepsAllMainTabsExpandedWhileScrollingInLightAndDark`
+passed on iPhone 18 Pro / iOS 27.0 in **39.426 seconds**. It scrolls the Events
+list three times, checks that all three tabs stay directly accessible at the
+expanded height, switches to Blueprints and back, then checks upward scrolling.
+Both appearances use the existing ephemeral date-ordering fixture.
+
+Result: `/tmp/gatherory-events-tab-bar-20261102.xcresult`; log:
+`/tmp/gatherory-events-tab-bar-20261102.log` (`TEST SUCCEEDED`). A generic
+unsigned Release simulator build also passed; log:
+`/tmp/gatherory-v1-release-build-20261102.log` (`BUILD SUCCEEDED`). Remaining
+warnings concern an unreachable Release fixture branch and absent App Intents
+metadata. The focused UI run compiled the app and both test targets; the full
+unit suite was not repeated for this native tab policy change.
+
+No manual screenshots, large-layout matrix, new dependencies, server changes,
+shared account mutations, uploads or deployments were performed. Physical-device
+gesture acceptance and a signed archive remain unverified in this pass. See
+the [V1 checkpoint](v1-release-checkpoint-2026-11-02.md) for prioritized release
+gates and the distinction between source checks and live acceptance.
+
+## Home and Events date ordering — November 2, 2026
+
+Home retains the main event at the top and orders child events by current/
+upcoming dates, recent past dates, then undated items. Overview keeps date rows
+and chronological times within a day; Cards and its rail use the same date
+policy. Events applies date ordering to each filtered result. Existing filter
+membership, permission checks, selection and persisted record order are retained.
+See [Home event layouts](home-event-layouts.md#date-ordering).
+
+`EventDateOrderingTests` covers shuffled library insertion order, recent-first
+past results, undated placeholders, multi-day/all-day events ending today,
+event-local midnight boundaries, stable identity ties, grouped time ordering,
+and unchanged selection/library/timeline. Existing Home projection tests cover
+guest scope, archived children and main-event deletion. Their fixed historical
+timezone fixture now supplies an explicit reference date.
+
+The final full native unit run passed **1,161 registered tests in 159 suites**
+(one opt-in live sync test skipped; 1,160 executed). The native UI method
+`EventDateOrderingUITests.testEventsAndHomeStartWithUpcomingDatesInLightAndDark`
+also passed in **35.156 seconds** on iPhone 18 Pro / iOS 27.0. It verifies that
+Events opens with the nearest upcoming gathering, Home keeps its main card
+above correctly ordered date rows, same-day events remain chronological, and
+Cards leads with the main event then today's child, in Light and Dark.
+Layouts launch independently because command-line preference values override
+settings changes; the earlier failed fixture-switch run is not acceptance.
+
+Result: `/tmp/gatherory-date-ordering-verified-20261102.xcresult`; log:
+`/tmp/gatherory-date-ordering-verified-20261102.log` (`TEST SUCCEEDED`).
+No manual screenshots, large-layout tests, new dependencies, backend edits,
+shared data changes or deployment were performed.
+
+## Invitation management shortcut removal — November 2, 2026
+
+The invitation toolbar no longer repeats the Manage action. Management stays
+on the preceding Home card's footer; invitation sharing, actions and editing
+remain available through their existing controls.
+
+The focused native build and two UI regression methods passed on iPhone 18 Pro /
+iOS 27.0. The main-event Light and subevent Dark scenarios verify the missing
+invitation Manage button, retained share/actions controls, native Back to Home,
+the original Manage footer opening the correct event dashboard, and Back to
+Home. The guest scenario verifies management remains unavailable. Result:
+`/tmp/gatherory-invitation-manage-removal-20261102.xcresult`; log:
+`/tmp/gatherory-invitation-manage-removal-20261102.log`
+(`TEST SUCCEEDED`, two methods, zero failures). `git diff --check` passed.
+No manual screenshots, new copy, packages, web changes or deployment were needed.
+
+## Team budget implementation and mobile acceptance — November 2, 2026
+
+The [team budget safety implementation](team-budget-safety.md) is verified
+locally on the mobile side. Paid records retain their amount/status across idea
+edits and withdrawal; budget changes require management authority; unaffordable
+Schedule requests fail before mutation. Allocation edits use one versioned
+whole-budget command with immutable retry identities and conflict review.
+
+Account now confirms **Use shared budget** with a native alert containing
+explicit Cancel and destructive actions. The earlier confirmation dialog was
+presented as a popover without a Cancel button. Accessibility inspection
+identified that presentation difference; the final UI test exercises the alert
+instead of treating the missing action as a timing failure.
+
+The complete native unit target passed **1,154 registered tests in 157 suites**,
+with the one opt-in live development sync test skipped (1,153 executed). No
+known-issue expectations were recorded in this run. The same build passed all
+three native UI methods on Gatherory MCP Dev / iPhone 18 Pro / iOS 27.0:
+
+- Host Light budget navigation, allocation draft cancellation and direct Back:
+  **27.271 seconds**.
+- View-only collaborator Dark budget visibility with editing disabled:
+  **15.178 seconds**.
+- Account conflict recovery in Dark, Cancel retaining intent, confirmation
+  restoring shared $600/$400 allocations and preserving the local event title:
+  **28.693 seconds**.
+
+Result: `/tmp/gatherory-budget-mobile-20261102.xcresult`; log:
+`/tmp/gatherory-budget-mobile-20261102.log` (`TEST SUCCEEDED`). Earlier failed
+October 30 bundles remain diagnostic evidence, not final acceptance.
+
+Two additional inbound `BudgetNativeWireTests` then passed in a focused run.
+They decode numeric major-unit expense/cap values through the archive codec,
+bootstrap and pull; exercise native `foodAndDrink`, explicit null allocations,
+25,001 integer cents and the exact maximum `999999999999.99`; and reject money
+encoded as strings. Result:
+`/tmp/gatherory-budget-native-wire-20261102.xcresult`; log:
+`/tmp/gatherory-budget-native-wire-20261102.log` (`TEST SUCCEEDED`). These two
+tests were added after the full-suite run and are reported separately.
+
+The user's separate web Decimal.js agent was contacted through its existing
+Codex chat. That agent owns web/server calculations and projections. The
+agreed contract retains Foundation Decimal in iOS, JSON numbers for archive
+money, integer cents/explicit nulls for budget commands, and decimal database
+values. No JavaScript money dependency was added to iOS. Server/database test
+results belong to that agent's acceptance record; this mobile verification
+does not claim a deployed end-to-end test.
+
+The coordinated web agent subsequently reported **eight passing isolated
+PostgreSQL budget integration tests**, including paid-expense rehoming before
+child deletion, replacement with the post-delete allocation vector, numeric
+archive/event/pull projections, and native `foodAndDrink`. That work also removes
+deleted children from the compatibility timeline and rehomed paid rows from
+their former child archive. These are that agent's executed server results,
+not tests re-executed by this mobile chat. Its broader web suite was still
+running when the initial update arrived. Its final handoff then confirmed
+typecheck and contracts passed, **962 web tests passed with 74 skipped**, and all
+eight opt-in budget database tests passed. Prettier and `git diff --check` passed;
+the disposable PostgreSQL container was stopped and removed. The server handoff
+is recorded in web `docs/development/money-arithmetic.md` and
+`docs/development/team-budget-sync.md`. No deployment is implied.
+
+English/Spanish localization coverage passed for **1,769 strings** with the
+existing nonliteral AppCopy extraction advisory. `git diff --check` passed.
+No manual screenshots, large-layout matrix, shared account budget writes,
+database reset, dev-server startup, production deployment, TestFlight upload or
+Git commit was performed. Physical-device radio-off/relaunch and real two-account
+acceptance against the matching server build remain release checks.
+
+## Team budgeting audit — October 30, 2026
+
+Luna agents audited native budget commands, UI permissions and the server sync
+protocol. See [the findings and recommended build order](team-budget-audit-2026-10-30.md).
+Only synthetic regression tests and documentation were added in this pass;
+budget behavior was not changed.
+
+The final focused native run passed **28 tests in four suites with seven known
+issue expectations**: `TeamBudgetAuditTests`, `WorkspaceBudgetRulesTests`,
+`IdeaBudgetTests` and `ManageBudgetTests`. Result:
+`/tmp/gatherory-team-budget-audit-unit-accepted-20261030.xcresult`; log:
+`/tmp/gatherory-team-budget-audit-unit-accepted-20261030.log`
+(`TEST SUCCEEDED`). Expected failures reproduce contributor cap-write authority,
+Paid status loss on note edits, Paid record removal on archival, silent Schedule
+funding failure, negative values at a trusted local replacement boundary, and
+concurrent allocation overrun. Seven expectations do not mean seven independent
+production defects, and this accepted run does not establish budget correctness.
+
+Both screenshot-free native UI scenarios passed on the standard iPhone 18 Pro
+simulator: host Light in **27.671 seconds**, and view-only collaborator Dark in
+**14.821 seconds**. They verify scoped Budget navigation, root allocation draft
+editing/cancellation, unchanged allocation on reopening, direct Back navigation,
+and disabled allocation controls for a read-only collaborator. Result:
+`/tmp/gatherory-team-budget-audit-final-20261030.xcresult`; log:
+`/tmp/gatherory-team-budget-audit-final-20261030.log` (`TEST SUCCEEDED`).
+This earlier combined bundle contains six known unit issues; the final unit-only
+bundle above adds the Paid archival probe. Earlier failed runs were harness
+diagnostics and are not acceptance evidence.
+
+The existing web overview, native contract, ordering and identity unit selection
+passed **nine tests in four files**; log:
+`/tmp/gatherory-team-budget-web-unit-20261030.log`. No database integration,
+committed UI allocation, live server budget mutation, real concurrent server
+race or physical-device test was run. The allocation race is a local native
+merge simulation; server authorization/atomicity findings are source-backed
+and still need isolated integration coverage. No actual account data, server,
+migration, production deployment or Git commit was changed.
+
+## Idea toolbar iOS 26 compatibility — October 30, 2026
+
+The unavailable-link branch in `IdeaDetailView`'s toolbar was explicitly empty.
+Swift 6 inferred `EmptyView` as toolbar content, whose conformance requires
+iOS 27. The toolbar now gates Schedule directly on the absence of any stored
+link instead of emitting an empty branch. Inaccessible links still expose
+neither View Event nor another Schedule action. Deployment and Swift language
+settings are unchanged.
+
+A focused Swift 6 compiler check with an iOS 26 simulator target and
+warnings-as-errors reproduced the exact diagnostic for the old builder pattern
+and passed for the corrected pattern. Logs:
+`/tmp/gatherory-toolbar-ios26-{before,fixed}-20261030.log`. This is a focused
+builder-availability check, not a whole-project Swift 6 migration. The normal
+native build and all **12 scheduling/link-projection regressions** passed in
+`/tmp/gatherory-toolbar-ios26-20261030.xcresult`; log:
+`/tmp/gatherory-toolbar-ios26-20261030.log` (`TEST SUCCEEDED`).
+
+## Scheduled idea navigation and live development collaboration — October 30, 2026
+
+The scheduled idea exposes **View Event** through the native navigation stack.
+The exact visible linked child supplies the preview content and the canonical
+invitation destination; the preview no longer says Proposed. System Back and
+interactive pop return to the same idea. Unavailable, duplicate, archived,
+foreign-root and unauthorized links have no fallback. The old proposal editor
+is hidden after scheduling; canonical event content retains its native editor.
+The Schedule sheet displays compact event-scoped team preference counts.
+
+The complete native unit run passed **1,125 registered tests in 155 suites**,
+with the one opt-in live test skipped by default (1,124 executed). The new
+`ScheduledIdeaEventProjectionTests` covers exact linkage, invalid/ambiguous
+links, deleted roots, isolated scopes, invitation projections, and inactive or
+missing participation. Result:
+`/tmp/gatherory-scheduled-idea-unit-final-20261030.xcresult`; log:
+`/tmp/gatherory-scheduled-idea-unit-final-20261030.log` (`TEST SUCCEEDED`).
+
+The opt-in `IdeaSchedulingLiveSyncTests` then passed against the actual
+development HTTPS API in **6.319 seconds** with two authenticated accounts and
+independent SwiftData stores, using the production native transport and sync
+coordinator. It verifies a queued contributor preference reaches the manager,
+the manager's Schedule produces one event on the contributor client, the vote
+survives scheduling, and repeated reconnect does not duplicate the event.
+The final cleanup also passed. Result:
+`/tmp/gatherory-live-idea-sync-accepted-20261030.xcresult`; log:
+`/tmp/gatherory-live-idea-sync-accepted-20261030.log`
+(`TEST EXECUTE SUCCEEDED`). Fresh bootstrap reads for both development accounts
+confirmed zero remaining acceptance ideas/events. The temporary sessions were
+revoked and credential/staging files removed.
+
+Earlier failed runs remain diagnostic evidence only. Projection fixtures were
+corrected for initializer reconciliation, localization now uses distinct named
+keys, and the live harness follows ordinary lifecycle, response-retraction and
+snapshot/tombstone cleanup instead of assuming generic entities use Todo CAS
+records. Initial test-only cleanup leftovers were removed and verified; those
+failed bundles are not counted as successful acceptance.
+
+These are two separate clients within a simulator-hosted test, not two physical
+devices. The offline interval delays synchronization after saving locally; it
+does not disable networking or prove persistence across a process restart.
+Actual two-device UI, radio-off/relaunch and signed-release acceptance remain
+open. No production deployment, server startup, migration, reset or upload was
+performed. See [the flow and opt-in test contract](idea-scheduling.md).
+
+The final screenshot-free native UI run passed both methods:
+`testEventIdeaScheduleCancellationAndConfirmationInBothAppearances` in
+**176.413 seconds**, and `testReadOnlyCollaboratorCannotScheduleEventIdea` in
+**16.143 seconds**. The first covers Light/Dark edited-draft cancellation,
+compact team input, View Event, canonical invitation title/date/location,
+absence of the stale proposal editor, system Back, interactive swipe-back, and
+one linked Home event. Result:
+`/tmp/gatherory-scheduled-idea-ui-final-20261030.xcresult`; log:
+`/tmp/gatherory-scheduled-idea-ui-final-20261030.log`
+(`TEST EXECUTE SUCCEEDED`, zero failures). The final build-for-testing also
+passed in `/tmp/gatherory-scheduled-idea-verified-build-20261030.log`.
+
+English/Spanish localization coverage passed for **1,755 strings**, retaining
+the existing nonliteral AppCopy extraction advisory; `git diff --check` passed.
+No screenshot inspection, super-large layout matrix, production action or Git
+commit was performed.
+
+## Event idea Schedule handoff — October 30, 2026
+
+See [event idea scheduling](idea-scheduling.md) for the native flow and scope.
+Ideas and Decide detail now offer Schedule for authorized event proposals,
+using a native draft sheet and the existing date/time and location editors.
+Non-event approvals and guest voting behavior are unchanged.
+
+The final screenshot-free `IdeaSchedulingUITests` run passed both methods on
+Gatherory MCP Dev / iPhone 18 Pro / iOS 27.0:
+
+- `testEventIdeaScheduleCancellationAndConfirmationInBothAppearances` passed
+  in 138.608 seconds. In Light and Dark, it starts from Reception, opens and
+  cancels the nested date editor, changes and saves an all-day draft, removes
+  the draft location, then cancels the outer sheet. Reopening restores the
+  original timed proposal and location. Confirmation adds exactly one Home
+  event; reopening the idea exposes Scheduled instead of another Schedule.
+- `testReadOnlyCollaboratorCannotScheduleEventIdea` passed in 16.619 seconds.
+  The view-only fixture cannot open Schedule and creates no linked Home event.
+
+Result: `/tmp/gatherory-idea-schedule-ui-final-20261030.xcresult`; log:
+`/tmp/gatherory-idea-schedule-ui-final-20261030.log`. The runner completed with
+`TEST SUCCEEDED`. These are seeded ephemeral DEBUG fixtures, not live server,
+multi-device, push, or signed-release acceptance. No screenshots were inspected.
+
+Earlier attempts are diagnostic evidence only: the initial build exposed test
+setup/compiler errors, the next build caught untyped localization format
+values, and the first combined functional run passed both UI methods but
+failed new unit fixtures that used pre-normalization proposal values. The
+fixtures now obtain the canonical stored proposal. Do not count that combined
+bundle as an all-green run.
+
+The final complete native unit run passed **1,121 tests in 153 suites** with
+`TEST SUCCEEDED`: `/tmp/gatherory-idea-schedule-unit-accepted-20261030.xcresult`,
+log `/tmp/gatherory-idea-schedule-unit-accepted-20261030.log`. Nine new scheduling
+tests cover content/media preservation, votes remaining separate, host/manage
+authority, contributor suggestion rights, revocation protection, stale
+source/root/viewer boundaries, same-account reconfiguration versus A→nil→A,
+identical retries, invalid schedules, inclusive one-day all-day dates, legacy
+configuration defaults, and preservation of independently edited linked events.
+The last unit iteration corrected a test that incorrectly assumed the legacy
+idea initializer leaves event configuration absent; it actually supplies an
+undated default. The accepted run covers both that default and an explicitly
+mismatched configuration.
+
+The final unit run includes two model-only guards added after the green UI run:
+changed submissions cannot rebuild an existing linked event, and unsupported
+event configurations expose no Schedule action. Their targeted regressions and
+the full unit suite passed; the native UI run covers the normal configured
+proposal path. Existing voting, budget, persistence and permission suites also
+remain green. English/Spanish localization coverage passed for **1,746 strings**
+with the existing nonliteral AppCopy extraction advisory; `git diff --check`
+passed. No production data, schema, deployment, upload or Git commit changed.
+
 See the [October 23 release readiness audit](release-readiness-audit-2026-10-23.md)
 for the broader native UI, database/HTTP and production-entrypoint checks after
 build 6, the invitation-preview date correction and remaining device acceptance.
@@ -3104,6 +4591,311 @@ Main Dark and date-tile Light captures were inspected. English/Spanish
 localization coverage passed for 1,723 strings with the existing nonliteral
 AppCopy warning. No physical-device save, live RSVP mutation, large-text matrix
 or deployment was performed.
+
+## Connection monitor Swift 6 capture — October 30, 2026
+
+The `NWPathMonitor` callback keeps its weak owner capture, promotes it to an
+immutable local, then captures that MainActor-isolated reference in the update
+task. This removes the nested mutable weak-capture diagnostic without a stored
+retain cycle or concurrency suppression. An explicit Foundation import makes
+the DEBUG ProcessInfo reference self-contained.
+
+Both DEBUG and non-DEBUG typechecks passed for the actual AppConnectionStatus
+and AppRuntimeConfiguration source files with `-swift-version 6`,
+`-strict-concurrency=complete`, `-default-isolation MainActor` and
+`-warnings-as-errors`. This verifies the affected code, not a whole-project
+Swift 6 language migration; the project language settings are unchanged.
+The normal native build and both OfflineConnectionUITests methods passed
+(Online/Offline in Light/Dark) in
+`/tmp/gatherory-connection-capture-swift6-20261030.xcresult`, log
+`/tmp/gatherory-connection-capture-swift6-20261030.log`. These use deterministic
+status fixtures rather than physically changing network connectivity.
+`git diff --check` passed. No UI layout or production deployment changed.
+
+## Complete-card zoom and context-menu previews — October 30, 2026
+
+Luna agents implemented and independently reviewed the card changes and added
+native gesture regressions. Overview main/child and Cards now register the
+entire decorated card as their zoom source, including its surface, border and
+Manage footer (and Cards shadow). The native context-menu preview uses that
+same complete card, outside its rounded clip. Horizontal day rows disable
+scroll clipping so the system's lifted card can extend beyond the row bounds.
+Artwork remains clipped inside the card; Open and Manage remain sibling buttons
+with their existing event references and permissions.
+
+`HomeEventCardInteractionUITests` exercises context-menu opening/dismissal,
+primary-card navigation, a short back drag held for half a second that cancels,
+a longer held drag that returns Home, and the event-specific Manage footer.
+Overview main and child pass in both Light and Dark; Cards main passes in Light
+as a compatibility check. The tests use native coordinates within the observed
+visible primary-button frame and preserve separate footer interaction.
+
+Initial test attempts exposed two automation errors rather than failed app
+outcomes: a menu-dismiss tap activated Share, and a nested scroll accessibility
+frame incorrectly excluded a visible child button. The test now dismisses in
+the inert screen gutter and computes hit points from the button/window/chrome
+bounds while revealing horizontal content separately. No app gesture override
+or interaction permission was changed to accommodate those tests.
+
+Verified artifacts: the Cards native method passed in
+`/tmp/gatherory-home-card-interactions-final-20261030.xcresult` (that run also
+records the subsequently corrected Overview test-coordinate failure). The final
+Overview main/child Light/Dark method passed with zero failures in
+`/tmp/gatherory-overview-card-interactions-20261030.xcresult`, log
+`/tmp/gatherory-overview-card-interactions-20261030.log`. These are behavioral
+checks: they do not measure intermediate animation pixels, rounded mask shape,
+or shadow clipping. No screenshots were requested by the new tests or inspected
+manually. Physical-device held-transition visual acceptance remains unclaimed.
+All 16 focused HomeEventLayoutTests and EventManagementAccessTests passed in
+`/tmp/gatherory-home-card-interaction-units-20261030.xcresult`; the final diff
+check passed.
+No packages, backend changes, production deployment or TestFlight upload are
+part of this change.
+
+## Overview default, status-free editing and lean date tile — October 30, 2026
+
+Home defaults and invalid stored preferences now resolve to Overview; explicit
+Cards preferences remain supported. New/duplicated main events start Ongoing,
+copied schedule items start Approved, and full native main/child edit sheets
+omit lifecycle Status and Planning Status. A saved legacy draft is promoted to
+Ongoing by the full main editor; existing terminal states are preserved. Hosts
+and managers retain confirmed deletion of Ongoing roots. Contributors do not
+gain that destructive permission. Main and child approval domains remain
+separate; no schema or existing-row migration was applied.
+
+The date tile uses a localized month/day stamp, weekday and time. Multi-day
+events use separate start/end rows with time-only endpoint formatting, avoiding
+DateIntervalFormatter's tendency to reinsert full numeric dates. No visible
+timezone line or selector is added; event-local formatting, full accessibility
+labels and calendar export keep the exact stored schedule. Cross-year, all-day,
+undated, invalid-end, DST and Spanish formatting have focused coverage.
+
+The broad native run initially exposed a real status-default interaction:
+Ongoing events with a start at `now` and no end were immediately inferred as
+Finished and lost edit permissions. Root lifecycle now follows stored status;
+dates alone do not silently lock planning. Explicit Finished/Cancelled and
+scoped completion rules are retained. The initial projection tests also needed
+their DST assertions moved to the new separate endpoint properties. Both were
+corrected before final verification.
+
+Final result: **1,112 unit tests in 152 suites passed**, plus one native UI
+method covering Overview fallback, main/child status-free editors, schedule
+editing/calendar affordance and no timezone selector in standard Light/Dark
+appearances. Result: `/tmp/gatherory-event-simplification-final-20261030.xcresult`;
+log: `/tmp/gatherory-event-simplification-final-20261030.log`. The new native
+method has no screenshot attachments; existing full-suite rendering tests
+retain their normal generated diagnostic images. No manual screenshot or
+physical-device visual review was performed. Add-to-calendar export logic is
+covered by existing unit suites; no live calendar write was attempted.
+
+Web/server creation defaults were aligned for workspace, direct root event,
+and MCP creation. `pnpm vitest run tests/effect/mcp-content-service.test.ts`
+passed six tests. The opt-in local MCP database integration passed one test,
+including canonical row and native archive Ongoing assertions; it uses fresh
+fixture accounts and cleans them up. `pnpm typecheck` passed. No server was
+started, production deployed, existing account event migrated, or build uploaded.
+English/Spanish verification passed for **1,737 strings** and both repository
+diff checks passed.
+
+## Event editing from invitation content — October 30, 2026
+
+Manage has no editing gear or editor sheet. Main invitation title/date/location
+continue to use the existing field-specific native sheets. Authorized planners
+can tap the corresponding child invitation content, including the information
+tiles, to open the existing editor for that captured child. Cancel returns to
+the invitation. The child request checks the exact root, child snapshot,
+account/device profile, principal generation, active editable membership and
+current event access. It closes on stale data or lost access; archived, missing
+or deleted events cannot become a new child through a fallback editor mode.
+Cancelled/completed events remain editable when otherwise authorized.
+
+Luna agents implemented the entry points and regression coverage. The final
+`xcodebuild test` passed **18 tests**, zero failures: 16 units across
+ChildInvitationEditingTests, MainInvitationEditingTests and
+EventManagementAccessTests, plus two ManageEventEditingUITests methods. The
+native tests cover main/child Manage without a gear, title tap → exact editor →
+Cancel → same invitation → Back Home in Light and Dark, and guest denial of
+editing/Manage. The older child-sharing UI test now expects editable controls
+for authorized planners; that separate sharing test was updated and compiled,
+not rerun. Date/location entry points reuse the child sheet route but were not
+individually navigated in the new UI methods. No screenshots were taken.
+
+Device Hub was opened on Gatherory MCP Dev (iPhone 18 Pro / iOS 27), including
+accessibility inspection during the native run. A standalone fixture launch
+after XCTest did not expose app accessibility controls in Device Hub, so a
+separate manual edit/cancel verification is not claimed. Automated navigation
+is verified by `/tmp/gatherory-event-content-edit-verified-20261030.xcresult`
+and `/tmp/gatherory-event-content-edit-verified-20261030.log`. English/Spanish
+localization verification passed for **1,738 strings**; `git diff --check`
+passed. No production deployment or physical-device installation was performed.
+
+## Compact offline UI — October 30, 2026
+
+Luna agents removed the launch offline bar and Events invitation-error inset,
+added compact signed-in/guest Account status with native `NWPathMonitor`, and
+added screenshot-free native regressions. An independent Luna review checked
+monitor lifetime, cached-account override, and recovery access. With populated
+Events, invitation refresh recovery deliberately uses pull-to-refresh instead
+of a visible error/retry overlay. Empty lists retain inline retry. Blocking
+identity restoration screens and offline persistence behavior remain intact.
+
+`xcodebuild test` passed on iPhone 18 Pro / iOS 27 Simulator: **15 tests**, zero
+failures: 13 tests in OfflineAccountRestorationTests and SessionRestorationTests,
+plus two OfflineConnectionUITests methods exercising Online/Offline in both
+Light and Dark appearances. The native tests verify saved library content is
+available, intrusive retry banners are absent, and the Account status and Retry
+visibility match the fixture. These tests use guarded DEBUG network-status
+fixtures requiring ephemeral data and development authentication bypass; they
+do not disable the simulator's network or prove a physical airplane-mode
+transition. Cached identity and cold archive/outbox recovery are exercised by
+the unit suites. Guest Account and empty-library retry compiled but were not
+separately navigated in these UI tests. No screenshots were taken.
+
+Result: `/tmp/gatherory-compact-offline-ui-20261030.xcresult`.
+Log: `/tmp/gatherory-compact-offline-ui-20261030.log`.
+English/Spanish localization verification passed for **1,735 strings**;
+`git diff --check` passed. No server, schema, package, deployment or TestFlight
+change was made.
+
+## Event-specific Updates audit — October 30, 2026
+
+Two Luna agents audited native scoping and added regressions. No cross-event
+feed bug was found: Manage pins its event reference, Updates receives the
+corresponding UUID, local planning notes filter the exact event, and legacy
+nil-event notes belong only to the main event. The server announcement query
+also filters the exact UUID; this was source inspection, not a live server run.
+Audience **All** means all permitted audiences within this event.
+
+Added regressions cover main/child/sibling note isolation while Home selection
+changes, clearing feed/capabilities on event switch, and ignoring a delayed
+response from the previous event. A native UI test follows main and child
+Overview → Manage → Updates using the event-specific accessibility identifier,
+then returns without changing Home's selection. No screenshots were taken.
+
+`xcodebuild test` passed on iPhone 18 Pro / iOS 27 Simulator: **34 tests**, zero
+failures (33 unit tests across EventAnnouncementControllerTests,
+ManageNoteHistoryTests, EventAnnouncementPlanningAccessTests and
+EventAnnouncementTransportTests, plus one native navigation test covering both
+main and child). Result: `/tmp/gatherory-event-updates-scope-20261030.xcresult`;
+log: `/tmp/gatherory-event-updates-scope-20261030.log`. The UI test verifies
+navigation scope; synthetic unit feeds verify content isolation. A populated
+live account feed was not exercised. No production deployment was performed.
+
+## Manage availability for local account identities — October 28, 2026
+
+The management wrapper incorrectly required notification authorization, which
+is intentionally unavailable to offline-restored accounts. It also rejected
+older valid local participants resolved by the configured viewer email without
+a linked user ID. The local management policy now verifies the configured
+account or exact local guest profile directly, preserving active participation,
+event scope, read-only permissions and captured account-generation checks.
+Remote announcement/push checks remain unchanged. Uncaptured scope initially
+shows a neutral loading indicator instead of Event Unavailable.
+
+Two Luna agents handled the access fix and regression cases. **20 focused unit
+tests passed** across `EventManagementAccessTests`,
+`OfflineAccountRestorationTests` and `EventAnnouncementPlanningAccessTests`.
+The restored-account integration test uses a token-matched cached account and
+network failure, proves both main/child Manage access while notification
+principal stays nil, then verifies sign-out removes access. Other cases cover
+legacy email-only membership, wrong account, foreign linked user ID,
+unconfigured/no principal, local guest profile mismatch, attendees and existing
+read-only/revocation boundaries.
+
+An initial legacy child fixture lacked normalized event participation after
+assigning its timeline; it now uses the real participant API, without weakening
+the access policy. A native helper also expected a mandatory Account back
+button after choosing Home layout; it now accepts native auto-return or Done
+and verifies the actual requested Home content before continuing.
+
+Results: `/tmp/gatherory-manage-local-access-verified-20261028.xcresult`, with
+matching log. The native management test exercises main/child footers in both
+Cards and Overview, dashboard/Collaborators/back navigation and unchanged Home
+context. It passed: **21 tests total**, zero failures/skips (20 unit tests and
+one native method covering all four footer cases). Localization coverage
+passed for **1,729 English/Spanish strings**, retaining the existing nonliteral
+AppCopy warning; `git diff --check` passed. No screenshot attachments are
+requested by that test. No server,
+schema, announcement authorization or production deployment changed.
+
+## Budget back navigation — October 28, 2026
+
+The dashboard Budget card now uses an explicit destination with the managed
+event reference. The event budget's previous nested workspace-budget link
+could add another Budget screen to the stack. **All event budgets** now changes
+scope inside the existing Budget screen, with **This event’s budget** restoring
+the original reference. Both labels are distinct in English/Spanish. A scoped
+workspace never offers the broader overview. The original event's budget is
+always the initial scope; projection and allocation permissions are unchanged.
+The accessible scope value uses the human-readable event name or All event
+budgets, never an internal event identifier.
+
+Two Luna agents audited the routes and added a screenshot-free native
+regression. **16 unit tests passed** across `ManageBudgetTests`,
+`ManageNavigationTests` and `EventManagementAccessTests`, covering budget
+projections, exact event/scoped boundaries, permissions and non-mutating
+navigation. Log: `/tmp/gatherory-budget-backstack-20261028.log`.
+
+The first native attempt stopped before Budget because the shared Account
+helper matched duplicated native accessibility toolbar nodes. It now selects
+one exact navigation-bar button and concrete picker buttons. The subsequent
+native run passed for main and child Overview footers, opening Budget twice
+each, checking event scope, explicitly switching to the aggregate and back,
+and requiring one Back tap to return to the same dashboard. The final run
+also checks the human-readable accessible scope labels.
+
+Result: `/tmp/gatherory-budget-backstack-final-20261028.xcresult`, matching log;
+the final repeated main/child method passed with zero failures/skips. A second
+native method explicitly leaves **All event budgets** selected, presses Back
+once and verifies the same Manage dashboard, with no intermediate Budget
+screen. It also passed in
+`/tmp/gatherory-budget-overview-back-20261028.xcresult` and matching log.
+These checks total **16 passing units and two passing native UI methods**.
+Localization coverage passed for **1,729 English/Spanish strings**, retaining
+only the pre-existing nonliteral AppCopy extraction warning; `git diff --check`
+passed.
+The
+unit results are in `/tmp/gatherory-budget-backstack-20261028.xcresult` (its UI
+helper attempt failed as described above). New UI code creates no screenshot
+attachments; no screenshots were requested or inspected. This focused check
+uses the iPhone 18 Pro / iOS 27.0 Simulator fixture, with no live account writes.
+Physical-device and dedicated Light/Dark/gesture matrices were not run.
+
+## Direct Manage dashboard from card footers — October 28, 2026
+
+The pushed destination now opens the existing Manage dashboard directly,
+without an intermediary menu or section list. Two Luna agents handled the
+direct dashboard reuse and UI regression updates. There is no Manage
+workspace tab. A divider, Manage label and chevron
+sit below each card's details as a full-width separate button; the card body
+still opens the invitation. Floating pills and management context-menu
+shortcuts were removed. Management and task notifications use Home's native
+navigation stack, with no management sheet or nested stack. Child editing
+retains its existing native sheet. Pinned dashboard mode neither initializes
+from Home's selected event nor repairs a missing child by falling back to root.
+Child settings cannot open root settings, read-only planners cannot edit
+settings/review requests, and current-principal checks invalidate stale scopes.
+
+**23 unit tests passed**, zero failures/skips, across
+`EventManagementAccessTests`, `HomeEventLayoutTests`,
+`WorkspaceTabPolicyTests`, `EventAnnouncementPlanningAccessTests` and
+`ManageNoteHistoryTests`. Result:
+`/tmp/gatherory-direct-manage-dashboard-20261028.xcresult`, with matching log.
+The app and both test targets are compiled by this focused test command.
+English/Spanish coverage passed for **1,727 strings** with the existing
+nonliteral AppCopy extraction warning, and `git diff --check` passed.
+
+Screenshot-free UI tests cover card and invitation entry, exact main/child
+context, guest exclusion, native-back return and unchanged Home selection. They
+also assert that the footer is below the primary event button, has at least a
+44-point target, and management has no sheet Done button. Dashboard checks now
+require its existing Guests/Collaborators cards and exclude the removed People
+menu; one native back step returns from Collaborators to the dashboard. The
+existing read-only collaborator test was migrated from the old tab. They were
+compiled but not executed: the user requested code-only work without
+screenshots. Native gestures, Light/Dark layout and physical-device notification
+acceptance are therefore unverified in this pass. No server, dependency,
+migration, push or deployment changed. See `event-management.md`.
 
 ## Home overview compact time ranges — October 28, 2026
 

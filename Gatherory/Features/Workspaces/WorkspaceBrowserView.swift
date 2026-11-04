@@ -125,6 +125,7 @@ struct WorkspaceBrowserView: View {
                             }
                             .buttonStyle(.plain)
                             .adaptiveReadingWidth(760)
+                            .accessibilityIdentifier("events.event.\(workspace.mainEventID)")
                             .accessibilityHint("Opens this workspace")
                             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
                             .contextMenu {
@@ -175,6 +176,7 @@ struct WorkspaceBrowserView: View {
                     .scrollTargetLayout()
                     .padding(.horizontal, AppTheme.Layout.screenHorizontal)
                 }
+                .accessibilityIdentifier("events.list")
                 .contentMargins(.vertical, AppTheme.Spacing.compact, for: .scrollContent)
                 .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
                 .scrollPosition(id: $focusedEventID, anchor: .top)
@@ -186,14 +188,6 @@ struct WorkspaceBrowserView: View {
         .refreshable {
             await guests.refresh(force: true)
             await cloudSync.synchronize(trigger: .manual)
-        }
-        .safeAreaInset(edge: .bottom) {
-            if let message = guests.errorMessage {
-                VStack(spacing: 8) {
-                    Text(message).font(.footnote)
-                    Button("Try Again") { Task { await guests.refresh(force: true) } }
-                }.padding().frame(maxWidth: .infinity).background(.regularMaterial)
-            }
         }
         .modifier(WorkspaceBrowserEventActionConfirmation(
             request: $pendingMainEventAction,
@@ -390,7 +384,16 @@ struct WorkspaceBrowserView: View {
         ContentUnavailableView {
             Label(selectedFilter.emptyTitle, systemImage: selectedFilter.symbol)
         } description: {
-            Text(selectedFilter.emptyDescription)
+            VStack(spacing: AppTheme.Spacing.compact) {
+                Text(selectedFilter.emptyDescription)
+                if browsableWorkspaces.isEmpty, let message = guests.errorMessage {
+                    Text(message)
+                        .font(.footnote)
+                    Button("Try Again") { Task { await guests.refresh(force: true) } }
+                        .font(.footnote.weight(.semibold))
+                        .accessibilityIdentifier("workspace-library.retry")
+                }
+            }
         } actions: {
             if selectedFilter == .all, browsableWorkspaces.isEmpty {
                 VStack(spacing: AppTheme.Spacing.compact) {
@@ -525,6 +528,8 @@ enum WorkspaceFilter: String, CaseIterable, Identifiable {
     ) -> [PlanningWorkspace] {
         workspaces.filter { workspace in
             includes(workspace, account: account, now: now, calendar: calendar)
+        }.sorted {
+            EventDateOrdering.key(for: $0, now: now) < EventDateOrdering.key(for: $1, now: now)
         }
     }
 

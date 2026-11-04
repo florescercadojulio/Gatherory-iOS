@@ -5,13 +5,14 @@ import Testing
 
 @MainActor
 struct EventRemovalTests {
-    @Test("Only a draft main event offers deletion", arguments: MainEventStatus.allCases)
+    @Test("Draft and ongoing main events offer deletion", arguments: MainEventStatus.allCases)
     func mainEventLifecycle(status: MainEventStatus) {
         let workspace = makeWorkspace(status: status)
         let action = workspace.eventRemovalAction(for: .main)
-        #expect(action == (status == .draft ? .deleteDraftMainEvent : nil))
-        let removed = workspace.removeEventFromHome(.main, expecting: .deleteDraftMainEvent)
-        #expect(removed == (status == .draft))
+        let isDeletable = status == .draft || status == .ongoing
+        #expect(action == (isDeletable ? .deleteMainEvent : nil))
+        let removed = workspace.removeEventFromHome(.main, expecting: .deleteMainEvent)
+        #expect(removed == isDeletable)
         #expect(workspace.isMainEventDeleted == removed)
         #expect(workspace.eventRemovalAction(for: .main) == nil)
     }
@@ -74,7 +75,7 @@ struct EventRemovalTests {
             workspace.timeline.append(child)
             #expect(workspace.eventRemovalAction(for: .main) == nil)
             #expect(workspace.eventRemovalAction(for: .subevent(child.id)) == nil)
-            #expect(!workspace.removeEventFromHome(.main, expecting: .deleteDraftMainEvent))
+            #expect(!workspace.removeEventFromHome(.main, expecting: .deleteMainEvent))
             #expect(!workspace.removeEventFromHome(.subevent(child.id), expecting: .archiveSubevent))
             #expect(!workspace.isMainEventDeleted)
             #expect(workspace.timeline.first?.status == .approved)
@@ -86,16 +87,58 @@ struct EventRemovalTests {
         let workspace = makeWorkspace(role: .collaborator, permission: .contribute)
         let child = makeChild(in: workspace)
         workspace.timeline.append(child)
-        #expect(workspace.eventRemovalAction(for: .main) == .deleteDraftMainEvent)
+        #expect(workspace.eventRemovalAction(for: .main) == .deleteMainEvent)
         #expect(workspace.removeEventFromHome(.subevent(child.id), expecting: .archiveSubevent))
+    }
+
+    @Test("Ongoing deletion requires host or manage permission")
+    func ongoingDeletionRequiresManagePermission() {
+        let host = makeWorkspace(status: .ongoing)
+        #expect(host.canDeleteMainEvent)
+        #expect(host.eventRemovalAction(for: .main) == .deleteMainEvent)
+        #expect(host.removeEventFromHome(.main, expecting: .deleteMainEvent))
+
+        let contributor = makeWorkspace(
+            status: .ongoing,
+            role: .collaborator,
+            permission: .contribute
+        )
+        #expect(!contributor.canDeleteMainEvent)
+        #expect(contributor.eventRemovalAction(for: .main) == nil)
+        #expect(!contributor.removeEventFromHome(.main, expecting: .deleteMainEvent))
+        #expect(!contributor.isMainEventDeleted)
+    }
+
+    @Test("Ongoing main events remain editable regardless of their dates")
+    func ongoingStatusDoesNotAutoFinish() {
+        let startsNow = makeWorkspace(status: .ongoing)
+        startsNow.mainEventStartsAt = .now
+        startsNow.mainEventEndsAt = nil
+        #expect(startsNow.currentMainEventStatus == .ongoing)
+        #expect(startsNow.canManageEvent(.main))
+
+        let endedWindow = makeWorkspace(status: .ongoing)
+        endedWindow.mainEventStartsAt = .now.addingTimeInterval(-86_400)
+        endedWindow.mainEventEndsAt = .now.addingTimeInterval(-3_600)
+        #expect(endedWindow.currentMainEventStatus == .ongoing)
+        #expect(endedWindow.canManageEvent(.main))
+    }
+
+    @Test("Explicit finished and cancelled main statuses remain read-only")
+    func terminalStatusesRemainReadOnly() {
+        for status in [MainEventStatus.finished, .cancelled] {
+            let workspace = makeWorkspace(status: status)
+            #expect(workspace.currentMainEventStatus == status)
+            #expect(!workspace.canManageEvent(.main))
+        }
     }
 
     @Test("A stale confirmation cannot delete an event after its status changes")
     func staleConfirmation() {
         let workspace = makeWorkspace()
-        #expect(workspace.eventRemovalAction(for: .main) == .deleteDraftMainEvent)
-        workspace.mainEventStatus = .ongoing
-        #expect(!workspace.removeEventFromHome(.main, expecting: .deleteDraftMainEvent))
+        #expect(workspace.eventRemovalAction(for: .main) == .deleteMainEvent)
+        workspace.mainEventStatus = .finished
+        #expect(!workspace.removeEventFromHome(.main, expecting: .deleteMainEvent))
         #expect(!workspace.isMainEventDeleted)
         let child = makeChild(in: workspace)
         workspace.timeline.append(child)
@@ -131,7 +174,7 @@ struct EventRemovalTests {
         #expect(workspace.eventRemovalAction(for: .subevent(UUID())) == nil)
         #expect(workspace.eventRemovalAction(for: .idea(UUID())) == nil)
         #expect(!workspace.removeEventFromHome(.main, expecting: .archiveSubevent))
-        #expect(!workspace.removeEventFromHome(.subevent(child.id), expecting: .deleteDraftMainEvent))
+        #expect(!workspace.removeEventFromHome(.subevent(child.id), expecting: .deleteMainEvent))
         #expect(workspace.timeline.first?.status == .approved)
         workspace.isInvitationProjection = true
         #expect(workspace.eventRemovalAction(for: .main) == nil)
@@ -167,7 +210,7 @@ struct EventRemovalTests {
         workspace.timeline.append(makeChild(in: workspace))
         library.add(workspace)
         persistence.flush(library)
-        #expect(workspace.removeEventFromHome(.main, expecting: .deleteDraftMainEvent))
+        #expect(workspace.removeEventFromHome(.main, expecting: .deleteMainEvent))
         persistence.flush(library)
         #expect(persistence.lastError == nil)
         let restored = try #require(persistence.restoreLibrary(seedData: false).workspaces.first)

@@ -121,6 +121,9 @@ extension WorkspaceLibrary {
 
     static var sample: WorkspaceLibrary {
 #if DEBUG
+        if EventDateOrderingUITestFixtures.isEnabled {
+            return EventDateOrderingUITestFixtures.makeLibrary()
+        }
         if BirthdayMarketingFixtures.isEnabled {
             return WorkspaceLibrary(workspaces: [BirthdayMarketingFixtures.makeWorkspace()])
         }

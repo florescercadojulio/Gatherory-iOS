@@ -57,6 +57,9 @@ struct WorkspaceArchiveV1: Codable {
     /// Optional server projection retaining fields not represented by the
     /// workspace's main-event editor, such as purpose and scheduling state.
     var scopedEvent: TimelineItem?
+    /// Local copy of the latest authoritative budget vector. It lets a person
+    /// discard a conflicted offline intent without losing other local edits.
+    var remoteBudgetSnapshotData: Data? = nil
 
     init(workspace: PlanningWorkspace) {
         mainEventID = workspace.mainEventID

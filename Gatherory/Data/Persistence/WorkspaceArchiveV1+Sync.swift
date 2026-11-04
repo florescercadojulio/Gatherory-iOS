@@ -9,6 +9,7 @@ extension WorkspaceArchiveV1 {
     func syncPayload(using codec: WorkspaceArchiveCodec) throws -> Data {
         var remote = self
         remote.scopedEvent = nil
+        remote.remoteBudgetSnapshotData = nil
         // To-dos have independent versions and are projected only to planners.
         remote.todos = nil
         // Responses have independent versions; a workspace snapshot must not
@@ -109,6 +110,7 @@ extension WorkspaceArchiveV1 {
         ideaResponses = local.ideaResponses
         eventMoments = local.eventMoments
         registry = local.registry
+        remoteBudgetSnapshotData = local.remoteBudgetSnapshotData
     }
 
     /// Bootstrap is metadata-only. Keep this account's downloaded bytes when

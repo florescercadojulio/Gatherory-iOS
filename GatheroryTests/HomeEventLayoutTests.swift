@@ -4,15 +4,15 @@ import Testing
 
 @MainActor
 struct HomeEventLayoutTests {
-    @Test("Home layout uses stable preference values and falls back to Cards")
+    @Test("Home layout uses stable preference values and falls back to Overview")
     func persistedValuesAndFallback() {
         #expect(HomeEventLayout.preferenceKey == "home.layout")
         #expect(HomeEventLayout.cards.id == "cards")
         #expect(HomeEventLayout.overview.id == "overview")
         #expect(HomeEventLayout(persistedValue: "cards") == .cards)
         #expect(HomeEventLayout(persistedValue: "overview") == .overview)
-        #expect(HomeEventLayout(persistedValue: "unknown-layout") == .cards)
-        #expect(HomeEventLayout(persistedValue: "") == .cards)
+        #expect(HomeEventLayout(persistedValue: "unknown-layout") == .overview)
+        #expect(HomeEventLayout(persistedValue: "") == .overview)
     }
 
     @Test("Home overview contexts preserve a guest's child-only invitation scope")
@@ -139,7 +139,7 @@ struct HomeEventLayoutTests {
 
         let groups = HomeEventsOverviewDayGroup.groups(for: [
             newYorkAfterMidnight, losAngelesLate, newYorkLate
-        ])
+        ], now: try #require(ISO8601DateFormatter().date(from: "2026-03-01T12:00:00Z")))
 
         #expect(groups.map(\.id) == ["2026-03-01", "2026-03-02"])
         #expect(groups[0].events.map(\.title) == ["New York evening", "Los Angeles evening"])

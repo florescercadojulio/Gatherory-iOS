@@ -5,10 +5,15 @@ struct BudgetView: View {
 
     @Environment(PlanningWorkspace.self) private var workspace
     @State private var allocationTarget: BudgetAllocationTarget?
+    @State private var showsWorkspaceOverview = false
+
+    private var effectiveReference: EventReference? {
+        showsWorkspaceOverview && !workspace.isScopedEvent ? nil : reference
+    }
 
     private var projection: BudgetDestinationProjection {
         BudgetDestinationProjection.make(
-            reference: reference,
+            reference: effectiveReference,
             isScopedEvent: workspace.isScopedEvent,
             mainEventID: workspace.mainEventID,
             workspaceTitle: workspace.title,
@@ -22,8 +27,8 @@ struct BudgetView: View {
     private var destinationAvailable: Bool {
         guard workspace.showsPlanningInterface else { return false }
         let availableReferences = ManageEventSummary.references(in: workspace)
-        if let reference {
-            return availableReferences.contains(reference)
+        if let effectiveReference {
+            return availableReferences.contains(effectiveReference)
         }
         return !workspace.isScopedEvent && availableReferences.contains(.main)
     }
@@ -87,14 +92,20 @@ struct BudgetView: View {
                         costDetails
                     }
 
-                    if !projection.isWorkspaceOverview && !workspace.isScopedEvent {
-                        NavigationLink {
-                            BudgetView(reference: nil)
+                    if reference != nil && !workspace.isScopedEvent {
+                        Button {
+                            showsWorkspaceOverview.toggle()
                         } label: {
-                            Label(String(localized: "Workspace Budget"), systemImage: "chart.pie")
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Label(
+                                projection.isWorkspaceOverview
+                                    ? String(localized: "This event’s budget")
+                                    : String(localized: "All event budgets"),
+                                systemImage: projection.isWorkspaceOverview ? "chart.bar.xaxis" : "chart.pie"
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("budget.scope.toggle")
                         .appCard()
                     }
                 }
@@ -106,7 +117,9 @@ struct BudgetView: View {
         .scrollIndicators(.hidden)
         .appSoftScrollEdges()
         .background(AppTheme.ColorToken.background)
-        .navigationTitle(projection.isWorkspaceOverview ? String(localized: "Workspace Budget") : "Budget")
+        .accessibilityIdentifier("budget.detail")
+        .accessibilityValue(projection.isWorkspaceOverview ? String(localized: "All event budgets") : projection.title)
+        .navigationTitle(projection.isWorkspaceOverview ? String(localized: "All event budgets") : String(localized: "Budget"))
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
@@ -125,7 +138,7 @@ struct BudgetView: View {
 
     private var totalCard: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-            Label("Total Spent", systemImage: "sum")
+            Label("Tracked cost", systemImage: "sum")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
@@ -185,7 +198,7 @@ struct BudgetView: View {
 
         return VStack(alignment: .leading, spacing: AppTheme.Spacing.standard) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Total Spent")
+                Text("Tracked cost")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
 
@@ -215,7 +228,7 @@ struct BudgetView: View {
                         ? AppTheme.ColorToken.destructive
                         : AppTheme.ColorToken.accent
                 )
-                .accessibilityLabel("Budget used")
+                .accessibilityLabel("Planned budget used")
                 .accessibilityValue("\(Int(progress * 100)) percent")
 
             HStack(spacing: 0) {
@@ -225,7 +238,7 @@ struct BudgetView: View {
                     .padding(.horizontal, AppTheme.Spacing.standard)
 
                 budgetMetric(
-                    title: isOverBudget ? "Over" : "Remaining",
+                    title: isOverBudget ? "Over" : "After planned costs",
                     amount: abs(remaining),
                     valueColor: isOverBudget
                         ? AppTheme.ColorToken.destructive
@@ -350,7 +363,7 @@ struct BudgetView: View {
                 Label(
                     isOverBudget
                         ? "\(abs(remaining).formatted(.currency(code: currencyCode).precision(.fractionLength(0)))) over"
-                        : "\(summary.spent.formatted(.currency(code: currencyCode).precision(.fractionLength(0)))) spent",
+                        : "\(summary.spent.formatted(.currency(code: currencyCode).precision(.fractionLength(0)))) tracked",
                     systemImage: isOverBudget ? "exclamationmark.circle.fill" : "banknote"
                 )
                 .font(.caption)
@@ -685,20 +698,9 @@ enum BudgetAllocationPermissionPolicy {
         in workspace: PlanningWorkspace,
         for target: EventReference
     ) -> Bool {
-        guard !workspace.isScopedEvent,
-              ManageEventSummary.references(in: workspace).contains(.main),
-              workspace.canManageInvitations(for: .main),
-              workspace.canManageInvitations(for: target),
-              ManageEventSummary.references(in: workspace).contains(target) else {
-            return false
-        }
-
-        return switch target {
-        case .main, .subevent:
-            true
-        case .idea:
-            false
-        }
+        workspace.canManageBudgets(for: target)
+            && ManageEventSummary.references(in: workspace).contains(.main)
+            && ManageEventSummary.references(in: workspace).contains(target)
     }
 }
 

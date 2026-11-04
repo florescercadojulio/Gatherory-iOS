@@ -76,7 +76,7 @@ struct AccountDeletionLocalCleanupTests {
         try fixture.persistence.saveChanges(in: fixture.library)
     }
 
-    @Test("Account deletion clears only that account's local discovery history")
+    @Test("Account deletion clears only that account's discovery history, tour and primer state")
     func deletionPreservesOtherAccountDiscoveryHistory() async throws {
         let fixture = try await makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
@@ -87,6 +87,17 @@ struct AccountDeletionLocalCleanupTests {
         let retainedHistory = BlueprintDiscoveryContextStore(accountID: fixture.accountB, defaults: fixture.defaults)
         retainedHistory.recordSeen(catalogKey: "retained-seen", at: now,
                                    accountID: fixture.accountB, generation: retainedHistory.callbackGeneration)
+        let tour = MovieNightTourStore(defaults: fixture.defaults)
+        let retainedWorkspaceID = UUID()
+        tour.recordPreviewUsed(accountID: fixture.accountA, installedWorkspaceID: UUID())
+        tour.recordPreviewUsed(accountID: fixture.accountB, installedWorkspaceID: retainedWorkspaceID)
+        let tourDiscovery = MovieNightTourDiscoveryStore(defaults: fixture.defaults)
+        tourDiscovery.begin(accountID: fixture.accountA)
+        tourDiscovery.begin(accountID: fixture.accountB)
+        let primers = ContextualPrimerStore(defaults: fixture.defaults)
+        primers.markSeen(.decide, accountID: fixture.accountA)
+        primers.markSeen(.search, accountID: fixture.accountA)
+        primers.markSeen(.search, accountID: fixture.accountB)
 
         try await fixture.cleanup(removeSessionCredential: {}, artifacts: nil)
             .remove(accountID: fixture.accountA, canRemoveSessionCredential: false)
@@ -95,6 +106,13 @@ struct AccountDeletionLocalCleanupTests {
         #expect(fixture.defaults.data(forKey: "blueprint.discovery.seen.v1.\(fixture.accountB)") != nil)
         let reloaded = BlueprintDiscoveryContextStore(accountID: fixture.accountB, defaults: fixture.defaults)
         #expect(try #require(reloaded.beginOrResumeSession()).seen.map(\.catalogKey) == ["retained-seen"])
+        #expect(tour.progress(accountID: fixture.accountA) == nil)
+        #expect(tour.progress(accountID: fixture.accountB)?.installedWorkspaceID == retainedWorkspaceID)
+        #expect(tourDiscovery.phase(accountID: fixture.accountA) == nil)
+        #expect(tourDiscovery.phase(accountID: fixture.accountB) == .chooseExplore)
+        #expect(!primers.hasSeen(.decide, accountID: fixture.accountA))
+        #expect(!primers.hasSeen(.search, accountID: fixture.accountA))
+        #expect(primers.hasSeen(.search, accountID: fixture.accountB))
     }
 
     private func assertDeletedAndRetained(_ fixture: Fixture, generation: UUID, pendingIDs: Set<UUID>) throws {

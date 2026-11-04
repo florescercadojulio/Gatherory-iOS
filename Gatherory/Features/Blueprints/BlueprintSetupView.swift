@@ -8,6 +8,7 @@ struct BlueprintSetupView: View {
     /// Captured at explicit Install confirmation; nil retains the legacy setup/recovery entry.
     let installationOwnerID: String?
     let onInstallationCompleted: (() -> Void)?
+    let onInstalledWorkspace: ((UUID) -> Void)?
     let onClose: (() -> Void)?
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(BlueprintSharedTemplateRouter.self) private var sharedBlueprintLinks
@@ -56,7 +57,7 @@ struct BlueprintSetupView: View {
 #endif
 
     private init(catalogKey: String?, sharedToken: String?, returnsToPreview: Bool,
-                 installationOwnerID: String?, onInstallationCompleted: (() -> Void)?,
+                 installationOwnerID: String?, onInstallationCompleted: (() -> Void)?, onInstalledWorkspace: ((UUID) -> Void)?,
                  onClose: (() -> Void)?, resolvedDraftStore: BlueprintSetupDraftStore?,
                  installationCoordinatorFactory: (() -> BlueprintInstallationCoordinator?)?) {
         self.catalogKey = catalogKey
@@ -64,6 +65,7 @@ struct BlueprintSetupView: View {
         self.returnsToPreview = returnsToPreview
         self.installationOwnerID = installationOwnerID
         self.onInstallationCompleted = onInstallationCompleted
+        self.onInstalledWorkspace = onInstalledWorkspace
         self.onClose = onClose
 #if DEBUG
         let usesDateConfirmationFixture = ProcessInfo.processInfo.arguments.contains("-BlueprintSetupDateConfirmationFixture")
@@ -76,20 +78,20 @@ struct BlueprintSetupView: View {
 
     init(catalogKey: String?, sharedToken: String? = nil, returnsToPreview: Bool = false,
          installationOwnerID: String? = nil,
-         onInstallationCompleted: (() -> Void)? = nil, onClose: (() -> Void)? = nil) {
+         onInstallationCompleted: (() -> Void)? = nil, onInstalledWorkspace: ((UUID) -> Void)? = nil, onClose: (() -> Void)? = nil) {
         self.init(catalogKey: catalogKey, sharedToken: sharedToken, returnsToPreview: returnsToPreview,
-                  installationOwnerID: installationOwnerID, onInstallationCompleted: onInstallationCompleted,
+                  installationOwnerID: installationOwnerID, onInstallationCompleted: onInstallationCompleted, onInstalledWorkspace: onInstalledWorkspace,
                   onClose: onClose, resolvedDraftStore: nil, installationCoordinatorFactory: nil)
     }
 
 #if DEBUG
     init(catalogKey: String?, sharedToken: String? = nil, returnsToPreview: Bool = false,
          installationOwnerID: String? = nil,
-         onInstallationCompleted: (() -> Void)? = nil, onClose: (() -> Void)? = nil,
+         onInstallationCompleted: (() -> Void)? = nil, onInstalledWorkspace: ((UUID) -> Void)? = nil, onClose: (() -> Void)? = nil,
          setupDraftStore: BlueprintSetupDraftStore,
          installationCoordinatorFactory: @escaping () -> BlueprintInstallationCoordinator?) {
         self.init(catalogKey: catalogKey, sharedToken: sharedToken, returnsToPreview: returnsToPreview,
-                  installationOwnerID: installationOwnerID, onInstallationCompleted: onInstallationCompleted,
+                  installationOwnerID: installationOwnerID, onInstallationCompleted: onInstallationCompleted, onInstalledWorkspace: onInstalledWorkspace,
                   onClose: onClose, resolvedDraftStore: setupDraftStore,
                   installationCoordinatorFactory: installationCoordinatorFactory)
     }
@@ -861,11 +863,12 @@ struct BlueprintSetupView: View {
         busy = true
         errorMessage = nil
         do {
-            _ = try await coordinator.install(input)
+            let workspace = try await coordinator.install(input)
             guard account?.id == ownerID, setupGeneration == generation else { return }
             draftCompleted = true
             AppHaptics.play(.success)
             onInstallationCompleted?()
+            onInstalledWorkspace?(workspace.mainEventID)
             closeSetup()
         } catch {
             guard self.account?.id == ownerID, setupGeneration == generation else { return }
@@ -882,11 +885,12 @@ struct BlueprintSetupView: View {
         busy = true
         errorMessage = nil
         do {
-            _ = try await coordinator.resume(intent)
+            let workspace = try await coordinator.resume(intent)
             guard self.account?.id == account.id, setupGeneration == generation else { return }
             draftCompleted = true
             AppHaptics.play(.success)
             onInstallationCompleted?()
+            onInstalledWorkspace?(workspace.mainEventID)
             closeSetup()
         } catch {
             guard self.account?.id == account.id, setupGeneration == generation else { return }

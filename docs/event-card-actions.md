@@ -1,6 +1,6 @@
 # Event card actions
 
-Updated October 25, 2026. Native SwiftUI implementation only; no production
+Updated October 30, 2026. Native SwiftUI implementation only; no production
 deployment or TestFlight upload is included.
 
 ## Cards
@@ -19,8 +19,10 @@ The native context menu retains Blueprint actions and adds:
   Finished/cancelled source events can be copied without modifying them.
 - **Cancel Event** where the existing lifecycle policy permits it, with the
   existing destructive confirmation and a permission recheck.
-- **Delete Event** for eligible drafts, with the existing confirmation and
-  lifecycle recheck. This retains existing main-event deletion semantics:
+- **Delete Event** for hosts and manage-capable collaborators on Ongoing main
+  events, and for eligible legacy drafts, with confirmation and a permission/
+  lifecycle recheck. Contributing-only collaborators cannot delete an Ongoing
+  main event. This retains existing main-event deletion semantics:
   the main event is marked deleted and child events are cleared, while the
   planning container remains available. This does not delete the account or
   silently remove the entire planning container and its remaining ideas.
@@ -45,7 +47,7 @@ The factory constructs new records explicitly rather than cloning an archive:
   linked-idea references.
 - Main event details, dates/time zones, locations, budget metadata, unarchived
   schedule and ideas. Structured idea values and ordinary resource URLs remain.
-- A draft main event and draft/upcoming schedule, with ideas reset to new.
+- An Ongoing main event and Approved/upcoming schedule, with ideas reset to new.
 - A new host-only roster; no copied participants, RSVP responses, votes, tasks,
   note history, expenses, albums, media identities or invitation/Blueprint
   sharing state. Photos/artwork are excluded, as the sheet explains.

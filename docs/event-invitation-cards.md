@@ -1,5 +1,31 @@
 # Event invitation cards
 
+## Current schedule tile and lifecycle — October 30, 2026
+
+The schedule tile uses a month/day stamp as its date anchor. Single-day events
+show a compact weekday and start–end time beside it. Multi-day and overnight
+events use two rows, each pairing its own stamp and weekday with its own time.
+There is no second full date range, numeric date/time interval, or visible
+timezone abbreviation. Cross-year and other-year stamps retain the year;
+all-day and undecided schedules keep their existing meaning. Event-local
+calendar formatting, stored IANA identifiers, calendar export and complete
+VoiceOver schedule descriptions remain intact. Users do not choose a timezone
+in the date editor. Add to Calendar remains a separate native footer action.
+
+Overview is the default Home layout, with Cards still available in Account.
+New and duplicated main events start Ongoing; copied scheduled children start
+Approved internally. Neither lifecycle Status nor Planning Status appears in
+the native event edit sheet. Saving a legacy draft in the full main editor
+promotes it to Ongoing; explicit Finished/Cancelled states and existing imported
+records are preserved. Dates no longer silently mark an Ongoing root event
+Finished or lock planning. Hosts and managers retain deletion of Ongoing main
+events; contributing-only collaborators do not gain that destructive action.
+
+Main and child invitation content supports permission-checked tap editing;
+Manage has no editing gear. The original main-only rules and timezone line
+described in the historical sections below are superseded by these updates.
+See `testing-verification.md` for the final test results and limits.
+
 ## Lean opening invitation schedule — October 27, 2026
 
 The opening artwork is for scanning: a single-day event shows Yesterday,
@@ -10,8 +36,8 @@ retain their year. All-day events use the date alone and undecided schedules
 stay undecided. Relative labels use native localized formatting and refresh
 while the invitation remains open.
 
-The date tile below remains the place for the complete date/time range and
-time zone. VoiceOver retains that full schedule even when the hero's visible
+The date tile below remains the place for the complete date/time range.
+VoiceOver retains that full schedule even when the hero's visible
 summary is short. The Add to Calendar footer keeps its native action without
 the visible copy/synchronization footnote.
 

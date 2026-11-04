@@ -243,6 +243,12 @@ final class WorkspacePersistenceController {
             }
 
             activeUserID = ownerUserID
+            // Restoration is a quiescent account boundary. An uploading marker
+            // persisted by a terminated process has no live worker to finish it.
+            // Keep its identity/file/retry count; ordinary staging still excludes
+            // active uploads, and another account's rows remain untouched.
+            try mediaBookkeeper.stageInterruptedUploadRecovery()
+            if context.hasChanges { try context.save() }
 
             if !records.isEmpty {
                 let workspaces = try records.map { record -> PlanningWorkspace in
@@ -676,7 +682,13 @@ final class WorkspacePersistenceController {
             )
         }
 
-        for (sortOrder, archive) in archives.enumerated() {
+        for (sortOrder, liveArchive) in archives.enumerated() {
+            var archive = liveArchive
+            let existingRecord = recordsByID[archive.mainEventID]
+            let previousArchive = try existingRecord.map {
+                try codec.decode(WorkspaceArchiveV1.self, from: $0.payload)
+            }
+            archive.remoteBudgetSnapshotData = previousArchive?.remoteBudgetSnapshotData
             if enqueuesMutations, archive.isScopedEvent == true {
                 // Scoped workspaces never have a workspace-level mutation.
                 // Keep this cleanup within the save transaction, not in the
@@ -684,14 +696,15 @@ final class WorkspacePersistenceController {
                 try discardWorkspaceMutations(scopeID: archive.mainEventID)
             }
             let payload = try codec.encode(archive)
-            let syncPayload = try archive.syncPayload(using: codec)
-            let existingRecord = recordsByID[archive.mainEventID]
-            let previousArchive = try existingRecord.map {
-                try codec.decode(WorkspaceArchiveV1.self, from: $0.payload)
+            let syncPayload: Data
+            if previousArchive == nil {
+                syncPayload = try archive.syncPayload(using: codec)
+            } else {
+                syncPayload = try archive.syncPayloadOmittingBudgetFields(using: codec)
             }
             let payloadChanged = existingRecord?.payload != payload
             let syncPayloadChanged = try previousArchive.map {
-                try $0.syncPayload(using: codec) != syncPayload
+                try $0.syncPayloadOmittingBudgetFields(using: codec) != syncPayload
             } ?? true
             let orderChanged = existingRecord?.sortOrder != sortOrder
 
@@ -761,6 +774,96 @@ final class WorkspacePersistenceController {
             .sorted { $0.createdAt < $1.createdAt }
             .first?
             .lastFailureCode
+    }
+
+    func pendingBudgetSyncAttentionFailureCode() throws -> String? {
+        try context.fetch(FetchDescriptor<PendingMutation>())
+            .filter {
+                $0.ownerUserID == activeUserID
+                    && $0.entityType == .budgetTransfer
+                    && $0.state == .requiresAttention
+            }
+            .sorted { $0.createdAt < $1.createdAt }
+            .first?
+            .lastFailureCode
+    }
+
+    func pendingBudgetSyncConflictScopeIDs() throws -> [UUID] {
+        Array(Set(try context.fetch(FetchDescriptor<PendingMutation>())
+            .filter {
+                $0.ownerUserID == activeUserID
+                    && $0.entityType == .budgetTransfer
+                    && $0.state == .requiresAttention
+            }
+            .map(\.scopeID)))
+            .sorted { $0.uuidString < $1.uuidString }
+    }
+
+    func canDiscardPendingBudgetIntent(scopeID: UUID) throws -> Bool {
+        guard let ownerUserID = activeUserID else { return false }
+        let mutations = try context.fetch(FetchDescriptor<PendingMutation>())
+            .filter {
+                $0.ownerUserID == ownerUserID
+                    && $0.scopeID == scopeID
+                    && $0.entityType == .budgetTransfer
+            }
+        guard !mutations.isEmpty, mutations.allSatisfy({ $0.state == .requiresAttention }) else {
+            return false
+        }
+        return try context.fetch(FetchDescriptor<WorkspaceRecord>()).contains { record in
+            guard record.ownerUserID == ownerUserID, record.id == scopeID,
+                  let archive = try? codec.decode(WorkspaceArchiveV1.self, from: record.payload) else {
+                return false
+            }
+            guard let payloadData = archive.remoteBudgetSnapshotData,
+                  let payload = try? JSONDecoder().decode(ReplaceBudgetMutationPayload.self, from: payloadData) else {
+                return false
+            }
+            var validatedArchive = archive
+            do {
+                try validatedArchive.apply(payload)
+                return true
+            } catch {
+                return false
+            }
+        }
+    }
+
+    /// Discards the complete conflicted budget vector and restores only its
+    /// budget fields from the last authoritative pull. Other workspace edits
+    /// and outbox mutations remain intact. An uncertain in-flight request is
+    /// deliberately not discardable until its server result is known.
+    @discardableResult
+    func discardPendingBudgetIntent(scopeID: UUID, from library: WorkspaceLibrary) throws -> Bool {
+        guard let ownerUserID = activeUserID else { return false }
+        let budgetMutations = try context.fetch(FetchDescriptor<PendingMutation>())
+            .filter {
+                $0.ownerUserID == ownerUserID
+                    && $0.scopeID == scopeID
+                    && $0.entityType == .budgetTransfer
+            }
+        guard !budgetMutations.isEmpty,
+              budgetMutations.allSatisfy({ $0.state == .requiresAttention }),
+              let record = try context.fetch(FetchDescriptor<WorkspaceRecord>())
+                .first(where: { $0.ownerUserID == ownerUserID && $0.id == scopeID }),
+              var archive = try? codec.decode(WorkspaceArchiveV1.self, from: record.payload),
+              let remotePayload = archive.remoteBudgetSnapshotData else {
+            return false
+        }
+        let authoritativeBudget = try JSONDecoder().decode(
+            ReplaceBudgetMutationPayload.self, from: remotePayload
+        )
+        try archive.apply(authoritativeBudget)
+        let savedArchive = try codec.encode(archive)
+        for mutation in budgetMutations { context.delete(mutation) }
+        record.payload = savedArchive
+        record.payloadSchemaVersion = WorkspaceArchiveV1.schemaVersion
+        record.updatedAt = .now
+        try context.save()
+        suppressNextObservedChange = true
+        library.upsert(archive.makeWorkspace())
+        onPendingMutations?()
+        return true
     }
 
     /// Repairs a workspace scope that the server cannot materialize.

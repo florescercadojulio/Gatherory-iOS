@@ -49,6 +49,12 @@ private struct HomeInvitationShareRequest: Identifiable {
     var id: String { "\(reference.id)-\(principalGeneration)" }
 }
 
+private struct HomeEventManagementRoute: Identifiable, Hashable {
+    let id = UUID()
+    let reference: EventReference
+    let initialDestination: EventManagementDestination?
+}
+
 struct HomeView: View {
     var homeReselectionTrigger = 0
     var onExitWorkspace: (() -> Void)?
@@ -63,6 +69,7 @@ struct HomeView: View {
     @State private var viewportHeight: CGFloat = 0
     @State private var isPresentingInvitationSharing = false
     @State private var detailInvitationShareRequest: HomeInvitationShareRequest?
+    @State private var eventManagementRoute: HomeEventManagementRoute?
     @State private var csvExportRequest: EventCSVExportRequest?
     @State private var editorTarget: HomeEventEditorTarget?
     @State private var isAddingEventIdea = false
@@ -88,10 +95,16 @@ struct HomeView: View {
     @State private var pendingDetailRemoval: HomeEventRemovalRequest?
     @State private var isRemovalUnavailable = false
     @Namespace private var invitationTransition
-    @AppStorage(HomeEventLayout.preferenceKey) private var persistedHomeLayout = HomeEventLayout.cards.rawValue
+    @AppStorage(HomeEventLayout.preferenceKey) private var persistedHomeLayout = HomeEventLayout.overview.rawValue
 
     private var homeLayout: HomeEventLayout {
         HomeEventLayout(persistedValue: persistedHomeLayout)
+    }
+
+    private var homeEventContexts: [EventReference] {
+        let projection = HomeEventsOverviewProjection(workspace: workspace)
+        return (projection.mainEventIsVisible ? [.main] : [])
+            + projection.childEvents.map { .subevent($0.id) }
     }
 
     private let pullToCreateThreshold: CGFloat = 200
@@ -139,6 +152,7 @@ struct HomeView: View {
                         eventActions(for: reference, includesDestructiveActions: false)
                     },
                     onOpenEvent: openEvent,
+                    onManageEvent: { presentEventManagement(for: $0) },
                     onRefresh: {
                         await cloudSync.synchronize(trigger: .manual)
                     },
@@ -151,7 +165,7 @@ struct HomeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .overlay(alignment: .trailing) {
-            if homeLayout == .cards, workspace.visibleEventContexts.count > 1 {
+            if homeLayout == .cards, homeEventContexts.count > 1 {
                 eventContextSwitcher
                     // Like a scroll indicator, the rail stays interactive at
                     // rest but becomes visually discoverable through motion.
@@ -181,7 +195,7 @@ struct HomeView: View {
             }
 
             AdaptiveToolbarActions {
-                if workspace.showsPlanningInterface {
+                if homeLayout == .cards, workspace.showsPlanningInterface {
                     NavigationLink {
                         EventAnnouncementsView(eventID: workspace.selectedEventID)
                     } label: {
@@ -233,15 +247,21 @@ struct HomeView: View {
             }
             .presentationDetents([.large])
         }
+        .navigationDestination(item: $eventManagementRoute) { route in
+            EventManagementView(reference: route.reference, initialDestination: route.initialDestination)
+                .environment(workspace)
+        }
         .fullScreenCover(isPresented: $isPresentingInvitationSharing) {
             CollaborationInviteView()
                 .environment(workspace)
         }
         .onChange(of: authentication?.principalGeneration) { _, _ in
             detailInvitationShareRequest = nil
+            eventManagementRoute = nil
         }
         .onChange(of: workspace.mainEventID) { _, _ in
             detailInvitationShareRequest = nil
+            eventManagementRoute = nil
         }
         .onChange(of: isDetailInvitationShareRequestValid) { _, isValid in
             if !isValid { detailInvitationShareRequest = nil }
@@ -269,7 +289,7 @@ struct HomeView: View {
         }
         .onAppear {
             if HomeEventLayout(rawValue: persistedHomeLayout) == nil {
-                persistedHomeLayout = HomeEventLayout.cards.rawValue
+                persistedHomeLayout = HomeEventLayout.overview.rawValue
             }
         }
         .task(id: homeLayout) {
@@ -280,9 +300,9 @@ struct HomeView: View {
             // Read after the layout settles so a rapid mode change cannot
             // restore a stale event captured by an earlier task.
             let selectedReference = workspace.selectedEventReference
-            let reference = workspace.visibleEventContexts.contains(selectedReference)
+            let reference = homeEventContexts.contains(selectedReference)
                 ? selectedReference
-                : workspace.visibleEventContexts.first
+                : homeEventContexts.first
             visibleScrollTarget = reference.map { .event($0) }
         }
         .onChange(of: persistedHomeLayout) { oldValue, newValue in
@@ -318,7 +338,7 @@ struct HomeView: View {
                     if workspace.isMainEventDeleted {
                         noMainEventPlaceholder
                     } else {
-                        ForEach(workspace.visibleEventContexts, id: \.self) { reference in
+                        ForEach(homeEventContexts, id: \.self) { reference in
                             eventHero(for: reference)
                                 .id(HomeScrollTarget.event(reference))
                         }
@@ -455,20 +475,12 @@ struct HomeView: View {
                 }
 
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    if reference == .main, workspace.showsPlanningInterface {
-                        NavigationLink {
-                            WorkspaceSettingsView()
-                        } label: {
-                            Label("Workspace Settings", systemImage: "gearshape")
-                                .labelStyle(.iconOnly)
-                        }
-                    }
-
                     if canEdit(reference) || workspace.eventRemovalAction(for: reference) != nil || workspace.canCancelEvent(reference) || canExport(.schedule, for: reference) || canExport(.guestList, for: reference) {
                         Menu(AppCopy.EventRemoval.actions, systemImage: "ellipsis") {
                             eventActions(for: reference)
                         }
                         .labelStyle(.iconOnly)
+                        .accessibilityIdentifier("invitation.actions")
                     }
                 }
             }
@@ -495,89 +507,102 @@ struct HomeView: View {
         )
         let parentContext = contextPresentation.parentContextTitle(
             mainEventTitle: workspace.title,
-            mainEventIsVisible: workspace.visibleEventContexts.contains(.main)
+            mainEventIsVisible: homeEventContexts.contains(.main)
         )
         let secondaryText = secondaryLabel(for: reference)
         let showsSecondaryText = parentContext == nil
             || timelineItem(for: reference)?.purpose != .eventExperience
         return GeometryReader { proxy in
-            Button {
-                openEvent(reference)
-            } label: {
-                WorkspaceEventHero(title: title(for: reference)) {
-                    eventArtwork(for: reference)
-                        .frame(width: proxy.size.width, height: eventHeroHeight)
-                        .clipped()
-                } people: {
-                    if !eventPeople(for: reference).isEmpty {
-                        attendeeSummary(for: reference)
-                    }
-                } metadata: {
-                    Text(EventScheduleFormatter.string(
-                        from: date(for: reference),
-                        includesTime: false,
-                        timeZoneIdentifier: timeZoneIdentifier(for: reference),
-                        dateStyle: .full
-                    ))
-                    .font(.headline)
-                    .multilineTextAlignment(.center)
+            let footerHeight: CGFloat = EventManagementAccess.canOpen(reference: reference, in: workspace) ? 56 : 0
+            let primaryContentHeight = max(eventHeroHeight - footerHeight, 0)
+            VStack(spacing: 0) {
+                Button {
+                    openEvent(reference)
+                } label: {
+                    WorkspaceEventHero(title: title(for: reference)) {
+                        eventArtwork(for: reference)
+                            .frame(width: proxy.size.width, height: primaryContentHeight)
+                            .clipped()
+                    } people: {
+                        if !eventPeople(for: reference).isEmpty {
+                            attendeeSummary(for: reference)
+                        }
+                    } metadata: {
+                        Text(EventScheduleFormatter.string(
+                            from: date(for: reference),
+                            includesTime: false,
+                            timeZoneIdentifier: timeZoneIdentifier(for: reference),
+                            dateStyle: .full
+                        ))
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
 
-                    if let eventLocation = location(for: reference) {
-                        Label(eventLocation.title, systemImage: "mappin.and.ellipse")
-                            .font(.caption.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(.white.opacity(0.88))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .lineLimit(2)
-                            .accessibilityLabel("Location, \(eventLocation.formatted)")
-                    }
+                        if let eventLocation = location(for: reference) {
+                            Label(eventLocation.title, systemImage: "mappin.and.ellipse")
+                                .font(.caption.weight(.semibold))
+                                .multilineTextAlignment(.center)
+                                .foregroundStyle(.white.opacity(0.88))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .lineLimit(2)
+                                .accessibilityLabel("Location, \(eventLocation.formatted)")
+                        }
 
-                    if let parentContext {
-                        Text(parentContext)
-                            .font(.caption.weight(.medium))
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(.white.opacity(0.78))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .lineLimit(2)
-                    }
+                        if let parentContext {
+                            Text(parentContext)
+                                .font(.caption.weight(.medium))
+                                .multilineTextAlignment(.center)
+                                .foregroundStyle(.white.opacity(0.78))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .lineLimit(2)
+                        }
 
-                    if showsSecondaryText {
-                        Text(secondaryText)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.72))
+                        if showsSecondaryText {
+                            Text(secondaryText)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.72))
+                        }
+                    } badge: {
+                        EmptyView()
                     }
-                } badge: {
-                    EmptyView()
+                    .frame(width: proxy.size.width, height: primaryContentHeight)
+                    .clipped()
                 }
-                .frame(width: proxy.size.width, height: eventHeroHeight)
-                .clipShape(cardShape)
-                .matchedTransitionSource(id: reference, in: invitationTransition) { source in
-                    source.clipShape(cardShape)
+                .buttonStyle(.plain)
+                .contentShape(.interaction, Rectangle())
+                .accessibilityHint("Opens event details")
+                .accessibilityIdentifier(reference == .main ? "home.event.main" : "home.event.child")
+                .accessibilityLabel(
+                    contextPresentation.cardAccessibilityLabel(
+                        title: title(for: reference),
+                        date: formattedDate,
+                        location: location(for: reference)?.formatted,
+                        subtitle: showsSecondaryText ? secondaryText : nil,
+                        parentContext: parentContext
+                    )
+                )
+                .frame(width: proxy.size.width, height: primaryContentHeight)
+                if EventManagementAccess.canOpen(reference: reference, in: workspace) {
+                    Rectangle()
+                        .fill(AppTheme.ColorToken.cardBorder)
+                        .frame(height: 0.5)
+                    eventManageButton(reference)
+                        .frame(maxWidth: .infinity, minHeight: footerHeight - 0.5, maxHeight: footerHeight - 0.5)
+                        .background(AppTheme.ColorToken.surface)
                 }
             }
-            .buttonStyle(.plain)
-            .contentShape(.interaction, cardShape)
+            .frame(width: proxy.size.width, height: eventHeroHeight)
+            .clipShape(cardShape)
+            .overlay {
+                cardShape.stroke(AppTheme.ColorToken.cardBorder, lineWidth: 0.5)
+            }
+            .shadow(color: AppTheme.ColorToken.mediaScrim.opacity(0.12), radius: 12, y: 6)
             .contentShape(.contextMenuPreview, cardShape)
+            .matchedTransitionSource(id: reference, in: invitationTransition) { source in
+                source.clipShape(cardShape)
+            }
             .contextMenu {
                 eventActions(for: reference, includesDestructiveActions: false)
             }
-            .accessibilityHint("Opens event details")
-            .accessibilityIdentifier(reference == .main ? "home.event.main" : "home.event.child")
-            .accessibilityLabel(
-                contextPresentation.cardAccessibilityLabel(
-                    title: title(for: reference),
-                    date: formattedDate,
-                    location: location(for: reference)?.formatted,
-                    subtitle: showsSecondaryText ? secondaryText : nil,
-                    parentContext: parentContext
-                )
-            )
-            .frame(width: proxy.size.width, height: eventHeroHeight)
-            .overlay {
-                cardShape
-                    .stroke(.white.opacity(0.20), lineWidth: 0.5)
-            }
-            .shadow(color: AppTheme.ColorToken.mediaScrim.opacity(0.12), radius: 12, y: 6)
             .accessibilityElement(children: .contain)
         }
         .frame(height: eventHeroHeight)
@@ -625,6 +650,32 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    private func eventManageButton(_ reference: EventReference) -> some View {
+        Button {
+            presentEventManagement(for: reference)
+        } label: {
+            HStack(spacing: AppTheme.Spacing.compact) {
+                Text("Manage")
+                    .font(.subheadline.weight(.semibold))
+                Spacer(minLength: AppTheme.Spacing.standard)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, AppTheme.Spacing.standard)
+            .frame(maxWidth: .infinity, minHeight: 55.5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.manage.\(reference.id)")
+    }
+
+    private func presentEventManagement(for reference: EventReference, destination: EventManagementDestination? = nil) {
+        guard EventManagementAccess.canOpen(reference: reference, in: workspace) else { return }
+        eventManagementRoute = HomeEventManagementRoute(reference: reference, initialDestination: destination)
     }
 
     private func canExport(_ kind: EventCSVExportKind, for reference: EventReference) -> Bool {
@@ -699,7 +750,7 @@ struct HomeView: View {
 
     private var eventContextSwitcher: some View {
         EventContextRail(
-            itemIDs: workspace.visibleEventContexts,
+            itemIDs: homeEventContexts,
             selectedID: visibleEventReference ?? workspace.selectedEventReference,
             previewIndex: scrubbedEventIndex,
             title: title(for:),
@@ -712,11 +763,11 @@ struct HomeView: View {
                 )
             },
             onPreview: { reference in
-                guard let index = workspace.visibleEventContexts.firstIndex(of: reference) else { return }
+                guard let index = homeEventContexts.firstIndex(of: reference) else { return }
                 previewEvent(at: index)
             },
             onCommit: { reference in
-                guard let index = workspace.visibleEventContexts.firstIndex(of: reference) else { return }
+                guard let index = homeEventContexts.firstIndex(of: reference) else { return }
                 commitScrubbedEvent(at: index)
             }
         )
@@ -737,13 +788,13 @@ struct HomeView: View {
             ? visibleEventReference ?? workspace.selectedEventReference
             : workspace.selectedEventReference
         let requestedReference: EventReference = if activeReference == .main {
-            workspace.currentOrNextChildEventReference() ?? workspace.visibleEventContexts.first ?? .main
+            workspace.currentOrNextChildEventReference() ?? homeEventContexts.first ?? .main
         } else {
             .main
         }
-        let targetReference = workspace.visibleEventContexts.contains(requestedReference)
+        let targetReference = homeEventContexts.contains(requestedReference)
             ? requestedReference
-            : workspace.visibleEventContexts.first ?? workspace.selectedEventReference
+            : homeEventContexts.first ?? workspace.selectedEventReference
 
         workspace.selectEventContext(targetReference)
         guard homeLayout == .cards else {
@@ -796,14 +847,14 @@ struct HomeView: View {
     }
 
     private func openEvent(_ reference: EventReference) {
-        guard workspace.visibleEventContexts.contains(reference) else { return }
+        guard homeEventContexts.contains(reference) else { return }
         workspace.selectEventContext(reference)
         openedEventReference = reference
     }
 
     private func previewEvent(at index: Int) {
         guard homeLayout == .cards else { return }
-        let references = workspace.visibleEventContexts
+        let references = homeEventContexts
         guard references.indices.contains(index) else { return }
 
         revealEventSwitcher()
@@ -817,7 +868,7 @@ struct HomeView: View {
 
     private func commitScrubbedEvent(at index: Int) {
         guard homeLayout == .cards else { return }
-        let references = workspace.visibleEventContexts
+        let references = homeEventContexts
         guard references.indices.contains(index) else {
             isScrubbingEvents = false
             scrubbedEventIndex = nil
@@ -834,7 +885,7 @@ struct HomeView: View {
 
     private func updateEventSwitcherReveal(offset: CGFloat) {
         guard homeLayout == .cards,
-              workspace.visibleEventContexts.count > 1,
+              homeEventContexts.count > 1,
               isScrollInteractionActive,
               let startOffset = scrollInteractionStartOffset else { return }
 
@@ -848,7 +899,7 @@ struct HomeView: View {
 
     private func revealEventSwitcher() {
         guard homeLayout == .cards,
-              workspace.visibleEventContexts.count > 1 else { return }
+              homeEventContexts.count > 1 else { return }
         eventSwitcherFadeTask?.cancel()
         eventSwitcherFadeTask = nil
 
@@ -891,7 +942,7 @@ struct HomeView: View {
         let delta = offset - startOffset
         guard abs(delta) >= 8 else { return }
 
-        let references = workspace.visibleEventContexts
+        let references = homeEventContexts
         guard let originIndex = references.firstIndex(of: originReference) else { return }
 
         let destinationIndex = delta > 0 ? originIndex + 1 : originIndex - 1
@@ -938,7 +989,7 @@ struct HomeView: View {
     private func restoreLastEventAfterPullIfNeeded() {
         guard isPullToCreateRegionVisible,
               !isRestoringFromPullToCreate,
-              let lastReference = workspace.visibleEventContexts.last else { return }
+              let lastReference = homeEventContexts.last else { return }
 
         isRestoringFromPullToCreate = true
         let target = HomeScrollTarget.event(lastReference)
@@ -1198,7 +1249,7 @@ private struct MainEventEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var title = ""
-    @State private var status: MainEventStatus = .draft
+    @State private var status: MainEventStatus = .ongoing
     @State private var startsAt = Date.now
     @State private var endsAt: Date?
     @State private var isAllDay = false
@@ -1222,16 +1273,6 @@ private struct MainEventEditorView: View {
                 TextField("Event name", text: $title)
                     .textInputAutocapitalization(.words)
 
-                Picker("Status", selection: $status) {
-                    ForEach(MainEventStatus.allCases) { option in
-                        Label(option.title, systemImage: option.symbol)
-                            .tag(option)
-                    }
-                }
-
-                Text(status.detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
 
             Section("Cover") {
@@ -1326,7 +1367,7 @@ private struct MainEventEditorView: View {
                         isConfirmingDeletion = true
                     }
                 } footer: {
-                    Text("A main event can only be deleted while it is still a draft.")
+                    Text("This removes the main event and its sub-events from planning Home.")
                 }
             }
         }
@@ -1397,7 +1438,7 @@ private struct MainEventEditorView: View {
         .task {
             guard !didLoad else { return }
             title = workspace.title
-            status = workspace.mainEventStatus
+            status = workspace.mainEventStatus.editorValue
             startsAt = workspace.mainEventStartsAt
             endsAt = workspace.mainEventEndsAt
             isAllDay = workspace.mainEventIsAllDay

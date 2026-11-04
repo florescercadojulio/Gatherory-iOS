@@ -11,6 +11,7 @@ enum BlueprintPreviewActionsVisualFixture {
         case collection
         case personal
         case sharedLink = "shared"
+        case movieNight
     }
 
     /// A single in-memory session shared by preview and library presentation.
@@ -37,11 +38,13 @@ enum BlueprintPreviewActionsVisualFixture {
 
         fileprivate init(ownerID: String, source: BlueprintCatalogEntry, context: Context) {
             let initialViewerState: BlueprintViewerState? = switch context {
-            case .discovery: BlueprintViewerState()
+            case .discovery, .movieNight: BlueprintViewerState()
             case .collection: BlueprintViewerState(bookmarked: true)
             case .personal, .sharedLink: nil
             }
-            let entry = Self.copy(source, catalogKey: context == .personal ? "visual_personal" : "\(source.catalogKey)-visual-1",
+            let entry = Self.copy(source,
+                                  catalogKey: context == .movieNight ? source.catalogKey
+                                    : context == .personal ? "visual_personal" : "\(source.catalogKey)-visual-1",
                                   viewerState: initialViewerState,
                                   discoveryContext: context == .discovery
                                     ? BlueprintDiscoveryContext(exposureId: "visual-preview-actions", expiresAt: .now.addingTimeInterval(3_600))
@@ -100,7 +103,7 @@ enum BlueprintPreviewActionsVisualFixture {
         /// Supplies the existing SetupView path with an explicitly unconfirmed draft.
         /// The UI fixture never turns suggested dates into confirmed dates for the user.
         func prepareSetupDraftForDirectInstall() throws {
-            guard context == .discovery || context == .personal else { return }
+            guard context == .discovery || context == .personal || context == .movieNight else { return }
             let children = entry.definition.modules.first { $0.type == "experience_tree" }?
                 .decodeConfiguration(BlueprintExperienceTreeConfig.self)?.children ?? []
             let ideas = entry.definition.modules.first { $0.type == "ideas" }?
@@ -110,7 +113,7 @@ enum BlueprintPreviewActionsVisualFixture {
                 return
             }
             let draft = BlueprintSetupDraft(ownerUserID: actionStore.ownerID, entry: entry,
-                requestID: UUID(), eventName: "My celebration",
+                requestID: UUID(), eventName: context == .movieNight ? entry.definition.blueprint.name : "My celebration",
                 startsAt: Date(timeIntervalSince1970: 1_798_200_000),
                 timeZoneIdentifier: "America/Detroit", selectedChildren: Set(children.prefix(1).map(\.key)),
                 selectedIdeas: Set(ideas.map(\.key)), confirmedDates: [:])
@@ -126,36 +129,38 @@ enum BlueprintPreviewActionsVisualFixture {
         /// Creates the production coordinator with a local protocol fixture. The
         /// fixture answers copy, schedule, installation receipt, and bootstrap using
         /// the same transport and import path as the app. Its audit stays local.
-        func makeInstallationCoordinator(library: WorkspaceLibrary) -> BlueprintInstallationCoordinator? {
+        func makeInstallationCoordinator(library: WorkspaceLibrary, account: UserAccount) -> BlueprintInstallationCoordinator? {
+            guard account.id == actionStore.ownerID else { return nil }
             if let setupCoordinator, installationLibrary === library { return setupCoordinator }
             do {
                 let persistence = try WorkspacePersistenceController(isStoredInMemoryOnly: true)
                 _ = persistence.restoreLibrary(seedData: false, ownerUserID: actionStore.ownerID)
-                let account = UserAccount(id: actionStore.ownerID, email: "preview@example.test",
-                    displayName: "Preview fixture", role: .planner, authenticationProvider: .password,
-                    createdAt: .now)
                 library.configureViewer(account)
 
-                let workspace = PlanningWorkspace.newWorkspace(title: "My celebration",
+                let workspace = PlanningWorkspace.newWorkspace(title: context == .movieNight ? entry.definition.blueprint.name : "My celebration",
                     startsAt: Date(timeIntervalSince1970: 1_798_200_000), timeZoneIdentifier: "America/Detroit",
                     eventLocation: nil, imageData: nil, owner: account)
                 let children = entry.definition.modules.first { $0.type == "experience_tree" }?
                     .decodeConfiguration(BlueprintExperienceTreeConfig.self)?.children ?? []
                 workspace.timeline = children.prefix(1).map { child in
                     TimelineItem(title: child.title, category: TimelineCategory(rawValue: child.category) ?? .other,
+                        purpose: child.purpose == "part_of_event" ? .eventExperience : .planning,
                         scheduledAt: Date(timeIntervalSince1970: 1_798_200_000),
-                        location: "", timeZoneIdentifier: "America/Detroit", participantIDs: workspace.mainEventParticipantIDs)
+                        location: "", timeZoneIdentifier: "America/Detroit", participantIDs: workspace.mainEventParticipantIDs,
+                        parentEventID: workspace.mainEventID)
                 }
                 let ideas = entry.definition.modules.first { $0.type == "ideas" }?
                     .decodeConfiguration(BlueprintIdeasConfig.self)?.ideas ?? []
                 for idea in ideas {
-                    workspace.addIdea(PlanningIdea(title: idea.title, note: idea.notes ?? "",
-                        category: IdeaCategory(rawValue: idea.category) ?? .other, submittedBy: account.displayName))
+                    workspace.addIdea(PlanningIdea(eventID: workspace.mainEventID, title: idea.title, note: idea.notes ?? "",
+                        category: IdeaCategory(rawValue: idea.category) ?? .other, submittedBy: account.displayName,
+                        submittedByUserID: account.id))
                 }
                 fixtureScopeID = workspace.mainEventID
                 fixtureArchive = try WorkspaceArchiveCodec().encode(WorkspaceArchiveV1(workspace: workspace))
                 BlueprintSetupFixtureURLProtocol.configure(entry: entry, scopeID: fixtureScopeID,
-                    archive: fixtureArchive!, failFirstInstall: ProcessInfo.processInfo.arguments.contains("-BlueprintSetupFixtureRetryOnce"))
+                    archive: fixtureArchive!, ownerID: account.id, displayName: account.displayName,
+                    failFirstInstall: ProcessInfo.processInfo.arguments.contains("-BlueprintSetupFixtureRetryOnce"))
 
                 let configuration = URLSessionConfiguration.ephemeral
                 configuration.protocolClasses = [BlueprintSetupFixtureURLProtocol.self]
@@ -208,21 +213,54 @@ enum BlueprintPreviewActionsVisualFixture {
     /// launch. Its catalog comes from the app's real bundled schema fixture.
     static func load(ownerID: String) -> State? {
         let arguments = ProcessInfo.processInfo.arguments
-        guard arguments.contains("-BlueprintPreviewActionsVisualFixture"),
+        let movieNightUITest = arguments.contains("-MovieNightOnboardingUITest")
+        guard (arguments.contains("-BlueprintPreviewActionsVisualFixture") || movieNightUITest),
               AppRuntimeConfiguration.usesEphemeralDataStore,
-              AppRuntimeConfiguration.seedsDevelopmentData,
+              AppRuntimeConfiguration.environment == .development,
               AppRuntimeConfiguration.skipsAuthentication,
               !ownerID.isEmpty,
-              let contextIndex = arguments.firstIndex(of: "-BlueprintPreviewFixtureContext"),
-              arguments.indices.contains(contextIndex + 1),
-              let context = Context(rawValue: arguments[contextIndex + 1]),
-              let source = bundledCatalogEntry()
+              movieNightUITest || AppRuntimeConfiguration.seedsDevelopmentData,
+              let contextAndSource = fixtureContextAndSource(arguments: arguments, movieNightUITest: movieNightUITest)
         else { return nil }
 
         if let state = statesByOwner[ownerID] { return state }
-        let state = State(ownerID: ownerID, source: source, context: context)
+        if movieNightUITest {
+            // A fresh ephemeral fixture models a first-time account on each
+            // launch; production progress remains durable and account-bound.
+            MovieNightTourStore().clear(accountID: ownerID)
+        }
+        let state = State(ownerID: ownerID, source: contextAndSource.source, context: contextAndSource.context)
         statesByOwner[ownerID] = state
         return state
+    }
+
+    static func movieNightCatalogEntry(ownerID: String) -> BlueprintCatalogEntry? {
+        guard ProcessInfo.processInfo.arguments.contains("-MovieNightOnboardingUITest"),
+              let state = load(ownerID: ownerID), state.context == .movieNight else { return nil }
+        return state.entry
+    }
+
+    private static func fixtureContextAndSource(
+        arguments: [String], movieNightUITest: Bool
+    ) -> (context: Context, source: BlueprintCatalogEntry)? {
+        if movieNightUITest {
+            guard let source = bundledMovieNightEntry() else { return nil }
+            return (.movieNight, source)
+        }
+        guard let contextIndex = arguments.firstIndex(of: "-BlueprintPreviewFixtureContext"),
+              arguments.indices.contains(contextIndex + 1),
+              let context = Context(rawValue: arguments[contextIndex + 1]),
+              context != .movieNight,
+              let source = bundledCatalogEntry() else { return nil }
+        return (context, source)
+    }
+
+    private static func bundledMovieNightEntry() -> BlueprintCatalogEntry? {
+        guard let url = Bundle.main.url(forResource: "movie-night-blueprint.v1", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let entry = try? JSONDecoder().decode(BlueprintCatalogEntry.self, from: data),
+              entry.catalogKey == "movie_night" else { return nil }
+        return entry
     }
 
     private static func bundledCatalogEntry() -> BlueprintCatalogEntry? {
@@ -322,6 +360,8 @@ private final class BlueprintSetupFixtureURLProtocol: URLProtocol {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var childKeys: [String] = []
     nonisolated(unsafe) private static var entry: BlueprintCatalogEntry?
+    nonisolated(unsafe) private static var ownerID = ""
+    nonisolated(unsafe) private static var ownerDisplayName = ""
     nonisolated(unsafe) private static var scopeID = UUID()
     nonisolated(unsafe) private static var archive = Data()
     nonisolated(unsafe) private static var failFirstInstall = false
@@ -335,9 +375,12 @@ private final class BlueprintSetupFixtureURLProtocol: URLProtocol {
         lock.unlock()
     }
 
-    static func configure(entry: BlueprintCatalogEntry, scopeID: UUID, archive: Data, failFirstInstall: Bool) {
+    static func configure(entry: BlueprintCatalogEntry, scopeID: UUID, archive: Data,
+                          ownerID: String, displayName: String, failFirstInstall: Bool) {
         lock.lock()
         self.entry = entry
+        self.ownerID = ownerID
+        self.ownerDisplayName = displayName
         self.scopeID = scopeID
         self.archive = archive
         self.failFirstInstall = failFirstInstall
@@ -407,7 +450,14 @@ private final class BlueprintSetupFixtureURLProtocol: URLProtocol {
         Self.lock.lock()
         let keys = Self.childKeys
         Self.lock.unlock()
-        let candidates = ["2027-01-10T10:00:00Z"]
+        let formatter = ISO8601DateFormatter()
+        let candidates: [String]
+        if let startString = mainEvent["startsAt"] as? String,
+           let start = formatter.date(from: startString) {
+            candidates = [formatter.string(from: start.addingTimeInterval(3_600))]
+        } else {
+            candidates = []
+        }
         let suggestions: [[String: Any]] = keys.map { key in
             ["key": key, "status": "suggested", "candidates": candidates]
         }
@@ -439,7 +489,8 @@ private final class BlueprintSetupFixtureURLProtocol: URLProtocol {
         let planChildren: [[String: Any]] = childrenInput.compactMap { selected in
             guard let key = selected["key"] as? String, let date = selected["startsAt"] as? String,
                   let child = children.first(where: { $0.key == key }) else { return nil }
-            return ["sourceKey": key, "name": child.title, "eventType": "wedding", "startsAt": date,
+            return ["sourceKey": key, "name": child.title,
+                    "eventType": source.definition.experienceDefaults.type, "startsAt": date,
                     "timeZone": timeZone, "parentSourceKey": "main", "purpose": child.purpose,
                     "category": child.category, "planningStatus": "approved"]
         }
@@ -448,9 +499,11 @@ private final class BlueprintSetupFixtureURLProtocol: URLProtocol {
             return ["sourceKey": key, "title": idea.title, "category": idea.category,
                     "notes": idea.notes ?? "", "targetSourceKey": "main", "configuration": [:], "status": "new"]
         }
-        let plan: [String: Any] = ["plannerVersion": 1, "experienceType": "wedding",
-            "categoryOrder": ["venue", "attire", "food", "flowers", "photography"],
-            "main": ["sourceKey": "main", "name": name, "eventType": "wedding", "startsAt": startsAt,
+        let categoryOrder = source.definition.modules.first { $0.type == "ideas" }?
+            .decodeConfiguration(BlueprintIdeasConfig.self)?.categoryOrder ?? []
+        let plan: [String: Any] = ["plannerVersion": 1, "experienceType": source.definition.experienceDefaults.type,
+            "categoryOrder": categoryOrder,
+            "main": ["sourceKey": "main", "name": name, "eventType": source.definition.experienceDefaults.type, "startsAt": startsAt,
                      "timeZone": timeZone, "parentSourceKey": NSNull(), "purpose": NSNull(),
                      "category": NSNull(), "planningStatus": NSNull()],
             "children": planChildren, "ideas": planIdeas, "instructions": [], "todos": [], "omissions": []]
@@ -556,9 +609,11 @@ private final class BlueprintSetupFixtureURLProtocol: URLProtocol {
         Self.lock.lock()
         let original = Self.archive
         let source = Self.entry
+        let ownerID = Self.ownerID
+        let ownerDisplayName = Self.ownerDisplayName
         Self.lock.unlock()
         guard var archive = try? WorkspaceArchiveCodec().decode(WorkspaceArchiveV1.self, from: original),
-              let source else { return }
+              let source, !ownerID.isEmpty else { return }
         archive.title = name
         archive.mainEventStartsAt = start
         archive.mainEventTimeZoneIdentifier = timeZone
@@ -570,15 +625,22 @@ private final class BlueprintSetupFixtureURLProtocol: URLProtocol {
                   let dateString = selected["startsAt"] as? String,
                   let date = formatter.date(from: dateString) else { return nil }
             return TimelineItem(title: child.title, category: TimelineCategory(rawValue: child.category) ?? .other,
+                purpose: child.purpose == "part_of_event" ? .eventExperience : .planning,
                 scheduledAt: date, location: "", timeZoneIdentifier: timeZone,
-                participantIDs: archive.mainEventParticipantIDs)
+                participantIDs: archive.mainEventParticipantIDs, parentEventID: archive.mainEventID)
         }
         let ideas = source.definition.modules.first { $0.type == "ideas" }?
             .decodeConfiguration(BlueprintIdeasConfig.self)?.ideas ?? []
         archive.ideas = selectedIdeas.compactMap { key in
             guard let idea = ideas.first(where: { $0.key == key }) else { return nil }
-            return PlanningIdea(title: idea.title, note: idea.notes ?? "",
-                category: IdeaCategory(rawValue: idea.category) ?? .other, submittedBy: "Preview fixture")
+            let category = IdeaCategory(rawValue: idea.category) ?? .other
+            let configuration: IdeaConfiguration? = category == .event
+                ? .event(EventIdeaConfiguration(category: .other, purpose: .planning,
+                    proposedDate: nil, location: nil))
+                : nil
+            return PlanningIdea(eventID: archive.mainEventID, title: idea.title, note: idea.notes ?? "",
+                category: category, submittedBy: ownerDisplayName, submittedByUserID: ownerID,
+                configuration: configuration)
         }
         guard let updated = try? WorkspaceArchiveCodec().encode(archive) else { return }
         Self.lock.lock(); Self.archive = updated; Self.lock.unlock()

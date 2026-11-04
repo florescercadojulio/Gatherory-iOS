@@ -18,6 +18,7 @@ struct BlueprintPreviewView: View {
     var installedTemplateID: UUID? = nil
     var personalSource: BlueprintPersonalRecord? = nil
     var onClose: (() -> Void)? = nil
+    var onInstalledWorkspace: ((UUID) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.currentUserAccount) private var account
     @Environment(WorkspaceLibrary.self) private var workspaceLibrary
@@ -192,9 +193,13 @@ struct BlueprintPreviewView: View {
                         returnsToPreview: true,
                         installationOwnerID: route.ownerID,
                         onInstallationCompleted: { installationCompleted = true },
+                        onInstalledWorkspace: onInstalledWorkspace,
                         onClose: { setupRoute = nil },
                         setupDraftStore: fixture.makeSetupDraftStore(),
-                        installationCoordinatorFactory: { fixture.makeInstallationCoordinator(library: workspaceLibrary) }
+                        installationCoordinatorFactory: {
+                            guard let account, account.id == route.ownerID else { return nil }
+                            return fixture.makeInstallationCoordinator(library: workspaceLibrary, account: account)
+                        }
                     )
                 } else {
                     BlueprintSetupView(
@@ -203,6 +208,7 @@ struct BlueprintPreviewView: View {
                         returnsToPreview: true,
                         installationOwnerID: route.ownerID,
                         onInstallationCompleted: { installationCompleted = true },
+                        onInstalledWorkspace: onInstalledWorkspace,
                         onClose: { setupRoute = nil }
                     )
                 }
@@ -213,6 +219,7 @@ struct BlueprintPreviewView: View {
                     returnsToPreview: true,
                     installationOwnerID: route.ownerID,
                     onInstallationCompleted: { installationCompleted = true },
+                    onInstalledWorkspace: onInstalledWorkspace,
                     onClose: { setupRoute = nil }
                 )
 #endif

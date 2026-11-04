@@ -4,6 +4,31 @@ import Testing
 
 @MainActor
 struct PlanningWorkspaceDuplicateFactoryTests {
+    @Test("A newly initialized main event starts ongoing")
+    func newWorkspaceStartsOngoing() {
+        let workspace = PlanningWorkspace(
+            title: "New Event",
+            mainEventStartsAt: .now,
+            venueName: "",
+            location: "",
+            planningMode: .openToIdeas,
+            members: [],
+            ideas: [],
+            timeline: [],
+            registry: []
+        )
+
+        #expect(workspace.mainEventStatus == .ongoing)
+    }
+
+    @Test("Main editor promotes legacy drafts and preserves terminal statuses")
+    func editorValueNormalizesOnlyDraft() {
+        #expect(MainEventStatus.draft.editorValue == .ongoing)
+        #expect(MainEventStatus.ongoing.editorValue == .ongoing)
+        #expect(MainEventStatus.finished.editorValue == .finished)
+        #expect(MainEventStatus.cancelled.editorValue == .cancelled)
+    }
+
     @Test("Duplicate copies event content and starts as a fresh host-only event")
     func defaultDuplicate() throws {
         let owner = makeOwner()
@@ -27,7 +52,7 @@ struct PlanningWorkspaceDuplicateFactoryTests {
         #expect(duplicate.title == "Copy of Family Picnic")
         #expect(duplicate.mainEventStartsAt == source.mainEventStartsAt)
         #expect(duplicate.mainEventLocation == source.mainEventLocation)
-        #expect(duplicate.mainEventStatus == .draft)
+        #expect(duplicate.mainEventStatus == .ongoing)
         #expect(duplicate.mainEventResponse == nil)
         #expect(duplicate.mainEventImageData == nil)
         #expect(duplicate.mainEventMediaAssetID == nil)
@@ -39,7 +64,7 @@ struct PlanningWorkspaceDuplicateFactoryTests {
         #expect(duplicate.timeline.count == 1)
         #expect(duplicate.timeline[0].id != child.id)
         #expect(duplicate.timeline[0].parentEventID == duplicate.mainEventID)
-        #expect(duplicate.timeline[0].status == .draft)
+        #expect(duplicate.timeline[0].status == .approved)
         #expect(duplicate.ideas.count == 1)
         #expect(duplicate.ideas[0].id != idea.id)
         #expect(duplicate.ideas[0].eventID == duplicate.mainEventID)
@@ -113,7 +138,7 @@ struct PlanningWorkspaceDuplicateFactoryTests {
         #expect(duplicate.timeline.count == source.timeline.count)
         #expect(copiedChild.parentEventID == duplicate.mainEventID)
         #expect(copiedChild.participantIDs == duplicate.members.map(\.id))
-        #expect(copiedChild.status == .draft)
+        #expect(copiedChild.status == .approved)
         #expect(copiedChild.completionStatus == .upcoming)
         #expect(copiedChild.response == nil)
         #expect(copiedChild.imageData == nil)
@@ -133,7 +158,7 @@ struct PlanningWorkspaceDuplicateFactoryTests {
         #expect(copiedEventIdea.eventID == duplicate.mainEventID)
         #expect(copiedEventIdea.status == .new)
         #expect(duplicate.timeline.contains { $0.linkedIdeaID == copiedEventIdea.id })
-        #expect(duplicate.timeline.allSatisfy { $0.status == .draft && $0.completionStatus == .upcoming })
+        #expect(duplicate.timeline.allSatisfy { $0.status == .approved && $0.completionStatus == .upcoming })
         #expect(duplicate.ideaResponses.isEmpty)
     }
 
@@ -177,7 +202,7 @@ struct PlanningWorkspaceDuplicateFactoryTests {
         ) == nil)
     }
 
-    @Test("Past and cancelled events can be copied as new drafts without changing the source")
+    @Test("Past and cancelled events can be copied as new ongoing events without changing the source")
     func closedEventsRemainReadOnly() throws {
         let owner = makeOwner()
         for status in [MainEventStatus.finished, .cancelled] {
@@ -192,7 +217,7 @@ struct PlanningWorkspaceDuplicateFactoryTests {
 
             #expect(duplicate.mainEventID != sourceID)
             #expect(duplicate.title == "Copy of \(sourceTitle)")
-            #expect(duplicate.mainEventStatus == .draft)
+            #expect(duplicate.mainEventStatus == .ongoing)
             #expect(source.mainEventID == sourceID)
             #expect(source.title == sourceTitle)
             #expect(source.mainEventStatus == sourceStatus)

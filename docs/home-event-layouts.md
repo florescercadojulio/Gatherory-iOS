@@ -1,29 +1,70 @@
 # Home event layouts
 
-Updated October 28, 2026. This is a native SwiftUI change; nothing is deployed
+Updated November 2, 2026. This is a native SwiftUI change; nothing is deployed
 or uploaded to TestFlight by this work.
 
 ## Choosing a view
 
 Open the profile button, then **Account → App Settings → Home view**, and choose:
 
-- **Cards**: the existing vertical event cards, snapping, event rail and
-  pull-to-create behavior. This remains the default.
-- **Overview**: a Blueprint-style main-event cover with title, schedule,
+- **Overview** (default): a Blueprint-style main-event cover with title, schedule,
   location and description, followed by date-grouped, image-led event cards.
   Each date has a horizontal collection; scroll vertically between dates and
   horizontally between events on the same day. No idea cards,
   idea counts or idea sections appear in this view.
+- **Cards**: the optional vertical event cards, snapping, event rail and
+  pull-to-create behavior.
 
 The native picker marks the active choice. Guest Account has the same picker.
 The device stores the preference
 under `home.layout`; reopening Home or the app preserves it. Unknown stored
-values safely display and select Cards. This is a display preference, not a
+values safely display and select Overview. Explicitly saved Cards preferences
+remain Cards. This is a display preference, not a
 field in the event archive or sync API.
 
-Updates has a direct megaphone button in Home for planners. Add event and the
-profile control retain their direct toolbar positions. The Home and Decide
+## Date ordering
+
+Home keeps its main-event card at the top. The schedule starts with today and
+upcoming dates, followed by past dates from newest to oldest; undated items
+sort last wherever they are available. Overview retains horizontal rows grouped
+by each event's local calendar date and chronological times within each row.
+Cards uses the same today/upcoming-first policy for its children and event rail.
+
+The Events tab also sorts its filtered results by date rather than insertion
+order. Events spanning today remain with current/upcoming events, including
+all-day events whose last day is today. Date classification uses each event's
+stored timezone; people do not need to choose a timezone to browse. Exact ties
+use stable event IDs. Existing filter membership and permission rules remain.
+
+This ordering is derived at display time. It does not rewrite the library,
+timeline, saved dates or sync records, and it does not reset the selected event
+or override a navigation destination. A return to a selected past event still
+returns to that event rather than redirecting the person to a different one.
+
+An event idea appears here after an authorized planner confirms **Schedule**.
+Votes alone never add a Home event. The proposal and scheduled child keep their
+existing link; opening or cancelling the Schedule sheet creates nothing. See
+[event idea scheduling](idea-scheduling.md).
+
+In Overview, open an event's **Manage → Updates** to read or post updates;
+the Home toolbar has no announcement/note shortcut. Cards retains its direct
+megaphone button for planners. Add event and the profile control retain their
+direct toolbar positions. The Home and Decide
 tabs keep the native tab bar expanded while scrolling.
+
+Verified October 30: the native regression
+`EventManagementUITests.testOverviewUpdatesOpensThroughManagementInsteadOfHomeToolbar`
+passed on iPhone 18 Pro / iOS 27 Simulator. It checks the Cards shortcut,
+its absence in Overview, and Overview → Manage → Updates navigation.
+Result: `/tmp/gatherory-overview-updates-20261030.xcresult` (one test,
+zero failures). No screenshot review was performed.
+
+Manage is now an event action rather than a workspace tab. Each accessible
+Home card has a Manage footer below its details, with a chevron. Only that
+footer opens the event-pinned management view; the card body still opens the
+invitation. Management uses native push/back navigation from the Home card's
+footer; the invitation toolbar does not repeat that action. See [event management from Home](event-management.md) for scope,
+permissions, notification routing and verification limits.
 
 ## Event context and permissions
 
@@ -46,7 +87,14 @@ Near dates use localized relative headings such as Today, Tomorrow and In 3
 days (yesterday through seven days ahead); farther dates retain full dates.
 Horizontal collections extend to the screen edges, with content insets only
 at the start and end. Cards use the existing invitation namespace for the
-native zoom transition into event detail and back.
+native zoom transition into event detail and back. The transition source and
+native context-menu preview belong to the complete decorated card, including
+its Manage footer, surface and border. Hiding just the inner button during an
+interactive dismissal must not leave an empty rounded shell behind. The
+context-menu modifier sits outside the card's own rounded clip, and horizontal
+day rows disable scroll clipping so the system's lifted preview can extend
+above and below the row. Artwork still clips inside its card; body and Manage
+remain separate tap targets.
 
 Overview cards show compact start–end time ranges when a valid end exists,
 using the event's time zone and native localized formatting. Same-day times

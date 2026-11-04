@@ -35,6 +35,17 @@ enum AppRuntimeConfiguration {
         ) ?? .production
     }
 
+    /// The configured backend environment for developer-only tooling. This
+    /// intentionally ignores simulated production-flow routing so Debug builds
+    /// can exercise production auth behavior while retaining development tools.
+    static var developerToolsEnvironment: Environment {
+        developerToolsEnvironment(configuredValue: infoString(forKey: "APP_ENVIRONMENT"))
+    }
+
+    static func developerToolsEnvironment(configuredValue: String) -> Environment {
+        Environment(rawValue: configuredValue) ?? .production
+    }
+
     static var alwaysShowsOnboarding: Bool {
         let arguments = ProcessInfo.processInfo.arguments
 

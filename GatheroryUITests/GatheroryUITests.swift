@@ -441,29 +441,31 @@ final class GatheroryUITests: XCTestCase {
             XCTAssertTrue(workspace.waitForExistence(timeout: 8))
             workspace.tap()
 
-            let manageTab = app.tabBars.buttons["Manage"]
-            XCTAssertTrue(manageTab.waitForExistence(timeout: 5))
-            manageTab.tap()
-
-            let collaboratorsCard = app.buttons
-                .matching(NSPredicate(format: "label CONTAINS %@", "Collaborators"))
-                .firstMatch
-            for _ in 0..<5 where !collaboratorsCard.isHittable { app.swipeUp() }
-            XCTAssertTrue(collaboratorsCard.isHittable)
-            collaboratorsCard.tap()
-            XCTAssertTrue(app.navigationBars["Collaborators"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.tabBars.buttons["Manage"].exists,
+                           "Workspace navigation should no longer include a Manage tab.")
+            HomeLayoutUITestSupport.select("Cards", in: app)
+            let manageButton = app.buttons["home.manage.main"]
+            XCTAssertTrue(manageButton.waitForExistence(timeout: 5))
+            manageButton.tap()
+            let dashboard = app.scrollViews["event.management.dashboard"]
+            XCTAssertTrue(dashboard.waitForExistence(timeout: 5),
+                          "A read-only collaborator should open the event dashboard directly.")
+            XCTAssertFalse(app.buttons["event.management.people"].exists,
+                           "The dashboard should not show a People menu entry.")
+            let collaborators = app.buttons.matching(
+                NSPredicate(format: "label CONTAINS[c] %@", "Collaborators")
+            ).firstMatch
+            XCTAssertTrue(collaborators.waitForExistence(timeout: 5))
+            collaborators.tap()
 
             let alexRow = app.descendants(matching: .any).matching(
                 NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Alex (You)", "View only")
             ).firstMatch
             XCTAssertTrue(alexRow.waitForExistence(timeout: 5), "The read-only viewer's name and access should remain visible.")
+            XCTAssertTrue(app.navigationBars.staticTexts["Alex & Jordan’s Wedding"].exists,
+                          "The management sheet keeps the selected event name in its navigation bar.")
             XCTAssertFalse(alexRow.elementType == .button, "A read-only participant row must not be exposed as an edit button.")
             XCTAssertTrue(alexRow.isHittable, "The read-only row should remain available to VoiceOver and touch exploration.")
-
-            let screenshot = XCTAttachment(screenshot: app.screenshot())
-            screenshot.name = "Read-only Collaborator — \(appearance)"
-            screenshot.lifetime = .keepAlways
-            add(screenshot)
 
             alexRow.tap()
             XCTAssertFalse(app.navigationBars["Participant"].exists, "Tapping a read-only row must not open the edit sheet.")
@@ -609,35 +611,60 @@ final class GatheroryUITests: XCTestCase {
     func testCancellationKeepsInvitationButClosesEditing() throws {
         for appearance in ["Light", "Dark"] {
             let app = fixtureApplication()
-            app.launchArguments += ["-UseProductionOnboarding", "-AppleLanguages", "(en)", "-AppleInterfaceStyle", appearance]
+            app.launchArguments += [
+                "-UseProductionOnboarding", "-home.layout", "overview",
+                "-AppleLanguages", "(en)", "-AppleInterfaceStyle", appearance,
+                "-appAppearance", appearance.lowercased()
+            ]
             app.launch()
+            addTeardownBlock {
+                guard app.state == .runningForeground else { return }
+                let tree = XCTAttachment(data: Data(app.debugDescription.utf8), uniformTypeIdentifier: "public.plain-text")
+                tree.name = "Cancellation accessibility — \(appearance)"
+                tree.lifetime = .deleteOnSuccess
+                self.add(tree)
+                let shot = XCTAttachment(screenshot: app.screenshot())
+                shot.name = "Cancellation — \(appearance)"
+                shot.lifetime = .deleteOnSuccess
+                self.add(shot)
+                app.terminate()
+            }
             let workspace = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Maya & Theo")).firstMatch
             XCTAssertTrue(workspace.waitForExistence(timeout: 8))
             workspace.tap()
-            let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Maya & Theo")).firstMatch
+            let card = app.buttons["home.overview.mainEvent"]
             XCTAssertTrue(card.waitForExistence(timeout: 5))
             card.tap()
-            let actions = app.buttons["Event Actions"]
+            XCTAssertTrue(app.navigationBars["Invitation"].waitForExistence(timeout: 5))
+            let actions = app.descendants(matching: .any).matching(identifier: "invitation.actions").firstMatch
             XCTAssertTrue(actions.waitForExistence(timeout: 5))
             actions.tap()
             app.buttons["Cancel Event"].tap()
             let confirmation = app.alerts.firstMatch
             XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
             confirmation.buttons["Cancel"].tap()
-            XCTAssertTrue(actions.exists)
+            XCTAssertTrue(app.buttons["invitation.edit.title"].waitForExistence(timeout: 5),
+                          "Dismissing cancellation must leave the invitation editable.")
             actions.tap()
             app.buttons["Cancel Event"].tap()
             XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
             confirmation.buttons["Cancel Event"].tap()
-            XCTAssertTrue(card.waitForExistence(timeout: 5), "Cancellation retains the invitation instead of deleting it.")
+            XCTAssertTrue(card.waitForExistence(timeout: 5), "Cancellation retains the event instead of deleting it.")
             card.tap()
+            XCTAssertTrue(app.navigationBars["Invitation"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts["Cancelled"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["invitation.edit.title"].exists)
+            XCTAssertFalse(app.buttons["invitation.edit.date"].exists)
+            XCTAssertFalse(app.buttons["invitation.edit.location"].exists)
+            XCTAssertFalse(app.buttons["Going"].isEnabled)
+            XCTAssertFalse(app.buttons["Not Sure"].isEnabled)
+            XCTAssertFalse(app.buttons["Not Going"].isEnabled)
+            // Cancellation can remove the entire conditional menu when no
+            // permitted actions remain. If retained for exports, it must still
+            // omit all planning/lifecycle edits.
+            if actions.exists { actions.tap() }
             XCTAssertFalse(app.buttons["Edit Event"].exists)
             XCTAssertFalse(app.buttons["Cancel Event"].exists)
-            XCTAssertTrue(app.staticTexts["Cancelled"].waitForExistence(timeout: 3))
-            let screenshot = XCTAttachment(screenshot: app.screenshot())
-            screenshot.name = "Cancelled Invitation — \(appearance)"
-            screenshot.lifetime = .keepAlways
-            add(screenshot)
             app.terminate()
         }
     }
@@ -680,76 +707,64 @@ final class GatheroryUITests: XCTestCase {
     }
 
     @MainActor
-    func testDecidePrimerPracticeAndLayout() throws {
-        for (appearance, largeText, language) in [
-            ("Light", false, "en"), ("Dark", false, "en"),
-            ("Dark", false, "es")
+    func testDecidePrimerSimpleLayoutAndDismissal() throws {
+        continueAfterFailure = false
+        let app = fixtureApplication()
+        app.launchArguments += [
+            "-UseProductionOnboarding", "-AppleLanguages", "(en)",
+            "-hasSeenDecideTimelinePrimer", "NO"
+        ]
+        app.launch()
+        defer { app.terminate() }
+        let workspace = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Alex & Jordan")).firstMatch
+        XCTAssertTrue(workspace.waitForExistence(timeout: 8))
+        workspace.tap()
+        let tab = app.tabBars.buttons["Decide"]
+        let decide = tab.exists ? tab : app.buttons["Decide"].firstMatch
+        XCTAssertTrue(decide.waitForExistence(timeout: 8))
+        decide.tap()
+
+        let action = app.buttons["decide-primer-continue"]
+        XCTAssertTrue(action.waitForExistence(timeout: 5))
+        XCTAssertEqual(action.label, "Continue")
+        XCTAssertTrue(action.isHittable)
+        XCTAssertGreaterThanOrEqual(action.frame.height, 44)
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(action.frame))
+        let heading = app.staticTexts["primer.heading"]
+        XCTAssertTrue(heading.exists)
+        XCTAssertEqual(heading.label, "Help your team choose")
+        XCTAssertTrue(app.descendants(matching: .any)["primer.brandHeader"].firstMatch.exists)
+        XCTAssertFalse(app.sheets.firstMatch.exists, "Education should use the welcome screen's edge-to-edge presentation.")
+        XCTAssertLessThan(action.frame.width, app.windows.firstMatch.frame.width * 0.7,
+                          "Continue should be a centered, content-sized action.")
+        for (identifier, text) in [
+            ("pass", "Swipe left if it’s not for you."),
+            ("maybe", "Swipe up if you’re not sure."),
+            ("love", "Swipe right if you love it. Your input helps the host choose.")
         ] {
-            let app = fixtureApplication()
-            app.launchArguments += [
-                "-UseProductionOnboarding", "-AppleLanguages", "(\(language))",
-                "-AppleInterfaceStyle", appearance, "-appAppearance", appearance.lowercased(),
-                "-hasSeenDecideTimelinePrimer", "NO"
-            ]
-            if largeText {
-                app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
-            }
-            app.launch()
-            let workspace = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Alex & Jordan")).firstMatch
-            XCTAssertTrue(workspace.waitForExistence(timeout: 8))
-            workspace.tap()
-            app.tabBars.buttons[language == "es" ? "Decidir" : "Decide"].tap()
-
-            let start = app.buttons[language == "es" ? "Empezar a decidir" : "Start Deciding"]
-            XCTAssertTrue(start.waitForExistence(timeout: 5))
-            XCTAssertTrue(start.isHittable, "Continue must stay reachable in each tested appearance and language.")
-            let initial = XCTAttachment(screenshot: app.screenshot())
-            initial.name = "Decide primer — \(appearance) — \(language)\(largeText ? " — Large Text" : "")"
-            initial.lifetime = .keepAlways
-            add(initial)
-
-            if appearance == "Light", !largeText, language == "en" {
-                let preview = app.descendants(matching: .any)["decide-primer-preview"]
-                XCTAssertTrue(preview.exists)
-                preview.swipeLeft()
-                XCTAssertEqual(app.staticTexts["decide-primer-feedback"].label, "Not for you. Teammates can still weigh in.")
-                preview.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.78))
-                    .press(forDuration: 0.1, thenDragTo: preview.coordinate(
-                        withNormalizedOffset: CGVector(dx: 0.5, dy: 0.18)
-                    ))
-                XCTAssertEqual(app.staticTexts["decide-primer-feedback"].label, "Undecided. You can change your response in Ideas.")
-                preview.swipeRight()
-                XCTAssertEqual(app.staticTexts["decide-primer-feedback"].label, "You love it. Approval is still a separate team decision.")
-            }
-
-            for (choice, english, spanish) in [
-                ("pass", "Not for you. Teammates can still weigh in.", "No es para ti. Los demás pueden seguir opinando."),
-                ("maybe", "Undecided. You can change your response in Ideas.", "Aún no te decides. Puedes cambiar tu respuesta en Ideas."),
-                ("love", "You love it. Approval is still a separate team decision.", "Te encanta. La aprobación sigue siendo una decisión aparte del equipo.")
-            ] {
-                let button = app.buttons["decide-primer-\(choice)"]
-                for _ in 0..<5 where !button.isHittable { app.swipeUp() }
-                XCTAssertTrue(button.isHittable)
-                XCTAssertGreaterThanOrEqual(button.frame.height, 44)
-                button.tap()
-                let feedback = app.staticTexts["decide-primer-feedback"]
-                XCTAssertTrue(feedback.waitForExistence(timeout: 3))
-                XCTAssertEqual(feedback.label, language == "es" ? spanish : english)
-            }
-            // The date explanation must remain reachable below the illustration.
-            let dated = app.staticTexts[language == "es" ? "Ya tiene una fecha" : "Already has a date"]
-            for _ in 0..<5 where !dated.isHittable { app.swipeUp() }
-            XCTAssertTrue(dated.exists)
-            let details = XCTAttachment(screenshot: app.screenshot())
-            details.name = "Decide primer details — \(appearance) — \(language)\(largeText ? " — Large Text" : "")"
-            details.lifetime = .keepAlways
-            add(details)
-            start.tap()
-            XCTAssertTrue(start.waitForNonExistence(timeout: 3))
-            XCTAssertFalse(app.buttons["Undo last decision"].exists, "Practice must not create real decisions.")
-            XCTAssertTrue(app.buttons["decision-event-filter"].exists)
-            app.terminate()
+            let row = app.descendants(matching: .any)["decide.primer.feature.\(identifier)"].firstMatch
+            XCTAssertTrue(row.exists)
+            XCTAssertTrue(row.label.contains(text))
         }
+        XCTAssertFalse(app.descendants(matching: .any)["decide-primer-preview"].exists)
+        XCTAssertFalse(app.staticTexts["decide-primer-feedback"].exists)
+        XCTAssertFalse(app.buttons["decide-primer-love"].exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "practice")).firstMatch.exists)
+        let loveRow = app.descendants(matching: .any)["decide.primer.feature.love"].firstMatch
+        if loveRow.frame.maxY > action.frame.minY - 8 { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertLessThanOrEqual(loveRow.frame.maxY, action.frame.minY - 8)
+        let image = XCTAttachment(screenshot: app.screenshot())
+        image.name = "Simple welcome-style swipe primer"
+        image.lifetime = .keepAlways
+        add(image)
+        action.tap()
+        XCTAssertTrue(action.waitForNonExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Undo last decision"].exists, "Reading the primer must not record a decision.")
+        XCTAssertTrue(app.buttons["decision-event-filter"].exists)
+        let ideasTab = app.tabBars.buttons["Ideas"]
+        (ideasTab.exists ? ideasTab : app.buttons["Ideas"].firstMatch).tap()
+        decide.tap()
+        XCTAssertFalse(action.exists, "The completed primer should stay dismissed on another Decide visit.")
     }
 
     @MainActor

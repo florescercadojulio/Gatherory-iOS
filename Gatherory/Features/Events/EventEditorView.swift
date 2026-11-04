@@ -105,7 +105,7 @@ struct EventEditorView: View {
         _title = State(initialValue: item?.title ?? "")
         _category = State(initialValue: item?.category ?? .other)
         _purpose = State(initialValue: item?.purpose ?? .planning)
-        _mainStatus = State(initialValue: .draft)
+        _mainStatus = State(initialValue: .ongoing)
         _childStatus = State(initialValue: item?.status ?? .approved)
         _startsAt = State(initialValue: item?.scheduledAt ?? .now)
         _hasScheduledDate = State(initialValue: item?.hasScheduledDate ?? true)
@@ -154,6 +154,10 @@ struct EventEditorView: View {
             : category.title
     }
 
+    private var canEditBudget: Bool {
+        workspace.canManageBudgets(for: isMainEvent || originalItem == nil ? .main : .subevent(draftEventID))
+    }
+
     private var expenseEventID: UUID {
         isMainEvent ? workspace.mainEventID : draftEventID
     }
@@ -177,12 +181,12 @@ struct EventEditorView: View {
     }
 
     private var mainBudgetIsValid: Bool {
-        mainBudgetAmount.isEmpty
+        !canEditBudget || mainBudgetAmount.isEmpty
             || (parsedMainBudget.map { $0 > .zero && $0 >= currentAllocatedBudget } ?? false)
     }
 
     private var childBudgetIsValid: Bool {
-        guard !isMainEvent, originalItem?.budgetCap == nil else { return true }
+        guard canEditBudget, !isMainEvent, originalItem?.budgetCap == nil else { return true }
         guard let parsedMainBudget else { return mainBudgetAmount.isEmpty }
         return parsedMainBudget > .zero && parsedMainBudget <= availableForNewEvent
     }
@@ -196,20 +200,6 @@ struct EventEditorView: View {
                 fieldAccessibilityIdentifier: "event.editor.title"
             )
 
-            if isMainEvent {
-                Picker("Status", selection: $mainStatus) {
-                    ForEach(MainEventStatus.allCases) { status in
-                        Label(status.title, systemImage: status.symbol).tag(status)
-                    }
-                }
-                Text(mainStatus.detail).font(.footnote).foregroundStyle(.secondary)
-            } else {
-                Picker("Planning Status", selection: $childStatus) {
-                    ForEach(EventStatus.allCases.filter { $0 != .archived }) { status in
-                        Label(status.title, systemImage: status.symbol).tag(status)
-                    }
-                }
-            }
         } header: {
             Text(isMainEvent ? "Main Event" : "Event Details")
         } footer: {
@@ -463,7 +453,7 @@ struct EventEditorView: View {
             }
 
             Section {
-                if !workspace.isScopedEvent && (isMainEvent || workspace.workspaceBudgetCap != nil) {
+                if canEditBudget && (isMainEvent || workspace.workspaceBudgetCap != nil) {
                     Button {
                         isEditingBudget = true
                     } label: {
@@ -474,7 +464,7 @@ struct EventEditorView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                } else if !workspace.isScopedEvent {
+                } else if canEditBudget {
                     planningRow(
                         symbol: "chart.pie.fill",
                         title: "Budget",
@@ -512,7 +502,7 @@ struct EventEditorView: View {
                         isConfirmingDeletion = true
                     }
                 } footer: {
-                    Text("The main event can only be deleted while it is a draft.")
+                    Text("This removes the main event and its sub-events from planning Home.")
                 }
                 .listRowBackground(AppTheme.ColorToken.surface)
             }
@@ -740,7 +730,7 @@ struct EventEditorView: View {
     private func loadMainEventIfNeeded() {
         guard !didLoadMain else { return }
         title = workspace.title
-        mainStatus = workspace.mainEventStatus
+        mainStatus = workspace.mainEventStatus.editorValue
         startsAt = workspace.mainEventStartsAt
         endsAt = workspace.mainEventEndsAt
         isAllDay = workspace.mainEventIsAllDay
@@ -769,7 +759,7 @@ struct EventEditorView: View {
     private func save() {
         let couldManageMainEvent = workspace.canManageMainEvent
         if isMainEvent {
-            if !workspace.isScopedEvent {
+            if canEditBudget {
                 _ = workspace.updateWorkspaceBudgetCap(parsedMainBudget)
             }
             workspace.updateMainEvent(
@@ -805,16 +795,16 @@ struct EventEditorView: View {
                 imageData: imageData,
                 eventDescription: eventDescription.trimmingCharacters(in: .whitespacesAndNewlines),
                 dressCode: attireDescription(style: attireStyle, guidance: dressCode),
-                budgetCap: usesBudget ? (originalItem?.budgetCap ?? .zero) : nil
+                budgetCap: canEditBudget ? (usesBudget ? (originalItem?.budgetCap ?? .zero) : nil) : originalItem?.budgetCap
             )
             if originalItem == nil {
                 workspace.addTimelineItem(item)
-                workspace.allocateInitialBudget(parsedMainBudget, to: item.id)
+                if canEditBudget { workspace.allocateInitialBudget(parsedMainBudget, to: item.id) }
             } else {
-                let needsInitialAllocation = originalItem?.budgetCap == nil && usesBudget
+                let needsInitialAllocation = canEditBudget && originalItem?.budgetCap == nil && usesBudget
                 workspace.updateTimelineItem(item)
                 if needsInitialAllocation {
-                    workspace.allocateInitialBudget(parsedMainBudget, to: item.id)
+                    if canEditBudget { workspace.allocateInitialBudget(parsedMainBudget, to: item.id) }
                 }
             }
         }
@@ -1098,6 +1088,7 @@ private struct EventCostsEditorView: View {
                             costRow(expense)
                         }
                         .buttonStyle(.plain)
+                        .deleteDisabled(expense.status == .paid)
                     }
                     .onDelete(perform: deleteExpenses)
 
@@ -1186,7 +1177,8 @@ private struct EventCostsEditorView: View {
     }
 
     private func deleteExpenses(at offsets: IndexSet) {
-        expenses.remove(atOffsets: offsets)
+        let removable = offsets.filter { expenses.indices.contains($0) && expenses[$0].status != .paid }
+        expenses.remove(atOffsets: IndexSet(removable))
     }
 }
 
@@ -1242,7 +1234,7 @@ private struct EventExpenseEditorView: View {
 
     private var canSave: Bool {
         guard let parsedAmount else { return false }
-        return !trimmedTitle.isEmpty && parsedAmount > .zero
+        return expense?.status != .paid && !trimmedTitle.isEmpty && parsedAmount > .zero
     }
 
     var body: some View {
@@ -1258,6 +1250,7 @@ private struct EventExpenseEditorView: View {
                     currencyCode: workspace.currencyCode
                 )
             }
+            .disabled(expense?.status == .paid)
             .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("Category") {
@@ -1268,6 +1261,7 @@ private struct EventExpenseEditorView: View {
                     }
                 }
             }
+            .disabled(expense?.status == .paid)
             .listRowBackground(AppTheme.ColorToken.surface)
 
             Section("Status") {
@@ -1279,24 +1273,27 @@ private struct EventExpenseEditorView: View {
                 }
                 .pickerStyle(.segmented)
             }
+            .disabled(expense?.status == .paid)
             .listRowBackground(AppTheme.ColorToken.surface)
         }
         .formStyle(.grouped)
         .appKeyboardDismissal()
         .scrollContentBackground(.hidden)
         .background(AppTheme.ColorToken.background)
-        .navigationTitle(expense == nil ? "Add Cost" : "Edit Cost")
+        .navigationTitle(expense?.status == .paid ? "Paid Cost" : (expense == nil ? "Add Cost" : "Edit Cost"))
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
+                Button(expense?.status == .paid ? "Done" : "Cancel") { dismiss() }
             }
 
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { save() }
-                    .disabled(!canSave)
-                    .keyboardShortcut(.defaultAction)
+            if expense?.status != .paid {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .disabled(!canSave)
+                        .keyboardShortcut(.defaultAction)
+                }
             }
         }
     }

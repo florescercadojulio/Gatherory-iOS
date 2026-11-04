@@ -1065,6 +1065,12 @@ enum MainEventStatus: String, CaseIterable, Identifiable, Codable {
     var isReadOnly: Bool {
         self == .finished || self == .cancelled
     }
+
+    /// Native event editors no longer expose a lifecycle picker. Legacy drafts
+    /// become ongoing when saved, while explicit terminal states stay intact.
+    var editorValue: Self {
+        self == .draft ? .ongoing : self
+    }
 }
 
 enum EventResponse: String, CaseIterable, Identifiable, Codable {

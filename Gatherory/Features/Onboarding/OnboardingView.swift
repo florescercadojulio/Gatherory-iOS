@@ -48,72 +48,7 @@ struct OnboardingView: View {
     }
 
     private var welcomePage: some View {
-        ScrollView {
-            VStack(spacing: AppTheme.Spacing.section) {
-                Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 8 : 52)
-
-                VStack(spacing: AppTheme.Spacing.standard) {
-                    Image("GatheroryLaunchMark")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 108, height: 108)
-                        .accessibilityHidden(true)
-
-                    Text(AppCopy.Primer.Onboarding.welcomeTitle)
-                        .font(.largeTitle.bold())
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 340)
-                }
-
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
-                    OnboardingFeature(
-                        symbol: "envelope.open.fill",
-                        title: AppCopy.Primer.Onboarding.invitationTitle,
-                        message: AppCopy.Primer.Onboarding.invitationMessage
-                    )
-
-                    OnboardingFeature(
-                        symbol: "rectangle.stack.badge.plus",
-                        title: AppCopy.Primer.Onboarding.planningTitle,
-                        message: AppCopy.Primer.Onboarding.planningMessage
-                    )
-                }
-                .frame(maxWidth: 520)
-
-                Spacer(minLength: AppTheme.Spacing.spacious)
-
-                VStack(spacing: AppTheme.Spacing.compact) {
-                    Image(systemName: "person.2.fill")
-                        .font(.title2)
-                        .foregroundStyle(AppTheme.ColorToken.accent)
-                        .accessibilityHidden(true)
-
-                    Text(AppCopy.Primer.Onboarding.collaborationMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 430)
-                }
-            }
-            .padding(.horizontal, AppTheme.Spacing.spacious)
-            .padding(.bottom, 104)
-            .frame(maxWidth: .infinity, minHeight: 690)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .safeAreaInset(edge: .bottom) {
-            Button(AppCopy.Common.continueAction) {
-                page = .create
-            }
-            .font(.headline)
-            .buttonStyle(.borderedProminent)
-            .foregroundStyle(AppTheme.ColorToken.onAccent)
-            .controlSize(.large)
-            .frame(maxWidth: 560)
-            .padding(.horizontal, AppTheme.Spacing.spacious)
-            .padding(.top, AppTheme.Spacing.compact)
-            .padding(.bottom, AppTheme.Spacing.standard)
-            .frame(maxWidth: .infinity)
-        }
+        OnboardingWelcomePrimer { page = .create }
     }
 
     private var createPage: some View {
@@ -216,6 +151,80 @@ struct OnboardingView: View {
     private enum Page {
         case welcome
         case create
+    }
+}
+
+/// The original native welcome content, shared by classic and guided onboarding.
+struct OnboardingWelcomePrimer: View {
+    let onContinue: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: AppTheme.Spacing.section) {
+                Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 8 : 52)
+
+                VStack(spacing: AppTheme.Spacing.standard) {
+                    Image("GatheroryLaunchMark")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 108, height: 108)
+                        .accessibilityHidden(true)
+
+                    Text(AppCopy.Primer.Onboarding.welcomeTitle)
+                        .font(.largeTitle.bold())
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 340)
+                }
+
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.spacious) {
+                    OnboardingFeature(
+                        symbol: "envelope.open.fill",
+                        title: AppCopy.Primer.Onboarding.invitationTitle,
+                        message: AppCopy.Primer.Onboarding.invitationMessage
+                    )
+
+                    OnboardingFeature(
+                        symbol: "rectangle.stack.badge.plus",
+                        title: AppCopy.Primer.Onboarding.planningTitle,
+                        message: AppCopy.Primer.Onboarding.planningMessage
+                    )
+                }
+                .frame(maxWidth: 520)
+
+                Spacer(minLength: AppTheme.Spacing.spacious)
+
+                VStack(spacing: AppTheme.Spacing.compact) {
+                    Image(systemName: "person.2.fill")
+                        .font(.title2)
+                        .foregroundStyle(AppTheme.ColorToken.accent)
+                        .accessibilityHidden(true)
+
+                    Text(AppCopy.Primer.Onboarding.collaborationMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 430)
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.spacious)
+            .padding(.bottom, 104)
+            .frame(maxWidth: .infinity, minHeight: 690)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .safeAreaInset(edge: .bottom) {
+            Button(AppCopy.Common.continueAction, action: onContinue)
+                .accessibilityIdentifier("onboarding.welcome.continue")
+            .font(.headline)
+            .buttonStyle(.borderedProminent)
+            .foregroundStyle(AppTheme.ColorToken.onAccent)
+            .controlSize(.large)
+            .frame(maxWidth: 560)
+            .padding(.horizontal, AppTheme.Spacing.spacious)
+            .padding(.top, AppTheme.Spacing.compact)
+            .padding(.bottom, AppTheme.Spacing.standard)
+            .frame(maxWidth: .infinity)
+        }
     }
 }
 

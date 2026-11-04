@@ -1,5 +1,10 @@
 # Gatherory App Store release and review handoff
 
+For the latest local build evidence and remaining acceptance gates, use the
+[November 2 V1 checkpoint](v1-release-checkpoint-2026-11-02.md). The upload
+history and dated audits below are historical records, not a current deployment
+or App Store Connect inspection.
+
 The later [release readiness audit](release-readiness-audit-2026-10-23.md)
 found and corrected an invitation-preview timezone issue, broken Home lifecycle
 shortcuts and the primer's upward practice gesture. It also improves safe sync

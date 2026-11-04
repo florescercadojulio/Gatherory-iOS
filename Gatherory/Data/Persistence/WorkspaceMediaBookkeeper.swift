@@ -15,6 +15,16 @@ struct WorkspaceMediaBookkeeper {
         self.ownerUserID = ownerUserID
     }
 
+    /// Called only when restoring the account graph, before that account's
+    /// upload worker starts. Ordinary preparation must not reset active uploads.
+    func stageInterruptedUploadRecovery() throws {
+        for transfer in try context.fetch(FetchDescriptor<PendingMediaTransfer>())
+        where transfer.ownerUserID == ownerUserID && transfer.state == .uploading {
+            transfer.state = .pending
+            transfer.nextAttemptAt = nil
+        }
+    }
+
     func stagePreparation(from library: WorkspaceLibrary) throws {
         let existing = try context.fetch(FetchDescriptor<PendingMediaTransfer>())
             .filter { $0.ownerUserID == ownerUserID }

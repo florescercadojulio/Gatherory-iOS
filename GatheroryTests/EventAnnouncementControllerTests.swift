@@ -237,12 +237,60 @@ struct EventAnnouncementControllerTests {
         #expect(!controller.canSend)
     }
 
+    @Test("Switching event scopes clears the prior feed and loads only the new event")
+    func switchingEventScopesDoesNotCarryFeed() async {
+        let firstEventID = eventID
+        let secondEventID = UUID()
+        let transport = AnnouncementTestTransport()
+        transport.feed = .init(announcements: [announcement(event: firstEventID)], canSend: true)
+        let controller = EventAnnouncementController()
+        activate(controller, transport: transport, eventID: firstEventID)
+        await controller.refresh()
+        #expect(controller.announcements.map(\.eventId) == [firstEventID])
+
+        transport.feed = .init(announcements: [announcement(event: secondEventID)], canSend: true)
+        activate(controller, transport: transport, eventID: secondEventID)
+        #expect(controller.announcements.isEmpty)
+        #expect(!controller.canSend)
+        #expect(!controller.hasLoaded)
+        await controller.refresh()
+
+        #expect(transport.loadedEventIDs == [firstEventID, secondEventID])
+        #expect(controller.announcements.map(\.eventId) == [secondEventID])
+        #expect(controller.canSend)
+    }
+
+    @Test("A late response for the prior event cannot replace the newly selected feed")
+    func lateLoadAfterEventSwitch() async {
+        let firstEventID = eventID
+        let secondEventID = UUID()
+        let delayedTransport = AnnouncementTestTransport()
+        delayedTransport.delayLoad = true
+        let controller = EventAnnouncementController()
+        activate(controller, transport: delayedTransport, eventID: firstEventID)
+        let oldLoad = Task { await controller.refresh() }
+        while delayedTransport.loadContinuation == nil { await Task.yield() }
+
+        let nextTransport = AnnouncementTestTransport()
+        nextTransport.feed = .init(announcements: [announcement(event: secondEventID)], canSend: true)
+        activate(controller, transport: nextTransport, eventID: secondEventID)
+        await controller.refresh()
+        delayedTransport.loadContinuation?.resume(returning: .init(
+            announcements: [announcement(event: firstEventID)], canSend: true
+        ))
+        await oldLoad.value
+
+        #expect(controller.scope?.eventID == secondEventID)
+        #expect(controller.announcements.map(\.eventId) == [secondEventID])
+    }
+
     private func announcement(event: UUID? = nil) -> EventAnnouncement {
         .init(id: UUID(), eventId: event ?? eventID, message: "Update", authorName: "Host", createdAt: .now)
     }
     private func activate(_ controller: EventAnnouncementController, transport: any EventAnnouncementTransport,
-                          principal: NotificationPrincipal = .account(id: "account-a"), generation: UInt64 = 0) {
-        controller.activate(scope: .init(principal: principal, generation: generation, eventID: eventID), transport: transport, isCurrent: { true })
+                          principal: NotificationPrincipal = .account(id: "account-a"), generation: UInt64 = 0,
+                          eventID: UUID? = nil) {
+        controller.activate(scope: .init(principal: principal, generation: generation, eventID: eventID ?? self.eventID), transport: transport, isCurrent: { true })
     }
 }
 
@@ -250,11 +298,13 @@ struct EventAnnouncementControllerTests {
     var feed = EventAnnouncementFeed(announcements: [], canSend: true)
     var failure: EventAnnouncementFailure?
     var sends: [(id: UUID, message: String, audience: EventAnnouncementAudience)] = []
+    var loadedEventIDs: [UUID] = []
     var delayLoad = false
     var delaySend = false
     var loadContinuation: CheckedContinuation<EventAnnouncementFeed, any Error>?
     var sendContinuation: CheckedContinuation<EventAnnouncement, any Error>?
     func load(eventID: UUID) async throws -> EventAnnouncementFeed {
+        loadedEventIDs.append(eventID)
         if delayLoad { return try await withCheckedThrowingContinuation { loadContinuation = $0 } }
         if let failure { throw failure }
         return feed

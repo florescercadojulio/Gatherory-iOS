@@ -1,11 +1,49 @@
 # Offline and PostgreSQL synchronization
 
+Shared budget allocations use a separate atomic, versioned whole-budget command.
+Its conflict review, retry ordering and native money contract are described in
+[team budget safety](team-budget-safety.md), with the
+[November 2 mobile acceptance results](testing-verification.md).
+
 Gatherory uses a local-first outbox/inbox design. SwiftData remains the UI's
 source of truth, while the authenticated web API replicates independently
 versioned planning records to PostgreSQL. A complete workspace snapshot remains
 as a compatibility and web-companion materialized view. Losing connectivity
 does not block editing: changes remain in the durable outbox and retry when the
 app becomes active or another local edit is made.
+
+Event ideas now use an explicit native Schedule confirmation before becoming
+dated Home events. Personal Decide responses remain independent of that
+commitment and of RSVP. The handoff uses the existing idea/linked-event outbox
+records, with no new sync schema; see [event idea scheduling](idea-scheduling.md)
+for permissions, stale-request checks, and verification limits.
+
+## Connection UI — October 30, 2026
+
+Saved content stays unobstructed: the app-wide offline banner and the Events
+library's bottom invitation-error bar have been removed. Open **Account** to
+see a compact labeled connection icon: green Online, red Offline, or neutral
+Checking before the native network monitor has reported a path. The same label
+appears in guest Account. Labels and differing symbols supplement color.
+
+`AppConnectionStatus` uses Apple's `NWPathMonitor` for network availability;
+Online is not a promise that authentication, the server, or pending uploads
+have completed. Signed-in Account shows Offline while cached-account session
+validation remains unavailable. Cloud Sync retains its separate progress and
+error information. Offline Account offers a compact Retry action, which retries
+session restoration when needed and requests manual sync. Sync Now remains
+available for the other connection states.
+
+Populated Events lists retain pull-to-refresh without an error overlay. If no
+browsable events exist, invitation errors and a retry action appear inside the
+existing empty state, alongside normal creation choices. True pre-entry
+identity/restoration failures retain their blocking recovery controls. This
+change does not alter caching, outbox delivery, account boundaries or permission
+checks.
+
+Verification: 13 recovery unit tests and two native UI methods passed (Online
+and Offline in standard Light/Dark layouts). See **Compact offline UI** in
+`testing-verification.md` for artifacts and fixture limits.
 
 ## Invariants
 
@@ -788,3 +826,15 @@ Release verification and the physical-device persistence checklist live in
   a child-event planning invitation resolves to its own scoped workspace,
   while guest invitations remain guest-only.
 - Expose a small sync-status surface for retryable and attention states.
+
+
+## Interrupted media upload recovery — November 4, 2026
+
+At account-library restoration, durable media transfers left in `.uploading`
+by an interrupted process return to `.pending` for that account only. Transfer
+identity, source file and attempt count are preserved; delayed retry is cleared.
+This reconciliation happens before the restored account's worker starts.
+Ordinary media preparation does not reset an actively uploading transfer.
+The two-account regression and interrupted-restore regression pass; see the
+[core gathering audit](core-gathering-release-check-2026-11-04.md). The source fix
+requires a new native build; live R2 recovery was not exercised in this pass.

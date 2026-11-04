@@ -78,6 +78,7 @@ final class PlanningWorkspace {
     private var viewerEmail: String?
     private(set) var localGuestProfileID: UUID?
     private var isViewerConfigured = false
+    private var viewerGeneration: UInt64 = 0
 
     private var decisionHistory: [DecisionRecord] = []
 
@@ -109,7 +110,7 @@ final class PlanningWorkspace {
         notes: [EventNote] = [],
         todos: [EventTodo] = [],
         ideaResponses: [IdeaResponse] = [],
-        mainEventStatus: MainEventStatus = .draft,
+        mainEventStatus: MainEventStatus = .ongoing,
         mainEventResponse: EventResponse? = nil,
         eventMoments: [EventMoment] = [],
         guides: [ExperienceGuide] = [],
@@ -358,6 +359,12 @@ final class PlanningWorkspace {
 
     func configureViewer(_ account: UserAccount?) {
         if viewerUserID != account?.id { decisionHistory.removeAll() }
+        if !isViewerConfigured
+            || viewerUserID != account?.id
+            || viewerEmail != account?.email
+            || localGuestProfileID != nil {
+            viewerGeneration &+= 1
+        }
         isViewerConfigured = true
         viewerUserID = account?.id
         viewerEmail = account?.email
@@ -369,6 +376,12 @@ final class PlanningWorkspace {
     func configureLocalGuestViewer(_ profile: LocalGuestProfile) {
         let guestID = profile.storageID
         if viewerUserID != guestID { decisionHistory.removeAll() }
+        if !isViewerConfigured
+            || viewerUserID != guestID
+            || viewerEmail != nil
+            || localGuestProfileID != profile.id {
+            viewerGeneration &+= 1
+        }
         isViewerConfigured = true
         viewerUserID = guestID
         viewerEmail = nil
@@ -562,7 +575,12 @@ final class PlanningWorkspace {
     /// Increasing the cap adds to the free pool; a new cap starts on the main event.
     @discardableResult
     func updateWorkspaceBudgetCap(_ newCap: Decimal?) -> Bool {
-        guard !isScopedEvent else { return false }
+        guard canManageBudgets else { return false }
+        if newCap == nil {
+            for child in timeline where child.budgetCap != nil {
+                guard canManageBudgets(for: .subevent(child.id)) else { return false }
+            }
+        }
         guard let change = WorkspaceBudgetRules.capChange(
             to: newCap,
             currentCap: workspaceBudgetCap,
@@ -589,7 +607,7 @@ final class PlanningWorkspace {
     /// to the free pool so the workspace never loses budget capacity.
     @discardableResult
     func setEventRequiresBudget(_ requiresBudget: Bool, eventID: UUID) -> Bool {
-        guard workspaceBudgetCap != nil,
+        guard canManageBudgets(for: .subevent(eventID)), workspaceBudgetCap != nil,
               let index = timeline.firstIndex(where: { $0.id == eventID }) else {
             return false
         }
@@ -607,7 +625,7 @@ final class PlanningWorkspace {
     /// remainder. The workspace cap never changes.
     @discardableResult
     func allocateInitialBudget(_ amount: Decimal?, to eventID: UUID) -> Bool {
-        guard workspaceBudgetCap != nil,
+        guard canManageBudgets(for: .subevent(eventID)), workspaceBudgetCap != nil,
               budgetCap(for: .subevent(eventID)) != nil,
               let funding = WorkspaceBudgetRules.initialFunding(
                 amount: amount,
@@ -648,8 +666,12 @@ final class PlanningWorkspace {
         from source: BudgetAccount,
         to destination: BudgetAccount
     ) -> Bool {
-        guard workspaceBudgetCap != nil,
-              source != destination,
+        let sourceReference: EventReference? = { if case .event(let ref) = source { ref } else { nil } }()
+        let destinationReference: EventReference? = { if case .event(let ref) = destination { ref } else { nil } }()
+        guard canManageBudgets,
+              (sourceReference == nil || canManageBudgets(for: sourceReference!)),
+              (destinationReference == nil || canManageBudgets(for: destinationReference!)),
+              workspaceBudgetCap != nil, source != destination,
               let transfer = WorkspaceBudgetRules.transfer(
                 amount: amount,
                 sourceBalance: budgetBalance(for: source),
@@ -737,12 +759,27 @@ final class PlanningWorkspace {
     }
 
     func replaceExpenses(_ expenses: [EventExpense], forEventID eventID: UUID) {
+        // A malformed replacement must not erase valid unpaid rows before the
+        // invalid amount is noticed.
+        guard expenses.allSatisfy({ $0.amount >= .zero }) else { return }
+        let existingExpenses = eventExpenses.filter { $0.eventID == eventID }
         eventExpenses.removeAll { $0.eventID == eventID }
         eventExpenses.append(contentsOf: expenses.map { expense in
             var scopedExpense = expense
             scopedExpense.eventID = eventID
+            if let paid = existingExpenses.first(where: {
+                $0.status == .paid && ($0.id == scopedExpense.id
+                    || ($0.sourceIdeaID != nil && $0.sourceIdeaID == scopedExpense.sourceIdeaID))
+            }) {
+                scopedExpense = paid
+                scopedExpense.eventID = eventID
+            }
             return scopedExpense
         })
+        for paid in existingExpenses where paid.status == .paid
+            && !eventExpenses.contains(where: { $0.id == paid.id }) {
+            eventExpenses.append(paid)
+        }
     }
 
     func participants(for reference: EventReference) -> [WorkspaceMember] {
@@ -1015,13 +1052,38 @@ final class PlanningWorkspace {
         return !isScopedEvent || canManageInvitations(for: .main)
     }
 
+    /// Authority for shared cap and allocation commands.
+    var canManageBudgets: Bool { canManageBudgets(for: .main) }
+
+    func canManageBudgets(for target: EventReference) -> Bool {
+        let isBudgetableTarget = switch target {
+        case .main, .subevent: true
+        case .idea: false
+        }
+        guard isBudgetableTarget,
+              !isScopedEvent, !isInvitationProjection, showsPlanningInterface,
+              !isMainEventDeleted, !currentMainEventStatus.isReadOnly,
+              let viewer = currentViewerMember(for: .main),
+              viewer.invitationStatus == .active,
+              canManageInvitations(for: .main),
+              canManageInvitations(for: target) else { return false }
+        return viewer.participantRole == .host
+            || (viewer.participantRole == .collaborator && viewer.planningPermission == .manage)
+    }
+
     var mainEventHasScheduledDate: Bool {
         !isScopedEvent || scopedMainEventDetails?.schedulingState != .unscheduled
     }
 
     var canDeleteMainEvent: Bool {
-        !isScopedEvent && !isMainEventDeleted && showsPlanningInterface && mainEventStatus == .draft
-            && currentViewerMember(for: .main)?.planningPermission != .viewOnly
+        guard !isScopedEvent, !isMainEventDeleted, showsPlanningInterface,
+              let viewer = currentViewerMember(for: .main) else { return false }
+        if mainEventStatus == .draft {
+            return viewer.planningPermission != .viewOnly
+        }
+        return mainEventStatus == .ongoing
+            && canManageMainEvent
+            && canManageInvitations(for: .main)
     }
 
     /// Shared lifecycle action, not a personal hide/leave operation. Guests,
@@ -1033,7 +1095,7 @@ final class PlanningWorkspace {
               viewer.planningPermission != .viewOnly else { return nil }
         switch reference {
         case .main:
-            return canDeleteMainEvent ? .deleteDraftMainEvent : nil
+            return canDeleteMainEvent ? .deleteMainEvent : nil
         case .subevent(let id):
             guard timeline.contains(where: {
                 $0.id == id && $0.parentEventID == mainEventID && $0.status != .archived
@@ -1053,7 +1115,7 @@ final class PlanningWorkspace {
     ) -> Bool {
         guard eventRemovalAction(for: reference) == action else { return false }
         switch (reference, action) {
-        case (.main, .deleteDraftMainEvent):
+        case (.main, .deleteMainEvent):
             deleteMainEvent()
         case (.subevent(let id), .archiveSubevent):
             guard let item = timeline.first(where: { $0.id == id }) else { return false }
@@ -1159,18 +1221,6 @@ final class PlanningWorkspace {
             if scopedMainEventDetails.status == .archived
                 || scopedMainEventDetails.completionStatus == .complete { return .finished }
         }
-        guard mainEventStatus != .draft, !mainEventStatus.isReadOnly else {
-            return mainEventStatus
-        }
-
-        if Date.now > mainEventWindow.upperBound {
-            return .finished
-        }
-
-        if mainEventWindow.contains(Date.now) {
-            return .ongoing
-        }
-
         return mainEventStatus
     }
 
@@ -1207,6 +1257,82 @@ final class PlanningWorkspace {
             && [.new, .maybe, .shortlisted].contains(idea.status)
     }
 
+    /// Approval is an explicit decision on a non-event idea. Event ideas use
+    /// the separate scheduling flow so approval never creates or approves an
+    /// event implicitly.
+    func canApproveIdea(_ idea: PlanningIdea) -> Bool {
+        guard let storedIdea = ideas.first(where: { $0.id == idea.id }),
+              storedIdea == idea,
+              storedIdea.category != .event,
+              storedIdea.category != .music,
+              [.new, .maybe, .shortlisted].contains(storedIdea.status),
+              canDecide(on: storedIdea) else { return false }
+        return approvalParentSnapshot(for: storedIdea) != nil
+    }
+
+    /// Captures the exact idea, parent event, and current viewer before the
+    /// approval sheet is presented.
+    func makeIdeaApprovalRequest(for idea: PlanningIdea) -> IdeaApprovalRequest? {
+        guard canApproveIdea(idea),
+              let viewer = currentViewerMember(for: decisionEventReference(for: idea)),
+              let parent = approvalParentSnapshot(for: idea) else { return nil }
+        return IdeaApprovalRequest(
+            rootEventID: mainEventID,
+            ideaSnapshot: idea,
+            parentEventID: parent.id,
+            parentEventName: parent.name,
+            parentStatus: parent.status,
+            viewerGeneration: viewerGeneration,
+            viewerMemberID: viewer.id,
+            viewerMemberSnapshot: viewer
+        )
+    }
+
+    /// Commits approval only while the exact proposal, parent, and authority
+    /// captured by the sheet remain current. Repeating the exact successful
+    /// request is idempotent.
+    @discardableResult
+    func confirmIdeaApproval(_ request: IdeaApprovalRequest) -> Bool {
+        guard request.ideaSnapshot.category != .event,
+              request.ideaSnapshot.category != .music,
+              [.new, .maybe, .shortlisted].contains(request.ideaSnapshot.status) else { return false }
+        guard let currentParent = approvalParentSnapshot(for: request.ideaSnapshot),
+              currentParent.id == request.parentEventID,
+              currentParent.name == request.parentEventName,
+              currentParent.status == request.parentStatus else { return false }
+        guard request.rootEventID == mainEventID,
+              request.viewerGeneration == viewerGeneration,
+              let currentViewer = currentViewerMember(for: decisionEventReference(for: request.ideaSnapshot)),
+              currentViewer.id == request.viewerMemberID,
+              currentViewer == request.viewerMemberSnapshot,
+              let index = ideas.firstIndex(where: { $0.id == request.ideaID }) else { return false }
+
+        var approvedIdea = request.ideaSnapshot
+        approvedIdea.status = .chosen
+        if ideas[index] == approvedIdea {
+            return canDecide(on: ideas[index])
+        }
+        guard ideas[index] == request.ideaSnapshot,
+              canApproveIdea(request.ideaSnapshot) else { return false }
+        updateIdea(request.ideaSnapshot, status: .chosen)
+        return ideas[index] == approvedIdea
+    }
+
+    private func approvalParentSnapshot(
+        for idea: PlanningIdea
+    ) -> (id: UUID, name: String, status: IdeaApprovalRequest.ParentStatus)? {
+        let eventID = idea.eventID ?? mainEventID
+        guard eventID == mainEventID else {
+            guard let event = timeline.first(where: {
+                $0.id == eventID && $0.parentEventID == mainEventID
+                    && $0.status != .archived && $0.status != .cancelled && $0.status != .rejected
+            }) else { return nil }
+            return (event.id, event.title, .subevent(event.status))
+        }
+        guard !isMainEventDeleted, !currentMainEventStatus.isReadOnly else { return nil }
+        return (mainEventID, title, .main(mainEventStatus))
+    }
+
     func response(on idea: PlanningIdea) -> DecisionChoice? {
         ideaResponses.first { $0.ideaID == idea.id && $0.userID == responseUserID }?.choice
     }
@@ -1235,6 +1361,130 @@ final class PlanningWorkspace {
         guard canManageEvent(reference), let viewer = currentViewerMember(for: .main),
               viewer.participantRole == .host || viewer.planningPermission == .manage else { return false }
         return true
+    }
+
+    /// Scheduling an event idea is a management action. Contributors can
+    /// continue to suggest and respond to ideas, but cannot publish one to Home.
+    func canScheduleEventIdea(_ idea: PlanningIdea) -> Bool {
+        guard canManageEventIdeaScheduling(idea),
+              idea.eventConfiguration != nil,
+              [.new, .maybe, .shortlisted, .chosen].contains(idea.status) else { return false }
+        return true
+    }
+
+    /// Management authority for schedule lifecycle mutations, including
+    /// revoking or changing an already scheduled idea. Source status is not
+    /// considered so archived/passed ideas can still be safely unscheduled.
+    func canManageEventIdeaScheduling(_ idea: PlanningIdea) -> Bool {
+        guard !isScopedEvent, !isInvitationProjection, showsPlanningInterface,
+              !isMainEventDeleted, !currentMainEventStatus.isReadOnly,
+              let storedIdea = ideas.first(where: { $0.id == idea.id }),
+              storedIdea == idea,
+              storedIdea.category == .event,
+              (storedIdea.eventID ?? mainEventID) == mainEventID,
+              let viewer = currentViewerMember(for: .main),
+              viewer.invitationStatus == .active,
+              viewer.planningPermission != .viewOnly else { return false }
+        return viewer.participantRole == .host
+            || (viewer.participantRole == .collaborator && viewer.planningPermission == .manage)
+    }
+
+    /// Captures the exact proposal and current authority before presenting the
+    /// Schedule sheet. Exact retries of a successful submission are idempotent.
+    func makeScheduleRequest(for idea: PlanningIdea) -> EventIdeaScheduleRequest? {
+        guard canScheduleEventIdea(idea),
+              let viewer = currentViewerMember(for: .main) else { return nil }
+        return EventIdeaScheduleRequest(
+            rootEventID: mainEventID,
+            ideaSnapshot: idea,
+            viewerGeneration: viewerGeneration,
+            viewerMemberID: viewer.id,
+            viewerMemberSnapshot: viewer
+        )
+    }
+
+    /// Atomically confirms a dated schedule proposal. A nil result means the
+    /// source, root, viewer generation, permissions, or date became invalid;
+    /// no workspace state is changed in that case.
+    @discardableResult
+    func confirmScheduleEventIdea(
+        _ request: EventIdeaScheduleRequest,
+        configuration: EventIdeaConfiguration
+    ) -> UUID? {
+        guard request.rootEventID == mainEventID,
+              request.viewerGeneration == viewerGeneration,
+              canAddChildEvent(to: mainEventID),
+              let currentViewer = currentViewerMember(for: .main),
+              currentViewer.id == request.viewerMemberID,
+              currentViewer == request.viewerMemberSnapshot,
+              let index = ideas.firstIndex(where: { $0.id == request.ideaID }),
+              Self.isValidScheduleConfiguration(configuration, for: request.ideaSnapshot) else { return nil }
+
+        // A retry after a successful commit uses the same sheet request. Treat
+        // only the exact committed idea as success; any intervening edit makes
+        // the old sheet stale even if its date and linked ID still match.
+        var expectedCommittedIdea = request.ideaSnapshot
+        expectedCommittedIdea.status = .chosen
+        expectedCommittedIdea.configuration = .event(configuration)
+        if ideas[index] == expectedCommittedIdea,
+           canScheduleEventIdea(ideas[index]),
+           let existingID = timeline.first(where: { $0.linkedIdeaID == request.ideaID })?.id {
+            return existingID
+        }
+
+        // Once an idea already owns a Home event, schedule edits belong to
+        // that event's controls. Do not rebuild it from proposal defaults.
+        guard !timeline.contains(where: { $0.linkedIdeaID == request.ideaID }) else { return nil }
+
+        guard ideas[index] == request.ideaSnapshot,
+              canScheduleEventIdea(request.ideaSnapshot) else { return nil }
+
+        if let requestedBudget = configuration.proposedBudget, requestedBudget > .zero {
+            guard workspaceBudgetCap != nil,
+                  WorkspaceBudgetRules.initialFunding(
+                    amount: requestedBudget,
+                    freePool: freeBudgetPool,
+                    mainAllocation: mainEventBudgetCap
+                  ) != nil,
+                  let currentViewer = currentViewerMember(for: .main),
+                  scheduledParticipantIDs(for: configuration).contains(currentViewer.id) else { return nil }
+        }
+
+        var scheduledIdea = ideas[index]
+        scheduledIdea.status = .chosen
+        scheduledIdea.configuration = .event(configuration)
+        // Use the same normalized write path as legacy approvals so expenses,
+        // linked Home events, and participation projections stay consistent.
+        replaceIdea(at: index, with: scheduledIdea)
+        return timeline.first(where: { $0.linkedIdeaID == scheduledIdea.id })?.id
+    }
+
+    private static func isValidScheduleConfiguration(
+        _ configuration: EventIdeaConfiguration,
+        for idea: PlanningIdea
+    ) -> Bool {
+        guard let original = idea.eventConfiguration,
+              let start = configuration.proposedDate,
+              start.timeIntervalSinceReferenceDate.isFinite,
+              TimeZone(identifier: configuration.timeZoneIdentifier) != nil else { return false }
+        if let end = configuration.proposedEndDate {
+            guard end.timeIntervalSinceReferenceDate.isFinite else { return false }
+            if configuration.isAllDay {
+                guard end >= start else { return false }
+            } else {
+                guard end > start else { return false }
+            }
+        }
+
+        // The Schedule sheet may edit timing and location only. Keep the
+        // proposal's event type, purpose, audience, budget, and attire settings.
+        var expected = original
+        expected.proposedDate = configuration.proposedDate
+        expected.proposedEndDate = configuration.proposedEndDate
+        expected.isAllDay = configuration.isAllDay
+        expected.timeZoneIdentifier = configuration.timeZoneIdentifier
+        expected.location = configuration.location
+        return expected == configuration
     }
 
     @discardableResult func cancelEvent(_ reference: EventReference) -> Bool {
@@ -1287,7 +1537,7 @@ final class PlanningWorkspace {
         childEvent.budgetCap = WorkspaceBudgetRules.childAllocation(
             workspaceCap: workspaceBudgetCap,
             previousAllocation: nil,
-            requestedAllocation: childEvent.budgetCap
+            requestedAllocation: canManageBudgets ? childEvent.budgetCap : nil
         )
         if childEvent.participantIDs.isEmpty {
             childEvent.participantIDs = mainEventParticipantIDs
@@ -1312,7 +1562,9 @@ final class PlanningWorkspace {
         childEvent.budgetCap = WorkspaceBudgetRules.childAllocation(
             workspaceCap: workspaceBudgetCap,
             previousAllocation: previousAllocation,
-            requestedAllocation: childEvent.budgetCap
+            requestedAllocation: canManageBudgets(for: .subevent(childEvent.id))
+                ? childEvent.budgetCap
+                : previousAllocation
         )
         timeline[index] = childEvent
         reconcileParticipations(for: childEvent.id, participantIDs: childEvent.participantIDs)
@@ -1775,7 +2027,22 @@ final class PlanningWorkspace {
         todos.removeAll { $0.eventID == item.id }
         eventParticipations.removeAll { $0.eventID == item.id }
         ideas.removeAll { $0.eventID == item.id }
-        eventExpenses.removeAll { $0.eventID == item.id }
+        for index in eventExpenses.indices where eventExpenses[index].eventID == item.id {
+            let sourceIdea = eventExpenses[index].sourceIdeaID.flatMap { sourceID in ideas.first(where: { $0.id == sourceID }) }
+            if eventExpenses[index].status == .paid {
+                let sourceEventID = sourceIdea?.eventID
+                let sourceEventSurvives = sourceEventID == mainEventID
+                    || sourceEventID.map { survivingID in timeline.contains(where: { $0.id == survivingID }) } == true
+                let ownerEventID = sourceEventSurvives ? (sourceEventID ?? mainEventID) : mainEventID
+                eventExpenses[index].eventID = ownerEventID
+                if sourceIdea?.eventID != ownerEventID {
+                    eventExpenses[index].sourceIdeaID = nil
+                }
+            } else if let sourceIdea {
+                eventExpenses[index].eventID = sourceIdea.eventID ?? mainEventID
+            }
+        }
+        eventExpenses.removeAll { $0.eventID == item.id && $0.status != .paid }
         notes.removeAll { $0.eventID == item.id }
         eventMoments.removeAll { $0.eventID == item.id }
         registry.removeAll { $0.eventID == item.id }
@@ -1786,6 +2053,9 @@ final class PlanningWorkspace {
 
     func updateIdea(_ idea: PlanningIdea, status: IdeaStatus) {
         guard let index = ideas.firstIndex(where: { $0.id == idea.id }), canDecide(on: ideas[index]) else { return }
+        if ideas[index].category == .event,
+           (ideas[index].status == .chosen || status == .chosen),
+           !canManageEventIdeaScheduling(ideas[index]) { return }
         guard !(isScopedEvent && ideas[index].category == .event && status == .chosen) else { return }
         var updatedIdea = ideas[index]
         updatedIdea.status = updatedIdea.category == .music ? .chosen : status
@@ -1798,9 +2068,36 @@ final class PlanningWorkspace {
             return
         }
         guard let index = ideas.firstIndex(where: { $0.id == idea.id }) else { return }
+        let current = ideas[index]
+        let changesScheduleLifecycle = current.category == .event && (
+            (current.status != .chosen && idea.status == .chosen)
+                || (current.status == .chosen && (
+                    idea.status != .chosen
+                        || Self.eventScheduleFieldsChanged(
+                            current.eventConfiguration,
+                            idea.eventConfiguration
+                        )
+                ))
+        )
+        if changesScheduleLifecycle, !canManageEventIdeaScheduling(current) { return }
         guard !(isScopedEvent && ideas[index].category == .event
                 && ideas[index].status != .chosen && idea.status == .chosen) else { return }
         replaceIdea(at: index, with: idea)
+    }
+
+    private static func eventScheduleFieldsChanged(
+        _ old: EventIdeaConfiguration?,
+        _ new: EventIdeaConfiguration?
+    ) -> Bool {
+        guard let old, let new else { return old != nil || new != nil }
+        return old.audience != new.audience
+            || old.requiresBudget != new.requiresBudget
+            || old.proposedBudget != new.proposedBudget
+            || old.proposedDate != new.proposedDate
+            || old.proposedEndDate != new.proposedEndDate
+            || old.isAllDay != new.isAllDay
+            || old.timeZoneIdentifier != new.timeZoneIdentifier
+            || old.location != new.location
     }
 
     func addIdea(_ idea: PlanningIdea) {
@@ -1825,6 +2122,28 @@ final class PlanningWorkspace {
         reconcileExpense(for: scopedIdea)
     }
 
+    /// Inserts a portable Blueprint idea as a fresh proposal without importing
+    /// any attached responses, schedule records, or other workspace relations.
+    /// The caller has already checked destination authorization.
+    @discardableResult
+    func insertBlueprintIdea(_ idea: PlanningIdea) -> Bool {
+        guard !ideas.contains(where: { $0.id == idea.id }) else { return false }
+        if idea.category == .music,
+           musicPlaylist(for: idea.eventID ?? mainEventID) != nil {
+            return false
+        }
+        ideas.insert(idea, at: 0)
+        reconcileExpense(for: idea)
+        return true
+    }
+
+    /// Restores the exact pre-import expense snapshot after a failed local save.
+    /// The caller must only use this for the idea it just inserted.
+    func rollbackBlueprintIdeaImport(id: UUID, previousExpenses: [EventExpense]) {
+        ideas.removeAll { $0.id == id }
+        eventExpenses = previousExpenses
+    }
+
     /// Promotes a dated, approved event proposal into a Home event without
     /// duplicating it. Undated approvals remain in Ideas until a date is set.
     @discardableResult
@@ -1836,14 +2155,16 @@ final class PlanningWorkspace {
             return nil
         }
 
-        let inheritedParticipants = mainEventParticipantIDs
-        let hostParticipants = members
-            .filter { $0.participantRole == .host && inheritedParticipants.contains($0.id) }
-            .map(\.id)
-        let participantIDs = configuration.audience == .hostsOnly && !hostParticipants.isEmpty
-            ? hostParticipants
-            : inheritedParticipants
+        let participantIDs = scheduledParticipantIDs(for: configuration)
         let existing = timeline.first(where: { $0.linkedIdeaID == idea.id })
+        if existing == nil, let requestedBudget = configuration.proposedBudget, requestedBudget > .zero {
+            guard workspaceBudgetCap != nil,
+                  WorkspaceBudgetRules.initialFunding(
+                    amount: requestedBudget,
+                    freePool: freeBudgetPool,
+                    mainAllocation: mainEventBudgetCap
+                  ) != nil else { return nil }
+        }
         let item = TimelineItem(
             id: existing?.id ?? UUID(),
             title: idea.title,
@@ -1862,6 +2183,7 @@ final class PlanningWorkspace {
             response: existing?.response,
             linkedIdeaID: idea.id,
             imageData: idea.imageData,
+            mediaAssetID: idea.mediaAssetID,
             eventDescription: idea.note,
             dressCode: existing.flatMap { $0.dressCode.isEmpty ? nil : $0.dressCode }
                 ?? configuration.attireDescription,
@@ -1875,6 +2197,16 @@ final class PlanningWorkspace {
             updateTimelineItem(item)
         }
         return timeline.contains { $0.id == item.id } ? item.id : nil
+    }
+
+    private func scheduledParticipantIDs(for configuration: EventIdeaConfiguration) -> [UUID] {
+        let inheritedParticipants = mainEventParticipantIDs
+        let hostParticipants = members
+            .filter { $0.participantRole == .host && inheritedParticipants.contains($0.id) }
+            .map(\.id)
+        return configuration.audience == .hostsOnly && !hostParticipants.isEmpty
+            ? hostParticipants
+            : inheritedParticipants
     }
 
     /// This is the single write path for existing ideas. Keeping financial
@@ -2002,6 +2334,14 @@ final class PlanningWorkspace {
     /// consume the workspace budget.
     private func reconcileExpense(for idea: PlanningIdea) {
         let existingIndex = eventExpenses.firstIndex { $0.sourceIdeaID == idea.id }
+        if let existingIndex, eventExpenses[existingIndex].status == .paid {
+            eventExpenses[existingIndex].title = idea.title
+            eventExpenses[existingIndex].category = idea.expenseCategory
+            eventExpenses[existingIndex].eventID = timeline.first(where: { $0.linkedIdeaID == idea.id })?.id
+                ?? idea.eventID ?? mainEventID
+            eventExpenses[existingIndex].updatedAt = .now
+            return
+        }
         guard let estimate = idea.estimatedCost,
               estimate > 0,
               idea.status != .passed,

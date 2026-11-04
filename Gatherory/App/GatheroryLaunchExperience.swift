@@ -31,6 +31,9 @@ struct GatheroryLaunchContainer: View {
     @State private var notificationNavigation = NotificationNavigationState()
     @State private var notificationSessionGeneration = UUID()
     @State private var localAccountLibraryID: String?
+#if DEBUG
+    @State private var developerOnboardingReplayAccountID: String?
+#endif
 
     private var sessionIdentity: String {
         authentication.currentUser?.id ?? authentication.localGuestProfile?.storageID ?? "signed-out"
@@ -47,6 +50,22 @@ struct GatheroryLaunchContainer: View {
             preparation.isReady(for: preparationRequest.identity)
     }
     private var preparationRecovery: SessionPreparationRecovery? { preparation.recovery(for: preparationRequest.identity) }
+
+    private var isDeveloperOnboardingReplayActive: Bool {
+#if DEBUG
+        DeveloperOnboardingReplayPolicy.isActive(
+            requestedAccountID: developerOnboardingReplayAccountID,
+            currentAccountID: authentication.currentUser?.id,
+            isAuthenticated: authentication.isAuthenticated,
+            isGuest: authentication.isGuestMode,
+            isSessionReady: isSessionReady,
+            isDebugBuild: true,
+            environment: AppRuntimeConfiguration.developerToolsEnvironment
+        )
+#else
+        false
+#endif
+    }
 
     private var authenticationFlowDestination: AuthenticationFlowDestination {
         AuthenticationFlowChain.default.destination(for: AuthenticationFlowContext(
@@ -141,16 +160,20 @@ struct GatheroryLaunchContainer: View {
                 case .accountDeletionCleanup:
                     accountDeletionCleanupRecovery
                 case .app:
-                    AppRootView()
-                        .safeAreaInset(edge: .top, spacing: 0) {
-                            if authentication.isOfflineAccountSession {
-                                offlineAccountBanner
-                            }
-                        }
+                    if isDeveloperOnboardingReplayActive {
+                        onboardingExperience
+                    } else {
+                        AppRootView()
+                    }
                 case .onboarding:
-                    OnboardingView(onCreateWorkspace: finishOnboarding, onSkipCreation: completeOnboarding)
+                    onboardingExperience
                 case .remoteAccount:
-                    remoteAccountExperience
+                    if isDeveloperOnboardingReplayActive,
+                       cloudSync.accountOnboardingState == .complete {
+                        onboardingExperience
+                    } else {
+                        remoteAccountExperience
+                    }
                 }
             }
             .transition(.opacity)
@@ -163,6 +186,9 @@ struct GatheroryLaunchContainer: View {
         }
         .environment(notificationNavigation)
         .onChange(of: sessionIdentity) { _, _ in
+#if DEBUG
+            developerOnboardingReplayAccountID = nil
+#endif
             notificationSessionGeneration = UUID()
             notificationNavigation.destination = nil
             notificationNavigation.attendanceAnnouncement = nil
@@ -172,6 +198,11 @@ struct GatheroryLaunchContainer: View {
                 localAccountLibraryID = nil
             }
         }
+#if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: DeveloperOnboardingReplayRequest.notificationName)) { notification in
+            acceptDeveloperOnboardingReplayRequest(notification)
+        }
+#endif
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, authentication.isOfflineAccountSession {
                 Task { await authentication.retrySessionRestoration() }
@@ -371,27 +402,6 @@ struct GatheroryLaunchContainer: View {
         .disabled(authentication.isProcessing)
     }
 
-    private var offlineAccountBanner: some View {
-        HStack(spacing: AppTheme.Spacing.compact) {
-            Image(systemName: "wifi.slash")
-                .foregroundStyle(AppTheme.ColorToken.accent)
-                .accessibilityHidden(true)
-            Text(SessionFlowCopy.offlineHelp)
-                .font(.footnote)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Button(AppCopy.Common.retry) {
-                Task { await authentication.retrySessionRestoration() }
-            }
-            .font(.footnote.weight(.semibold))
-            .disabled(authentication.isProcessing)
-            .accessibilityIdentifier("offline-account.retry")
-        }
-        .padding(.horizontal, AppTheme.Spacing.standard)
-        .padding(.vertical, AppTheme.Spacing.compact)
-        .background(.regularMaterial)
-        .accessibilityElement(children: .contain)
-    }
-
     private var accountDeletionCleanupRecovery: some View {
         let cleanup = authentication.deletionCleanup
         return ContentUnavailableView {
@@ -471,7 +481,7 @@ struct GatheroryLaunchContainer: View {
         case .signedOut, .resolving:
             AccountOnboardingLoadingView()
         case .needsOnboarding:
-            OnboardingView(onCreateWorkspace: finishOnboarding, onSkipCreation: completeOnboarding)
+            onboardingExperience
         case .complete:
             AppRootView()
         case .unavailable:
@@ -510,6 +520,30 @@ struct GatheroryLaunchContainer: View {
         completeOnboarding()
     }
 
+    @ViewBuilder
+    private var onboardingExperience: some View {
+        let ownerID = authentication.currentUser?.id
+        Group {
+            switch OnboardingExperienceSelection.resolve() {
+            case .classic:
+                OnboardingView(onCreateWorkspace: finishOnboarding, onSkipCreation: completeOnboarding)
+            case .movieNight:
+                MovieNightOnboardingView(
+                    onStartTour: {
+                        guard let ownerID, authentication.currentUser?.id == ownerID,
+                              MovieNightTourDiscoveryStore().phase(accountID: ownerID) != nil else { return }
+                        completeOnboarding()
+                    },
+                    onSkipCreation: {
+                        guard authentication.currentUser?.id == ownerID else { return }
+                        completeOnboarding()
+                    }
+                )
+            }
+        }
+        .id(sessionIdentity)
+    }
+
     private func completeOnboarding() {
         // Decide education belongs to the onboarding journey. Development
         // builds force onboarding, so completing that flow should make the
@@ -525,6 +559,50 @@ struct GatheroryLaunchContainer: View {
                 completedOnboardingIdentity = preparationRequest.identity
             }
         }
+#if DEBUG
+        developerOnboardingReplayAccountID = nil
+#endif
+    }
+
+    private func acceptDeveloperOnboardingReplayRequest(_ notification: Notification) {
+#if DEBUG
+        let destination: DeveloperOnboardingReplayPolicy.Destination
+        switch authenticationFlowDestination {
+        case .app:
+            destination = .app
+        case .remoteAccount where cloudSync.accountOnboardingState == .complete:
+            destination = .completeRemoteAccount
+        case .remoteAccount:
+            destination = .unresolvedRemoteAccount
+        default:
+            destination = .unsafe
+        }
+
+        let accountID = notification.userInfo?["accountID"] as? String
+        guard DeveloperOnboardingReplayPolicy.shouldAccept(
+            requestedAccountID: accountID,
+            currentAccountID: authentication.currentUser?.id,
+            isAuthenticated: authentication.isAuthenticated,
+            isGuest: authentication.isGuestMode,
+            isSessionReady: isSessionReady,
+            hasBlockingRecovery: authentication.isProcessing
+                || authentication.isSigningOut
+                || authentication.deletionCleanup.blocksEntry
+                || authentication.guestDiscardNeedsAttention,
+            hasPendingGuestImport: authentication.hasPendingGuestImport,
+            hasPendingInvitation: invitations.pendingToken != nil,
+            invitationRequiresAuthentication: invitations.requiresAuthentication,
+            hasPendingSharedBlueprint: sharedBlueprintLinks.pendingToken != nil,
+            destination: destination,
+            isDebugBuild: true,
+            environment: AppRuntimeConfiguration.developerToolsEnvironment
+        ), let accountID else { return }
+
+        MovieNightTourDiscoveryStore().clear(accountID: accountID)
+        MovieNightTourStore().clear(accountID: accountID)
+        ContextualPrimerStore().reset(accountID: accountID)
+        developerOnboardingReplayAccountID = accountID
+#endif
     }
 }
 

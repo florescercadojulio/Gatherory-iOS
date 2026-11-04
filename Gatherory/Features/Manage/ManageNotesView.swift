@@ -68,6 +68,7 @@ struct ManageNotesPreview: View {
                 .accessibilityHint(AnnouncementCopy.openUpdates)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("manage.updates.\(reference.id)")
         }
     }
 }

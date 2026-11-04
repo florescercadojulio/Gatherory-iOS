@@ -19,6 +19,7 @@ struct GatheroryApp: App {
     @State private var authentication: AuthenticationSession
     @State private var workspaceLibrary: WorkspaceLibrary
     @State private var cloudSync: WorkspaceCloudSyncController
+    @State private var connectionStatus: AppConnectionStatus
     @State private var invitations = InvitationRouter(baseURL: AppRuntimeConfiguration.authenticationBaseURL)
     @State private var sharedBlueprintLinks = BlueprintSharedTemplateRouter(baseURL: AppRuntimeConfiguration.authenticationBaseURL)
     @State private var guestInvitations = GuestInvitationStore(baseURL: AppRuntimeConfiguration.authenticationBaseURL)
@@ -39,10 +40,44 @@ struct GatheroryApp: App {
         let persistence = WorkspacePersistenceController.bootstrap(
             isStoredInMemoryOnly: AppRuntimeConfiguration.usesEphemeralDataStore
         )
+        #if DEBUG
+        let usesBudgetConflictUITestFixture = BudgetConflictUITestFixtures.isEnabled
+        #else
+        let usesBudgetConflictUITestFixture = false
+        #endif
         let library = persistence.restoreLibrary(
-            seedData: AppRuntimeConfiguration.seedsDevelopmentData && !authentication.deletionCleanup.blocksEntry,
+            seedData: AppRuntimeConfiguration.seedsDevelopmentData
+                && !authentication.deletionCleanup.blocksEntry
+                && !usesBudgetConflictUITestFixture,
             ownerUserID: authentication.deletionCleanup.blocksEntry ? nil : authentication.currentUser?.id
         )
+        #if DEBUG
+        if usesBudgetConflictUITestFixture {
+            guard let owner = authentication.currentUser else {
+                fatalError("Budget conflict UI fixture requires -SkipAuthentication.")
+            }
+            do {
+                try BudgetConflictUITestFixtures.install(
+                    persistence: persistence, library: library, owner: owner
+                )
+            } catch {
+                fatalError("Could not install budget conflict UI fixture: \(error)")
+            }
+        }
+        #endif
+        #if DEBUG
+        // Explicit, isolated UI harness only. Never reset a real account's tour.
+        if ProcessInfo.processInfo.arguments.contains("-ResetMovieNightTourUITestState"),
+           AppRuntimeConfiguration.environment == .development,
+           AppRuntimeConfiguration.skipsAuthentication,
+           AppRuntimeConfiguration.usesEphemeralDataStore,
+           let accountID = authentication.currentUser?.id {
+            MovieNightTourStore().clear(accountID: accountID)
+            MovieNightTourDiscoveryStore().clear(accountID: accountID)
+            ContextualPrimerStore().reset(accountID: accountID)
+        }
+        #endif
+        let syncBaseURL = usesBudgetConflictUITestFixture ? nil : AppRuntimeConfiguration.authenticationBaseURL
 
         _authentication = State(initialValue: authentication)
         _notifications = State(initialValue: notifications)
@@ -53,9 +88,10 @@ struct GatheroryApp: App {
             initialValue: WorkspaceCloudSyncController(
                 persistence: persistence,
                 library: library,
-                baseURL: AppRuntimeConfiguration.authenticationBaseURL
+                baseURL: syncBaseURL
             )
         )
+        _connectionStatus = State(initialValue: AppConnectionStatus.bootstrap())
     }
 
     private static func configurePostHog() {
@@ -105,6 +141,7 @@ struct GatheroryApp: App {
             .environment(musicPreviewPlayer)
             .environment(persistence)
             .environment(cloudSync)
+            .environment(connectionStatus)
             .environment(invitations)
             .environment(sharedBlueprintLinks)
             .environment(guestInvitations)

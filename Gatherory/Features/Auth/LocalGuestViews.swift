@@ -38,6 +38,7 @@ struct LocalGuestNameView: View {
 
 struct LocalGuestAccountView: View {
     @Environment(AuthenticationSession.self) private var authentication
+    @Environment(AppConnectionStatus.self) private var connectionStatus: AppConnectionStatus?
     @Environment(NotificationController.self) private var notifications
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppHaptics.preferenceKey) private var hapticsEnabled = true
@@ -64,6 +65,9 @@ struct LocalGuestAccountView: View {
                 Button(GuestCopy.signInToSave) { dismiss(); authentication.requestGuestSignIn() }
             }
             Section("App Settings") {
+                AccountConnectionLabel(status: connectionStatus?.status ?? .checking)
+                    .accessibilityIdentifier("account.connection.status")
+
                 Toggle(isOn: $hapticsEnabled) {
                     HStack(spacing: AppTheme.Spacing.compact) {
                         Image(systemName: "waveform")

@@ -142,7 +142,8 @@ private struct NativeAdContentView: UIViewRepresentable {
 
 /// All ad assets are descendants of NativeAdView and registered with its
 /// asset properties so the SDK can process clicks, impressions and AdChoices.
-private final class RegisteredNativeAdView: NativeAdView {
+final class RegisteredNativeAdView: NativeAdView {
+    private static let assetInset: CGFloat = 1
     private let attributionLabel = UILabel()
     private let advertiserLabel = UILabel()
     private let headlineLabel = UILabel()
@@ -192,6 +193,9 @@ private final class RegisteredNativeAdView: NativeAdView {
     }
 
     func populate(with ad: NativeAd?, isPreviewSample: Bool) {
+        // SwiftUI may update a mounted card repeatedly. A loaded creative is
+        // immutable: do not reset SDK media or mutate its registered assets.
+        if let ad, (pendingNativeAd ?? nativeAd) === ad { return }
         if (pendingNativeAd ?? nativeAd) !== ad {
             nativeAd = nil
             pendingNativeAd = ad
@@ -225,27 +229,25 @@ private final class RegisteredNativeAdView: NativeAdView {
     }
 
     override func layoutSubviews() {
-        super.layoutSubviews()
+#if DEBUG
+        defer { recordScrollVerificationState() }
+#endif
         guard bounds.width.isFinite, bounds.height.isFinite,
-              bounds.width > 0, bounds.height > 0 else { return }
+              bounds.width > Self.assetInset * 2, bounds.height > 0 else {
+            suspendRegistration()
+            clearAssetFrames()
+            super.layoutSubviews()
+            return
+        }
 
         let layout = assetLayout(forWidth: bounds.width)
-        // Dynamic Type or a column resize can require a new host height. Keep
-        // the object pending until SwiftUI supplies that height; don't spin a
-        // layout loop, clip advertiser assets, or register an overflowing view.
-        if layout.size.height > bounds.height + 0.5, let displayedAd = nativeAd {
-            pendingNativeAd = displayedAd
-            nativeAd = nil
-        }
-        let isRightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
-        for (view, frame) in layout.frames {
-            view.frame = isRightToLeft
-                ? CGRect(x: bounds.width - frame.maxX, y: frame.minY, width: frame.width, height: frame.height)
-                : frame
-        }
-        sampleMediaPlaceholder.frame = mediaAssetView.bounds
-
-        guard layout.size.height <= bounds.height + 0.5 else {
+        // No tolerance here: even a fraction of a point outside NativeAdView
+        // violates asset containment. SwiftUI can propose a transient smaller
+        // height during fitting, recycling and column-width changes.
+        guard layout.size.height <= bounds.height else {
+            suspendRegistration()
+            clearAssetFrames()
+            super.layoutSubviews()
             measuredWidth = bounds.width
             if requestedHostSize != layout.size {
                 requestedHostSize = layout.size
@@ -253,17 +255,71 @@ private final class RegisteredNativeAdView: NativeAdView {
             }
             return
         }
+
+        let isRightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let frames = layout.frames.map { view, frame in
+            let x = isRightToLeft ? bounds.width - frame.maxX : frame.minX
+            return (view, CGRect(x: bounds.minX + x, y: bounds.minY + frame.minY,
+                                 width: frame.width, height: frame.height))
+        }
+        // Detach the creative before moving registered assets, including when
+        // width or text size changes but there is already enough host height.
+        if frames.contains(where: { $0.0.frame != $0.1 }) { suspendRegistration() }
+        for (view, frame) in frames { view.frame = frame }
+        sampleMediaPlaceholder.frame = mediaAssetView.bounds
+        super.layoutSubviews()
+
         requestedHostSize = nil
-        let permittedBounds = bounds.insetBy(dx: -0.5, dy: -0.5)
-        guard layout.frames.filter({ !$0.0.isHidden }).allSatisfy({ permittedBounds.contains($0.1) }) else { return }
+        // Inspect actual UIKit frames after the SDK's layout, not just our
+        // planned rectangles. Never register an overflowing asset.
+        guard frames.filter({ !$0.0.isHidden }).allSatisfy({ view, _ in
+            view.frame.isEmpty || bounds.contains(view.convert(view.bounds, to: self))
+        }) else {
+            suspendRegistration()
+            clearAssetFrames()
+            return
+        }
         if let pendingNativeAd {
             self.pendingNativeAd = nil
             nativeAd = pendingNativeAd
         }
     }
 
+    private func suspendRegistration() {
+        if let nativeAd {
+            pendingNativeAd = nativeAd
+            self.nativeAd = nil
+        }
+    }
+
+    private func clearAssetFrames() {
+        for view in [attributionLabel, advertiserLabel, headlineLabel, bodyLabel,
+                     iconImageView, mediaAssetView, callToActionButton, choicesAssetView] {
+            view.frame = .zero
+        }
+        sampleMediaPlaceholder.frame = .zero
+    }
+
+#if DEBUG
+    /// Read-only diagnostics for the Google sample scroll harness. Nothing is
+    /// enabled in Release or ordinary app launches; ad clicks stay SDK-owned.
+    private func recordScrollVerificationState() {
+        guard ProcessInfo.processInfo.arguments.contains("-BlueprintAdsScrollVerification") else { return }
+        let assets: [UIView?] = [headlineView, bodyView, advertiserView, iconView,
+                               mediaView, callToActionView, adChoicesView]
+        let contained = assets.compactMap { $0 }.filter { !$0.isHidden }.allSatisfy {
+            $0.frame.isEmpty || bounds.contains($0.convert($0.bounds, to: self))
+        }
+        accessibilityValue = "registered=\(nativeAd != nil);assetsContained=\(contained)"
+    }
+#endif
+
     private func assetLayout(forWidth proposedWidth: CGFloat) -> AssetLayout {
-        let width = proposedWidth.isFinite ? max(proposedWidth, 0) : 0
+        let hostWidth = proposedWidth.isFinite ? max(proposedWidth, 0) : 0
+        // Keep assets one point inside the native view, so UIKit coordinate
+        // conversion and fractional/RTL bounds cannot round an edge outward.
+        let inset = Self.assetInset
+        let width = max(0, hostWidth - inset * 2)
         guard width > 0 else { return AssetLayout(frames: [], size: .zero) }
         let gap: CGFloat = 8
         let choicesSize: CGFloat = min(44, width)
@@ -312,7 +368,10 @@ private final class RegisteredNativeAdView: NativeAdView {
             frames.append((callToActionButton, CGRect(x: 0, y: y, width: width, height: height)))
             y += height
         }
-        return AssetLayout(frames: frames, size: CGSize(width: width, height: ceil(y)))
+        return AssetLayout(
+            frames: frames.map { ($0.0, $0.1.offsetBy(dx: inset, dy: inset)) },
+            size: CGSize(width: hostWidth, height: ceil(y) + inset * 2)
+        )
     }
 
     private func updateActionTypography() {

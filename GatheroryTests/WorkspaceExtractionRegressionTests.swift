@@ -17,6 +17,7 @@ struct WorkspaceExtractionRegressionTests {
         let originalIDs = Set(originalMutations.map(\.id))
         let childID = try #require(workspace.timeline.first?.id)
         var notificationCount = 0
+        var budgetMutationID: UUID?
         defer { persistence.onPendingMutations = nil }
         persistence.onPendingMutations = {
             notificationCount += 1
@@ -28,15 +29,21 @@ struct WorkspaceExtractionRegressionTests {
                 #expect(archive.mainEventBudgetCap == 700)
                 #expect(archive.timeline.first?.budgetCap == 300)
                 let queued = try context.fetch(FetchDescriptor<PendingMutation>())
-                #expect(Set(queued.map(\.id)) == originalIDs)
+                #expect(originalIDs.isSubset(of: Set(queued.map(\.id))))
                 #expect(queued.allSatisfy { $0.ownerUserID == "budget-owner" })
+                let budgetMutation = try #require(queued.first { $0.entityType == .budgetTransfer })
+                budgetMutationID = budgetMutation.id
+                let budget = try JSONDecoder().decode(ReplaceBudgetMutationPayload.self, from: budgetMutation.payload)
+                #expect(budget.expectedBudgetVersion == 0)
+                #expect(budget.allocations.first { $0.eventID == workspace.mainEventID }?.amountCents == 70_000)
+                #expect(budget.allocations.first { $0.eventID == childID }?.amountCents == 30_000)
                 let eventMutation = try #require(queued.first { $0.entityType == .event && $0.entityID == childID })
                 let event = try JSONDecoder().decode(TimelineItem.self, from: eventMutation.payload)
-                #expect(event.budgetCap == 300)
+                #expect(event.budgetCap == .zero)
                 let workspaceMutation = try #require(queued.first { $0.entityType == .workspace })
                 let remote = try JSONDecoder().decode(WorkspaceArchiveV1.self, from: workspaceMutation.payload)
-                #expect(remote.mainEventBudgetCap == 700)
-                #expect(remote.timeline.first?.budgetCap == 300)
+                #expect(remote.mainEventBudgetCap == 1_000)
+                #expect(remote.timeline.first?.budgetCap == .zero)
             } catch {
                 Issue.record(error)
             }
@@ -55,7 +62,7 @@ struct WorkspaceExtractionRegressionTests {
         #expect(workspace.selectedEventReference == .subevent(childID))
         try await Task.sleep(for: .milliseconds(600))
         #expect(notificationCount == 1)
-        #expect(Set(try mutations(in: persistence).map(\.id)) == originalIDs)
+        #expect(Set(try mutations(in: persistence).map(\.id)) == originalIDs.union([try #require(budgetMutationID)]))
         #expect(persistence.lastError == nil)
     }
 
@@ -139,7 +146,12 @@ struct WorkspaceExtractionRegressionTests {
         let restored = persistence.restoreLibrary(seedData: false, ownerUserID: "remote-owner")
         #expect(restored.workspaces.first?.workspaceBudgetCap == 1_200)
         #expect(!persistence.hasUnsavedLocalChanges)
-        #expect(try mutations(in: persistence).contains { $0.entityType == .workspace })
+        let persistedBudgetMutations = try mutations(in: persistence)
+        let budgetMutation = try #require(persistedBudgetMutations.first { $0.entityType == .budgetTransfer })
+        let budgetPayload = try JSONDecoder().decode(ReplaceBudgetMutationPayload.self, from: budgetMutation.payload)
+        #expect(budgetPayload.workspaceCapCents == 120_000)
+        #expect(budgetMutation.baseVersion == 0)
+        #expect(!persistedBudgetMutations.contains { $0.entityType == .workspace })
     }
 
     @Test("Scoped offline edits queue stable event entities and never workspace mutations")

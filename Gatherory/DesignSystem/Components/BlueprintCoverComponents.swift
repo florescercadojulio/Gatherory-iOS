@@ -232,6 +232,20 @@ private nonisolated enum BlueprintPublicCoverLoader {
     }
 }
 
+/// Copies only immutable, public Explore artwork through the same bounded,
+/// redirect-free loader used by catalog cards. No session is sent to the CDN.
+nonisolated enum BlueprintIdeaPublicImage {
+    static func data(from value: String) async throws -> Data {
+        guard let url = BlueprintPublicCoverURL.validated(value),
+              let loaded = try await BlueprintPublicCoverLoader.download(from: url),
+              let data = loaded.image.jpegData(compressionQuality: 0.86) else {
+            throw BlueprintCoverTransportFailure.invalidResponse
+        }
+        try Task.checkCancellation()
+        return data
+    }
+}
+
 nonisolated enum BlueprintPublicCoverURL {
     static func validated(_ value: String?) -> URL? {
         guard let value,

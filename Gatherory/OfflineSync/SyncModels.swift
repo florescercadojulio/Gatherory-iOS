@@ -24,6 +24,7 @@ nonisolated struct SyncEntityType: RawRepresentable, Codable, Hashable, Sendable
     static let note = Self(rawValue: "note")
     static let moment = Self(rawValue: "moment")
     static let todo = Self(rawValue: "todo")
+    static let budgetTransfer = Self(rawValue: "budget_transfer")
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()

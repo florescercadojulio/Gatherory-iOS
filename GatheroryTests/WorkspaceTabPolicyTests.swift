@@ -7,6 +7,5 @@ struct WorkspaceTabPolicyTests {
         #expect(WorkspaceTab.home.keepsTabBarExpanded)
         #expect(WorkspaceTab.decide.keepsTabBarExpanded)
         #expect(!WorkspaceTab.ideas.keepsTabBarExpanded)
-        #expect(!WorkspaceTab.manage.keepsTabBarExpanded)
     }
 }

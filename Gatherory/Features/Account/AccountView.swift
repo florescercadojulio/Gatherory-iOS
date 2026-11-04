@@ -4,13 +4,16 @@ struct AccountView: View {
     var sharedBlueprintActions: BlueprintActionStore? = nil
     @Environment(AuthenticationSession.self) private var authentication
     @Environment(WorkspaceCloudSyncController.self) private var cloudSync
+    @Environment(AppConnectionStatus.self) private var connectionStatus: AppConnectionStatus?
     @Environment(NotificationController.self) private var notifications
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @AppStorage(AppColorThemeChoice.storageKey) private var colorThemeRawValue = AppColorThemeChoice.gatheroryBlue.rawValue
     @AppStorage(AppHaptics.preferenceKey) private var hapticsEnabled = true
+    @State private var budgetConflictToResolve: BudgetSyncConflict?
     @State private var isEditingProfile = false
     @State private var isDeletingAccount = false
+    @State private var isRedoingMovieNightTour = false
     @State private var weatherAttribution: EventWeatherAttribution?
     @State private var localBlueprintActions: BlueprintActionStore?
 
@@ -47,6 +50,12 @@ struct AccountView: View {
         return cloudSync.lastSuccessfulSyncAt == nil ? "Ready" : "Up to Date"
     }
 
+    private var connectionState: AppConnectionStatus.Status {
+        authentication.isOfflineAccountSession || authentication.isSessionRestorationUnavailable
+            ? .offline
+            : (connectionStatus?.status ?? .checking)
+    }
+
     private var syncStatusSymbol: String {
         if cloudSync.lastError != nil { return "exclamationmark.triangle.fill" }
         if cloudSync.lastMediaError != nil || cloudSync.hasPendingMediaUploads { return "photo.badge.exclamationmark" }
@@ -77,6 +86,9 @@ struct AccountView: View {
     }
 
     private var syncStatusDetail: String {
+        if !cloudSync.budgetConflicts.isEmpty {
+            return String(localized: "Your budget changes need review. Your other changes remain saved.")
+        }
         guard let error = cloudSync.lastError else {
             return "Changes are saved on this device first and sync when a connection is available."
         }
@@ -221,7 +233,85 @@ struct AccountView: View {
             }
             .listRowBackground(AppTheme.ColorToken.surface)
 
+            if authentication.currentUser != nil {
+                Section("Learn Gatherory") {
+                    Button {
+                        isRedoingMovieNightTour = true
+                    } label: {
+                        Label("Redo tour", systemImage: "sparkles")
+                    }
+                    .accessibilityIdentifier("account.redoTour")
+                }
+                .listRowBackground(AppTheme.ColorToken.surface)
+            }
+
+#if DEBUG
+            if authentication.currentUser != nil,
+               DeveloperOnboardingReplayPolicy.isAvailable(
+                   isDebugBuild: true,
+                   environment: AppRuntimeConfiguration.developerToolsEnvironment
+               ) {
+                Section("Developer") {
+                    Button {
+                        guard let accountID = authentication.currentUser?.id else { return }
+                        DeveloperOnboardingReplayRequest.post(
+                            accountID: accountID,
+                            environment: AppRuntimeConfiguration.developerToolsEnvironment
+                        )
+                        dismiss()
+                    } label: {
+                        Label("Redo onboarding", systemImage: "arrow.counterclockwise")
+                    }
+                    .accessibilityIdentifier(DeveloperOnboardingReplayPolicy.accessibilityIdentifier)
+                }
+                .listRowBackground(AppTheme.ColorToken.surface)
+            }
+#endif
+
+            if !cloudSync.budgetConflicts.isEmpty {
+                Section {
+                    ForEach(cloudSync.budgetConflicts) { conflict in
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
+                            Text(conflict.title)
+                                .font(.headline)
+                            Button("Use shared budget", systemImage: "arrow.triangle.2.circlepath") {
+                                budgetConflictToResolve = conflict
+                            }
+                            .disabled(!conflict.canUseSharedBudget || cloudSync.isSynchronizing)
+                            .accessibilityIdentifier("account.budget.useShared")
+                        }
+                    }
+                } header: {
+                    Text("Budget changes need review")
+                } footer: {
+                    Text("Sync to get the latest shared budget. You can discard this device’s unsynced budget changes while keeping your other edits.")
+                }
+                .listRowBackground(AppTheme.ColorToken.surface)
+            }
+
             Section {
+                HStack {
+                    AccountConnectionLabel(status: connectionState)
+                        .accessibilityIdentifier("account.connection.status")
+
+                    Spacer()
+
+                    if connectionState == .offline {
+                        Button("Retry", systemImage: "arrow.clockwise") {
+                            Task {
+                                if authentication.isOfflineAccountSession || authentication.isSessionRestorationUnavailable {
+                                    await authentication.retrySessionRestoration()
+                                }
+                                await cloudSync.synchronize(trigger: .manual)
+                            }
+                        }
+                        .disabled(cloudSync.isSynchronizing || authentication.isProcessing)
+                        .labelStyle(.titleAndIcon)
+                        .font(.subheadline)
+                        .accessibilityIdentifier("account.connection.retry")
+                    }
+                }
+
                 LabeledContent {
                     HStack(spacing: AppTheme.Spacing.compact) {
                         if cloudSync.isSynchronizing {
@@ -244,11 +334,13 @@ struct AccountView: View {
                     Label("Cloud Sync", systemImage: "arrow.triangle.2.circlepath.icloud")
                 }
 
-                Button("Sync Now", systemImage: "arrow.clockwise") {
-                    Task { await cloudSync.synchronize(trigger: .manual) }
+                if connectionState != .offline {
+                    Button("Sync Now", systemImage: "arrow.clockwise") {
+                        Task { await cloudSync.synchronize(trigger: .manual) }
+                    }
+                    .disabled(cloudSync.isSynchronizing || authentication.currentUser == nil)
+                    .foregroundStyle(AppTheme.ColorToken.accent)
                 }
-                .disabled(cloudSync.isSynchronizing || authentication.currentUser == nil)
-                .foregroundStyle(AppTheme.ColorToken.accent)
             } header: {
                 Text("Cloud Data")
             } footer: {
@@ -332,6 +424,17 @@ struct AccountView: View {
         .task {
             weatherAttribution = try? await WeatherKitEventWeatherProvider().attribution()
         }
+        .alert("Use the shared budget?", isPresented: Binding(
+            get: { budgetConflictToResolve != nil },
+            set: { if !$0 { budgetConflictToResolve = nil } }
+        ), presenting: budgetConflictToResolve) { conflict in
+            Button("Use shared budget", role: .destructive) {
+                Task { await cloudSync.useSharedBudget(scopeID: conflict.scopeID) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("This discards your unsynced budget changes for this event. Your other edits are kept.")
+        }
         .task(id: "\(authentication.currentUser?.id ?? "")|\(String(describing: cloudSync.accountOnboardingState))") {
             if let sharedBlueprintActions {
                 guard authentication.currentUser?.id == sharedBlueprintActions.ownerID else {
@@ -382,6 +485,52 @@ struct AccountView: View {
             .presentationDragIndicator(.visible)
             .interactiveDismissDisabled(authentication.isProcessing)
         }
+        .fullScreenCover(isPresented: $isRedoingMovieNightTour) {
+            MovieNightOnboardingView(
+                onStartTour: {
+                    isRedoingMovieNightTour = false
+                    dismiss()
+                },
+                onSkipCreation: {
+                    isRedoingMovieNightTour = false
+                    dismiss()
+                }
+            )
+        }
+    }
+
+}
+
+struct AccountConnectionLabel: View {
+    let status: AppConnectionStatus.Status
+
+    private var title: String {
+        switch status {
+        case .checking: String(localized: "account.connection.checking", defaultValue: "Checking")
+        case .online: String(localized: "account.connection.online", defaultValue: "Online")
+        case .offline: String(localized: "account.connection.offline", defaultValue: "Offline")
+        }
+    }
+
+    private var symbol: String {
+        switch status {
+        case .checking: "ellipsis"
+        case .online: "wifi"
+        case .offline: "wifi.slash"
+        }
+    }
+
+    private var tint: Color {
+        switch status {
+        case .checking: AppTheme.ColorToken.textSecondary
+        case .online: .green
+        case .offline: AppTheme.ColorToken.destructive
+        }
+    }
+
+    var body: some View {
+        Label(title, systemImage: symbol)
+            .foregroundStyle(tint)
     }
 }
 

@@ -3,6 +3,7 @@ import UIKit
 import MusicKit
 
 struct IdeasView: View {
+    private let tourWindowGeometry: MovieNightTourWindowGeometry?
     @Environment(ImageSafetyStore.self) private var safety
     var onExitWorkspace: (() -> Void)?
 
@@ -14,9 +15,13 @@ struct IdeasView: View {
     @State private var isAddingIdea = false
     @State private var addIdeaDetent: PresentationDetent = .medium
     @State private var selectedIdeaID: UUID?
+    @State private var schedulePresentation: IdeaSchedulePresentation?
+    @State private var approvalRequest: IdeaApprovalRequest?
     @Namespace private var ideaTransition
 
-    init(scope: Binding<IdeasScope> = .constant(.all), onExitWorkspace: (() -> Void)? = nil) {
+    init(scope: Binding<IdeasScope> = .constant(.all), onExitWorkspace: (() -> Void)? = nil,
+         tourWindowGeometry: MovieNightTourWindowGeometry? = nil) {
+        self.tourWindowGeometry = tourWindowGeometry
         self._scope = scope
         self.onExitWorkspace = onExitWorkspace
     }
@@ -29,7 +34,10 @@ struct IdeasView: View {
             workspace.contextualIdeas
         }
 
-        return ideas.filter { filter.includes($0) && !safety.isBlocked($0.submittedByUserID) }
+        return ideas.filter {
+            filter.includes($0, response: workspace.response(on: $0))
+                && !safety.isBlocked($0.submittedByUserID)
+        }
     }
 
     private var scopeTitle: String {
@@ -55,6 +63,10 @@ struct IdeasView: View {
         .scrollIndicators(.hidden)
         .appSoftScrollEdges()
         .background(AppTheme.ColorToken.background)
+        .preference(key: MovieNightTourIdeasFilterPreferenceKey.self, value: filter.rawValue)
+        .movieNightTourSuppressed(
+            isAddingIdea || schedulePresentation != nil || approvalRequest != nil || selectedIdeaID != nil
+        )
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
@@ -85,6 +97,15 @@ struct IdeasView: View {
             }
             .presentationDetents([.medium, .large], selection: $addIdeaDetent)
             .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $schedulePresentation) { presentation in
+            IdeaScheduleSheet(
+                request: presentation.request,
+                initialConfiguration: presentation.configuration
+            )
+        }
+        .sheet(item: $approvalRequest) { request in
+            IdeaApprovalSheet(request: request)
         }
         .navigationDestination(item: $selectedIdeaID) { ideaID in
             IdeaDetailView(
@@ -145,13 +166,20 @@ struct IdeasView: View {
                 }
             }
         } label: {
-            Label(filter.title, systemImage: "line.3.horizontal.decrease")
-                .labelStyle(.iconOnly)
-                .frame(width: AppTheme.Layout.minimumTouchTarget, height: AppTheme.Layout.minimumTouchTarget)
-                .contentShape(Rectangle())
+            ZStack {
+                Image(systemName: "line.3.horizontal.decrease")
+                MovieNightTourWindowTarget(target: .ideasFilter, tracker: tourWindowGeometry)
+                    .frame(width: AppTheme.Layout.minimumTouchTarget, height: AppTheme.Layout.minimumTouchTarget)
+                    .accessibilityHidden(true)
+            }
+            .frame(width: AppTheme.Layout.minimumTouchTarget, height: AppTheme.Layout.minimumTouchTarget)
+            .contentShape(Rectangle())
+            .movieNightTourTarget(.ideasFilter)
         }
         .accessibilityLabel("Filter ideas")
         .accessibilityValue(filter.title)
+        .accessibilityIdentifier("ideas.filter")
+
     }
 
     private func isSelectedEvent(_ reference: EventReference) -> Bool {
@@ -179,15 +207,27 @@ struct IdeasView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("idea.collection.card.\(idea.id.uuidString)")
         .accessibilityHint("Opens idea details. Touch and hold for actions.")
-        .accessibilityAction(named: "Shortlist") {
-            update(idea, to: .shortlisted)
-        }
-        .accessibilityAction(named: "Save for Now") {
-            update(idea, to: .maybe)
-        }
-        .accessibilityAction(named: idea.status == .archived ? "Restore" : "Archive") {
-            update(idea, to: idea.status == .archived ? .new : .archived)
+        .movieNightTourTarget(.idea(idea.id))
+        .accessibilityActions {
+            if canChangeIdeaStatus(idea) {
+                if idea.status != .shortlisted {
+                    Button("Shortlist") { update(idea, to: .shortlisted) }
+                }
+                if idea.status != .maybe && idea.status != .archived {
+                    Button("Save for Now") { update(idea, to: .maybe) }
+                }
+                Button(idea.status == .archived ? "Restore" : "Archive") {
+                    update(idea, to: idea.status == .archived ? .new : .archived)
+                }
+            }
+            if canSchedule(idea) {
+                Button(IdeaScheduleCopy.action) { presentSchedule(for: idea) }
+            }
+            if canApprove(idea) {
+                Button("Approve") { presentApproval(for: idea) }
+            }
         }
         .contextMenu {
             ideaActions(for: idea)
@@ -196,29 +236,77 @@ struct IdeasView: View {
 
     @ViewBuilder
     private func ideaActions(for idea: PlanningIdea) -> some View {
-        if idea.status != .shortlisted {
-            Button("Shortlist", systemImage: "heart.fill") {
-                update(idea, to: .shortlisted)
+        if canSchedule(idea) {
+            Button(IdeaScheduleCopy.action, systemImage: "calendar") {
+                presentSchedule(for: idea)
             }
         }
+        if canApprove(idea) {
+            Button("Approve", systemImage: "checkmark.circle.fill") {
+                presentApproval(for: idea)
+            }
+            .accessibilityIdentifier("idea.approval.action.\(idea.id.uuidString)")
+        }
+        if canSchedule(idea) || canApprove(idea) {
+            Divider()
+        }
+        if canChangeIdeaStatus(idea) {
+            if idea.status != .shortlisted {
+                Button("Shortlist", systemImage: "heart.fill") {
+                    update(idea, to: .shortlisted)
+                }
+            }
 
-        if idea.status != .maybe && idea.status != .archived {
-            Button("Save for Now", systemImage: "bookmark.fill") {
-                update(idea, to: .maybe)
+            if idea.status != .maybe && idea.status != .archived {
+                Button("Save for Now", systemImage: "bookmark.fill") {
+                    update(idea, to: .maybe)
+                }
+            }
+
+            Divider()
+
+            if idea.status == .archived {
+                Button("Restore", systemImage: "arrow.uturn.backward") {
+                    update(idea, to: .new)
+                }
+            } else {
+                Button("Archive", systemImage: "archivebox.fill") {
+                    update(idea, to: .archived)
+                }
             }
         }
+    }
 
-        Divider()
+    private func canSchedule(_ idea: PlanningIdea) -> Bool {
+        idea.category == .event
+            && !workspace.timeline.contains(where: { $0.linkedIdeaID == idea.id })
+            && workspace.canScheduleEventIdea(idea)
+    }
 
-        if idea.status == .archived {
-            Button("Restore", systemImage: "arrow.uturn.backward") {
-                update(idea, to: .new)
-            }
-        } else {
-            Button("Archive", systemImage: "archivebox.fill") {
-                update(idea, to: .archived)
-            }
-        }
+    private func canApprove(_ idea: PlanningIdea) -> Bool {
+        idea.category != .music && idea.category != .event
+            && idea.status != .chosen && workspace.canApproveIdea(idea)
+    }
+
+    private func presentSchedule(for idea: PlanningIdea) {
+        guard canSchedule(idea),
+              let request = workspace.makeScheduleRequest(for: idea),
+              let configuration = idea.eventConfiguration else { return }
+        schedulePresentation = IdeaSchedulePresentation(
+            ideaID: idea.id,
+            request: request,
+            configuration: configuration
+        )
+    }
+
+    private func presentApproval(for idea: PlanningIdea) {
+        guard canApprove(idea) else { return }
+        approvalRequest = workspace.makeIdeaApprovalRequest(for: idea)
+    }
+
+    private func canChangeIdeaStatus(_ idea: PlanningIdea) -> Bool {
+        guard idea.category == .event, idea.status == .chosen else { return true }
+        return workspace.canManageEventIdeaScheduling(idea)
     }
 
     private func update(_ idea: PlanningIdea, to status: IdeaStatus) {
@@ -319,8 +407,17 @@ struct IdeasEventScopeAccessory: View {
     }
 }
 
+struct MovieNightTourIdeasFilterPreferenceKey: PreferenceKey {
+    static var defaultValue: String? = nil
+
+    static func reduce(value: inout String?, nextValue: () -> String?) {
+        if let next = nextValue() { value = next }
+    }
+}
+
 enum IdeaFilter: String, CaseIterable, Identifiable {
     case all
+    case liked
     case inbox
     case saved
     case approved
@@ -337,6 +434,7 @@ enum IdeaFilter: String, CaseIterable, Identifiable {
         case .approved: AppCopy.IdeaStatus.approved
         case .passed: String(localized: "idea.filter.passed", defaultValue: "Passed")
         case .archived: String(localized: "idea.filter.archive", defaultValue: "Archive")
+        case .liked: String(localized: "idea.filter.liked", defaultValue: "Liked")
         }
     }
 
@@ -348,6 +446,7 @@ enum IdeaFilter: String, CaseIterable, Identifiable {
         case .approved: "checkmark.seal"
         case .passed: "xmark.circle"
         case .archived: "archivebox"
+        case .liked: "heart"
         }
     }
 
@@ -359,6 +458,7 @@ enum IdeaFilter: String, CaseIterable, Identifiable {
         case .approved: "No approved ideas"
         case .passed: "No passed ideas"
         case .archived: "No archived ideas"
+        case .liked: String(localized: "idea.filter.liked.empty.title", defaultValue: "No liked ideas")
         }
     }
 
@@ -370,10 +470,15 @@ enum IdeaFilter: String, CaseIterable, Identifiable {
         case .approved: "Ideas appear here after they are approved."
         case .passed: "Ideas you passed on appear here."
         case .archived: "Archived ideas appear here."
+        case .liked: String(localized: "idea.filter.liked.empty.description", defaultValue: "Ideas you liked appear here.")
         }
     }
 
     func includes(_ idea: PlanningIdea) -> Bool {
+        includes(idea, response: nil)
+    }
+
+    func includes(_ idea: PlanningIdea, response: DecisionChoice?) -> Bool {
         switch self {
         case .all:
             idea.status != .archived
@@ -387,6 +492,8 @@ enum IdeaFilter: String, CaseIterable, Identifiable {
             idea.status == .passed
         case .archived:
             idea.status == .archived
+        case .liked:
+            idea.status != .archived && response == .love
         }
     }
 }
@@ -497,11 +604,22 @@ struct IdeaDetailView: View {
     @Environment(PlanningWorkspace.self) private var workspace
     @State private var isEditingIdea = false
     @State private var editorDetent: PresentationDetent = .large
+    @State private var schedulePresentation: IdeaSchedulePresentation?
+    @State private var approvalRequest: IdeaApprovalRequest?
+    @State private var openedScheduledEventID: UUID?
     let ideaID: UUID
     let transitionNamespace: Namespace.ID
 
     private var idea: PlanningIdea? {
         workspace.ideas.first { $0.id == ideaID && !safety.isBlocked($0.submittedByUserID) }
+    }
+
+    /// Resolve only the exact child linked to this idea in the current root
+    /// workspace. An unavailable link stays unavailable; it never falls back
+    /// to the root invitation or another timeline event.
+    private var linkedScheduledEvent: TimelineItem? {
+        guard let idea else { return nil }
+        return ScheduledIdeaEventProjection.resolve(ideaID: idea.id, in: workspace)
     }
 
     var body: some View {
@@ -524,7 +642,8 @@ struct IdeaDetailView: View {
         .toolbar {
             if let idea {
                 if (idea.category != .music || workspace.canEditMusicPlaylist(for: idea))
-                    && (idea.category != .event || IdeaEventEditing.canEdit(idea, in: workspace)) {
+                    && (idea.category != .event || (IdeaEventEditing.canEdit(idea, in: workspace)
+                        && !workspace.timeline.contains(where: { $0.linkedIdeaID == idea.id }))) {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Edit idea", systemImage: "pencil") {
                             editorDetent = .large
@@ -534,7 +653,34 @@ struct IdeaDetailView: View {
                     }
                 }
 
-                if idea.category != .music {
+                if idea.category == .event,
+                   linkedScheduledEvent != nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("View Event", systemImage: "calendar.badge.checkmark") {
+                            guard let event = linkedScheduledEvent else { return }
+                            openedScheduledEventID = event.id
+                        }
+                        .accessibilityIdentifier("idea.schedule.view-event")
+                    }
+                } else if idea.category == .event,
+                          !workspace.timeline.contains(where: { $0.linkedIdeaID == idea.id }),
+                          workspace.canScheduleEventIdea(idea) {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(IdeaScheduleCopy.action) {
+                            guard let request = workspace.makeScheduleRequest(for: idea),
+                                  let configuration = idea.eventConfiguration else { return }
+                            schedulePresentation = IdeaSchedulePresentation(
+                                ideaID: idea.id,
+                                request: request,
+                                configuration: configuration
+                            )
+                        }
+                        .accessibilityIdentifier("idea.schedule.action")
+                    }
+                }
+
+                if idea.category != .music,
+                   canChangeIdeaStatus(idea) {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu("Idea actions", systemImage: "ellipsis") {
                         if idea.status != .new {
@@ -555,33 +701,16 @@ struct IdeaDetailView: View {
                             }
                         }
 
-                        if idea.status != .chosen {
+                        if idea.category != .event, workspace.canApproveIdea(idea) {
                             Button("Approve", systemImage: "checkmark.circle.fill") {
-                                updateStatus(idea, to: .chosen)
+                                approvalRequest = workspace.makeIdeaApprovalRequest(for: idea)
                             }
+                            .accessibilityIdentifier("idea.approval.action.\(idea.id.uuidString)")
                         }
 
                         if idea.status != .passed {
                             Button("Decline for Event", systemImage: "xmark.circle") {
                                 updateStatus(idea, to: .passed)
-                            }
-                        }
-
-                        if idea.category == .event, idea.status == .chosen {
-                            if workspace.timeline.contains(where: { $0.linkedIdeaID == idea.id }) {
-                                Button("On Home", systemImage: "calendar.badge.checkmark") {}
-                                    .disabled(true)
-                            } else if idea.eventConfiguration?.proposedDate != nil {
-                                Button("Add to Home", systemImage: "calendar.badge.plus") {
-                                    _ = withAnimation {
-                                        workspace.scheduleEventIdea(idea)
-                                    }
-                                }
-                            } else {
-                                Button("Add a Date", systemImage: "calendar.badge.clock") {
-                                    editorDetent = .large
-                                    isEditingIdea = true
-                                }
                             }
                         }
 
@@ -614,6 +743,18 @@ struct IdeaDetailView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+        .sheet(item: $schedulePresentation) { presentation in
+            IdeaScheduleSheet(
+                request: presentation.request,
+                initialConfiguration: presentation.configuration
+            )
+        }
+        .sheet(item: $approvalRequest) { request in
+            IdeaApprovalSheet(request: request)
+        }
+        .navigationDestination(item: $openedScheduledEventID) { eventID in
+            ScheduledIdeaEventDestination(ideaID: ideaID, eventID: eventID)
+        }
         .navigationTransition(.zoom(sourceID: ideaID, in: transitionNamespace))
     }
 
@@ -626,6 +767,47 @@ struct IdeaDetailView: View {
             AppHaptics.play(.success)
         }
     }
+
+    private func canChangeIdeaStatus(_ idea: PlanningIdea) -> Bool {
+        guard idea.category == .event, idea.status == .chosen else { return true }
+        return workspace.canManageEventIdeaScheduling(idea)
+    }
+}
+
+private struct ScheduledIdeaEventDestination: View {
+    @Environment(PlanningWorkspace.self) private var workspace
+
+    let ideaID: UUID
+    let eventID: UUID
+
+    private var linkedEventIsCurrentAndVisible: Bool {
+        ScheduledIdeaEventProjection.resolve(ideaID: ideaID, in: workspace)?.id == eventID
+    }
+
+    var body: some View {
+        Group {
+            if linkedEventIsCurrentAndVisible {
+                EventInvitationScreen(
+                    reference: .subevent(eventID),
+                    accessibilityTitleIdentifier: "idea.schedule.linked-event.title"
+                )
+            } else {
+                ContentUnavailableView("Event unavailable", systemImage: "calendar.badge.exclamationmark")
+                    .accessibilityIdentifier("idea.schedule.linked-event.title")
+            }
+        }
+        .navigationTitle("Invitation")
+        .navigationBarTitleDisplayMode(.inline)
+        .appClearNavigationBar()
+        .appImageDetailAppearance()
+    }
+}
+
+private struct IdeaSchedulePresentation: Identifiable {
+    let id = UUID()
+    let ideaID: UUID
+    let request: EventIdeaScheduleRequest
+    let configuration: EventIdeaConfiguration
 }
 
 private struct WorkspaceIdeaDetailScreen: View {
@@ -644,7 +826,11 @@ private struct WorkspaceIdeaDetailScreen: View {
                     .font(.subheadline.weight(.semibold))
             }
         } footer: {
-            IdeaSummaryCollaboration(idea: idea, teamSummary: workspace.teamResponseSummary(for: idea)) {
+            IdeaSummaryCollaboration(
+                idea: idea,
+                teamSummary: workspace.teamResponseSummary(for: idea),
+                members: workspace.members
+            ) {
                 if idea.category != .music {
                     IdeaResponseControls(idea: idea)
                 }
@@ -699,7 +885,9 @@ private struct WorkspaceIdeaDetailScreen: View {
                 IdeaMetadataRow(
                     title: "Shared by",
                     value: idea.submittedBy,
-                    symbol: "person.fill"
+                    symbol: "person.fill",
+                    submitter: idea,
+                    members: workspace.members
                 )
             }
 
@@ -1330,7 +1518,9 @@ private struct EventIdeaDetailCard: View {
             EventIdeaMetadataRow(
                 title: "Proposed By",
                 value: idea.submittedBy,
-                symbol: "person.2.fill"
+                symbol: "person.2.fill",
+                submitter: idea,
+                members: workspace.members
             )
 
             if !idea.note.isEmpty {
@@ -1376,14 +1566,21 @@ private struct EventIdeaMetadataRow: View {
     let title: String
     let value: String
     let symbol: String
+    var submitter: PlanningIdea? = nil
+    var members: [WorkspaceMember] = []
 
     var body: some View {
         HStack(alignment: .top, spacing: AppTheme.Spacing.standard) {
-            Image(systemName: symbol)
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .frame(width: 28)
-                .accessibilityHidden(true)
+            if let submitter {
+                IdeaSubmitterAttribution(idea: submitter, members: members, showsName: false)
+                    .frame(width: 28, alignment: .leading)
+            } else {
+                Image(systemName: symbol)
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
@@ -1434,6 +1631,8 @@ private struct IdeaMetadataRow: View {
     let title: String
     let value: String
     let symbol: String
+    var submitter: PlanningIdea? = nil
+    var members: [WorkspaceMember] = []
 
     var body: some View {
         LabeledContent {
@@ -1442,8 +1641,16 @@ private struct IdeaMetadataRow: View {
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
         } label: {
-            Label(title, systemImage: symbol)
-                .foregroundStyle(.secondary)
+            if let submitter {
+                HStack(spacing: AppTheme.Spacing.compact) {
+                    IdeaSubmitterAttribution(idea: submitter, members: members, showsName: false)
+                    Text(title)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Label(title, systemImage: symbol)
+                    .foregroundStyle(.secondary)
+            }
         }
         .font(.body)
         .padding(.horizontal, AppTheme.Spacing.standard)
@@ -2070,7 +2277,7 @@ struct IdeaEditorView: View {
             Text("Adding To")
         } footer: {
             if isNewSubeventIdea {
-                Text("This creates a sub-event of \(destinationEventTitle) when it is approved.")
+                Text("Scheduling adds this as a sub-event of \(destinationEventTitle).")
             }
         }
         .listRowBackground(AppTheme.ColorToken.surface)
@@ -2184,7 +2391,7 @@ struct IdeaEditorView: View {
                 Text("Enter a budget greater than zero, or leave it blank.")
                     .foregroundStyle(AppTheme.ColorToken.destructive)
             } else {
-                Text("Set a spending limit only when this event needs one. The estimate becomes a tracked cost after approval.")
+                Text("Set a spending limit only when this event needs one. Estimates are tracked now; approval marks them as committed.")
             }
         }
         .listRowBackground(AppTheme.ColorToken.surface)
@@ -2441,7 +2648,7 @@ struct IdeaEditorView: View {
             } header: {
                 Text("When & Where")
             } footer: {
-                Text("Date and location are optional. Approved ideas with a date become events automatically.")
+                Text("Choose a date and location when you schedule this event idea.")
             }
 
         case .registry:

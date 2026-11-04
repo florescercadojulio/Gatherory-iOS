@@ -36,7 +36,11 @@ import Foundation
             { try BlueprintLibraryVisibilityStore(defaults: defaults).removeAll(accountID: $0) },
             { try BlueprintLibraryCollectionPreferenceStore(defaults: defaults).removeAll(accountID: $0) },
             { try BlueprintRecentHistory(defaults: defaults).removeAll(accountID: $0) },
-            { BlueprintDiscoveryContextStore.clear(accountID: $0, defaults: defaults) }
+            { BlueprintDiscoveryContextStore.clear(accountID: $0, defaults: defaults) },
+            { IdeaDiscoveryAdditionStore.clear(accountID: $0, defaults: defaults) },
+            { MovieNightTourStore(defaults: defaults).clear(accountID: $0) },
+            { MovieNightTourDiscoveryStore(defaults: defaults).clear(accountID: $0) },
+            { ContextualPrimerStore(defaults: defaults).reset(accountID: $0) }
         ]
         for artifact in artifacts { attempt { try artifact(accountID) } }
         if canRemoveSessionCredential { attempt { try removeSessionCredential() } }

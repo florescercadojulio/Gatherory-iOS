@@ -1,3 +1,4 @@
+import PostHog
 import SwiftUI
 
 struct BlueprintCreateShareView: View {
@@ -387,6 +388,18 @@ struct BlueprintCreateShareView: View {
         if (savedRevision != nil && savedRevision != previousRevision) || createdLink {
             AppHaptics.play(.success)
         }
+        if savedRevision != nil && savedRevision != previousRevision {
+            PostHogSDK.shared.capture(
+                "blueprint_created",
+                properties: [
+                    "creates_share_link": createsShareLink,
+                    "publishes_to_search": publishesToSearch
+                ]
+            )
+        }
+        if createdLink {
+            PostHogSDK.shared.capture("blueprint_share_link_created")
+        }
     }
 
     private func replaceShareLink(_ store: BlueprintCreateShareStore) async {
@@ -394,6 +407,7 @@ struct BlueprintCreateShareView: View {
         await store.replaceShareLink()
         if store.createdLinks.contains(where: { !previousActiveLinks.contains($0.id) && $0.revokedAt == nil }) {
             AppHaptics.play(.success)
+            PostHogSDK.shared.capture("blueprint_share_link_replaced")
         }
     }
 
@@ -402,6 +416,7 @@ struct BlueprintCreateShareView: View {
         await store.revokeCreatedLink(linkID)
         if wasActive, store.createdLinks.contains(where: { $0.id == linkID && $0.revokedAt != nil }) {
             AppHaptics.play(.success)
+            PostHogSDK.shared.capture("blueprint_share_link_revoked")
         }
     }
 
@@ -415,6 +430,10 @@ struct BlueprintCreateShareView: View {
         let expectedRevision = enabled ? store.created?.revision : nil
         if previousRevision != store.listedRevision, store.listedRevision == expectedRevision {
             AppHaptics.play(.success)
+            PostHogSDK.shared.capture(
+                "blueprint_search_listing_updated",
+                properties: ["is_listed": enabled]
+            )
         }
     }
 

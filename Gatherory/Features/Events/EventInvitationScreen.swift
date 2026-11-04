@@ -6,6 +6,56 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
+struct ChildInvitationEditRequest: Identifiable {
+    let item: TimelineItem
+    let rootEventID: UUID
+    let accountID: String?
+    let localGuestProfileID: UUID?
+    let principalGeneration: UInt64
+    let memberID: UUID
+    let role: WorkspaceRole
+    let permission: PlanningPermission
+    let invitationStatus: CollaborationInvitationStatus
+
+    var id: UUID { item.id }
+
+    func matches(
+        rootEventID currentRootEventID: UUID,
+        reference: EventReference,
+        item currentItem: TimelineItem?,
+        accountID currentAccountID: String?,
+        localGuestProfileID currentLocalGuestProfileID: UUID?,
+        principalGeneration currentPrincipalGeneration: UInt64?,
+        member currentMember: WorkspaceMember?,
+        canEditTodos: Bool,
+        isInvitationProjection: Bool,
+        isScopedEvent: Bool,
+        isMainEventDeleted: Bool
+    ) -> Bool {
+        guard canEditTodos, !isInvitationProjection, !isScopedEvent,
+              !isMainEventDeleted,
+              rootEventID == currentRootEventID,
+              reference == .subevent(item.id),
+              let currentItem,
+              currentItem == item,
+              currentItem.status != .archived,
+              item.parentEventID == rootEventID,
+              accountID == currentAccountID,
+              localGuestProfileID == currentLocalGuestProfileID,
+              (currentAccountID != nil) != (currentLocalGuestProfileID != nil),
+              principalGeneration == currentPrincipalGeneration,
+              let currentMember,
+              currentMember.id == memberID,
+              currentMember.participantRole == role,
+              currentMember.participantRole != .guest,
+              currentMember.planningPermission == permission,
+              currentMember.planningPermission != .viewOnly,
+              currentMember.invitationStatus == invitationStatus,
+              currentMember.invitationStatus == .active else { return false }
+        return true
+    }
+}
+
 /// The shared event experience used by the main event, timeline events, and event ideas.
 /// Only the root event can expose a child schedule; subevents and ideas are leaves.
 struct EventInvitationScreen: View {
@@ -28,10 +78,12 @@ struct EventInvitationScreen: View {
     @State private var hideFailure: String?
     @State private var calendarDraft: CalendarEventDraft?
     @State private var editingMainEventField: MainInvitationEditSnapshot?
+    @State private var editingChildEvent: ChildInvitationEditRequest?
     @Namespace private var childTransition
     @Namespace private var playlistTransition
 
     let reference: EventReference
+    var accessibilityTitleIdentifier: String? = nil
     var onAttendanceResponse: ((EventResponse) -> Void)? = nil
     var isUpdatingAttendance = false
     var attendanceUpdate: GuestAttendanceUpdate? = nil
@@ -113,25 +165,33 @@ struct EventInvitationScreen: View {
             guard let idea = workspace.ideas.first(where: { $0.id == id }),
                   let configuration = idea.eventConfiguration else { return nil }
 
+            let visibleLinkedItem = ScheduledIdeaEventProjection.resolve(ideaID: id, in: workspace)
+            let isLinked = workspace.timeline.contains { $0.linkedIdeaID == id }
+
             return EventPresentation(
-                title: idea.title,
-                eyebrow: "Proposed \(configuration.purpose.shortTitle) Event",
-                categoryTitle: configuration.category.title,
-                categorySymbol: configuration.category.symbol,
-                startsAt: configuration.proposedDate,
-                endsAt: configuration.proposedEndDate,
-                isAllDay: configuration.isAllDay,
-                timeZoneIdentifier: configuration.timeZoneIdentifier,
-                location: configuration.location,
-                imageData: imageSafety.visibleImageData(idea.imageData, assetID: idea.mediaAssetID),
+                title: visibleLinkedItem?.title ?? idea.title,
+                eyebrow: isLinked
+                    ? (visibleLinkedItem == nil ? String(localized: "Scheduled Event Unavailable") : String(localized: "Scheduled Event"))
+                    : "Proposed \(configuration.purpose.shortTitle) Event",
+                categoryTitle: visibleLinkedItem?.category.title ?? configuration.category.title,
+                categorySymbol: visibleLinkedItem?.category.symbol ?? configuration.category.symbol,
+                startsAt: visibleLinkedItem.map { $0.hasScheduledDate ? $0.scheduledAt : nil } ?? configuration.proposedDate,
+                endsAt: visibleLinkedItem == nil ? configuration.proposedEndDate : visibleLinkedItem?.endsAt,
+                isAllDay: visibleLinkedItem?.isAllDay ?? configuration.isAllDay,
+                timeZoneIdentifier: visibleLinkedItem?.timeZoneIdentifier ?? configuration.timeZoneIdentifier,
+                location: visibleLinkedItem == nil ? configuration.location : visibleLinkedItem?.eventLocation,
+                imageData: imageSafety.visibleImageData(
+                    visibleLinkedItem == nil ? idea.imageData : visibleLinkedItem?.imageData,
+                    assetID: visibleLinkedItem == nil ? idea.mediaAssetID : visibleLinkedItem?.mediaAssetID
+                ),
                 fallbackAssetName: nil,
-                colors: configuration.category.artworkColors,
-                accent: configuration.category.artworkAccent,
-                purpose: configuration.purpose,
-                statusTitle: idea.status.title,
-                statusSymbol: idea.status.symbol,
-                peopleLabel: "Proposed By",
-                people: [
+                colors: visibleLinkedItem?.category.artworkColors ?? configuration.category.artworkColors,
+                accent: visibleLinkedItem?.category.artworkAccent ?? configuration.category.artworkAccent,
+                purpose: visibleLinkedItem?.purpose ?? configuration.purpose,
+                statusTitle: visibleLinkedItem?.status.title ?? (isLinked ? String(localized: "Unavailable") : idea.status.title),
+                statusSymbol: visibleLinkedItem?.status.symbol ?? (isLinked ? "calendar.badge.exclamationmark" : idea.status.symbol),
+                peopleLabel: isLinked ? String(localized: "Invitation") : "Proposed By",
+                people: isLinked ? [] : [
                     EventPersonPresentation(
                         name: idea.submittedBy,
                         id: "\(idea.id.uuidString)-submitter"
@@ -140,12 +200,13 @@ struct EventInvitationScreen: View {
                 showsAttendeeList: false,
                 response: nil,
                 permitsResponse: false,
-                note: idea.note,
-                dressCode: "",
+                note: visibleLinkedItem == nil ? idea.note : visibleLinkedItem?.eventDescription ?? "",
+                dressCode: visibleLinkedItem?.dressCode ?? "",
                 guestIdeas: [],
                 children: [],
                 moments: workspace.moments(for: .idea(id)),
-                isCancelled: workspace.currentMainEventStatus == .cancelled
+                isCancelled: visibleLinkedItem?.status == .cancelled
+                    || workspace.currentMainEventStatus == .cancelled
             )
         }
     }
@@ -245,12 +306,24 @@ struct EventInvitationScreen: View {
         .sheet(item: $editingMainEventField) { snapshot in
             mainEventEditor(for: snapshot)
         }
+        .sheet(item: $editingChildEvent) { request in
+            NavigationStack {
+                if isCurrentChildEdit(request) {
+                    EventEditorView(mode: .subevent(request.item))
+                } else {
+                    ContentUnavailableView("Event Unavailable", systemImage: "lock")
+                }
+            }
+        }
         .onChange(of: account?.id) { oldID, newID in
             guard oldID != newID else { return }
             sharedAlbumRoute = nil
         }
         .onChange(of: isOpenEditCurrent) { _, isCurrent in
             if !isCurrent { editingMainEventField = nil }
+        }
+        .onChange(of: isOpenChildEditCurrent) { _, isCurrent in
+            if !isCurrent { editingChildEvent = nil }
         }
         .alert(AppCopy.Safety.hide, isPresented: Binding(get: { hideFailure != nil }, set: { if !$0 { hideFailure = nil } })) {
             Button(AppCopy.Common.done) { hideFailure = nil }
@@ -279,8 +352,8 @@ struct EventInvitationScreen: View {
             height: height,
             topSpacer: dynamicTypeSize.isAccessibilitySize ? 150 : 260,
             bottomPadding: dynamicTypeSize.isAccessibilitySize ? AppTheme.Spacing.spacious : 12,
-            titleAction: canEditMainEvent ? AnyView(
-                Button { beginEditing(.title) } label: {
+            titleAction: canEditInvitationEvent ? AnyView(
+                Button { beginEditingVisibleEvent(.title) } label: {
                     Text(event.title)
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))
                         .multilineTextAlignment(.center)
@@ -290,7 +363,7 @@ struct EventInvitationScreen: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("invitation.edit.title")
-                .accessibilityHint("Edits the main event title.")
+                .accessibilityHint(reference == .main ? "Edits the main event title." : "Edits the event title.")
             ) : nil
         ) {
             if event.isCancelled {
@@ -306,28 +379,28 @@ struct EventInvitationScreen: View {
             }
         } timingLocation: {
             VStack(spacing: 6) {
-                if canEditMainEvent {
-                    Button { beginEditing(.date) } label: {
+                if canEditInvitationEvent {
+                    Button { beginEditingVisibleEvent(.date) } label: {
                         dateHeroLabel(event)
                             .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
                             .contentShape(Rectangle())
                     }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("invitation.edit.date")
-                        .accessibilityHint("Edits the main event date and time.")
+                        .accessibilityHint(reference == .main ? "Edits the main event date and time." : "Edits the event date and time.")
                 } else {
                     dateHeroLabel(event)
                 }
 
-                if canEditMainEvent {
-                    Button { beginEditing(.location) } label: {
+                if canEditInvitationEvent {
+                    Button { beginEditingVisibleEvent(.location) } label: {
                         locationHeroLabel(event)
                             .frame(minHeight: AppTheme.Layout.minimumTouchTarget)
                             .contentShape(Rectangle())
                     }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("invitation.edit.location")
-                        .accessibilityHint("Edits the main event location.")
+                        .accessibilityHint(reference == .main ? "Edits the main event location." : "Edits the event location.")
                 } else if let location = event.location {
                     Text(location.title).font(.subheadline.weight(.semibold))
                 }
@@ -357,6 +430,7 @@ struct EventInvitationScreen: View {
                 .accessibilityIdentifier("invitation.hero.response")
             }
         }
+        .accessibilityIdentifier(accessibilityTitleIdentifier ?? "invitation.hero.title")
     }
 
     private var canEditMainEvent: Bool {
@@ -379,6 +453,97 @@ struct EventInvitationScreen: View {
               workspace.isLocalGuestViewer,
               workspace.localGuestProfileID == profile.id else { return false }
         return true
+    }
+
+    private var canEditInvitationEvent: Bool {
+        canEditMainEvent || canEditChildEvent
+    }
+
+    private var canEditChildEvent: Bool {
+        guard case .subevent(let id) = reference,
+              let item = workspace.timeline.first(where: { $0.id == id }),
+              item.parentEventID == workspace.mainEventID,
+              !workspace.isScopedEvent,
+              !workspace.isInvitationProjection,
+              workspace.canEditTodos(for: reference),
+              let member = workspace.currentViewerMember(for: reference),
+              member.participantRole != .guest,
+              member.planningPermission != .viewOnly,
+              member.invitationStatus == .active,
+              let authentication,
+              !authentication.isSigningOut else { return false }
+
+        let accountID = authentication.currentUser?.id
+        guard account?.id == accountID else { return false }
+        let localGuestProfileID = accountID == nil && authentication.isGuestMode
+            ? authentication.localGuestProfile?.id
+            : nil
+        guard EventManagementAccess.canOpen(
+            reference: reference,
+            in: workspace,
+            accountID: accountID,
+            localGuestProfileID: localGuestProfileID
+        ) else { return false }
+
+        if let currentUser = authentication.currentUser {
+            return currentUser.id == accountID
+        }
+        guard authentication.isGuestMode,
+              let profile = authentication.localGuestProfile,
+              workspace.isLocalGuestViewer,
+              workspace.localGuestProfileID == profile.id,
+              localGuestProfileID == profile.id else { return false }
+        return true
+    }
+
+    private var isOpenChildEditCurrent: Bool {
+        guard let request = editingChildEvent else { return true }
+        return isCurrentChildEdit(request)
+    }
+
+    private func isCurrentChildEdit(_ request: ChildInvitationEditRequest) -> Bool {
+        let currentItem = workspace.timeline.first { $0.id == request.item.id }
+        let currentMember = workspace.currentViewerMember(for: reference)
+        return request.matches(
+            rootEventID: workspace.mainEventID,
+            reference: reference,
+            item: currentItem,
+            accountID: account?.id,
+            localGuestProfileID: authentication?.isGuestMode == true ? authentication?.localGuestProfile?.id : nil,
+            principalGeneration: authentication?.principalGeneration,
+            member: currentMember,
+            canEditTodos: canEditChildEvent,
+            isInvitationProjection: workspace.isInvitationProjection,
+            isScopedEvent: workspace.isScopedEvent,
+            isMainEventDeleted: workspace.isMainEventDeleted
+        )
+    }
+
+    private func beginEditingVisibleEvent(_ field: MainInvitationEditField) {
+        if canEditMainEvent {
+            beginEditing(field)
+        } else {
+            beginEditingChildEvent()
+        }
+    }
+
+    private func beginEditingChildEvent() {
+        guard canEditChildEvent,
+              case .subevent(let id) = reference,
+              let item = workspace.timeline.first(where: { $0.id == id }),
+              let member = workspace.currentViewerMember(for: reference),
+              let authentication else { return }
+        editingChildEvent = ChildInvitationEditRequest(
+            item: item,
+            rootEventID: workspace.mainEventID,
+            accountID: account?.id,
+            localGuestProfileID: authentication.isGuestMode ? authentication.localGuestProfile?.id : nil,
+            principalGeneration: authentication.principalGeneration,
+            memberID: member.id,
+            role: member.participantRole,
+            permission: member.planningPermission,
+            invitationStatus: member.invitationStatus
+        )
     }
 
     private var isOpenEditCurrent: Bool {
@@ -582,11 +747,11 @@ struct EventInvitationScreen: View {
 
                 EventInvitationLocationView(
                     location: location,
-                    editAction: canEditMainEvent ? { beginEditing(.location) } : nil
+                    editAction: canEditInvitationEvent ? { beginEditingVisibleEvent(.location) } : nil
                 )
-            } else if canEditMainEvent {
+            } else if canEditInvitationEvent {
                 EventInvitationFeatureCard {
-                    Button { beginEditing(.location) } label: {
+                    Button { beginEditingVisibleEvent(.location) } label: {
                         Label("Add location", systemImage: "mappin.and.ellipse")
                             .font(.headline)
                             .frame(maxWidth: .infinity, minHeight: AppTheme.Layout.minimumTouchTarget)
@@ -737,6 +902,12 @@ struct EventInvitationScreen: View {
         return EventInvitationScheduleCard(
             monthText: schedule.monthText,
             dayText: schedule.dayText,
+            endMonthText: schedule.endMonthText,
+            endDayText: schedule.endDayText,
+            startWeekdayText: schedule.startWeekdayText,
+            endWeekdayText: schedule.endWeekdayText,
+            startTimeText: schedule.startTimeText,
+            endTimeText: schedule.endTimeText,
             dateText: schedule.dateText ?? String(localized: "Date to be decided"),
             timeText: schedule.timeText,
             timezoneText: schedule.timezoneText,
@@ -752,7 +923,7 @@ struct EventInvitationScreen: View {
                     notes: event.note
                 )
             },
-            editAction: canEditMainEvent ? { beginEditing(.date) } : nil
+            editAction: canEditInvitationEvent ? { beginEditingVisibleEvent(.date) } : nil
         )
     }
 
@@ -1366,6 +1537,12 @@ private struct EventPlaylistArtworkGrid<Artwork: View>: View {
 private struct EventInvitationScheduleCard: View {
     let monthText: String?
     let dayText: String?
+    var endMonthText: String? = nil
+    var endDayText: String? = nil
+    var startWeekdayText: String? = nil
+    var endWeekdayText: String? = nil
+    var startTimeText: String? = nil
+    var endTimeText: String? = nil
     let dateText: String
     let timeText: String?
     let timezoneText: String?
@@ -1376,30 +1553,16 @@ private struct EventInvitationScheduleCard: View {
     var body: some View {
         EventInvitationFeatureCard {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.compact) {
-                let scheduleContent = HStack(alignment: .center, spacing: AppTheme.Spacing.standard) {
-                    dateStamp
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(dateText)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.84))
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        if let timeText {
-                            Text(timeText)
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        if let timezoneText {
-                            Text(timezoneText)
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.66))
-                                .fixedSize(horizontal: false, vertical: true)
+                let scheduleContent = VStack(alignment: .leading, spacing: 2) {
+                    if let endMonthText, let endDayText {
+                        endpointRow(month: monthText ?? "", day: dayText ?? "", weekday: startWeekdayText ?? dateText, time: startTimeText ?? (endTimeText == nil ? timeText : nil))
+                        endpointRow(month: endMonthText, day: endDayText, weekday: endWeekdayText ?? dateText, time: endTimeText)
+                    } else {
+                        HStack(alignment: .center, spacing: AppTheme.Spacing.standard) {
+                            dateStamp
+                            scheduleDetails(range: false)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(accessibilityText)
@@ -1432,19 +1595,7 @@ private struct EventInvitationScheduleCard: View {
     @ViewBuilder
     private var dateStamp: some View {
         if let monthText, let dayText {
-            VStack(spacing: 0) {
-                Text(monthText)
-                    .font(.caption2.weight(.bold))
-                    .textCase(.uppercase)
-                    .foregroundStyle(.white.opacity(0.72))
-                Text(dayText)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
-            }
-            .frame(width: 52)
-            .frame(minHeight: 58)
-            .accessibilityHidden(true)
+            stamp(month: monthText, day: dayText)
         } else {
             Image(systemName: "calendar.badge.clock")
                 .font(.title2.weight(.regular))
@@ -1453,6 +1604,74 @@ private struct EventInvitationScheduleCard: View {
                 .frame(minHeight: 58)
                 .accessibilityHidden(true)
         }
+    }
+
+    private func stamp(month: String, day: String) -> some View {
+        VStack(spacing: 0) {
+            Text(month)
+                .font(.caption2.weight(.bold))
+                .textCase(.uppercase)
+                .foregroundStyle(.white.opacity(0.72))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(day)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+        }
+        .frame(minWidth: 42)
+        .frame(minHeight: 58)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func scheduleDetails(range: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if range {
+                Text(dateText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.84))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                HStack(spacing: 6) {
+                    Text(dateText)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.84))
+                    if let timeText {
+                        Text(timeText)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            if range, let timeText {
+                Text(timeText)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func endpointRow(month: String, day: String, weekday: String, time: String?) -> some View {
+        HStack(alignment: .center, spacing: AppTheme.Spacing.standard) {
+            stamp(month: month, day: day)
+            HStack(spacing: 6) {
+                Text(weekday)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.84))
+                if let time {
+                    Text(time)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minHeight: 44)
     }
 
     private func calendarButton(_ action: @escaping () -> Void) -> some View {

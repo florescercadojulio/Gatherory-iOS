@@ -10,6 +10,7 @@ final class PhotoAttachmentPickerUITests: XCTestCase {
         for appearance in ["Light", "Dark"] {
             let app = fixtureApplication(appearance: appearance)
             app.launch()
+            addFailureDiagnostics(for: app, context: "Photo picker — \(appearance)")
 
             let workspace = app.buttons.matching(
                 NSPredicate(format: "label CONTAINS %@", "Maya & Theo")
@@ -22,8 +23,9 @@ final class PhotoAttachmentPickerUITests: XCTestCase {
             let mainEvent = app.buttons["home.event.main"]
             XCTAssertTrue(mainEvent.waitForExistence(timeout: 5))
             mainEvent.tap()
-
-            let eventActions = app.buttons["Event Actions"]
+            XCTAssertTrue(app.navigationBars["Invitation"].waitForExistence(timeout: 5))
+            let eventActions = app.descendants(matching: .any)
+                .matching(identifier: "invitation.actions").firstMatch
             XCTAssertTrue(eventActions.waitForExistence(timeout: 5))
             eventActions.tap()
             let editEvent = app.buttons["Edit Event"]
@@ -39,6 +41,13 @@ final class PhotoAttachmentPickerUITests: XCTestCase {
             let editedTitle = titleField.value as? String ?? ""
             XCTAssertFalse(editedTitle.isEmpty)
             XCTAssertNotEqual(editedTitle, originalTitle, "The test must create an unsaved event edit before opening Photos.")
+
+            // Keep the draft but clear the keyboard so it cannot cover the
+            // image-card button at the bottom of this form on Dark appearance.
+            let keyboardDone = app.buttons["Done"]
+            XCTAssertTrue(keyboardDone.waitForExistence(timeout: 3))
+            keyboardDone.tap()
+            XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
 
             let openImagePicker = app.buttons["photoAttachmentPicker.open"]
             for _ in 0..<8 where !openImagePicker.isHittable {
@@ -125,5 +134,28 @@ final class PhotoAttachmentPickerUITests: XCTestCase {
             "-appAppearance", appearance.lowercased()
         ]
         return app
+    }
+
+    @MainActor
+    private func addFailureDiagnostics(for app: XCUIApplication, context: String) {
+        addTeardownBlock { [weak self] in
+            defer { app.terminate() }
+            guard let self, self.testRun?.hasSucceeded == false,
+                  app.state == .runningForeground else { return }
+            let snapshot = app.debugDescription
+            print("UI_FAILURE_\(context)\n\(snapshot)")
+            let accessibilityAttachment = XCTAttachment(
+                data: Data(snapshot.utf8),
+                uniformTypeIdentifier: "public.plain-text"
+            )
+            accessibilityAttachment.name = "Accessibility tree — \(context)"
+            accessibilityAttachment.lifetime = .keepAlways
+            self.add(accessibilityAttachment)
+
+            let screenshotAttachment = XCTAttachment(screenshot: app.screenshot())
+            screenshotAttachment.name = "Failure screen — \(context)"
+            screenshotAttachment.lifetime = .keepAlways
+            self.add(screenshotAttachment)
+        }
     }
 }

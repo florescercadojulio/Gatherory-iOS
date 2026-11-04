@@ -243,7 +243,12 @@ struct WorkspaceBudgetFacadeParityTests {
     ) -> PlanningWorkspace {
         PlanningWorkspace(
             title: "Budget rules", mainEventStartsAt: .now, venueName: "", location: "",
-            planningMode: .openToIdeas, members: [], ideas: ideas, timeline: timeline,
+            planningMode: .openToIdeas,
+            members: [WorkspaceMember(
+                name: "Budget manager", participantRole: .host,
+                initials: "BM", planningPermission: .manage
+            )],
+            ideas: ideas, timeline: timeline,
             workspaceBudgetCap: 100, currencyCode: currencyCode, registry: []
         )
     }
@@ -254,6 +259,9 @@ struct WorkspaceBudgetFacadeParityTests {
             participantIDs: [], parentEventID: workspace.mainEventID, budgetCap: 90
         )
         workspace.addTimelineItem(child)
-        return child
+        guard let storedChild = workspace.timeline.first(where: { $0.id == child.id }) else {
+            preconditionFailure("The budget fixture child should be stored by the workspace.")
+        }
+        return storedChild
     }
 }

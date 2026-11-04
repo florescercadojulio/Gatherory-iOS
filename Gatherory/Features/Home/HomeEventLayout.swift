@@ -7,7 +7,7 @@ enum HomeEventLayout: String, CaseIterable, Identifiable {
     static let preferenceKey = "home.layout"
 
     init(persistedValue: String) {
-        self = HomeEventLayout(rawValue: persistedValue) ?? .cards
+        self = HomeEventLayout(rawValue: persistedValue) ?? .overview
     }
 
     var id: String { rawValue }

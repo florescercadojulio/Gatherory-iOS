@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HomeEventLayoutPicker: View {
-    @AppStorage(HomeEventLayout.preferenceKey) private var persistedLayout = HomeEventLayout.cards.rawValue
+    @AppStorage(HomeEventLayout.preferenceKey) private var persistedLayout = HomeEventLayout.overview.rawValue
 
     private var selection: Binding<HomeEventLayout> {
         Binding(

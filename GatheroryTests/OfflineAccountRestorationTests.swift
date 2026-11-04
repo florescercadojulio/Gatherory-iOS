@@ -34,6 +34,36 @@ struct OfflineAccountRestorationTests {
         #expect(authentication.isSessionRestorationUnavailable)
     }
 
+    @Test("Cached offline planning can open management without notification authorization")
+    func offlineManagementUsesTheLocalAccountIdentity() async {
+        let client = OfflineRestoreAuthenticationClient(cachedAccount: Self.account)
+        client.restoreFailure = AuthenticationFailure.networkUnavailable
+        let authentication = makeSession(client)
+        await authentication.restoreSession()
+
+        let host = WorkspaceMember(name: "Morgan", participantRole: .host, initials: "M", email: Self.account.email)
+        let child = TimelineItem(title: "Dinner", category: .other, scheduledAt: .now,
+                                 location: "", participantIDs: [host.id])
+        let workspace = PlanningWorkspace(
+            title: "Weekend", mainEventStartsAt: .now, venueName: "", location: "",
+            planningMode: .openToIdeas, members: [host], ideas: [], timeline: [child], registry: []
+        )
+        workspace.configureViewer(authentication.currentUser)
+
+        #expect(authentication.isOfflineAccountSession)
+        #expect(authentication.notificationPrincipal == nil)
+        for reference in [EventReference.main, .subevent(child.id)] {
+            #expect(EventManagementAccess.canOpen(reference: reference, in: workspace,
+                                                accountID: authentication.currentUser?.id, localGuestProfileID: nil))
+        }
+        #expect(EventAnnouncementPlanningAccess.reference(in: workspace, eventID: workspace.mainEventID,
+                                                         principal: authentication.notificationPrincipal) == nil)
+
+        #expect(await authentication.signOut())
+        #expect(!EventManagementAccess.canOpen(reference: .main, in: workspace,
+                                             accountID: authentication.currentUser?.id, localGuestProfileID: nil))
+    }
+
     @Test("Without a token-matched profile, offline restore remains in retry recovery")
     func unavailableRestoreWithoutCachedProfileStaysInRecovery() async {
         let client = OfflineRestoreAuthenticationClient(cachedAccount: nil)

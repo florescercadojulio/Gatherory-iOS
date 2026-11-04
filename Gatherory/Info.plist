@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>ADMOB_NATIVE_AD_UNIT_ID</key>
+	<string>$(ADMOB_NATIVE_AD_UNIT_ID)</string>
 	<key>APP_ENVIRONMENT</key>
 	<string>$(APP_ENVIRONMENT)</string>
 	<key>AUTH_BASE_URL</key>
@@ -43,29 +45,20 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>FORCE_ONBOARDING</key>
-	<string>$(FORCE_ONBOARDING)</string>
-	<key>FCM_NOTIFICATIONS_ENABLED</key>
-	<string>$(FCM_NOTIFICATIONS_ENABLED)</string>
 	<key>EXPLORE_ADS_ENABLED</key>
 	<string>$(EXPLORE_ADS_ENABLED)</string>
 	<key>EXPLORE_ADS_TEST_MODE</key>
 	<string>$(EXPLORE_ADS_TEST_MODE)</string>
-	<key>GADApplicationIdentifier</key>
-	<string>$(ADMOB_APP_ID)</string>
-	<key>ADMOB_NATIVE_AD_UNIT_ID</key>
-	<string>$(ADMOB_NATIVE_AD_UNIT_ID)</string>
-	<key>GADDelayAppMeasurementInit</key>
-	<true/>
-	<key>SKAdNetworkItems</key>
-	<array>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>cstr6suwn9.skadnetwork</string>
-		</dict>
-	</array>
+	<key>FCM_NOTIFICATIONS_ENABLED</key>
+	<string>$(FCM_NOTIFICATIONS_ENABLED)</string>
+	<key>FORCE_ONBOARDING</key>
+	<string>$(FORCE_ONBOARDING)</string>
 	<key>FirebaseMessagingAutoInitEnabled</key>
 	<false/>
+	<key>GADApplicationIdentifier</key>
+	<string>$(ADMOB_APP_ID)</string>
+	<key>GADDelayAppMeasurementInit</key>
+	<true/>
 	<key>GIDClientID</key>
 	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
 	<key>GIDServerClientID</key>
@@ -101,6 +94,13 @@
 	<string>$(SEED_DEVELOPMENT_DATA)</string>
 	<key>SIMULATE_PRODUCTION_FLOW</key>
 	<string>$(SIMULATE_PRODUCTION_FLOW)</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 	<key>SKIP_AUTH_LOGIN</key>
 	<string>$(SKIP_AUTH_LOGIN)</string>
 	<key>UIApplicationSceneManifest</key>

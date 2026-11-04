@@ -24,6 +24,34 @@ struct ManageNoteHistoryTests {
         #expect(childNotes.map(\.body) == ["Child"])
     }
 
+    @Test("Switching the selected event replaces its note history")
+    func switchingReferenceDoesNotCarryNotes() {
+        let workspace = makeWorkspace()
+        let child = makeChild(parentEventID: workspace.mainEventID)
+        let sibling = makeChild(parentEventID: workspace.mainEventID)
+        workspace.timeline = [child, sibling]
+        workspace.addParticipant(workspace.members[0].id, to: .subevent(child.id))
+        workspace.addParticipant(workspace.members[0].id, to: .subevent(sibling.id))
+        let mainNote = EventNote(eventID: workspace.mainEventID, body: "Main update")
+        let childNote = EventNote(eventID: child.id, body: "Subevent update")
+        let siblingNote = EventNote(eventID: sibling.id, body: "Sibling update")
+        workspace.notes = [mainNote, childNote, siblingNote]
+
+        let pinnedReference = EventReference.subevent(child.id)
+        workspace.selectedEventReference = .main
+        var visibleBodies = ManageNoteHistory.notes(in: workspace, reference: pinnedReference, isBlocked: { _ in false }).map(\.body)
+        #expect(visibleBodies == ["Subevent update"])
+
+        workspace.selectedEventReference = .subevent(sibling.id)
+        visibleBodies = ManageNoteHistory.notes(in: workspace, reference: .main, isBlocked: { _ in false }).map(\.body)
+        #expect(visibleBodies == ["Main update"])
+
+        visibleBodies = ManageNoteHistory.notes(in: workspace, reference: .subevent(sibling.id), isBlocked: { _ in false }).map(\.body)
+        #expect(visibleBodies == ["Sibling update"])
+        visibleBodies = ManageNoteHistory.notes(in: workspace, reference: pinnedReference, isBlocked: { _ in false }).map(\.body)
+        #expect(visibleBodies == ["Subevent update"])
+    }
+
     @Test("History excludes blocked authors and keeps equal timestamps stable")
     func blockedAuthorsAndStableOrdering() {
         let workspace = makeWorkspace()

@@ -45,10 +45,6 @@ struct ManageEventSummary: Identifiable {
         canSendNote = workspace.canSendNote(to: reference)
     }
 }
-private enum ManageDestination: Hashable {
-    case budget(EventReference)
-}
-
 struct ManageView: View {
     var isActive = true
     var onExitWorkspace: (() -> Void)?
@@ -60,19 +56,24 @@ struct ManageView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.layoutDirection) private var layoutDirection
     @Binding private var selection: EventReference
+    private let pinnedReference: EventReference?
     @State private var hasInitializedSelection = false
     @State private var successfulTakeHaptic = 0
     @State private var todoTakeFailed = false
 
     init(selection: Binding<EventReference> = .constant(.main), isActive: Bool = true,
-         onExitWorkspace: (() -> Void)? = nil) {
+         onExitWorkspace: (() -> Void)? = nil, pinnedReference: EventReference? = nil) {
         self._selection = selection
         self.isActive = isActive
         self.onExitWorkspace = onExitWorkspace
+        self.pinnedReference = pinnedReference
     }
 
     private var references: [EventReference] { ManageEventSummary.references(in: workspace) }
-    private var reference: EventReference { references.contains(selection) ? selection : references.first ?? .main }
+    private var reference: EventReference {
+        if let pinnedReference { return pinnedReference }
+        return references.contains(selection) ? selection : references.first ?? .main
+    }
     private var summary: ManageEventSummary? { ManageEventSummary(workspace: workspace, reference: reference) }
     private var nextTodo: EventTodo? { workspace.nextTodo(for: reference) }
     private var todoTimeZone: TimeZone {
@@ -103,7 +104,7 @@ struct ManageView: View {
         ScrollView {
             VStack(spacing: AppTheme.Spacing.spacious) {
                 if let summary {
-                    if #unavailable(iOS 26.1) {
+                    if pinnedReference == nil, #unavailable(iOS 26.1) {
                         ManageEventSelector(
                             events: references.compactMap { ManageEventSummary(workspace: workspace, reference: $0) },
                             selected: summary, selection: $selection
@@ -112,7 +113,9 @@ struct ManageView: View {
 
                     ManageDashboardLayout(isAccessibilitySize: dynamicTypeSize.isAccessibilitySize,
                                           layoutDirection: layoutDirection) {
-                        NavigationLink(value: ManageDestination.budget(reference)) {
+                        NavigationLink {
+                            BudgetView(reference: reference)
+                        } label: {
                             ManageBudgetCard(
                                 spent: ManageMetric(value: summary.spent.formatted(.currency(code: workspace.currencyCode)), label: String(localized: "Spent")),
                                 remaining: .remaining(spent: summary.spent, budget: summary.budget, currencyCode: workspace.currencyCode),
@@ -121,6 +124,7 @@ struct ManageView: View {
                                 budgetTotal: summary.budget?.formatted(.currency(code: workspace.currencyCode))
                             )
                         }
+                        .accessibilityIdentifier("manage.budget.open")
                         ManageGuestsCard(summary: summary)
                         ManageCollaboratorsCard(summary: summary, approval: approvalMetric)
                         ManageQuickApprovalCard(summary: summary)
@@ -222,6 +226,7 @@ struct ManageView: View {
             .padding(.top, AppTheme.Layout.screenTop)
             .padding(.bottom, AppTheme.Layout.screenBottom)
         }
+        .accessibilityIdentifier("event.management.dashboard")
         .background(AppTheme.ColorToken.background)
         .appSoftScrollEdges()
         .navigationTitle(AppCopy.Tab.manage)
@@ -235,19 +240,14 @@ struct ManageView: View {
                     .frame(width: 44, height: 44)
             }
         }
-        .navigationDestination(for: ManageDestination.self) { destination in
-            switch destination {
-            case .budget(let reference): BudgetView(reference: reference)
-            }
-        }
         .onAppear {
-            if !hasInitializedSelection {
+            if pinnedReference == nil, !hasInitializedSelection {
                 selection = references.contains(workspace.selectedEventReference) ? workspace.selectedEventReference : references.first ?? .main
                 hasInitializedSelection = true
             }
         }
         .onChange(of: references) { _, values in
-            if !values.contains(selection) { selection = values.first ?? .main }
+            if pinnedReference == nil, !values.contains(selection) { selection = values.first ?? .main }
         }
         .task(id: "\(summary?.eventID.uuidString ?? "")|\(authentication.currentUser?.id ?? "")|\(summary?.canManageInvitations == true)|\(scenePhase)|\(isActive)") {
             await refreshRequests()

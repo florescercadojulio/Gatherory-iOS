@@ -117,23 +117,42 @@ private struct BlueprintCatalogCardButton: View {
     let measurementScopeID: String
     let onMeaningfulExposure: ((String) -> Void)?
     let onSelect: () -> Void
+    var guidedSelectionKey: String? = nil
+    var guidedTourActive = false
+    var onGuidedSelection: (() -> Void)? = nil
     @State private var isVisible = false
 
     private var state: BlueprintViewerState { actionStore?.states[entry.catalogKey] ?? entry.viewerState ?? .init() }
+    private var isGuidedCard: Bool { guidedTourActive }
+    private var isGuidedSelection: Bool {
+        MovieNightTourExplorePolicy.isSelectable(
+            catalogKey: entry.catalogKey,
+            guidedTourActive: guidedTourActive,
+            guidedSelectionKey: guidedSelectionKey
+        ) && guidedTourActive
+    }
     private var dwellTaskID: String {
         "\(isVisible)-\(measurementIsActive)-\(localExposureIsActive)-\(measurementScopeID)-\(actionStore?.ownerID ?? "anonymous")-\(actionStore?.measurementEnabled ?? false)-\(entry.discoveryContext?.exposureId ?? "")"
     }
 
     var body: some View {
-        Button(action: onSelect) {
-            BlueprintCatalogTile(entry: entry)
+        Button {
+            if isGuidedCard {
+                guard isGuidedSelection else { return }
+                onGuidedSelection?()
+            } else {
+                onSelect()
+            }
+        } label: {
+            cardTile
                 .matchedTransitionSource(id: transitionID, in: namespace)
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("blueprint.catalog.card.\(entry.catalogKey)")
+        .disabled(isGuidedCard && !isGuidedSelection)
+        .accessibilityIdentifier(isGuidedSelection ? "movieNightTour.explore.movieNight" : "blueprint.catalog.card.\(entry.catalogKey)")
         .accessibilityHint(ExploreCopy.openHint)
         .contextMenu {
-            if entry.viewerState != nil, let actionStore {
+            if !isGuidedCard, entry.viewerState != nil, let actionStore {
                 Button {
                     Task { _ = await actionStore.set(.like, enabled: !state.liked, for: entry) }
                 } label: { Label(state.liked ? BlueprintCopy.unlike : BlueprintCopy.like, systemImage: state.liked ? "heart.slash" : "heart") }
@@ -147,7 +166,7 @@ private struct BlueprintCatalogCardButton: View {
         }
         .onScrollVisibilityChange(threshold: BlueprintImpressionPolicy.visibilityThreshold) { isVisible = $0 }
         .task(id: dwellTaskID) {
-            guard isVisible, measurementIsActive || localExposureIsActive else { return }
+            guard !isGuidedCard, isVisible, measurementIsActive || localExposureIsActive else { return }
             let began = Date()
             do { try await Task.sleep(for: .seconds(BlueprintImpressionPolicy.minimumDuration)) } catch { return }
             guard !Task.isCancelled else { return }
@@ -161,6 +180,25 @@ private struct BlueprintCatalogCardButton: View {
             guard qualifies else { return }
             if localExposureIsActive { onMeaningfulExposure?(entry.catalogKey) }
             if measurementIsActive, let actionStore { await actionStore.record(.impression, for: entry) }
+        }
+    }
+
+    @ViewBuilder
+    private var cardTile: some View {
+        if isGuidedSelection {
+            BlueprintCatalogTile(entry: entry)
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
+                        .strokeBorder(AppTheme.ColorToken.accent, lineWidth: 3)
+                        .padding(1.5)
+                        .accessibilityIdentifier("movieNightTour.explore.movieNight.highlight")
+                        .accessibilityHidden(true)
+                        .allowsHitTesting(false)
+                }
+                .movieNightTourTarget(.movieNightBlueprint)
+                .background { MovieNightTourWindowTarget(target: .movieNightBlueprint) }
+        } else {
+            BlueprintCatalogTile(entry: entry)
         }
     }
 }
@@ -216,7 +254,8 @@ struct BlueprintCatalogGrid: View {
                     localExposureIsActive: localExposureIsActive,
                     transitionID: BlueprintPreviewTransitionID(source: source, entryID: entry.id),
                     namespace: transitionNamespace, measurementScopeID: measurementScopeID,
-                    onMeaningfulExposure: onMeaningfulExposure) { onSelect(entry) }
+                    onMeaningfulExposure: onMeaningfulExposure,
+                    onSelect: { onSelect(entry) })
                 .accessibilitySortPriority(Double(entries.count - index) * 2)
             }
         }
@@ -228,6 +267,10 @@ struct BlueprintCatalogGrid: View {
 /// positions so adding another page never moves an already visible slot.
 struct BlueprintPagedCatalogGrid: View {
     let entries: [BlueprintCatalogEntry]
+    var ideaEntries: [IdeaDiscoveryEntry] = []
+    var addedIdeaSourceIDs: Set<String> = []
+    var showsIdeas = true
+    var projectionIsReady = true
     let source: BlueprintCatalogSource
     let transitionNamespace: Namespace.ID
     let scope: BlueprintCatalogFeedScope
@@ -236,14 +279,21 @@ struct BlueprintPagedCatalogGrid: View {
     let isExhausted: Bool
     let loadFailed: Bool
     let onSelect: (BlueprintCatalogEntry) -> Void
+    var onSelectIdea: ((IdeaDiscoveryEntry) -> Void)? = nil
+    var onIdeaLoadMore: (() -> Void)? = nil
+    var guidedSelectionKey: String? = nil
+    var onGuidedSelection: ((BlueprintCatalogEntry) -> Void)? = nil
+    var guidedTourActive = false
     let onLoadMore: () -> Void
     let onRetry: () -> Void
     var actionStore: BlueprintActionStore? = nil
     var itemsHeader: AnyView? = nil
+    var itemsFooter: AnyView? = nil
     var measurementIsActive = true
     var localExposureIsActive = true
     var measurementScopeID = "default"
     var onMeaningfulExposure: ((String) -> Void)? = nil
+    var scrollIdentifier = "blueprint.catalog.scroll"
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var lastAutomaticLoadOffset: CGFloat = -1
     @State private var viewportSize = CGSize.zero
@@ -251,10 +301,12 @@ struct BlueprintPagedCatalogGrid: View {
     @State private var adPlacements = ExploreAdPlacementState()
     @State private var placementIdentity: AdFeedLayoutIdentity?
     @State private var visibleOrganicIndices: Set<Int> = []
+    @State private var feedProjection = ExploreFeedProjectionCache()
+    @State private var scrollPosition = ScrollPosition(edge: .top)
     @Environment(\.locale) private var locale
 
     private var adLayoutIdentity: AdFeedLayoutIdentity {
-        .init(scope: scope, sessionID: adSession?.scopeID,
+        .init(scope: scope, includesIdeas: showsIdeas, sessionID: adSession?.scopeID,
               resetGeneration: adSession?.resetGeneration ?? 0,
               viewportWidth: viewportSize.width, columnWidth: adColumnWidth, textSize: dynamicTypeSize,
               locale: locale.identifier)
@@ -268,17 +320,43 @@ struct BlueprintPagedCatalogGrid: View {
             return slotID
         }.prefix(3).map { $0 }
     }
+    private var projectionInput: ExploreFeedProjectionInput {
+        .init(context: projectionContext,
+              blueprintIDs: projectionIsReady ? entries.map(\.id) : [],
+              ideaIDs: projectionIsReady ? ideaEntries.map(\.id) : [])
+    }
+    private var projectionContext: String {
+        let sourceID: String = switch source {
+        case .results: "results"
+        case .recent: "recent"
+        case .category(let category): "category:\(category)"
+        }
+        return "\(sourceID)|\(scope.category ?? "")|\(scope.query ?? "")"
+    }
     private var loadMoreTitle: String {
         String(localized: "explore.loadMore", defaultValue: "Load More")
     }
     private var feedRows: [BlueprintPagedCatalogRow] {
+        guard projectionIsReady else { return [] }
         var rows: [BlueprintPagedCatalogRow] = []
-        for (index, entry) in entries.enumerated() {
-            let organicCount = index + 1
-            let slotID = adSession != nil && shouldInsertAd(afterOrganicCount: organicCount) && scope.query == nil
-                ? "explore-ad-\(organicCount)"
-                : nil
-            rows.append(BlueprintPagedCatalogRow(entry: entry, adSlotID: slotID))
+        let blueprintByID = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let ideaByID = Dictionary(ideaEntries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let input = projectionInput
+        var projection = feedProjection
+        projection.update(context: input.context, blueprintIDs: input.blueprintIDs, ideaIDs: input.ideaIDs)
+        let identities = projection.identities
+        for identity in identities {
+            let content: BlueprintPagedCatalogContent
+            switch identity {
+            case .blueprint(let id):
+                guard let entry = blueprintByID[id] else { continue }
+                content = .blueprint(entry)
+            case .idea(let id):
+                guard showsIdeas, let entry = ideaByID[id] else { continue }
+                content = .idea(entry)
+            }
+            let slotID = adSession == nil ? nil : ExploreAdFeedPolicy.slotID(afterOrganicCount: rows.count + 1)
+            rows.append(BlueprintPagedCatalogRow(content: content, adSlotID: slotID))
         }
         return rows
     }
@@ -299,7 +377,8 @@ struct BlueprintPagedCatalogGrid: View {
             .padding(.bottom, AppTheme.Layout.screenBottom)
         }
         .frame(maxWidth: .infinity)
-        .accessibilityIdentifier("blueprint.catalog.scroll")
+        .scrollPosition($scrollPosition)
+        .accessibilityIdentifier(scrollIdentifier)
         .onGeometryChange(for: CGSize.self) { $0.size } action: { viewportSize = $0 }
         .background {
             if let adSession {
@@ -314,7 +393,7 @@ struct BlueprintPagedCatalogGrid: View {
         }
         .onChange(of: adLayoutIdentity) { _, _ in ensureAdLayoutIdentity() }
         .onChange(of: adSession?.loadedSlotIDs ?? []) { _, _ in admitReadyAds() }
-        .onChange(of: entries.isEmpty) { _, empty in
+        .onChange(of: entries.isEmpty && (!showsIdeas || ideaEntries.isEmpty)) { _, empty in
             if empty { adPlacements.reset(); visibleOrganicIndices.removeAll() }
         }
         .scrollIndicators(.hidden)
@@ -331,7 +410,23 @@ struct BlueprintPagedCatalogGrid: View {
             lastAutomaticLoadOffset = state.offset
             onLoadMore()
         }
-        .onChange(of: contentIdentity) { _, _ in lastAutomaticLoadOffset = -1 }
+        .onChange(of: contentIdentity) { _, _ in
+            lastAutomaticLoadOffset = -1
+            // Keep the native scroll/search hierarchy alive while showing the
+            // first result of a new query. Page appends do not change identity.
+            scrollPosition.scrollTo(edge: .top)
+        }
+        .onChange(of: guidedTourActive, initial: true) { _, isGuided in
+            if isGuided { scrollPosition.scrollTo(edge: .top) }
+        }
+        .onAppear { updateProjection(projectionInput) }
+        .onChange(of: projectionInput) { _, input in updateProjection(input) }
+    }
+
+    private func updateProjection(_ input: ExploreFeedProjectionInput) {
+        feedProjection.update(context: input.context,
+                              blueprintIDs: input.blueprintIDs,
+                              ideaIDs: input.ideaIDs)
     }
 
     private var catalogItems: some View {
@@ -343,62 +438,32 @@ struct BlueprintPagedCatalogGrid: View {
                 spacing: 12,
                 minimumColumnWidth: 170,
                 estimatedHeight: { row, width in
-                    let imageHeight = width * (
-                        row.entry.browseCategories.first?.catalogTileAspectRatio
-                            ?? BlueprintBrowseCategory.events.catalogTileAspectRatio
-                    )
-                    let cardHeight = imageHeight + BlueprintCatalogTile.estimatedTextHeight
+                    let cardHeight: CGFloat
+                    switch row.content {
+                    case .blueprint(let entry):
+                        let imageHeight = width * (
+                            entry.browseCategories.first?.catalogTileAspectRatio
+                                ?? BlueprintBrowseCategory.events.catalogTileAspectRatio
+                        )
+                        cardHeight = imageHeight + BlueprintCatalogTile.estimatedTextHeight
+                    case .idea(let entry):
+                        let category = IdeaCategory(rawValue: entry.idea.category) ?? .other
+                        cardHeight = width / category.collectionAspectRatio
+                    }
                     return cardHeight + (row.adSlotID == nil ? 0 : 12 + 360)
                 }
             ) { row, index in
                 let sourcePriority = Double(feedRows.count - index) * 2
-                VStack(spacing: 12) {
-                    BlueprintCatalogCardButton(entry: row.entry, actionStore: actionStore,
-                        measurementIsActive: measurementIsActive,
-                        localExposureIsActive: localExposureIsActive,
-                        transitionID: BlueprintPreviewTransitionID(source: source, entryID: row.entry.id),
-                        namespace: transitionNamespace, measurementScopeID: measurementScopeID,
-                        onMeaningfulExposure: onMeaningfulExposure) { onSelect(row.entry) }
-                    .accessibilitySortPriority(sourcePriority)
-                    .onScrollVisibilityChange(threshold: 0.01) { visible in
-                        guard adSession != nil else { return }
-                        if visible { visibleOrganicIndices.insert(index + 1) }
-                        else { visibleOrganicIndices.remove(index + 1) }
-                    }
-                    .onGeometryChange(for: AdInsertionGeometry.self) { proxy in
-                        AdInsertionGeometry(
-                            identity: adLayoutIdentity,
-                            width: proxy.size.width,
-                            viewportIsKnown: viewportSize.height > 0,
-                            belowViewport: proxy.frame(in: .scrollView(axis: .vertical)).maxY > viewportSize.height
-                        )
-                    } action: { geometry in
-                        guard let slotID = row.adSlotID, geometry.viewportIsKnown else { return }
-                        recordAdAnchor(slotID: slotID, geometry: geometry)
-                    }
-                    if let slotID = row.adSlotID, let adSession,
-                       let reservedHeight = adPlacements.reservedHeight(for: slotID) {
-                        Group {
-                            if let ad = adSession.ad(forSlotID: slotID),
-                               adPlacements.renders(slotID: slotID, creativeID: String(describing: ObjectIdentifier(ad))) {
-                                AdMobNativeAdCard(slotID: slotID, session: adSession)
-                            } else {
-                                // An expired creative is removed immediately. Only an
-                                // already admitted slot keeps its geometry until refresh.
-                                Color.clear.accessibilityHidden(true)
-                            }
-                        }
-                        .frame(minHeight: reservedHeight, alignment: .top)
-                        .id(adSession.scopeID)
-                        .accessibilitySortPriority(sourcePriority - 1)
-                    }
-                }
+                rowView(row, index: index, sourcePriority: sourcePriority)
             }
+
+            if let itemsFooter { itemsFooter }
 
             if loadFailed {
                 Button(AppCopy.Common.retry, action: onRetry)
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
+                    .disabled(guidedTourActive)
             } else if isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity)
@@ -407,9 +472,75 @@ struct BlueprintPagedCatalogGrid: View {
                 Button(loadMoreTitle, action: onLoadMore)
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
+                    .disabled(guidedTourActive)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func rowView(_ row: BlueprintPagedCatalogRow, index: Int, sourcePriority: Double) -> some View {
+        VStack(spacing: 12) {
+            organicCard(row, sourcePriority: sourcePriority)
+                .onScrollVisibilityChange(threshold: 0.01) { visible in
+                    guard adSession != nil else { return }
+                    if visible { visibleOrganicIndices.insert(index + 1) }
+                    else { visibleOrganicIndices.remove(index + 1) }
+                }
+                .onGeometryChange(for: AdInsertionGeometry.self) { proxy in
+                    AdInsertionGeometry(
+                        identity: adLayoutIdentity, width: proxy.size.width,
+                        viewportIsKnown: viewportSize.height > 0,
+                        belowViewport: proxy.frame(in: .scrollView(axis: .vertical)).maxY > viewportSize.height
+                    )
+                } action: { geometry in
+                    guard let slotID = row.adSlotID, geometry.viewportIsKnown else { return }
+                    recordAdAnchor(slotID: slotID, geometry: geometry)
+                }
+            if let slotID = row.adSlotID, let adSession,
+               let reservedHeight = adPlacements.reservedHeight(for: slotID) {
+                Group {
+                    if let ad = adSession.ad(forSlotID: slotID),
+                       adPlacements.renders(slotID: slotID, creativeID: String(describing: ObjectIdentifier(ad))) {
+                        AdMobNativeAdCard(slotID: slotID, session: adSession)
+                    } else { Color.clear.accessibilityHidden(true) }
+                }
+                .frame(minHeight: reservedHeight, alignment: .top)
+                .id(adSession.scopeID)
+                .accessibilitySortPriority(sourcePriority - 1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func organicCard(_ row: BlueprintPagedCatalogRow, sourcePriority: Double) -> some View {
+        switch row.content {
+        case .blueprint(let entry):
+            BlueprintCatalogCardButton(entry: entry, actionStore: actionStore,
+                measurementIsActive: measurementIsActive,
+                localExposureIsActive: localExposureIsActive,
+                transitionID: BlueprintPreviewTransitionID(source: source, entryID: entry.id),
+                namespace: transitionNamespace, measurementScopeID: measurementScopeID,
+                onMeaningfulExposure: onMeaningfulExposure,
+                onSelect: { onSelect(entry) },
+                guidedSelectionKey: guidedSelectionKey,
+                guidedTourActive: guidedTourActive,
+                onGuidedSelection: { onGuidedSelection?(entry) })
+                .accessibilitySortPriority(sourcePriority)
+        case .idea(let entry):
+            if let onSelectIdea {
+                Button { onSelectIdea(entry) } label: {
+                    IdeaDiscoveryCard(entry: entry, isAdded: addedIdeaSourceIDs.contains(entry.id))
+                }
+                .buttonStyle(.plain)
+                .disabled(guidedTourActive)
+                .accessibilityIdentifier("idea.discovery.card.\(entry.id)")
+                .accessibilitySortPriority(sourcePriority)
+                .onScrollVisibilityChange(threshold: 0.01) { visible in
+                    guard visible, ideaEntries.suffix(4).contains(where: { $0.id == entry.id }) else { return }
+                    onIdeaLoadMore?()
+                }
+            }
+        }
     }
 
     private func ensureAdLayoutIdentity() {
@@ -469,9 +600,12 @@ struct BlueprintPagedCatalogGrid: View {
         }
     }
 
-    private func shouldInsertAd(afterOrganicCount count: Int) -> Bool {
-        count >= 6 && (count - 6).isMultiple(of: 12)
-    }
+}
+
+private struct ExploreFeedProjectionInput: Equatable {
+    let context: String
+    let blueprintIDs: [String]
+    let ideaIDs: [String]
 }
 
 private struct PagedGridContentIdentity: Hashable {
@@ -479,11 +613,19 @@ private struct PagedGridContentIdentity: Hashable {
     let scope: BlueprintCatalogFeedScope
 }
 
+private enum BlueprintPagedCatalogContent {
+    case blueprint(BlueprintCatalogEntry)
+    case idea(IdeaDiscoveryEntry)
+}
+
 private struct BlueprintPagedCatalogRow: Identifiable {
-    let entry: BlueprintCatalogEntry
+    let content: BlueprintPagedCatalogContent
     let adSlotID: String?
     var id: String {
-        "blueprint:\(entry.id)"
+        switch content {
+        case .blueprint(let entry): "blueprint:\(entry.id)"
+        case .idea(let entry): "idea:\(entry.id)"
+        }
     }
 }
 
@@ -573,6 +715,7 @@ extension BlueprintBrowseCategory {
 
 nonisolated private struct AdFeedLayoutIdentity: Equatable, Sendable {
     let scope: BlueprintCatalogFeedScope
+    let includesIdeas: Bool
     let sessionID: String?
     let resetGeneration: Int
     let viewportWidth: CGFloat

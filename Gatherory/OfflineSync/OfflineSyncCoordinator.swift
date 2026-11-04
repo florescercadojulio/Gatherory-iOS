@@ -90,7 +90,14 @@ actor OfflineSyncCoordinator {
                 // Preserve local versions for ordinary conflicts. A scoped
                 // read-only rejection is different: pull authorized state so
                 // current roles arrive while the draft remains queued.
-                if !attentionIDs.isEmpty, summary.attentionFailureCode != "SCOPE_READ_ONLY" {
+                let budgetMutationIDs = Set(claimed.compactMap { mutation in
+                    mutation.entityType == .budgetTransfer ? mutation.id : nil
+                })
+                let onlyBudgetMutationsNeedReview = !attentionIDs.isEmpty
+                    && attentionIDs.isSubset(of: budgetMutationIDs)
+                if !attentionIDs.isEmpty,
+                   summary.attentionFailureCode != "SCOPE_READ_ONLY",
+                   !onlyBudgetMutationsNeedReview {
                     summary.completedAt = .now
                     return summary
                 }

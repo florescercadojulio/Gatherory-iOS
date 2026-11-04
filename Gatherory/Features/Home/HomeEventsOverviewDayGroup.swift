@@ -6,7 +6,7 @@ struct HomeEventsOverviewDayGroup: Identifiable {
     let title: String
     let events: [TimelineItem]
 
-    static func groups(for events: [TimelineItem]) -> [HomeEventsOverviewDayGroup] {
+    static func groups(for events: [TimelineItem], now: Date = .now) -> [HomeEventsOverviewDayGroup] {
         var scheduledEventsByDay: [String: [TimelineItem]] = [:]
         var componentsByDay: [String: DateComponents] = [:]
         var unscheduledEvents: [TimelineItem] = []
@@ -40,9 +40,14 @@ struct HomeEventsOverviewDayGroup: Identifiable {
                   let components = componentsByDay[id] else { return nil }
             let orderedEvents = ordered(events)
             guard let representativeEvent = orderedEvents.first,
-                  let title = dateTitle(for: components, timeZoneIdentifier: representativeEvent.timeZoneIdentifier)
+                  let title = dateTitle(for: components, timeZoneIdentifier: representativeEvent.timeZoneIdentifier, now: now)
             else { return nil }
             return HomeEventsOverviewDayGroup(id: id, title: title, events: orderedEvents)
+        }.sorted { lhs, rhs in
+            let leftIsUpcoming = lhs.events.contains { EventDateOrdering.key(for: $0, now: now).period == 0 }
+            let rightIsUpcoming = rhs.events.contains { EventDateOrdering.key(for: $0, now: now).period == 0 }
+            if leftIsUpcoming != rightIsUpcoming { return leftIsUpcoming }
+            return leftIsUpcoming ? lhs.id < rhs.id : lhs.id > rhs.id
         }
 
         guard !unscheduledEvents.isEmpty else { return datedGroups }
@@ -62,7 +67,7 @@ struct HomeEventsOverviewDayGroup: Identifiable {
         }
     }
 
-    private static func dateTitle(for components: DateComponents, timeZoneIdentifier: String) -> String? {
+    private static func dateTitle(for components: DateComponents, timeZoneIdentifier: String, now: Date) -> String? {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = .autoupdatingCurrent
         let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .autoupdatingCurrent
@@ -76,7 +81,7 @@ struct HomeEventsOverviewDayGroup: Identifiable {
         guard let date = calendar.date(from: stableComponents) else { return nil }
 
         let targetDay = calendar.startOfDay(for: date)
-        let today = calendar.startOfDay(for: .now)
+        let today = calendar.startOfDay(for: now)
         let dayOffset = calendar.dateComponents([.day], from: today, to: targetDay).day
         if let dayOffset, (-1...7).contains(dayOffset) {
             let relativeFormatter = RelativeDateTimeFormatter()

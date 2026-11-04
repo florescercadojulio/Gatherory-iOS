@@ -13,12 +13,14 @@ struct DecisionDeckView: View {
     var onExitWorkspace: (() -> Void)?
 
     @Environment(PlanningWorkspace.self) private var workspace
+    @Environment(WorkspaceCloudSyncController.self) private var cloudSync
     @Environment(\.currentUserAccount) private var currentUserAccount
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("hasSeenDecideTimelinePrimer") private var hasSeenDecidePrimer = false
     @State private var drag = DecisionDeckDrag<UUID>()
     @State private var selectedIdeaID: UUID?
     @State private var isShowingDecidePrimer = false
+    @State private var decidePrimerAccountID = ""
+    @State private var tourFinishRevision = 0
     @State private var decisionScope: DecisionScope = .queue
     @State private var session = DecisionDeckSession()
     @State private var motionHistory = DecisionDeckMotionHistory<UUID>()
@@ -28,6 +30,10 @@ struct DecisionDeckView: View {
     private var visibleQueue: [PlanningIdea] {
         session.queue(in: workspace, eventID: decisionScope.eventID)
             .filter { !safety.isBlocked($0.submittedByUserID) }
+    }
+
+    private var contextualPrimerCheckID: String {
+        "\(currentUserAccount?.id ?? "")|\(isActive)|\(cloudSync.accountOnboardingState)|\(tourFinishRevision)"
     }
 
     private var currentIdea: PlanningIdea? { visibleQueue.first }
@@ -73,10 +79,16 @@ struct DecisionDeckView: View {
                         eventTitle: workspace.eventTitle(for: cardIdea),
                         currencyCode: workspace.currencyCode,
                         teamSummary: workspace.teamResponseSummary(for: cardIdea),
+                        members: workspace.members,
                         dragOffset: dragOffset,
                         transitionNamespace: decisionTransition
                     )
                     .frame(maxHeight: .infinity)
+                    .background {
+                        if isCurrent {
+                            Color.clear.movieNightTourTarget(.decision(cardIdea.id))
+                        }
+                    }
                     .modifier(DecisionCardDepth(depth: isCurrent || command != nil ? 0 : 1))
                     .overlay {
                         if !isCurrent && command == nil {
@@ -201,6 +213,7 @@ struct DecisionDeckView: View {
         .padding(.bottom, AppTheme.Layout.screenTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.ColorToken.background)
+        .movieNightTourSuppressed(isShowingDecidePrimer || selectedIdeaID != nil || flight.current != nil)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .appClearNavigationBar()
@@ -245,24 +258,34 @@ struct DecisionDeckView: View {
                 transitionNamespace: decisionTransition
             )
         }
-        .sheet(isPresented: $isShowingDecidePrimer) {
+        .fullScreenCover(isPresented: $isShowingDecidePrimer) {
             DecideEventPrimer {
-                hasSeenDecidePrimer = true
+                ContextualPrimerStore().markSeen(.decide, accountID: decidePrimerAccountID)
                 isShowingDecidePrimer = false
             }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
         }
-        .task {
+        .task(id: contextualPrimerCheckID) {
+            await Task.yield()
+            guard !Task.isCancelled else { return }
             presentPrimerIfNeeded()
         }
         .onChange(of: isActive) { _, isActive in
             guard isActive else { return }
             presentPrimerIfNeeded()
         }
+        .onChange(of: cloudSync.accountOnboardingState) { _, state in
+            if state == .complete { presentPrimerIfNeeded() }
+        }
+        .onChange(of: currentUserAccount?.id) { _, _ in
+            presentPrimerIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .contextualPrimerTourDidFinish)) { notification in
+            guard notification.userInfo?["accountID"] as? String == currentUserAccount?.id else { return }
+            tourFinishRevision += 1
+        }
         .onChange(of: isShowingDecidePrimer) { wasShowing, isShowing in
             if wasShowing && !isShowing {
-                hasSeenDecidePrimer = true
+                ContextualPrimerStore().markSeen(.decide, accountID: decidePrimerAccountID)
             }
         }
         .onChange(of: currentUserAccount?.id) { _, _ in
@@ -349,11 +372,13 @@ struct DecisionDeckView: View {
     }
 
     private func presentPrimerIfNeeded() {
-        guard DecidePrimerPresentationPolicy.shouldPresent(
-            hasSeenPrimer: hasSeenDecidePrimer,
-            isDecideTabActive: isActive
+        guard ContextualPrimerPolicy.shouldPresent(
+            hasSeenPrimer: ContextualPrimerStore().hasSeen(.decide, accountID: currentUserAccount?.id ?? ""),
+            isTabActive: isActive,
+            accountState: cloudSync.accountOnboardingState
         ) else { return }
 
+        decidePrimerAccountID = currentUserAccount?.id ?? ""
         isShowingDecidePrimer = true
     }
 
@@ -420,6 +445,7 @@ private struct DecisionCard: View {
     let eventTitle: String
     let currencyCode: String
     let teamSummary: TeamResponseSummary
+    var members: [WorkspaceMember] = []
     let dragOffset: CGSize
     let transitionNamespace: Namespace.ID
 
@@ -469,7 +495,7 @@ private struct DecisionCard: View {
     }
 
     private var ideaDetails: some View {
-        IdeaSummaryCard(idea: idea, currencyCode: currencyCode, teamSummary: teamSummary)
+        IdeaSummaryCard(idea: idea, currencyCode: currencyCode, teamSummary: teamSummary, members: members)
     }
 
 }
@@ -479,6 +505,7 @@ struct IdeaSummaryCard<Footer: View>: View {
     let idea: PlanningIdea
     let currencyCode: String
     let teamSummary: TeamResponseSummary
+    var members: [WorkspaceMember] = []
     @ViewBuilder var footer: () -> Footer
 
     var body: some View {
@@ -488,7 +515,7 @@ struct IdeaSummaryCard<Footer: View>: View {
                     .font(.subheadline.weight(.semibold))
             }
         } footer: {
-            IdeaSummaryCollaboration(idea: idea, teamSummary: teamSummary, footer: footer)
+            IdeaSummaryCollaboration(idea: idea, teamSummary: teamSummary, members: members, footer: footer)
         }
     }
 
@@ -498,6 +525,7 @@ struct IdeaSummaryCard<Footer: View>: View {
 struct IdeaSummaryCollaboration<Footer: View>: View {
     let idea: PlanningIdea
     let teamSummary: TeamResponseSummary
+    var members: [WorkspaceMember] = []
     @ViewBuilder var footer: () -> Footer
 
     var body: some View {
@@ -505,11 +533,7 @@ struct IdeaSummaryCollaboration<Footer: View>: View {
             TeamResponseBar(summary: teamSummary, ideaStatus: idea.status, showsTitle: false)
                 .id(idea.id)
 
-            Label(idea.submittedBy, systemImage: "person.crop.circle.fill")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityLabel("Suggested by \(idea.submittedBy)")
+            IdeaSubmitterAttribution(idea: idea, members: members)
 
             footer()
         }
@@ -518,8 +542,8 @@ struct IdeaSummaryCollaboration<Footer: View>: View {
 }
 
 extension IdeaSummaryCard where Footer == EmptyView {
-    init(idea: PlanningIdea, currencyCode: String, teamSummary: TeamResponseSummary) {
-        self.init(idea: idea, currencyCode: currencyCode, teamSummary: teamSummary) { EmptyView() }
+    init(idea: PlanningIdea, currencyCode: String, teamSummary: TeamResponseSummary, members: [WorkspaceMember] = []) {
+        self.init(idea: idea, currencyCode: currencyCode, teamSummary: teamSummary, members: members) { EmptyView() }
     }
 }
 

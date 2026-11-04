@@ -148,6 +148,53 @@ final class MainInvitationEditingUITests: XCTestCase {
     }
 
     @MainActor
+    func testGuestAndViewOnlyStayReadOnlyAfterSwitchingHomeLayout() throws {
+        continueAfterFailure = false
+
+        for (readOnly, guest) in [(true, false), (false, true)] {
+            let app = launch(appearance: "light", readOnly: readOnly, guest: guest,
+                             pinsHomeLayout: false)
+            addTeardownBlock {
+                guard app.state == .runningForeground else { return }
+                self.attach(app, name: "Role after Account layout switch")
+                app.terminate()
+            }
+            openSeededWorkspace(in: app)
+
+            // Select both layouts through the actual preference UI. A launch
+            // argument for home.layout would override the saved preference and
+            // make this an invalid test of the Account flow.
+            HomeLayoutUITestSupport.select("Overview", in: app)
+            XCTAssertTrue(app.scrollViews["home.overview"].waitForExistence(timeout: 5),
+                          app.debugDescription)
+
+            HomeLayoutUITestSupport.select("Cards", in: app)
+            XCTAssertTrue(app.buttons["home.event.main"].waitForExistence(timeout: 5),
+                          app.debugDescription)
+            let managementButtons = app.buttons.matching(
+                NSPredicate(format: "identifier BEGINSWITH %@", "home.manage.")
+            )
+            if guest {
+                XCTAssertEqual(managementButtons.count, 0,
+                               "Switching to Cards must not grant guest management entry points.")
+            } else {
+                XCTAssertTrue(app.buttons["home.manage.main"].exists,
+                              "View-only collaborators may still open the read-only management dashboard.")
+            }
+
+            let main = app.buttons["home.event.main"]
+            XCTAssertTrue(main.waitForExistence(timeout: 6))
+            main.tap()
+            XCTAssertTrue(app.navigationBars["Invitation"].waitForExistence(timeout: 6))
+            XCTAssertFalse(app.buttons["invitation.edit.title"].exists)
+            XCTAssertFalse(app.buttons["invitation.edit.date"].exists)
+            XCTAssertFalse(app.buttons["invitation.edit.location"].exists)
+            XCTAssertFalse(app.buttons["invitation-share-invitation"].exists)
+            assertPlainReadOnlyDetails(in: app)
+        }
+    }
+
+    @MainActor
     func testDetailShareUsesOpenedChildAndNativeBackReturnsHome() throws {
         continueAfterFailure = false
         let app = launch(appearance: "light")
@@ -171,10 +218,10 @@ final class MainInvitationEditingUITests: XCTestCase {
         XCTAssertTrue(share.isHittable)
         XCTAssertLessThan(share.frame.midX, app.windows.firstMatch.frame.midX,
                           "Detail sharing should appear on the leading side of the invitation toolbar.")
-        XCTAssertFalse(app.buttons["invitation.edit.title"].exists,
-                        "Child invitations should remain read-only in the main-event editor flow.")
-        XCTAssertFalse(app.buttons["invitation.edit.date"].exists)
-        XCTAssertFalse(app.buttons["invitation.edit.location"].exists)
+        XCTAssertTrue(app.buttons["invitation.edit.title"].exists,
+                      "Authorized planners can edit the opened child from its invitation content.")
+        XCTAssertTrue(app.buttons["invitation.edit.date"].exists)
+        XCTAssertTrue(app.buttons["invitation.edit.location"].exists)
         share.tap()
 
         XCTAssertTrue(app.navigationBars["Invite"].waitForExistence(timeout: 8))
@@ -206,8 +253,13 @@ final class MainInvitationEditingUITests: XCTestCase {
             .firstMatch
         XCTAssertTrue(seededWorkspace.waitForExistence(timeout: 8))
         seededWorkspace.tap()
-        XCTAssertTrue(app.buttons["home.event.main"].waitForExistence(timeout: 8),
-                      "Both planner and guest-role workspaces should open the main invitation.")
+        if app.scrollViews["home.overview"].exists {
+            XCTAssertTrue(app.scrollViews["home.overview"].waitForExistence(timeout: 8),
+                          "The selected workspace should open in Overview.")
+        } else {
+            XCTAssertTrue(app.buttons["home.event.main"].waitForExistence(timeout: 8),
+                          "Both planner and guest-role workspaces should open the main invitation.")
+        }
     }
 
     @MainActor
@@ -245,7 +297,9 @@ final class MainInvitationEditingUITests: XCTestCase {
     }
 
     @MainActor
-    private func launch(appearance: String, readOnly: Bool = false, guest: Bool = false, withMapCoordinates: Bool = false) -> XCUIApplication {
+    private func launch(appearance: String, readOnly: Bool = false, guest: Bool = false,
+                        homeLayout: String? = nil, pinsHomeLayout: Bool = true,
+                        withMapCoordinates: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += [
             "-DisableProductionFlowSimulation", "-SkipAuthentication",
@@ -253,6 +307,16 @@ final class MainInvitationEditingUITests: XCTestCase {
             "-AppleLanguages", "(en)", "-AppleInterfaceStyle", appearance,
             "-appAppearance", appearance,
         ]
+        if readOnly || guest || homeLayout != nil {
+            app.launchArguments.append("-UseProductionOnboarding")
+        }
+        if pinsHomeLayout, let homeLayout {
+            // Pin the role checks to the alternate Cards route instead of
+            // inheriting a layout preference left by another UI test.
+            app.launchArguments += ["-home.layout", homeLayout]
+        } else if pinsHomeLayout && (readOnly || guest) {
+            app.launchArguments += ["-home.layout", "cards"]
+        }
         if readOnly { app.launchArguments.append("-ReadOnlyCollaboratorsUITest") }
         if guest { app.launchArguments.append("-MainInvitationGuestUITest") }
         if withMapCoordinates { app.launchArguments.append("-MainInvitationMapUITest") }

@@ -21,6 +21,16 @@ struct WorkspaceOutboxWriter {
         baseVersion: Int,
         pendingMutations: [PendingMutation]
     ) {
+        // A root deletion supersedes any local budget intent for this scope.
+        // Otherwise a conflicted synthetic command could remain orphaned after
+        // the workspace tombstone is acknowledged.
+        for mutation in (try? context.fetch(FetchDescriptor<PendingMutation>())) ?? []
+        where mutation.scopeID == scopeID
+            && mutation.ownerUserID == ownerUserID
+            && mutation.entityType != .workspace {
+            context.delete(mutation)
+        }
+
         if let pending = pendingMutations
             .filter({ mutation in
                 mutation.scopeID == scopeID
@@ -78,6 +88,7 @@ struct WorkspaceOutboxWriter {
                     && mutation.entityType == entityType
                     && mutation.entityID == entityID
                     && mutation.state == .pending
+                    && (entityType != .budgetTransfer || mutation.attemptCount == 0)
             })
             .max(by: { $0.createdAt < $1.createdAt }) {
             pending.payload = payload
@@ -113,8 +124,47 @@ struct WorkspaceOutboxWriter {
         archive: WorkspaceArchiveV1,
         pendingMutations: [PendingMutation]
     ) throws {
-        let previousEntities = try previousArchive?.syncEntities(using: codec) ?? [:]
-        let entities = try archive.syncEntities(using: codec)
+        let previousEntities = try previousArchive?.syncEntitiesOmittingBudgetFields(using: codec) ?? [:]
+        let entities: [WorkspaceSyncEntityKey: Data]
+        if previousArchive == nil {
+            entities = try archive.syncEntities(using: codec)
+        } else {
+            entities = try archive.syncEntitiesOmittingBudgetFields(using: codec)
+        }
+
+        if archive.isScopedEvent != true,
+           let previousArchive,
+           archive.hasBudgetChanges(comparedTo: previousArchive) {
+            let budgetVersion = try RemoteEntityVersionRecord.version(
+                in: context, scopeID: scopeID, entityType: .budgetTransfer,
+                entityID: scopeID, ownerUserID: ownerUserID
+            ) ?? 0
+            let budgetPayload = try JSONEncoder().encode(
+                archive.budgetMutationPayload(expectedBudgetVersion: budgetVersion)
+            )
+            coalesceMutation(
+                scopeID: scopeID,
+                entityType: .budgetTransfer,
+                entityID: scopeID,
+                payload: budgetPayload,
+                operation: .update,
+                baseVersion: budgetVersion,
+                pendingMutations: pendingMutations
+            )
+            if pendingMutations.contains(where: {
+                $0.scopeID == scopeID && $0.ownerUserID == ownerUserID
+                    && $0.entityType == .budgetTransfer && $0.state == .requiresAttention
+            }),
+               let blockedIntent = try context.fetch(FetchDescriptor<PendingMutation>())
+                .filter({
+                    $0.scopeID == scopeID && $0.ownerUserID == ownerUserID
+                        && $0.entityType == .budgetTransfer && $0.state == .pending
+                })
+                .max(by: { $0.createdAt < $1.createdAt }) {
+                blockedIntent.state = .requiresAttention
+                blockedIntent.lastFailureCode = "budget_conflict_review_required"
+            }
+        }
 
         for (key, payload) in entities {
             let previousPayload = previousEntities[key]

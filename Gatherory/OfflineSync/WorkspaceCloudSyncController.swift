@@ -10,6 +10,14 @@ enum AccountOnboardingState: Equatable, Sendable {
     case unavailable
 }
 
+struct BudgetSyncConflict: Identifiable, Equatable, Sendable {
+    let scopeID: UUID
+    let title: String
+    let canUseSharedBudget: Bool
+
+    var id: UUID { scopeID }
+}
+
 private enum PostHogSyncLogCapture {
     static func started(trigger: SyncTrigger) {
         PostHogSDK.shared.logger?.info("workspace_sync_started", attributes: [
@@ -86,6 +94,7 @@ final class WorkspaceCloudSyncController {
     private(set) var cannotReadSaveState = false
     private(set) var lastSuccessfulSyncAt: Date?
     private(set) var accountOnboardingState: AccountOnboardingState = .signedOut
+    private(set) var budgetConflicts: [BudgetSyncConflict] = []
 
     /// Creates an account-scoped blueprint client for the authenticated
     /// workspace currently managed by this controller.
@@ -192,6 +201,7 @@ final class WorkspaceCloudSyncController {
             ? .signedOut
             : usesRemoteAccountState ? .resolving : .needsOnboarding
         persistence.activate(userID: userID, in: library, seedData: seedData)
+        refreshSaveState()
 
         guard let userID else { return }
         guard usesRemoteAccountState else {
@@ -242,6 +252,30 @@ final class WorkspaceCloudSyncController {
     func synchronize(trigger: SyncTrigger = .manual) async {
         guard activeUserID != deletingAccountID, !isPreparingSignOut else { return }
         await runJoinedSync(trigger: trigger)
+    }
+
+    /// Refreshes first so a server version conflict's authoritative vector is
+    /// cached, then discards the complete local budget intent and synchronizes
+    /// any unrelated queued changes.
+    func useSharedBudget(scopeID: UUID) async {
+        guard let userID = activeUserID else { return }
+        let revision = activationRevision
+        await synchronize(trigger: .manual)
+        guard activeUserID == userID, activationRevision == revision else { return }
+        do {
+            guard try persistence.discardPendingBudgetIntent(scopeID: scopeID, from: library) else {
+                refreshSaveState()
+                return
+            }
+        } catch {
+            lastError = error
+            refreshSaveState()
+            return
+        }
+        refreshSaveState()
+        await synchronize(trigger: .manual)
+        guard activeUserID == userID, activationRevision == revision else { return }
+        refreshSaveState()
     }
 
     /// Refresh the shared roster and responses without racing debounced local edits.
@@ -535,8 +569,18 @@ final class WorkspaceCloudSyncController {
             pendingChangeScopeIDs = try persistence.pendingScopeIDs()
             pendingPhotoScopeIDs = try persistence.pendingMediaScopeIDs()
             hasPendingMediaUploads = !pendingPhotoScopeIDs.isEmpty
+            budgetConflicts = try persistence.pendingBudgetSyncConflictScopeIDs().map { scopeID in
+                BudgetSyncConflict(
+                    scopeID: scopeID,
+                    title: library.workspaces.first(where: { $0.mainEventID == scopeID })?.title ?? String(localized: "Event Budget"),
+                    canUseSharedBudget: try persistence.canDiscardPendingBudgetIntent(scopeID: scopeID)
+                )
+            }
             cannotReadSaveState = false
-        } catch { cannotReadSaveState = true }
+        } catch {
+            budgetConflicts = []
+            cannotReadSaveState = true
+        }
     }
 
     private func hasConfirmedOnboarding(for userID: String) -> Bool {
